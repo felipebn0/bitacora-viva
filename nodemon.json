@@ -1,0 +1,3 @@
+{
+  "ignore": ["bitacora.json", "resumen.json", "debug.log", "audio/*"]
+}

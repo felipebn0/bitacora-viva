@@ -1,0 +1,19 @@
+{
+  "name": "bitacora-viva",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Compañero de charlas por voz para registrar la historia de vida de una persona.",
+  "main": "server.js",
+  "scripts": {
+    "dev": "nodemon server.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.120.0",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}
