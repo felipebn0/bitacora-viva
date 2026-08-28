@@ -516,6 +516,8 @@
       stateLabel.textContent = 'Hubo un problema para conectar. Probá de nuevo.';
       setState('idle', stateLabel.textContent);
       orbLabel.innerHTML = 'Presioná<br>para hablar';
+      releaseMic();
+      await saveSessionLog(); // no perder lo ya hablado por un problema de red
     }
   }
 
@@ -540,8 +542,19 @@
     setState('listening', 'Escuchando…');
     orbLabel.innerHTML = 'Escuchando<br>…';
     writeToggle.style.display = 'inline';
-    if (!window.MediaRecorder || !navigator.mediaDevices) return; // sin soporte: queda "prefiero escribir"
+    if (!window.MediaRecorder || !navigator.mediaDevices) {
+      writeRow.classList.add('visible');
+      writeInput.focus();
+      return; // sin soporte: queda "prefiero escribir"
+    }
     await startRecordingAudio();
+    if (!mediaStream || !mediaRecorder) {
+      // no dio permiso de micrófono o falló: no nos quedamos trabados "escuchando" para siempre
+      stateLabel.textContent = 'No pude usar el micrófono — escribí tu respuesta.';
+      writeRow.classList.add('visible');
+      writeInput.focus();
+      return;
+    }
     startVoiceActivityDetection();
     if (fallbackRecognition) {
       fallbackTranscript = '';
@@ -570,11 +583,8 @@
     fetchNext();
   }
 
-  async function finishSession() {
-    setState('ended', '');
-    orbLabel.innerHTML = 'Presioná<br>para otra charla';
-    writeToggle.style.display = 'none';
-    releaseMic();
+  async function saveSessionLog() {
+    if (!sessionLog.length) return;
     try {
       await fetch('/api/save', {
         method: 'POST',
@@ -582,6 +592,14 @@
         body: JSON.stringify({ history: sessionLog }),
       });
     } catch (e) {}
+  }
+
+  async function finishSession() {
+    setState('ended', '');
+    orbLabel.innerHTML = 'Presioná<br>para otra charla';
+    writeToggle.style.display = 'none';
+    releaseMic();
+    await saveSessionLog();
   }
 
   function startSession() {
@@ -612,6 +630,8 @@
   // Cambiá BUTTON_KEY por la tecla que detectes en el paso de prueba (ver README).
   const BUTTON_KEY = 'Enter';
   document.addEventListener('keydown', (e) => {
+    const tag = (e.target && e.target.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return; // no pisar el Enter de los cuadros de texto
     if (e.key === BUTTON_KEY) {
       e.preventDefault();
       handleOrbPress();
@@ -644,6 +664,7 @@
   }
 
   async function askFamilia() {
+    if (familiaAsk.disabled) return; // ya hay una pregunta en curso
     const q = familiaInput.value.trim();
     if (!q) return;
     addFamiliaBubble('q', q);
@@ -669,6 +690,19 @@
 
   familiaAsk.addEventListener('click', askFamilia);
   familiaInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') askFamilia(); });
+
+  // Si se cierra la pestaña o se navega a otro lado a mitad de charla,
+  // intentamos guardar lo que se alcanzó a hablar en vez de perderlo.
+  window.addEventListener('pagehide', () => {
+    if (!sessionLog.length) return;
+    if (state === 'idle' || state === 'ended') return;
+    try {
+      navigator.sendBeacon(
+        '/api/save',
+        new Blob([JSON.stringify({ history: sessionLog })], { type: 'application/json' })
+      );
+    } catch (e) {}
+  });
 })();
 </script>
 </body>

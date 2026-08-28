@@ -1,72 +1,82 @@
 require('dotenv').config({ quiet: true });
 const express = require('express');
-const fs = require('fs');
 const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
+const { neon } = require('@neondatabase/serverless');
+const { put } = require('@vercel/blob');
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-const BITACORA_PATH = path.join(__dirname, 'bitacora.json');
-const RESUMEN_PATH = path.join(__dirname, 'resumen.json');
-const AUDIO_DIR = path.join(__dirname, 'audio');
-const MODEL = 'claude-haiku-4-5-20251001';
+// Limitador simple por IP: evita que alguien con el link (por ejemplo un
+// túnel de ngrok abierto, o la URL pública de Vercel) gaste crédito de
+// Claude/ElevenLabs a lo loco.
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const RATE_LIMIT_MAX = 30; // pedidos por minuto por IP, a las rutas que cuestan dinero
+const rateLimitHits = new Map();
 
-app.use('/audio', express.static(AUDIO_DIR));
-
-app.post('/api/save-audio', express.raw({ type: '*/*', limit: '20mb' }), (req, res) => {
-  try {
-    const { sessionId, index, role } = req.query;
-    if (!sessionId || index === undefined || !role) {
-      return res.status(400).json({ error: 'Faltan datos.' });
-    }
-    const safeSession = String(sessionId).replace(/[^a-zA-Z0-9_-]/g, '');
-    const ext = (req.get('Content-Type') || '').includes('mpeg') ? 'mp3' : 'webm';
-    const dir = path.join(AUDIO_DIR, safeSession);
-    fs.mkdirSync(dir, { recursive: true });
-    const filename = `${role}-${index}.${ext}`;
-    fs.writeFileSync(path.join(dir, filename), req.body);
-    res.json({ ok: true, file: `audio/${safeSession}/${filename}` });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'No se pudo guardar el audio.' });
+function rateLimit(req, res, next) {
+  const ip = req.ip || 'desconocida';
+  const now = Date.now();
+  const hits = (rateLimitHits.get(ip) || []).filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+  if (hits.length >= RATE_LIMIT_MAX) {
+    return res.status(429).json({ error: 'Demasiados pedidos, esperá un momento.' });
   }
-});
-
-const SYSTEM_PROMPT = `Eres una entrevistadora cálida y paciente, colombiana, que ayuda a una persona mayor a contar la historia de su vida. Hablas en español de Colombia, tuteando siempre a la persona (usa "tú", nunca "usted" ni "vos": "¿cómo estás?", "cuéntame", "tienes"), con oraciones simples y cortas, fáciles de escuchar en voz alta.
-
-Usa modismos colombianos suaves y variados, propios de un trato respetuoso con una persona mayor (por ejemplo: "qué más", "listo", "de una", "qué chévere", "¿cierto?", "pues sí", "qué belleza", "qué interesante", "cuéntame más" — nunca jerga juvenil o vulgar como "bacano", "berraquera" o groserías). El tono es animado y cercano, pero con la calidez respetuosa con la que se habla con un mayor, no como con un amigo de la misma edad.
-
-Esto es una charla de sobremesa, no un cuestionario. Antes de pasar a otra cosa, reacciona de verdad a lo que te acaban de contar: comenta algo, ríete si hay algo gracioso, sorpréndete, o pide un detalle más ("¿y qué pasó después?", "¿en serio? cuéntame más de eso") antes de avanzar a otro tema. Alterna entre preguntas cortas y comentarios — no todos los turnos tienen que terminar en pregunta.
-
-Reglas:
-- Una sola idea por turno: o preguntas, o comentas, nunca varias preguntas juntas.
-- Empieza siempre por conocer a la persona: su nombre, el nombre de sus papás, sus hermanos, tíos cercanos, y si llegó a conocer a sus abuelos y cómo se llamaban.
-- Después avanza naturalmente hacia su infancia, juventud, trabajo, momentos de orgullo, desafíos superados, y algún consejo o mensaje para su familia.
-- Escucha de verdad lo que cuenta: si menciona algo interesante (un nombre, un lugar, una anécdota), profundiza en eso antes de seguir con el guion. No sigas un orden rígido.
-- Tono cálido, agradecido, sin apuro.
-- Cuando sientas que la charla ya cubrió una historia rica y completa (generalmente entre 12 y 20 intercambios), cierra con un mensaje cálido de despedida agradeciendo lo compartido, avisando que quedó guardado, e invitando a seguir otro día. Termina ese mensaje final, y solo ese, con la palabra exacta [FIN] en una línea aparte.
-- Nunca uses la palabra [FIN] excepto en ese cierre.
-- Si más abajo hay un resumen de charlas anteriores, no vuelvas a preguntar nada que ya está ahí (nombre, familia, etc.). Saluda siempre por su nombre si el resumen lo tiene (ej: "¡Hola, Felipe!"), y arranca yendo directo a un tema nuevo, o profundizando en algo que quedó pendiente.`;
-
-function loadMemorySummary() {
-  if (!fs.existsSync(RESUMEN_PATH)) return '';
-  try {
-    const data = JSON.parse(fs.readFileSync(RESUMEN_PATH, 'utf-8'));
-    return (data.texto || '').trim();
-  } catch (e) {
-    return '';
-  }
+  hits.push(now);
+  rateLimitHits.set(ip, hits);
+  next();
 }
 
-function buildFullTranscripts(keyword) {
-  if (!fs.existsSync(BITACORA_PATH)) return 'No hay charlas guardadas todavía.';
-  const sessions = JSON.parse(fs.readFileSync(BITACORA_PATH, 'utf-8'));
-  if (!sessions.length) return 'No hay charlas guardadas todavía.';
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, hits] of rateLimitHits) {
+    const recent = hits.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+    if (recent.length) rateLimitHits.set(ip, recent);
+    else rateLimitHits.delete(ip);
+  }
+}, RATE_LIMIT_WINDOW_MS).unref();
 
-  let blocks = sessions.map((s) => {
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const MODEL = 'claude-haiku-4-5-20251001';
+
+// --- Base de datos (Neon Postgres, vía la integración de Vercel) ---
+const DB_URL = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+const sql = DB_URL ? neon(DB_URL) : null;
+
+let schemaReady = null;
+function ensureSchema() {
+  if (!sql) throw new Error('Falta configurar la base de datos (DATABASE_URL).');
+  if (!schemaReady) {
+    schemaReady = (async () => {
+      await sql`CREATE TABLE IF NOT EXISTS sessions (
+        id SERIAL PRIMARY KEY,
+        fecha TIMESTAMPTZ NOT NULL DEFAULT now(),
+        intercambios JSONB NOT NULL
+      )`;
+      await sql`CREATE TABLE IF NOT EXISTS resumen (
+        id INT PRIMARY KEY DEFAULT 1,
+        texto TEXT NOT NULL DEFAULT '',
+        actualizado TIMESTAMPTZ
+      )`;
+      await sql`INSERT INTO resumen (id, texto) VALUES (1, '') ON CONFLICT (id) DO NOTHING`;
+    })();
+  }
+  return schemaReady;
+}
+
+async function loadMemorySummary() {
+  await ensureSchema();
+  const rows = await sql`SELECT texto FROM resumen WHERE id = 1`;
+  return (rows[0] && rows[0].texto) || '';
+}
+
+async function buildFullTranscripts(keyword) {
+  await ensureSchema();
+  const rows = await sql`SELECT fecha, intercambios FROM sessions ORDER BY fecha ASC`;
+  if (!rows.length) return 'No hay charlas guardadas todavía.';
+
+  let blocks = rows.map((s) => {
     const fecha = new Date(s.fecha).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
     const lines = (s.intercambios || [])
       .filter((m) => m.role === 'user' || m.role === 'assistant')
@@ -87,7 +97,7 @@ function buildFullTranscripts(keyword) {
 
 async function updateMemorySummary(newExchanges) {
   try {
-    const anterior = loadMemorySummary();
+    const anterior = await loadMemorySummary();
     const nuevaCharla = (newExchanges || [])
       .filter((m) => m.role === 'user' || m.role === 'assistant')
       .map((m) => (m.role === 'assistant' ? 'Entrevistadora: ' : 'Él contó: ') + m.content)
@@ -104,15 +114,38 @@ async function updateMemorySummary(newExchanges) {
     });
 
     const texto = response.content[0].text.trim();
-    fs.writeFileSync(RESUMEN_PATH, JSON.stringify({ texto, actualizado: new Date().toISOString() }, null, 2));
+    await ensureSchema();
+    await sql`UPDATE resumen SET texto = ${texto}, actualizado = now() WHERE id = 1`;
   } catch (err) {
     console.error('No se pudo actualizar el resumen:', err);
   }
 }
 
-app.post('/api/next', async (req, res) => {
+const SYSTEM_PROMPT = `Eres una entrevistadora cálida y paciente, colombiana, que ayuda a una persona mayor a contar la historia de su vida. Hablas en español de Colombia, tuteando siempre a la persona (usa "tú", nunca "usted" ni "vos": "¿cómo estás?", "cuéntame", "tienes"), con oraciones simples y cortas, fáciles de escuchar en voz alta.
+
+Usa modismos colombianos suaves y variados, propios de un trato respetuoso con una persona mayor (por ejemplo: "qué más", "listo", "de una", "qué chévere", "¿cierto?", "pues sí", "qué belleza", "qué interesante", "cuéntame más" — nunca jerga juvenil o vulgar como "bacano", "berraquera" o groserías). El tono es animado y cercano, pero con la calidez respetuosa con la que se habla con un mayor, no como con un amigo de la misma edad.
+
+Esto es una charla de sobremesa, no un cuestionario. Antes de pasar a otra cosa, reacciona de verdad a lo que te acaban de contar: comenta algo, ríete si hay algo gracioso, sorpréndete, o pide un detalle más ("¿y qué pasó después?", "¿en serio? cuéntame más de eso") antes de avanzar a otro tema. Alterna entre preguntas cortas y comentarios — no todos los turnos tienen que terminar en pregunta.
+
+Reglas:
+- Una sola idea por turno: o preguntas, o comentas, nunca varias preguntas juntas.
+- Empieza siempre por conocer a la persona: su nombre, el nombre de sus papás, sus hermanos, tíos cercanos, y si llegó a conocer a sus abuelos y cómo se llamaban.
+- Después avanza naturalmente hacia su infancia, juventud, trabajo, momentos de orgullo, desafíos superados, y algún consejo o mensaje para su familia.
+- Escucha de verdad lo que cuenta: si menciona algo interesante (un nombre, un lugar, una anécdota), profundiza en eso antes de seguir con el guion. No sigas un orden rígido.
+- Tono cálido, agradecido, sin apuro.
+- Cuando sientas que la charla ya cubrió una historia rica y completa (generalmente entre 12 y 20 intercambios), cierra con un mensaje cálido de despedida agradeciendo lo compartido, avisando que quedó guardado, e invitando a seguir otro día. Termina ese mensaje final, y solo ese, con la palabra exacta [FIN] en una línea aparte.
+- Nunca uses la palabra [FIN] excepto en ese cierre.
+- Si más abajo hay un resumen de charlas anteriores, no vuelvas a preguntar nada que ya está ahí (nombre, familia, etc.). Saluda siempre por su nombre si el resumen lo tiene (ej: "¡Hola, Felipe!"), y arranca yendo directo a un tema nuevo, o profundizando en algo que quedó pendiente.`;
+
+app.post('/api/next', rateLimit, async (req, res) => {
   try {
-    const history = req.body.history || [];
+    const history = Array.isArray(req.body.history) ? req.body.history.slice(0, 60) : [];
+    for (const m of history) {
+      if (!m || (m.role !== 'user' && m.role !== 'assistant') || typeof m.content !== 'string') {
+        return res.status(400).json({ error: 'Historial inválido.' });
+      }
+      if (m.content.length > 4000) m.content = m.content.slice(0, 4000);
+    }
     const messages = history.length
       ? history
       : [{
@@ -120,7 +153,7 @@ app.post('/api/next', async (req, res) => {
           content: '(La persona acaba de presionar el botón para empezar a charlar. Si el resumen tiene su nombre, saludala por su nombre. Si no, saludala cálidamente y preguntale cómo se llama.)',
         }];
 
-    const memoria = loadMemorySummary();
+    const memoria = await loadMemorySummary();
     const system = memoria
       ? `${SYSTEM_PROMPT}\n\nResumen de charlas anteriores (no repitas lo que ya está acá):\n${memoria}`
       : SYSTEM_PROMPT;
@@ -196,7 +229,7 @@ async function speakWithAzure(text) {
   return Buffer.from(await resp.arrayBuffer());
 }
 
-app.post('/api/transcribe', express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
+app.post('/api/transcribe', rateLimit, express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
   try {
     if (!req.body || !req.body.length) return res.status(400).json({ error: 'Falta audio.' });
     if (!ELEVEN_KEY) {
@@ -228,10 +261,11 @@ app.post('/api/transcribe', express.raw({ type: '*/*', limit: '20mb' }), async (
   }
 });
 
-app.post('/api/speak', async (req, res) => {
+app.post('/api/speak', rateLimit, async (req, res) => {
   try {
-    const text = (req.body.text || '').trim();
+    let text = (req.body.text || '').trim();
     if (!text) return res.status(400).json({ error: 'Falta texto.' });
+    if (text.length > 2000) text = text.slice(0, 2000);
 
     let buffer;
     if (ELEVEN_KEY && ELEVEN_VOICE_ID) {
@@ -250,19 +284,39 @@ app.post('/api/speak', async (req, res) => {
   }
 });
 
-app.post('/api/save', (req, res) => {
+app.post('/api/save-audio', express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
   try {
-    const { history } = req.body;
-    const sessions = fs.existsSync(BITACORA_PATH)
-      ? JSON.parse(fs.readFileSync(BITACORA_PATH, 'utf-8'))
-      : [];
+    const { sessionId, index, role } = req.query;
+    if (!sessionId || index === undefined || !role) {
+      return res.status(400).json({ error: 'Faltan datos.' });
+    }
+    // Todo lo que compone el nombre del archivo viene de la URL — se sanitiza
+    // fuerte antes de usarlo como ruta.
+    const safeSession = String(sessionId).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 100);
+    const safeRole = String(role).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 20);
+    const safeIndex = String(index).replace(/[^0-9]/g, '').slice(0, 10);
+    if (!safeSession || !safeRole || !safeIndex) {
+      return res.status(400).json({ error: 'Datos inválidos.' });
+    }
+    const contentType = req.get('Content-Type') || 'audio/webm';
+    const ext = contentType.includes('mpeg') ? 'mp3' : 'webm';
+    const filename = `audio/${safeSession}/${safeRole}-${safeIndex}.${ext}`;
 
-    sessions.push({
-      fecha: new Date().toISOString(),
-      intercambios: history,
-    });
+    const blob = await put(filename, req.body, { access: 'public', contentType, addRandomSuffix: true });
+    res.json({ ok: true, file: blob.url });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo guardar el audio.' });
+  }
+});
 
-    fs.writeFileSync(BITACORA_PATH, JSON.stringify(sessions, null, 2));
+app.post('/api/save', async (req, res) => {
+  try {
+    const history = Array.isArray(req.body.history) ? req.body.history.slice(0, 100) : [];
+    if (!history.length) return res.status(400).json({ error: 'Nada que guardar.' });
+
+    await ensureSchema();
+    await sql`INSERT INTO sessions (intercambios) VALUES (${JSON.stringify(history)}::jsonb)`;
     res.json({ ok: true });
 
     // se actualiza en segundo plano, no hace esperar al usuario
@@ -295,40 +349,29 @@ const FAMILY_TOOLS = [{
   },
 }];
 
-app.post('/api/ask-familia', async (req, res) => {
+app.post('/api/ask-familia', rateLimit, async (req, res) => {
   try {
-    const question = (req.body.question || '').trim();
+    let question = (req.body.question || '').trim();
     if (!question) return res.status(400).json({ error: 'Falta la pregunta.' });
+    if (question.length > 1000) question = question.slice(0, 1000);
 
-    if (!fs.existsSync(BITACORA_PATH)) {
-      return res.json({
-        answer: 'Todavía no hay charlas guardadas. Cuando presione el botón y cuente algo, vas a poder preguntar sobre eso acá.',
-      });
+    const memoria = await loadMemorySummary();
+    if (!memoria) {
+      const rows = await sql`SELECT id FROM sessions LIMIT 1`;
+      if (!rows.length) {
+        return res.json({
+          answer: 'Todavía no hay charlas guardadas. Cuando presione el botón y cuente algo, vas a poder preguntar sobre eso acá.',
+        });
+      }
     }
 
-    const memoria = loadMemorySummary();
     const system = `${FAMILY_SYSTEM_PROMPT_BASE}\n\nResumen disponible:\n${memoria || '(todavía no hay resumen armado, usá la herramienta para leer las charlas directamente)'}`;
 
     let messages = [{ role: 'user', content: question }];
+    let response;
+    const MAX_TOOL_ROUNDS = 3;
 
-    let response = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: 500,
-      system,
-      tools: FAMILY_TOOLS,
-      messages,
-    });
-
-    if (response.stop_reason === 'tool_use') {
-      const toolUse = response.content.find((b) => b.type === 'tool_use');
-      const toolResultText = buildFullTranscripts(toolUse.input && toolUse.input.palabra_clave);
-
-      messages = [
-        ...messages,
-        { role: 'assistant', content: response.content },
-        { role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: toolResultText }] },
-      ];
-
+    for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
       response = await anthropic.messages.create({
         model: MODEL,
         max_tokens: 500,
@@ -336,6 +379,18 @@ app.post('/api/ask-familia', async (req, res) => {
         tools: FAMILY_TOOLS,
         messages,
       });
+
+      if (response.stop_reason !== 'tool_use' || round === MAX_TOOL_ROUNDS) break;
+
+      const toolUse = response.content.find((b) => b.type === 'tool_use');
+      if (!toolUse) break;
+      const toolResultText = await buildFullTranscripts(toolUse.input && toolUse.input.palabra_clave);
+
+      messages = [
+        ...messages,
+        { role: 'assistant', content: response.content },
+        { role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: toolResultText }] },
+      ];
     }
 
     const textBlock = response.content.find((b) => b.type === 'text');
@@ -346,7 +401,24 @@ app.post('/api/ask-familia', async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Bitácora Viva corriendo en http://localhost:${PORT}`);
+// Red de seguridad: si algo inesperado falla fuera de una ruta, lo dejamos
+// registrado y seguimos corriendo en vez de que el proceso se caiga solo
+// (importante para cuando esto quede desatendido en la Raspberry Pi).
+process.on('uncaughtException', (err) => {
+  console.error('Error no capturado:', err);
 });
+process.on('unhandledRejection', (err) => {
+  console.error('Promesa rechazada sin capturar:', err);
+});
+
+// En Vercel, este archivo se exporta como función serverless (ver api/index.js)
+// y Vercel maneja el puerto. Corriendo local (npm run dev / npm start), sí
+// levantamos el servidor nosotros mismos.
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`Bitácora Viva corriendo en http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;

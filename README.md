@@ -38,7 +38,7 @@ La app usa ElevenLabs si está configurado; si no, prueba con Azure; si ninguno 
 
 ```bash
 cd "/Users/felipebernal/Claude Code/bitacora-viva"
-npm install express dotenv @anthropic-ai/sdk
+npm install
 ```
 
 ## Correr
@@ -58,14 +58,33 @@ Abrí **Chrome** en [http://localhost:3000](http://localhost:3000) (Chrome es el
 
 ## Dónde queda guardado
 
-- **Transcript (texto):** cada charla se agrega como un objeto nuevo en `bitacora.json`, con fecha y toda la conversación. Es un archivo de texto simple — se puede abrir con cualquier editor.
-- **Audio de tu papá:** cada respuesta hablada se graba y se guarda en `audio/<charla>/user-N.webm`. El nombre de cada archivo aparece en `bitacora.json`, en el campo `audioFile` de esa respuesta.
-- **Audio de las preguntas (la voz que le habla a él):** solo se graba si configuraste ElevenLabs o Azure (ver "Pendientes" más abajo) — la voz del sistema no se puede capturar. Cuando lo configures, va a empezar a guardarse solo, en `audio/<charla>/assistant-N.mp3`.
-- **Resumen (la memoria):** en `resumen.json`. Se actualiza solo al final de cada charla — Claude relee el resumen anterior + la charla nueva, y arma uno actualizado. Así la próxima charla no repite lo ya sabido, y las preguntas de la familia son rápidas de responder sin tener que releer todo. Si una pregunta de la familia necesita un detalle muy específico que el resumen no tiene, el sistema va solo a buscarlo en las charlas completas.
+Todo se guarda en la nube (Postgres + Vercel Blob), no en archivos locales — así funciona igual corriendo en tu Mac o desplegado en Vercel.
+
+- **Transcript (texto):** cada charla se agrega como una fila nueva en la tabla `sessions` de la base de datos, con fecha y toda la conversación.
+- **Audio de tu papá:** cada respuesta hablada se sube a Vercel Blob y queda referenciada en el campo `audioFile` de esa respuesta.
+- **Audio de las preguntas (la voz que le habla a él):** solo se sube si configuraste ElevenLabs o Azure — la voz del sistema no se puede capturar.
+- **Resumen (la memoria):** en la tabla `resumen`. Se actualiza solo al final de cada charla — Claude relee el resumen anterior + la charla nueva, y arma uno actualizado. Así la próxima charla no repite lo ya sabido, y las preguntas de la familia son rápidas de responder sin tener que releer todo. Si una pregunta de la familia necesita un detalle muy específico que el resumen no tiene, el sistema va solo a buscarlo en las charlas completas.
 
 ## Pendientes
 
 - Configurar ElevenLabs o Azure para que la voz sea más natural (pasos más abajo) — hasta entonces usa la voz del sistema.
+
+## Desplegar en Vercel
+
+1. Subí el proyecto a un repo de GitHub (privado) si todavía no lo hiciste.
+2. Andá a [vercel.com](https://vercel.com) → **Add New** → **Project** → elegí ese repo → **Import**. No hace falta tocar nada de la configuración de build (no hay build).
+3. Antes de desplegar (o después, desde la pestaña **Storage** del proyecto):
+   - **Storage → Create Database → Postgres (Neon)** → conectala al proyecto. Esto agrega sola la variable `DATABASE_URL`.
+   - **Storage → Create Database → Blob** → conectala al proyecto. Esto agrega sola la variable `BLOB_READ_WRITE_TOKEN`.
+4. En **Settings → Environment Variables**, agregá a mano:
+   - `ANTHROPIC_API_KEY`
+   - `ELEVENLABS_API_KEY` y `ELEVENLABS_VOICE_ID` (si los usás)
+5. **Deploy**. Cada vez que hagas `git push`, Vercel despliega solo la nueva versión.
+6. Las tablas de la base de datos se crean solas la primera vez que la app las necesita (al presionar el botón por primera vez) — no hay que correr ninguna migración a mano.
+
+### Para seguir corriendo local además de en Vercel
+
+Copiá `DATABASE_URL` y `BLOB_READ_WRITE_TOKEN` desde **Storage** en el dashboard de Vercel (click en cada base → **.env.local** o **Quickstart**) y pegalos en tu `.env` local. Sin esto, `npm run dev` sigue prendiendo pero las charlas no se van a poder guardar.
 
 ## Botón físico
 
