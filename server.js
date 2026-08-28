@@ -1,19 +1,22 @@
 require('dotenv').config({ quiet: true });
 const express = require('express');
 const path = require('path');
+const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const Anthropic = require('@anthropic-ai/sdk');
 const { neon } = require('@neondatabase/serverless');
 const { put } = require('@vercel/blob');
 
 const app = express();
+app.set('trust proxy', 1); // detrás del proxy de Vercel: para que req.ip y req.secure sean correctos
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Limitador simple por IP: evita que alguien con el link (por ejemplo un
-// túnel de ngrok abierto, o la URL pública de Vercel) gaste crédito de
-// Claude/ElevenLabs a lo loco.
+// Limitador simple por IP: evita que alguien con el link gaste crédito de
+// Claude/ElevenLabs a lo loco (además del login, esto frena intentos de
+// adivinar contraseñas).
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
-const RATE_LIMIT_MAX = 30; // pedidos por minuto por IP, a las rutas que cuestan dinero
+const RATE_LIMIT_MAX = 30;
 const rateLimitHits = new Map();
 
 function rateLimit(req, res, next) {
@@ -62,31 +65,163 @@ function ensureSchema() {
   if (!sql) throw new Error('Falta configurar la base de datos (DATABASE_URL).');
   if (!schemaReady) {
     schemaReady = (async () => {
+      await sql`CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`;
+
+      // sessions/resumen ya existían de una versión sin cuentas — se agrega
+      // user_id de forma aditiva (nunca se borra nada existente).
       await sql`CREATE TABLE IF NOT EXISTS sessions (
         id SERIAL PRIMARY KEY,
         fecha TIMESTAMPTZ NOT NULL DEFAULT now(),
         intercambios JSONB NOT NULL
       )`;
+      await sql`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS user_id INT REFERENCES users(id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)`;
+
       await sql`CREATE TABLE IF NOT EXISTS resumen (
         id INT PRIMARY KEY DEFAULT 1,
         texto TEXT NOT NULL DEFAULT '',
         actualizado TIMESTAMPTZ
       )`;
-      await sql`INSERT INTO resumen (id, texto) VALUES (1, '') ON CONFLICT (id) DO NOTHING`;
+      await sql`ALTER TABLE resumen ADD COLUMN IF NOT EXISTS user_id INT REFERENCES users(id)`;
+      await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_resumen_user ON resumen(user_id)`;
     })();
   }
   return schemaReady;
 }
 
-async function loadMemorySummary() {
+// --- Sesión de login (cookie firmada, sin tabla de sesiones aparte) ---
+const SESSION_SECRET = process.env.SESSION_SECRET;
+if (!SESSION_SECRET) {
+  console.error('SESSION_SECRET no está definida — configurala en las variables de entorno para que el login sea seguro.');
+}
+const SESSION_COOKIE = 'bv_session';
+const SESSION_MAX_AGE = 60 * 60 * 24 * 365; // 1 año, para no tener que loguearse siempre en el dispositivo físico
+
+function signSession(payload) {
+  const b64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const sig = crypto.createHmac('sha256', SESSION_SECRET || 'clave-insegura-configurar-SESSION_SECRET').update(b64).digest('base64url');
+  return `${b64}.${sig}`;
+}
+
+function verifySession(token) {
+  if (!token) return null;
+  const idx = token.lastIndexOf('.');
+  if (idx === -1) return null;
+  const b64 = token.slice(0, idx);
+  const sig = token.slice(idx + 1);
+  const expected = crypto.createHmac('sha256', SESSION_SECRET || 'clave-insegura-configurar-SESSION_SECRET').update(b64).digest('base64url');
+  if (sig.length !== expected.length) return null;
+  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+  try {
+    return JSON.parse(Buffer.from(b64, 'base64url').toString());
+  } catch (e) {
+    return null;
+  }
+}
+
+function parseCookies(header) {
+  const out = {};
+  (header || '').split(';').forEach((pair) => {
+    const idx = pair.indexOf('=');
+    if (idx === -1) return;
+    const k = pair.slice(0, idx).trim();
+    const v = pair.slice(idx + 1).trim();
+    if (k) out[k] = decodeURIComponent(v);
+  });
+  return out;
+}
+
+function setSessionCookie(req, res, payload) {
+  const token = signSession(payload);
+  const secure = req.secure ? '; Secure' : '';
+  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${token}; Max-Age=${SESSION_MAX_AGE}; Path=/; HttpOnly; SameSite=Lax${secure}`);
+}
+
+function clearSessionCookie(req, res) {
+  const secure = req.secure ? '; Secure' : '';
+  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax${secure}`);
+}
+
+function requireAuth(req, res, next) {
+  const cookies = parseCookies(req.headers.cookie);
+  const session = verifySession(cookies[SESSION_COOKIE]);
+  if (!session || !session.userId) {
+    return res.status(401).json({ error: 'No autenticado.' });
+  }
+  req.userId = session.userId;
+  req.username = session.username;
+  next();
+}
+
+app.get('/api/me', (req, res) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const session = verifySession(cookies[SESSION_COOKIE]);
+  if (!session) return res.status(401).json({ error: 'No autenticado.' });
+  res.json({ username: session.username });
+});
+
+app.post('/api/register', rateLimit, async (req, res) => {
+  try {
+    const { username, password, setupKey } = req.body || {};
+    if (!process.env.SETUP_KEY || setupKey !== process.env.SETUP_KEY) {
+      return res.status(403).json({ error: 'Clave de configuración incorrecta.' });
+    }
+    if (!username || !password || String(password).length < 4) {
+      return res.status(400).json({ error: 'Usuario y clave (mínimo 4 caracteres) son obligatorios.' });
+    }
+    const cleanUsername = String(username).trim().toLowerCase().slice(0, 50);
+    if (!/^[a-z0-9_-]+$/.test(cleanUsername)) {
+      return res.status(400).json({ error: 'El usuario solo puede tener letras, números, "-" y "_".' });
+    }
+    await ensureSchema();
+    const existing = await sql`SELECT id FROM users WHERE username = ${cleanUsername}`;
+    if (existing.length) return res.status(409).json({ error: 'Ese usuario ya existe.' });
+    const hash = await bcrypt.hash(password, 10);
+    await sql`INSERT INTO users (username, password_hash) VALUES (${cleanUsername}, ${hash})`;
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo crear el usuario.' });
+  }
+});
+
+app.post('/api/login', rateLimit, async (req, res) => {
+  try {
+    const { username, password } = req.body || {};
+    if (!username || !password) return res.status(400).json({ error: 'Faltan usuario o clave.' });
+    await ensureSchema();
+    const cleanUsername = String(username).trim().toLowerCase();
+    const rows = await sql`SELECT id, username, password_hash FROM users WHERE username = ${cleanUsername}`;
+    if (!rows.length) return res.status(401).json({ error: 'Usuario o clave incorrectos.' });
+    const ok = await bcrypt.compare(password, rows[0].password_hash);
+    if (!ok) return res.status(401).json({ error: 'Usuario o clave incorrectos.' });
+    setSessionCookie(req, res, { userId: rows[0].id, username: rows[0].username });
+    res.json({ ok: true, username: rows[0].username });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo iniciar sesión.' });
+  }
+});
+
+app.post('/api/logout', (req, res) => {
+  clearSessionCookie(req, res);
+  res.json({ ok: true });
+});
+
+async function loadMemorySummary(userId) {
   await ensureSchema();
-  const rows = await sql`SELECT texto FROM resumen WHERE id = 1`;
+  const rows = await sql`SELECT texto FROM resumen WHERE user_id = ${userId}`;
   return (rows[0] && rows[0].texto) || '';
 }
 
-async function buildFullTranscripts(keyword) {
+async function buildFullTranscripts(userId, keyword) {
   await ensureSchema();
-  const rows = await sql`SELECT fecha, intercambios FROM sessions ORDER BY fecha ASC`;
+  const rows = await sql`SELECT fecha, intercambios FROM sessions WHERE user_id = ${userId} ORDER BY fecha ASC`;
   if (!rows.length) return 'No hay charlas guardadas todavía.';
 
   let blocks = rows.map((s) => {
@@ -108,9 +243,9 @@ async function buildFullTranscripts(keyword) {
   return blocks.map((b) => `--- Charla del ${b.fecha} ---\n${b.lines.join('\n')}`).join('\n\n');
 }
 
-async function updateMemorySummary(newExchanges) {
+async function updateMemorySummary(userId, newExchanges) {
   try {
-    const anterior = await loadMemorySummary();
+    const anterior = await loadMemorySummary(userId);
     const nuevaCharla = (newExchanges || [])
       .filter((m) => m.role === 'user' || m.role === 'assistant')
       .map((m) => (m.role === 'assistant' ? 'Entrevistadora: ' : 'Él contó: ') + m.content)
@@ -128,7 +263,8 @@ async function updateMemorySummary(newExchanges) {
 
     const texto = response.content[0].text.trim();
     await ensureSchema();
-    await sql`UPDATE resumen SET texto = ${texto}, actualizado = now() WHERE id = 1`;
+    await sql`INSERT INTO resumen (user_id, texto, actualizado) VALUES (${userId}, ${texto}, now())
+              ON CONFLICT (user_id) DO UPDATE SET texto = EXCLUDED.texto, actualizado = EXCLUDED.actualizado`;
   } catch (err) {
     console.error('No se pudo actualizar el resumen:', err);
   }
@@ -150,7 +286,7 @@ Reglas:
 - Nunca uses la palabra [FIN] excepto en ese cierre.
 - Si más abajo hay un resumen de charlas anteriores, no vuelvas a preguntar nada que ya está ahí (nombre, familia, etc.). Saluda siempre por su nombre si el resumen lo tiene (ej: "¡Hola, Felipe!"), y arranca yendo directo a un tema nuevo, o profundizando en algo que quedó pendiente.`;
 
-app.post('/api/next', rateLimit, async (req, res) => {
+app.post('/api/next', requireAuth, rateLimit, async (req, res) => {
   try {
     const history = Array.isArray(req.body.history) ? req.body.history.slice(0, 60) : [];
     for (const m of history) {
@@ -166,7 +302,7 @@ app.post('/api/next', rateLimit, async (req, res) => {
           content: '(La persona acaba de presionar el botón para empezar a charlar. Si el resumen tiene su nombre, saludala por su nombre. Si no, saludala cálidamente y preguntale cómo se llama.)',
         }];
 
-    const memoria = await loadMemorySummary();
+    const memoria = await loadMemorySummary(req.userId);
     const system = memoria
       ? `${SYSTEM_PROMPT}\n\nResumen de charlas anteriores (no repitas lo que ya está acá):\n${memoria}`
       : SYSTEM_PROMPT;
@@ -242,7 +378,7 @@ async function speakWithAzure(text) {
   return Buffer.from(await resp.arrayBuffer());
 }
 
-app.post('/api/transcribe', rateLimit, express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
+app.post('/api/transcribe', requireAuth, rateLimit, express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
   try {
     if (!req.body || !req.body.length) return res.status(400).json({ error: 'Falta audio.' });
     if (!ELEVEN_KEY) {
@@ -274,7 +410,7 @@ app.post('/api/transcribe', rateLimit, express.raw({ type: '*/*', limit: '20mb' 
   }
 });
 
-app.post('/api/speak', rateLimit, async (req, res) => {
+app.post('/api/speak', requireAuth, rateLimit, async (req, res) => {
   try {
     let text = (req.body.text || '').trim();
     if (!text) return res.status(400).json({ error: 'Falta texto.' });
@@ -297,7 +433,7 @@ app.post('/api/speak', rateLimit, async (req, res) => {
   }
 });
 
-app.post('/api/save-audio', express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
+app.post('/api/save-audio', requireAuth, express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
   try {
     const { sessionId, index, role } = req.query;
     if (!sessionId || index === undefined || !role) {
@@ -313,7 +449,7 @@ app.post('/api/save-audio', express.raw({ type: '*/*', limit: '20mb' }), async (
     }
     const contentType = req.get('Content-Type') || 'audio/webm';
     const ext = contentType.includes('mpeg') ? 'mp3' : 'webm';
-    const filename = `audio/${safeSession}/${safeRole}-${safeIndex}.${ext}`;
+    const filename = `audio/${req.userId}/${safeSession}/${safeRole}-${safeIndex}.${ext}`;
 
     const blob = await put(filename, req.body, { access: 'public', contentType, addRandomSuffix: true });
     res.json({ ok: true, file: blob.url });
@@ -323,17 +459,17 @@ app.post('/api/save-audio', express.raw({ type: '*/*', limit: '20mb' }), async (
   }
 });
 
-app.post('/api/save', async (req, res) => {
+app.post('/api/save', requireAuth, async (req, res) => {
   try {
     const history = Array.isArray(req.body.history) ? req.body.history.slice(0, 100) : [];
     if (!history.length) return res.status(400).json({ error: 'Nada que guardar.' });
 
     await ensureSchema();
-    await sql`INSERT INTO sessions (intercambios) VALUES (${JSON.stringify(history)}::jsonb)`;
+    await sql`INSERT INTO sessions (user_id, intercambios) VALUES (${req.userId}, ${JSON.stringify(history)}::jsonb)`;
     res.json({ ok: true });
 
     // se actualiza en segundo plano, no hace esperar al usuario
-    updateMemorySummary(history).catch((err) => console.error('No se pudo actualizar el resumen:', err));
+    updateMemorySummary(req.userId, history).catch((err) => console.error('No se pudo actualizar el resumen:', err));
   } catch (err) {
     console.error(err);
     if (!res.headersSent) res.status(500).json({ error: 'No se pudo guardar la charla.' });
@@ -362,15 +498,16 @@ const FAMILY_TOOLS = [{
   },
 }];
 
-app.post('/api/ask-familia', rateLimit, async (req, res) => {
+app.post('/api/ask-familia', requireAuth, rateLimit, async (req, res) => {
   try {
     let question = (req.body.question || '').trim();
     if (!question) return res.status(400).json({ error: 'Falta la pregunta.' });
     if (question.length > 1000) question = question.slice(0, 1000);
 
-    const memoria = await loadMemorySummary();
+    await ensureSchema();
+    const memoria = await loadMemorySummary(req.userId);
     if (!memoria) {
-      const rows = await sql`SELECT id FROM sessions LIMIT 1`;
+      const rows = await sql`SELECT id FROM sessions WHERE user_id = ${req.userId} LIMIT 1`;
       if (!rows.length) {
         return res.json({
           answer: 'Todavía no hay charlas guardadas. Cuando presione el botón y cuente algo, vas a poder preguntar sobre eso acá.',
@@ -397,7 +534,7 @@ app.post('/api/ask-familia', rateLimit, async (req, res) => {
 
       const toolUse = response.content.find((b) => b.type === 'tool_use');
       if (!toolUse) break;
-      const toolResultText = await buildFullTranscripts(toolUse.input && toolUse.input.palabra_clave);
+      const toolResultText = await buildFullTranscripts(req.userId, toolUse.input && toolUse.input.palabra_clave);
 
       messages = [
         ...messages,

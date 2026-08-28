@@ -139,43 +139,150 @@
   @media (min-width: 700px) {
     .familia { display: flex; }
   }
+
+  #appContent { display: none; flex-direction: column; align-items: center; }
+
+  .login {
+    width: min(340px, 100%);
+    background: #FBF6EA;
+    border-radius: 28px;
+    box-shadow: 0 30px 60px -25px rgba(0,0,0,0.35);
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .login h1 { margin: 0 0 4px; }
+  .login p.sub { color: var(--ink-soft); font-size: 0.9rem; margin: 0 0 6px; text-align: center; }
+  .login input {
+    border: 1px solid #E7DFCC; border-radius: 10px; padding: 12px 14px;
+    font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink);
+  }
+  .login button {
+    border: none; background: var(--gold-deep); color: #FBF6EA; border-radius: 10px;
+    padding: 12px; font-weight: 700; font-size: 1rem; cursor: pointer; font-family: var(--font-body);
+  }
+  .login button:disabled { opacity: 0.6; cursor: default; }
+  .login .error { min-height: 1.2em; text-align: center; }
+
+  .logout-row { text-align: center; margin-top: 20px; }
 </style>
 </head>
 <body>
-  <div class="device">
+  <div class="login" id="loginScreen">
     <h1>Bitácora Viva</h1>
-    <div class="body-area">
-      <div class="greeting" id="greeting">
-        <div class="sub">Presioná el botón para empezar a charlar.</div>
-      </div>
-      <div class="transcript" id="transcript" aria-live="polite"></div>
-      <div class="orb-zone">
-        <button class="orb" id="orb" data-state="idle" aria-label="Presionar para comenzar la charla">
-          <span id="orbLabel">Presioná<br>para hablar</span>
-        </button>
-        <div class="state-label" id="stateLabel"></div>
-        <button class="write-toggle" id="writeToggle" type="button">prefiero escribir</button>
-        <div class="write-row" id="writeRow">
-          <input type="text" id="writeInput" placeholder="Escribí tu respuesta…" aria-label="Escribir respuesta">
-          <button id="writeSend" type="button">Enviar</button>
+    <p class="sub">Iniciá sesión para entrar a tu bitácora.</p>
+    <input type="text" id="loginUser" placeholder="Usuario" autocomplete="username">
+    <input type="password" id="loginPass" placeholder="Clave" autocomplete="current-password">
+    <button id="loginBtn" type="button">Entrar</button>
+    <p class="error" id="loginError"></p>
+  </div>
+
+  <div id="appContent">
+    <div class="device">
+      <h1>Bitácora Viva</h1>
+      <div class="body-area">
+        <div class="greeting" id="greeting">
+          <div class="sub">Presioná el botón para empezar a charlar.</div>
         </div>
-        <button class="write-toggle" id="voiceToggle" type="button">cambiar voz</button>
-        <div class="write-row" id="voiceRow">
-          <select id="voiceSelect" aria-label="Elegir voz"></select>
+        <div class="transcript" id="transcript" aria-live="polite"></div>
+        <div class="orb-zone">
+          <button class="orb" id="orb" data-state="idle" aria-label="Presionar para comenzar la charla">
+            <span id="orbLabel">Presioná<br>para hablar</span>
+          </button>
+          <div class="state-label" id="stateLabel"></div>
+          <button class="write-toggle" id="writeToggle" type="button">prefiero escribir</button>
+          <div class="write-row" id="writeRow">
+            <input type="text" id="writeInput" placeholder="Escribí tu respuesta…" aria-label="Escribir respuesta">
+            <button id="writeSend" type="button">Enviar</button>
+          </div>
+          <button class="write-toggle" id="voiceToggle" type="button">cambiar voz</button>
+          <div class="write-row" id="voiceRow">
+            <select id="voiceSelect" aria-label="Elegir voz"></select>
+          </div>
         </div>
       </div>
+    </div>
+
+    <div class="familia">
+      <h2>Preguntale a la bitácora</h2>
+      <p class="sub">Escribí una pregunta sobre lo que tu papá ya contó (nombres, lugares, historias…).</p>
+      <div class="familia-chat" id="familiaChat"></div>
+      <div class="familia-input-row">
+        <input type="text" id="familiaInput" placeholder="Ej: ¿cómo se llamaban sus papás?">
+        <button id="familiaAsk" type="button">Preguntar</button>
+      </div>
+    </div>
+
+    <div class="logout-row">
+      <button class="write-toggle" id="logoutBtn" type="button">cerrar sesión (<span id="whoami"></span>)</button>
     </div>
   </div>
 
-  <div class="familia">
-    <h2>Preguntale a la bitácora</h2>
-    <p class="sub">Escribí una pregunta sobre lo que tu papá ya contó (nombres, lugares, historias…).</p>
-    <div class="familia-chat" id="familiaChat"></div>
-    <div class="familia-input-row">
-      <input type="text" id="familiaInput" placeholder="Ej: ¿cómo se llamaban sus papás?">
-      <button id="familiaAsk" type="button">Preguntar</button>
-    </div>
-  </div>
+<script>
+(function () {
+  const loginScreen = document.getElementById('loginScreen');
+  const appContent = document.getElementById('appContent');
+  const loginUser = document.getElementById('loginUser');
+  const loginPass = document.getElementById('loginPass');
+  const loginBtn = document.getElementById('loginBtn');
+  const loginError = document.getElementById('loginError');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const whoami = document.getElementById('whoami');
+
+  function showApp(username) {
+    loginScreen.style.display = 'none';
+    appContent.style.display = 'flex';
+    whoami.textContent = username || '';
+  }
+
+  function showLogin() {
+    appContent.style.display = 'none';
+    loginScreen.style.display = 'flex';
+    loginPass.value = '';
+    loginUser.focus();
+  }
+
+  async function doLogin() {
+    const username = loginUser.value.trim();
+    const password = loginPass.value;
+    if (!username || !password) return;
+    loginBtn.disabled = true;
+    loginError.textContent = '';
+    try {
+      const resp = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        loginError.textContent = data.error || 'No se pudo iniciar sesión.';
+        loginBtn.disabled = false;
+        return;
+      }
+      window.location.reload();
+    } catch (e) {
+      loginError.textContent = 'Hubo un problema para conectar.';
+      loginBtn.disabled = false;
+    }
+  }
+
+  loginBtn.addEventListener('click', doLogin);
+  loginPass.addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+  loginUser.addEventListener('keydown', (e) => { if (e.key === 'Enter') loginPass.focus(); });
+
+  logoutBtn.addEventListener('click', async () => {
+    try { await fetch('/api/logout', { method: 'POST' }); } catch (e) {}
+    window.location.reload();
+  });
+
+  fetch('/api/me')
+    .then((resp) => (resp.ok ? resp.json() : Promise.reject()))
+    .then((data) => showApp(data.username))
+    .catch(() => showLogin());
+})();
+</script>
 
 <script>
 (function () {

@@ -12,6 +12,7 @@
     "@anthropic-ai/sdk": "^0.120.0",
     "@neondatabase/serverless": "^1.1.0",
     "@vercel/blob": "^2.8.0",
+    "bcryptjs": "^3.0.3",
     "dotenv": "^17.4.2",
     "express": "^5.2.1"
   },
