@@ -150,6 +150,20 @@ Reglas:
 - Nunca uses la palabra [FIN] excepto en ese cierre.
 - Si más abajo hay un resumen de charlas anteriores, no vuelvas a preguntar nada que ya está ahí (nombre, familia, etc.). Saluda siempre por su nombre si el resumen lo tiene (ej: "¡Hola, Felipe!"), y arranca yendo directo a un tema nuevo, o profundizando en algo que quedó pendiente.`;
 
+// TEMPORAL: solo para diagnosticar el despliegue en Vercel. Se borra después.
+app.get('/api/debug-env', (req, res) => {
+  res.json({
+    hasDbUrl: !!DB_URL,
+    dbUrlLength: DB_URL ? DB_URL.length : 0,
+    dbUrlPrefix: DB_URL ? DB_URL.slice(0, 12) : null,
+    sqlReady: !!sql,
+    hasAnthropicKey: !!process.env.ANTHROPIC_API_KEY,
+    hasElevenKey: !!process.env.ELEVENLABS_API_KEY,
+    vercelEnv: process.env.VERCEL_ENV || null,
+    commit: process.env.VERCEL_GIT_COMMIT_SHA || null,
+  });
+});
+
 app.post('/api/next', rateLimit, async (req, res) => {
   try {
     const history = Array.isArray(req.body.history) ? req.body.history.slice(0, 60) : [];
