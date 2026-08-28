@@ -42,7 +42,20 @@ const MODEL = 'claude-haiku-4-5-20251001';
 
 // --- Base de datos (Neon Postgres, vía la integración de Vercel) ---
 const DB_URL = process.env.DATABASE_URL || process.env.POSTGRES_URL;
-const sql = DB_URL ? neon(DB_URL) : null;
+let sql = null;
+if (!DB_URL) {
+  console.error('DATABASE_URL no está definida en las variables de entorno de esta función.');
+} else if (!/^postgres(ql)?:\/\//.test(DB_URL)) {
+  console.error(
+    `DATABASE_URL está definida pero no empieza con postgres:// (largo=${DB_URL.length}, primeros caracteres="${DB_URL.slice(0, 12)}")`
+  );
+} else {
+  try {
+    sql = neon(DB_URL);
+  } catch (err) {
+    console.error('neon() rechazó DATABASE_URL:', err.message);
+  }
+}
 
 let schemaReady = null;
 function ensureSchema() {
