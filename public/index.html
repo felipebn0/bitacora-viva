@@ -93,8 +93,11 @@
   .orb[data-state="listening"] { background: radial-gradient(circle at 35% 30%, #D9A15C, var(--gold-deep)); }
   .orb[data-state="listening"]::before { animation-duration: 1.4s; }
   .orb[data-state="speaking"], .orb[data-state="thinking"] { background: radial-gradient(circle at 35% 30%, #6E7F53, var(--moss)); }
+  .orb[data-state="paused"] { background: radial-gradient(circle at 35% 30%, #B5A98C, #8A7C63); }
+  .orb[data-state="paused"]::before { animation: none; opacity: 0.3; }
   .state-label { font-size: 0.9rem; color: var(--ink-soft); min-height: 1.3em; }
   .write-toggle { background: none; border: none; color: var(--moss); text-decoration: underline; cursor: pointer; font-family: var(--font-body); }
+  .end-toggle { color: #a33; font-size: 0.85rem; }
   .write-row { display: none; gap: 8px; width: 100%; max-width: 280px; }
   .write-row.visible { display: flex; }
   .write-row input, .write-row select { flex: 1; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 12px; font-family: var(--font-body); background: #fff; color: var(--ink); }
@@ -191,6 +194,7 @@
             <span id="orbLabel">Presioná<br>para hablar</span>
           </button>
           <div class="state-label" id="stateLabel"></div>
+          <button class="write-toggle end-toggle" id="endBtn" type="button" style="display:none;">terminar la charla</button>
           <button class="write-toggle" id="writeToggle" type="button">prefiero escribir</button>
           <div class="write-row" id="writeRow">
             <input type="text" id="writeInput" placeholder="Escribí tu respuesta…" aria-label="Escribir respuesta">
@@ -298,12 +302,14 @@
   const voiceToggle = document.getElementById('voiceToggle');
   const voiceRow = document.getElementById('voiceRow');
   const voiceSelect = document.getElementById('voiceSelect');
+  const endBtn = document.getElementById('endBtn');
 
   let history = [];       // lo que se le manda a Claude (solo role/content)
   let sessionLog = [];    // lo que se guarda en la bitácora (incluye audio)
   let sessionKey = null;  // carpeta de audio de esta charla
   let turnIndex = 0;
   let state = 'idle';
+  let pausedFromState = null;
   let sessionId = 0;
   let mediaStream = null;
   let mediaRecorder = null;
@@ -431,10 +437,12 @@
     state = next;
     orb.dataset.state = next;
     stateLabel.textContent = label || '';
-    orb.setAttribute(
-      'aria-label',
-      next === 'idle' || next === 'ended' ? 'Presionar para comenzar la charla' : 'Presionar para terminar la charla'
-    );
+    const resting = next === 'idle' || next === 'ended';
+    let orbHint = 'Presionar para comenzar la charla';
+    if (next === 'paused') orbHint = 'Presionar para seguir la charla';
+    else if (!resting) orbHint = 'Presionar para pausar la charla';
+    orb.setAttribute('aria-label', orbHint);
+    endBtn.style.display = resting ? 'none' : 'inline';
   }
 
   function speakWithSystemVoice(text, onEnd) {
@@ -628,21 +636,52 @@
     }
   }
 
-  async function requestGracefulStop() {
+  async function endConversation() {
     stopVoiceActivityDetection();
     if (fallbackRecognition) { try { fallbackRecognition.abort(); } catch (e) {} }
     sessionId += 1; // invalida cualquier respuesta pendiente de este turno
     if ('speechSynthesis' in window) speechSynthesis.cancel();
+    if (ttsAudioEl) { try { ttsAudioEl.pause(); } catch (e) {} }
     await stopRecordingAudio();
     writeRow.classList.remove('visible');
 
     history.push({
       role: 'user',
       content:
-        '(La persona presionó el botón para terminar la charla por ahora, a mitad de la conversación. Cierra con un mensaje cálido y empático que incluya un mini resumen de 1 o 2 frases de lo que se habló hoy, y las ganas de seguir charlando otro día. Termina ese mensaje, y solo ese, con [FIN].)',
+        '(La persona quiere terminar la charla por ahora, a mitad de la conversación. Cierra con un mensaje cálido y empático que incluya un mini resumen de 1 o 2 frases de lo que se habló hoy, y las ganas de seguir charlando otro día. Termina ese mensaje, y solo ese, con [FIN].)',
     });
 
     fetchNext();
+  }
+
+  async function pauseConversation() {
+    pausedFromState = state;
+    stopVoiceActivityDetection();
+    if (fallbackRecognition) { try { fallbackRecognition.abort(); } catch (e) {} }
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+    if (ttsAudioEl) { try { ttsAudioEl.pause(); } catch (e) {} }
+    sessionId += 1; // invalida cualquier respuesta pendiente de este turno
+    await stopRecordingAudio();
+    writeRow.classList.remove('visible');
+    setState('paused', 'En pausa — presioná para seguir');
+    orbLabel.innerHTML = 'Presioná<br>para seguir';
+    saveSessionLog(); // por si no vuelve: que no se pierda lo hablado hasta acá
+  }
+
+  function resumeConversation() {
+    const mySession = ++sessionId;
+    if (pausedFromState === 'thinking') {
+      fetchNext(); // se había pausado antes de recibir la pregunta nueva
+      return;
+    }
+    const lastAssistant = [...history].reverse().find((m) => m.role === 'assistant');
+    if (!lastAssistant) { fetchNext(); return; }
+    setState('speaking', 'Hablando…');
+    orbLabel.innerHTML = '···';
+    speak(lastAssistant.content, () => {
+      if (mySession !== sessionId) return;
+      listenForAnswer();
+    });
   }
 
   async function listenForAnswer() {
@@ -712,6 +751,7 @@
   function startSession() {
     if (state !== 'idle' && state !== 'ended') return;
     sessionId += 1;
+    pausedFromState = null;
     greeting.style.display = 'none';
     transcript.classList.add('visible');
     transcript.innerHTML = '';
@@ -726,10 +766,14 @@
     if (state === 'idle' || state === 'ended') {
       unlockAudioPlayback();
       startSession();
+    } else if (state === 'paused') {
+      resumeConversation();
     } else {
-      requestGracefulStop();
+      pauseConversation();
     }
   }
+
+  endBtn.addEventListener('click', endConversation);
 
   orb.addEventListener('click', handleOrbPress);
 
