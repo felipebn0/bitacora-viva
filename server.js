@@ -89,6 +89,28 @@ function ensureSchema() {
       )`;
       await sql`ALTER TABLE resumen ADD COLUMN IF NOT EXISTS user_id INT REFERENCES users(id)`;
       await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_resumen_user ON resumen(user_id)`;
+
+      // Aportes de la familia: historias escritas, y fotos/videos con descripción.
+      await sql`CREATE TABLE IF NOT EXISTS family_notes (
+        id SERIAL PRIMARY KEY,
+        user_id INT NOT NULL REFERENCES users(id),
+        contributor TEXT,
+        texto TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_family_notes_user ON family_notes(user_id)`;
+
+      await sql`CREATE TABLE IF NOT EXISTS media (
+        id SERIAL PRIMARY KEY,
+        user_id INT NOT NULL REFERENCES users(id),
+        type TEXT NOT NULL,
+        url TEXT NOT NULL,
+        caption TEXT,
+        contributor TEXT,
+        discussed BOOLEAN NOT NULL DEFAULT false,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_media_user ON media(user_id)`;
     })();
   }
   return schemaReady;
@@ -219,6 +241,28 @@ async function loadMemorySummary(userId) {
   return (rows[0] && rows[0].texto) || '';
 }
 
+// Historias y fotos/videos que la familia fue aportando, para que la
+// entrevistadora los use y pregunte por las personas o momentos que aparecen.
+async function loadFamilyContext(userId) {
+  await ensureSchema();
+  const notes = await sql`SELECT contributor, texto FROM family_notes WHERE user_id = ${userId} ORDER BY created_at DESC LIMIT 20`;
+  const pending = await sql`SELECT id, type, caption, contributor FROM media WHERE user_id = ${userId} AND discussed = false ORDER BY created_at ASC LIMIT 1`;
+
+  let text = '';
+  if (notes.length) {
+    text += `\n\nHistorias que la familia contó (podés usarlas para profundizar o confirmar detalles, con naturalidad):\n${notes
+      .map((n) => `- [${n.contributor || 'un familiar'}]: ${n.texto}`)
+      .join('\n')}`;
+  }
+  if (pending.length) {
+    const m = pending[0];
+    const tipo = m.type === 'video' ? 'un video' : 'una foto';
+    text += `\n\nLa familia subió ${tipo} (de ${m.contributor || 'un familiar'}) con esta descripción: "${m.caption || 'sin descripción'}". En algún momento de esta charla, preguntale con naturalidad sobre eso (quién aparece, qué recuerda de ese momento) — no hace falta que sea lo primero que preguntes.`;
+    sql`UPDATE media SET discussed = true WHERE id = ${m.id}`.catch(() => {});
+  }
+  return text;
+}
+
 async function buildFullTranscripts(userId, keyword) {
   await ensureSchema();
   const rows = await sql`SELECT fecha, intercambios FROM sessions WHERE user_id = ${userId} ORDER BY fecha ASC`;
@@ -303,9 +347,11 @@ app.post('/api/next', requireAuth, rateLimit, async (req, res) => {
         }];
 
     const memoria = await loadMemorySummary(req.userId);
-    const system = memoria
-      ? `${SYSTEM_PROMPT}\n\nResumen de charlas anteriores (no repitas lo que ya está acá):\n${memoria}`
-      : SYSTEM_PROMPT;
+    const familia = await loadFamilyContext(req.userId);
+    const system =
+      SYSTEM_PROMPT +
+      (memoria ? `\n\nResumen de charlas anteriores (no repitas lo que ya está acá):\n${memoria}` : '') +
+      familia;
 
     const response = await anthropic.messages.create({
       model: MODEL,
@@ -456,6 +502,66 @@ app.post('/api/save-audio', requireAuth, express.raw({ type: '*/*', limit: '20mb
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo guardar el audio.' });
+  }
+});
+
+app.post('/api/contribute-story', requireAuth, rateLimit, async (req, res) => {
+  try {
+    let { contributor, text } = req.body || {};
+    text = (text || '').trim();
+    if (!text) return res.status(400).json({ error: 'Falta el texto de la historia.' });
+    if (text.length > 4000) text = text.slice(0, 4000);
+    const cleanContributor = (contributor || '').trim().slice(0, 60) || null;
+
+    await ensureSchema();
+    await sql`INSERT INTO family_notes (user_id, contributor, texto) VALUES (${req.userId}, ${cleanContributor}, ${text})`;
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo guardar la historia.' });
+  }
+});
+
+// Límite bajo a propósito: las funciones serverless de Vercel no aceptan
+// cuerpos de pedido grandes (tope real ~4.5MB). Para fotos alcanza; para
+// videos largos hace falta otro mecanismo de subida que todavía no armamos.
+app.post('/api/contribute-media', requireAuth, express.raw({ type: '*/*', limit: '4mb' }), async (req, res) => {
+  try {
+    if (!req.body || !req.body.length) return res.status(400).json({ error: 'Falta el archivo.' });
+    const { contributor, caption } = req.query;
+    const contentType = req.get('Content-Type') || 'application/octet-stream';
+    const type = contentType.startsWith('video') ? 'video' : 'foto';
+    const cleanContributor = String(contributor || '').trim().slice(0, 60) || null;
+    const cleanCaption = String(caption || '').trim().slice(0, 500) || null;
+    const ext = (contentType.split('/')[1] || 'bin').replace(/[^a-z0-9]/gi, '').slice(0, 10) || 'bin';
+
+    const blob = await put(`media/${req.userId}/${type}-${Date.now()}.${ext}`, req.body, {
+      access: 'public',
+      contentType,
+      addRandomSuffix: true,
+    });
+
+    await ensureSchema();
+    await sql`INSERT INTO media (user_id, type, url, caption, contributor) VALUES (${req.userId}, ${type}, ${blob.url}, ${cleanCaption}, ${cleanContributor})`;
+    res.json({ ok: true, url: blob.url, type });
+  } catch (err) {
+    console.error(err);
+    if (err && err.message && err.message.includes('request entity too large')) {
+      return res.status(413).json({ error: 'El archivo es muy grande (máximo 4MB por ahora).' });
+    }
+    res.status(500).json({ error: 'No se pudo subir el archivo.' });
+  }
+});
+
+app.get('/api/contributions', requireAuth, async (req, res) => {
+  try {
+    await ensureSchema();
+    const notes = await sql`SELECT contributor, texto, created_at FROM family_notes WHERE user_id = ${req.userId} ORDER BY created_at DESC LIMIT 30`;
+    const media = await sql`SELECT type, url, caption, contributor, created_at FROM media WHERE user_id = ${req.userId} ORDER BY created_at DESC LIMIT 30`;
+    res.json({ notes, media });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudieron cargar los aportes.' });
   }
 });
 

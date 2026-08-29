@@ -112,7 +112,6 @@
     border: 1px solid #E7DFCC;
     border-radius: 20px;
     padding: 22px 24px;
-    display: flex;
     flex-direction: column;
     gap: 12px;
   }
@@ -138,6 +137,38 @@
   .familia-input-row input { flex: 1; border: 1px solid #E7DFCC; border-radius: 10px; padding: 10px 12px; font-family: var(--font-body); background: #fff; color: var(--ink); }
   .familia-input-row button { border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px; padding: 0 16px; font-weight: 700; cursor: pointer; }
   .familia-input-row button:disabled { opacity: 0.6; cursor: default; }
+
+  .aportes {
+    width: min(440px, 100%);
+    margin: 28px auto 0;
+    background: #FBF6EA;
+    border: 1px solid #E7DFCC;
+    border-radius: 20px;
+    padding: 22px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .aportes h2 { font-family: var(--font-display); font-size: 1.1rem; margin: 0; font-weight: 600; }
+  .aportes .sub { color: var(--ink-soft); font-size: 0.9rem; margin: 0; }
+  .aportes label { font-size: 0.85rem; color: var(--ink-soft); margin-bottom: -6px; }
+  .aportes input[type="text"], .aportes textarea, .aportes input[type="file"] {
+    border: 1px solid #E7DFCC; border-radius: 10px; padding: 10px 12px;
+    font-family: var(--font-body); background: #fff; color: var(--ink); font-size: 0.95rem;
+  }
+  .aportes textarea { resize: vertical; min-height: 70px; }
+  .aportes button {
+    border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px;
+    padding: 10px 16px; font-weight: 700; cursor: pointer; font-family: var(--font-body); align-self: flex-start;
+  }
+  .aportes button:disabled { opacity: 0.6; cursor: default; }
+  .aportes hr { border: none; border-top: 1px solid #E7DFCC; margin: 4px 0; }
+  .aportes .msg { font-size: 0.85rem; min-height: 1.2em; color: var(--moss); }
+  .aportes .lista { display: flex; flex-direction: column; gap: 10px; max-height: 220px; overflow-y: auto; }
+  .aportes .lista img { max-width: 100%; border-radius: 10px; display: block; }
+  .aportes .lista video { max-width: 100%; border-radius: 10px; display: block; }
+  .aportes .lista .item { font-size: 0.85rem; color: var(--ink-soft); }
+  .aportes .lista .item strong { color: var(--ink); }
 
   @media (min-width: 700px) {
     .familia { display: flex; }
@@ -216,6 +247,31 @@
         <input type="text" id="familiaInput" placeholder="Ej: ¿cómo se llamaban sus papás?">
         <button id="familiaAsk" type="button">Preguntar</button>
       </div>
+    </div>
+
+    <div class="aportes">
+      <h2>Aportar a la bitácora</h2>
+      <p class="sub">Historias, fotos o videos para ayudar a profundizar la charla.</p>
+
+      <label for="aporteNombre">Tu nombre</label>
+      <input type="text" id="aporteNombre" placeholder="Ej: Marcela">
+
+      <label for="aporteTexto">Contá una historia o recuerdo</label>
+      <textarea id="aporteTexto" placeholder="Ej: papá conoció a mamá en una fiesta de la universidad…"></textarea>
+      <button id="aporteTextoBtn" type="button">Agregar historia</button>
+
+      <hr>
+
+      <label for="aporteArchivo">Foto o video (hasta 4MB)</label>
+      <input type="file" id="aporteArchivo" accept="image/*,video/*">
+      <input type="text" id="aporteCaption" placeholder="¿Quién aparece? ¿Qué momento es?">
+      <button id="aporteArchivoBtn" type="button">Subir foto/video</button>
+
+      <p class="msg" id="aporteMsg"></p>
+
+      <hr>
+
+      <div class="lista" id="aportesLista"></div>
     </div>
 
     <div class="logout-row">
@@ -842,6 +898,103 @@
   familiaAsk.addEventListener('click', askFamilia);
   familiaInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') askFamilia(); });
 
+  // --- Aportar a la bitácora (historias, fotos, videos) ---
+  const aporteNombre = document.getElementById('aporteNombre');
+  const aporteTexto = document.getElementById('aporteTexto');
+  const aporteTextoBtn = document.getElementById('aporteTextoBtn');
+  const aporteArchivo = document.getElementById('aporteArchivo');
+  const aporteCaption = document.getElementById('aporteCaption');
+  const aporteArchivoBtn = document.getElementById('aporteArchivoBtn');
+  const aporteMsg = document.getElementById('aporteMsg');
+  const aportesLista = document.getElementById('aportesLista');
+
+  async function cargarAportes() {
+    try {
+      const resp = await fetch('/api/contributions');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      aportesLista.innerHTML = '';
+      const items = [
+        ...(data.notes || []).map((n) => ({ ...n, kind: 'nota' })),
+        ...(data.media || []).map((m) => ({ ...m, kind: 'media' })),
+      ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+      items.forEach((it) => {
+        const div = document.createElement('div');
+        div.className = 'item';
+        if (it.kind === 'nota') {
+          div.innerHTML = `<strong>${it.contributor || 'Familia'}:</strong> ${it.texto}`;
+        } else if (it.type === 'video') {
+          div.innerHTML = `<video controls src="${it.url}"></video><div><strong>${it.contributor || 'Familia'}:</strong> ${it.caption || ''}</div>`;
+        } else {
+          div.innerHTML = `<img src="${it.url}" alt=""><div><strong>${it.contributor || 'Familia'}:</strong> ${it.caption || ''}</div>`;
+        }
+        aportesLista.appendChild(div);
+      });
+    } catch (e) {}
+  }
+
+  async function agregarHistoria() {
+    const contributor = aporteNombre.value.trim();
+    const text = aporteTexto.value.trim();
+    if (!text) return;
+    aporteTextoBtn.disabled = true;
+    aporteMsg.textContent = '';
+    try {
+      const resp = await fetch('/api/contribute-story', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contributor, text }),
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        aporteTexto.value = '';
+        aporteMsg.textContent = 'Historia agregada. Gracias.';
+        cargarAportes();
+      } else {
+        aporteMsg.textContent = data.error || 'No se pudo agregar.';
+      }
+    } catch (e) {
+      aporteMsg.textContent = 'Hubo un problema para conectar.';
+    }
+    aporteTextoBtn.disabled = false;
+  }
+
+  async function subirArchivo() {
+    const file = aporteArchivo.files[0];
+    if (!file) return;
+    if (file.size > 4 * 1024 * 1024) {
+      aporteMsg.textContent = 'El archivo pesa más de 4MB — probá con uno más chico por ahora.';
+      return;
+    }
+    const contributor = encodeURIComponent(aporteNombre.value.trim());
+    const caption = encodeURIComponent(aporteCaption.value.trim());
+    aporteArchivoBtn.disabled = true;
+    aporteMsg.textContent = 'Subiendo…';
+    try {
+      const resp = await fetch(`/api/contribute-media?contributor=${contributor}&caption=${caption}`, {
+        method: 'POST',
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        body: file,
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        aporteArchivo.value = '';
+        aporteCaption.value = '';
+        aporteMsg.textContent = 'Subido correctamente.';
+        cargarAportes();
+      } else {
+        aporteMsg.textContent = data.error || 'No se pudo subir.';
+      }
+    } catch (e) {
+      aporteMsg.textContent = 'Hubo un problema para conectar.';
+    }
+    aporteArchivoBtn.disabled = false;
+  }
+
+  aporteTextoBtn.addEventListener('click', agregarHistoria);
+  aporteArchivoBtn.addEventListener('click', subirArchivo);
+
   // Si se cierra la pestaña o se navega a otro lado a mitad de charla,
   // intentamos guardar lo que se alcanzó a hablar en vez de perderlo.
   window.addEventListener('pagehide', () => {
@@ -854,6 +1007,8 @@
       );
     } catch (e) {}
   });
+
+  cargarAportes();
 })();
 </script>
 </body>
