@@ -88,6 +88,11 @@ function ensureSchema() {
         actualizado TIMESTAMPTZ
       )`;
       await sql`ALTER TABLE resumen ADD COLUMN IF NOT EXISTS user_id INT REFERENCES users(id)`;
+      // "id" era la clave primaria de la versión vieja (sin cuentas), con un
+      // default constante (1) en vez de un contador — eso hacía chocar
+      // cualquier fila nueva. La sacamos; user_id (con su índice único de
+      // abajo) es la clave real ahora.
+      await sql`ALTER TABLE resumen DROP CONSTRAINT IF EXISTS resumen_pkey`;
       await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_resumen_user ON resumen(user_id)`;
 
       // Aportes de la familia: historias escritas, y fotos/videos con descripción.
