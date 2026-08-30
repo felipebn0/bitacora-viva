@@ -192,18 +192,6 @@ app.get('/api/me', (req, res) => {
   res.json({ username: session.username });
 });
 
-// TEMPORAL: solo para diagnosticar por qué no se actualiza el resumen.
-app.get('/api/debug-resumen', requireAuth, async (req, res) => {
-  try {
-    await ensureSchema();
-    const resumenRows = await sql`SELECT * FROM resumen WHERE user_id = ${req.userId}`;
-    const sessionCount = await sql`SELECT count(*) FROM sessions WHERE user_id = ${req.userId}`;
-    res.json({ userId: req.userId, resumenRows, sessionCount: sessionCount[0] });
-  } catch (err) {
-    res.status(500).json({ error: err.message, stack: err.stack });
-  }
-});
-
 app.post('/api/register', rateLimit, async (req, res) => {
   try {
     const { username, password, setupKey } = req.body || {};
