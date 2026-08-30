@@ -240,6 +240,25 @@ app.post('/api/logout', (req, res) => {
   res.json({ ok: true });
 });
 
+// Borra las charlas, el resumen y los aportes de la cuenta logueada, para
+// empezar de cero. No borra la cuenta en sí (usuario/clave siguen sirviendo).
+app.post('/api/reset-bitacora', requireAuth, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    const s = await sql`DELETE FROM sessions WHERE user_id = ${req.userId} RETURNING id`;
+    const r = await sql`DELETE FROM resumen WHERE user_id = ${req.userId} RETURNING user_id`;
+    const n = await sql`DELETE FROM family_notes WHERE user_id = ${req.userId} RETURNING id`;
+    const m = await sql`DELETE FROM media WHERE user_id = ${req.userId} RETURNING id`;
+    res.json({
+      ok: true,
+      deleted: { sessions: s.length, resumen: r.length, family_notes: n.length, media: m.length },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo reiniciar la bitácora.' });
+  }
+});
+
 async function loadMemorySummary(userId) {
   await ensureSchema();
   const rows = await sql`SELECT texto FROM resumen WHERE user_id = ${userId}`;
