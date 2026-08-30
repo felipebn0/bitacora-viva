@@ -549,7 +549,7 @@ app.post('/api/contribute-media', requireAuth, express.raw({ type: '*/*', limit:
     if (err && err.message && err.message.includes('request entity too large')) {
       return res.status(413).json({ error: 'El archivo es muy grande (máximo 4MB por ahora).' });
     }
-    res.status(500).json({ error: 'No se pudo subir el archivo.', debug: err && err.message });
+    res.status(500).json({ error: 'No se pudo subir el archivo.' });
   }
 });
 
