@@ -401,7 +401,13 @@
   async function startRecordingAudio() {
     try {
       if (!mediaStream) {
-        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: false, // en mics Bluetooth (AirPods) esto a veces borra la voz baja tratándola como ruido
+            autoGainControl: true,   // ayuda a levantar el volumen bajo de un mic Bluetooth
+          },
+        });
       }
       audioChunks = [];
       mediaRecorder = new MediaRecorder(mediaStream);
@@ -566,12 +572,28 @@
   // escuchando; recién cuando pasan SILENCE_MS sin volumen, cerramos la
   // grabación y la mandamos al servidor para transcribirla.
   const SILENCE_MS = 2000; // pausa tolerada antes de dar la respuesta por terminada
-  const VAD_THRESHOLD = 0.02; // umbral de volumen para considerar que hay voz
+  const VAD_MIN_THRESHOLD = 0.006; // piso absoluto: nunca calibrar por debajo de esto
+  const VAD_CALIBRATION_MS = 400; // primeros ms para medir el "silencio" real de ESTE mic
+  // Modo diagnóstico: abrí la página con ?debugMic=1 para ver el volumen (rms) en
+  // vivo y confirmar si un mic (ej. AirPods) está entrando muy bajo.
+  const DEBUG_MIC = new URLSearchParams(location.search).has('debugMic');
   let audioContext = null;
   let analyser = null;
   let vadRafId = null;
   let vadActive = false;
   let lastLoudTime = 0;
+  let vadThreshold = 0.02;
+  let vadStartTime = 0;
+  let vadCalibrated = false;
+  let vadNoiseFloor = 0;
+  let debugEl = null;
+
+  function ensureDebugEl() {
+    if (!DEBUG_MIC || debugEl) return;
+    debugEl = document.createElement('div');
+    debugEl.style.cssText = 'position:fixed;bottom:8px;left:8px;background:#000;color:#0f0;font:11px monospace;padding:4px 8px;z-index:9999;border-radius:6px;';
+    document.body.appendChild(debugEl);
+  }
 
   function startVoiceActivityDetection() {
     if (!mediaStream) return;
@@ -587,6 +609,11 @@
     const data = new Uint8Array(analyser.frequencyBinCount);
     lastLoudTime = Date.now();
     vadActive = true;
+    vadStartTime = Date.now();
+    vadCalibrated = false;
+    vadNoiseFloor = 0;
+    vadThreshold = 0.02;
+    ensureDebugEl();
 
     function tick() {
       if (!vadActive) return;
@@ -597,9 +624,29 @@
         sumSquares += v * v;
       }
       const rms = Math.sqrt(sumSquares / data.length);
-      if (rms > VAD_THRESHOLD) lastLoudTime = Date.now();
 
-      if (Date.now() - lastLoudTime > SILENCE_MS) {
+      // Calibración: durante los primeros VAD_CALIBRATION_MS medimos el piso de
+      // ruido real de este micrófono (celular, AirPods, lo que sea) y recién ahí
+      // fijamos el umbral. Con AirPods por Bluetooth el volumen capturado suele
+      // ser mucho más bajo que con el mic del teléfono, así que un número fijo
+      // (como el 0.02 anterior) puede no dispararse nunca y cortar la grabación
+      // de inmediato aunque la persona esté hablando.
+      if (!vadCalibrated) {
+        vadNoiseFloor = Math.max(vadNoiseFloor, rms);
+        if (Date.now() - vadStartTime > VAD_CALIBRATION_MS) {
+          vadThreshold = Math.max(vadNoiseFloor * 1.8, VAD_MIN_THRESHOLD);
+          vadCalibrated = true;
+          lastLoudTime = Date.now();
+        }
+      } else if (rms > vadThreshold) {
+        lastLoudTime = Date.now();
+      }
+
+      if (DEBUG_MIC && debugEl) {
+        debugEl.textContent = `rms=${rms.toFixed(4)}  umbral=${vadThreshold.toFixed(4)}  calibrado=${vadCalibrated}`;
+      }
+
+      if (vadCalibrated && Date.now() - lastLoudTime > SILENCE_MS) {
         stopVoiceActivityDetection();
         finalizeSpokenAnswer();
         return;
