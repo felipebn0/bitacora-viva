@@ -572,10 +572,12 @@ app.post('/api/save', requireAuth, async (req, res) => {
 
     await ensureSchema();
     await sql`INSERT INTO sessions (user_id, intercambios) VALUES (${req.userId}, ${JSON.stringify(history)}::jsonb)`;
-    res.json({ ok: true });
 
-    // se actualiza en segundo plano, no hace esperar al usuario
-    updateMemorySummary(req.userId, history).catch((err) => console.error('No se pudo actualizar el resumen:', err));
+    // Se espera de verdad (en Vercel, la función puede cortarse apenas se
+    // manda la respuesta — "en segundo plano" no garantiza que termine).
+    await updateMemorySummary(req.userId, history).catch((err) => console.error('No se pudo actualizar el resumen:', err));
+
+    res.json({ ok: true });
   } catch (err) {
     console.error(err);
     if (!res.headersSent) res.status(500).json({ error: 'No se pudo guardar la charla.' });
