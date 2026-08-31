@@ -238,6 +238,21 @@
 
       // Línea de padre/madre real hacia cada hijo (campo "padres"), no por
       // generación genérica — así cada rama va a quien corresponde de verdad.
+      // Cuando dos familias distintas quedan una al lado de la otra (ej. los
+      // hermanos de un lado y la mamá del otro con muy pocos hijos), sus
+      // líneas horizontales pueden terminar ocupando el mismo rango de
+      // ancho y verse como una sola barra continua. Para evitarlo, cada
+      // grupo de hermanos (mismos padres) que comparte la altura de la
+      // transición usa un nivel Y un poco distinto ("escalonado").
+      const nivelPorTransicion = new Map(); // "anchorY redondeado" -> Map(claveDePadres -> nivel)
+      function nivelDeGrupo(anchorY, claveDePadres) {
+        const t = Math.round(anchorY);
+        if (!nivelPorTransicion.has(t)) nivelPorTransicion.set(t, new Map());
+        const m = nivelPorTransicion.get(t);
+        if (!m.has(claveDePadres)) m.set(claveDePadres, m.size);
+        return m.get(claveDePadres);
+      }
+
       people.forEach((p) => {
         const childAvatar = avatarByName.get(p.nombre);
         if (!childAvatar) return;
@@ -249,7 +264,13 @@
         const anchorY = Math.max(...parentCenters.map((c) => c.bottom));
         if (anchorY >= childC.top) return; // evita líneas invertidas si el dato viene raro
         const anchorX = parentCenters.reduce((s, c) => s + c.x, 0) / parentCenters.length;
-        const midY = anchorY + (childC.top - anchorY) / 2;
+
+        const claveDePadres = padresNombres.slice().sort().join('|');
+        const nivel = nivelDeGrupo(anchorY, claveDePadres);
+        const disponible = childC.top - anchorY;
+        const paso = Math.min(16, disponible / 5); // no pasarse del espacio real entre filas
+        const midY = anchorY + paso * 1.2 + nivel * paso;
+
         drawLine(svg, anchorX, anchorY, anchorX, midY);
         drawLine(svg, anchorX, midY, childC.x, midY);
         drawLine(svg, childC.x, midY, childC.x, childC.top);
