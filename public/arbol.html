@@ -126,19 +126,41 @@
     return partnerOf;
   }
 
+  // Ordena cada fila agrupando primero por HERMANOS DE SANGRE (mismos
+  // padres) — así el bloque de hermanos de Fernando no se separa aunque su
+  // esposa Marta tenga sus propios padres distintos. Solo se "pega" a la
+  // pareja junto a su grupo cuando esa pareja no tiene padres propios
+  // conocidos en el árbol (cuñado/cuñada), que es el único caso donde
+  // pegarlos no rompe ningún bloque de hermanos real.
   function ordenarConParejasJuntas(grupo, partnerOf) {
-    const result = [];
-    const used = new Set();
+    const key = (p) => {
+      const padres = (Array.isArray(p.padres) ? p.padres : []).filter(Boolean);
+      return padres.length ? padres.slice().sort().join('|') : null;
+    };
+    const grupos = new Map(); // clave de padres -> [personas]
+    const ordenClaves = [];
+    const sinPadres = [];
     grupo.forEach((p) => {
-      if (used.has(p.nombre)) return;
-      result.push(p);
-      used.add(p.nombre);
-      const partnerName = partnerOf.get(p.nombre);
-      if (partnerName) {
-        const partner = grupo.find((x) => x.nombre === partnerName && !used.has(x.nombre));
-        if (partner) { result.push(partner); used.add(partner.nombre); }
-      }
+      const k = key(p);
+      if (k === null) { sinPadres.push(p); return; }
+      if (!grupos.has(k)) { grupos.set(k, []); ordenClaves.push(k); }
+      grupos.get(k).push(p);
     });
+
+    const result = [];
+    const usadosSinPadres = new Set();
+    ordenClaves.forEach((k) => {
+      grupos.get(k).forEach((p) => {
+        result.push(p);
+        const partnerName = partnerOf.get(p.nombre);
+        if (!partnerName) return;
+        const partner = sinPadres.find((x) => x.nombre === partnerName && !usadosSinPadres.has(x.nombre));
+        if (partner) { result.push(partner); usadosSinPadres.add(partner.nombre); }
+      });
+    });
+    // Cualquier "sin padres conocidos" que no se pudo pegar a su pareja
+    // (no tiene pareja en esta fila) va al final, en su orden original.
+    sinPadres.forEach((p) => { if (!usadosSinPadres.has(p.nombre)) result.push(p); });
     return result;
   }
 
