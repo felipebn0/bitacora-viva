@@ -177,64 +177,47 @@
   #appContent { display: none; flex-direction: column; align-items: center; }
 
   .main-layout { display: flex; flex-direction: column; align-items: center; }
-  .left-col { display: flex; flex-direction: column; align-items: center; }
-  .right-col { display: none; }
+  .device-col { display: flex; flex-direction: column; align-items: center; width: 100%; }
+  .panels-col { display: flex; flex-direction: column; align-items: center; width: 100%; }
 
   @media (min-width: 980px) {
-    .main-layout { flex-direction: row; align-items: flex-start; gap: 28px; }
-    .right-col { display: flex; flex-direction: column; gap: 20px; width: 300px; flex-shrink: 0; position: sticky; top: 24px; }
+    .main-layout { flex-direction: row; align-items: flex-start; justify-content: center; gap: 28px; }
+    .device-col { width: auto; flex-shrink: 0; order: 2; position: sticky; top: 24px; }
+    .panels-col { width: min(420px, 100%); flex-shrink: 0; order: 1; }
   }
 
-  .tree-panel {
-    background: #FBF6EA;
-    border: 1px solid #E7DFCC;
-    border-radius: 20px;
-    padding: 20px 22px;
+  .topbar {
+    width: 100%;
+    max-width: 900px;
+    margin: 0 auto 18px;
     display: flex;
-    flex-direction: column;
+    justify-content: flex-end;
     gap: 10px;
   }
-  .tree-panel h2 { font-family: var(--font-display); font-size: 1.05rem; margin: 0; font-weight: 600; }
-  .tree-panel .sub { color: var(--ink-soft); font-size: 0.85rem; margin: 0; }
-  .tree-panel .empty { color: var(--ink-soft); font-size: 0.85rem; font-style: italic; }
-
-  #treeTiers { overflow-x: auto; padding-bottom: 4px; }
-  .tree-graphic { position: relative; display: flex; flex-direction: column; gap: 26px; padding-top: 2px; width: max-content; min-width: 100%; }
-  .tree-row { display: flex; flex-wrap: nowrap; justify-content: center; gap: 10px; position: relative; z-index: 1; width: max-content; margin: 0 auto; }
-  .tree-lines { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 0; overflow: visible; }
-  .tree-lines line { stroke: #B7A87E; stroke-width: 2; }
-  .tree-node {
-    background: var(--bubble-user);
-    border-radius: 12px;
-    padding: 6px 10px;
-    font-size: 0.82rem;
-    line-height: 1.25;
-    text-align: center;
-    min-width: 56px;
-  }
-  .tree-node strong { display: block; color: var(--ink); }
-  .tree-node span { display: block; color: var(--ink-soft); font-size: 0.72rem; }
-  .tree-node.principal { background: var(--gold-deep); box-shadow: 0 4px 10px -4px rgba(0,0,0,0.4); }
-  .tree-node.principal strong, .tree-node.principal span { color: #FBF6EA; }
-
-  .timeline-item {
-    position: relative;
-    padding: 0 0 12px 16px;
-    border-left: 2px solid #E7DFCC;
-    font-size: 0.88rem;
-  }
-  .timeline-item:last-child { border-left-color: transparent; padding-bottom: 0; }
-  .timeline-item::before {
-    content: '';
-    position: absolute;
-    left: -5px;
-    top: 3px;
-    width: 8px;
-    height: 8px;
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
-    background: var(--moss);
+    background: #FBF6EA;
+    border: 1px solid #E7DFCC;
+    font-size: 1.3rem;
+    text-decoration: none;
+    cursor: pointer;
+    box-shadow: 0 2px 6px -3px rgba(0,0,0,0.2);
   }
-  .timeline-year { color: var(--moss); font-weight: 700; font-size: 0.78rem; }
+  .icon-btn-msg {
+    position: absolute;
+    margin-top: 52px;
+    background: var(--ink);
+    color: #FBF6EA;
+    font-size: 0.8rem;
+    padding: 6px 10px;
+    border-radius: 8px;
+    white-space: nowrap;
+  }
 
   .login {
     width: min(340px, 100%);
@@ -273,8 +256,16 @@
   </div>
 
   <div id="appContent">
+   <div class="topbar">
+     <div style="position: relative;">
+       <a class="icon-btn" href="/arbol.html" target="_blank" rel="noopener" title="Árbol genealógico" aria-label="Árbol genealógico">🌳</a>
+     </div>
+     <div style="position: relative;">
+       <button class="icon-btn" id="bookIconBtn" type="button" title="Libro de la historia" aria-label="Libro de la historia">📖</button>
+     </div>
+   </div>
    <div class="main-layout">
-    <div class="left-col">
+    <div class="device-col">
     <div class="device">
       <h1>Bitácora Viva</h1>
       <div class="body-area">
@@ -301,7 +292,9 @@
         </div>
       </div>
     </div>
+    </div>
 
+    <div class="panels-col">
     <div class="familia">
       <h2>Preguntale a la bitácora</h2>
       <p class="sub">Escribí una pregunta sobre lo que tu papá ya contó (nombres, lugares, historias…).</p>
@@ -345,21 +338,6 @@
       <p class="sub">Cuando lo que cuenta parece una historia completa (no un dato corto), queda anotado acá junto con su audio.</p>
       <div class="lista" id="storyLogLista"></div>
     </div>
-    </div>
-
-    <div class="right-col">
-      <div class="tree-panel">
-        <h2>Árbol genealógico</h2>
-        <p class="sub">Se va armando solo con lo que se cuenta en las charlas. <a href="/arbol.html" target="_blank" rel="noopener" style="color: var(--gold-deep);">Ver completo →</a></p>
-        <div id="treeTiers"></div>
-      </div>
-      <!-- Línea de tiempo: escondida por ahora. El código (cargarArbol,
-           timelineList) sigue funcionando por si se retoma más adelante. -->
-      <div class="tree-panel" style="display:none;">
-        <h2>Línea de tiempo</h2>
-        <p class="sub">Momentos de su vida, en orden.</p>
-        <div id="timelineList"></div>
-      </div>
     </div>
    </div>
 
@@ -902,7 +880,6 @@
     writeToggle.style.display = 'none';
     releaseMic();
     await saveSessionLog();
-    cargarArbol();
   }
 
   function startSession(mode) {
@@ -1018,126 +995,8 @@
 
   const storyLogLista = document.getElementById('storyLogLista');
 
-  const treeTiers = document.getElementById('treeTiers');
-  const timelineList = document.getElementById('timelineList');
-
-  function tierForRelacion(relacion) {
-    const r = (relacion || '').toLowerCase();
-    if (/abuel/.test(r)) return 0;
-    if (/(pap[aá]|padre|mam[aá]|madre|t[ií]o|t[ií]a)/.test(r)) return 1;
-    if (/(nieto|nieta)/.test(r)) return 4;
-    if (/(hijo|hija|sobrin)/.test(r)) return 3;
-    return 2; // hermanos, esposo/a, primos, sujeto principal
-  }
-
-  // Novio/novia no cuenta como familia directa en el árbol (solo esposo/a) —
-  // filtro extra acá por si algo se cuela, el backend ya filtra también.
-  function esNovio(relacion) {
-    return /\bnovi[oa]\b/i.test(relacion || '');
-  }
-
-  function drawLine(svg, x1, y1, x2, y2) {
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', x1); line.setAttribute('y1', y1);
-    line.setAttribute('x2', x2); line.setAttribute('y2', y2);
-    svg.appendChild(line);
-  }
-
-  const CATEGORY_ICON = {
-    'nacimiento': '👶', 'cumpleaños': '🎂', 'viaje': '✈️',
-    'graduación': '🎓', 'matrimonio': '💍', 'muerte': '🕊️',
-    'otro hito importante': '⭐',
-  };
-
-  async function cargarArbol() {
-    try {
-      const resp = await fetch('/api/tree');
-      if (!resp.ok) return;
-      const data = await resp.json();
-
-      treeTiers.innerHTML = '';
-      const people = (data.people || []).filter((p) => !esNovio(p.relacion));
-      if (!people.length) {
-        treeTiers.innerHTML = '<p class="empty">Todavía no hay nadie registrado — va a ir apareciendo a medida que se charla.</p>';
-      } else {
-        const tiers = [[], [], [], [], []];
-        people.forEach((p) => { tiers[tierForRelacion(p.relacion)].push(p); });
-
-        const graphic = document.createElement('div');
-        graphic.className = 'tree-graphic';
-        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        svg.setAttribute('class', 'tree-lines');
-        graphic.appendChild(svg);
-
-        const nodeByName = new Map();
-        tiers.forEach((grupo) => {
-          if (!grupo.length) return;
-          const row = document.createElement('div');
-          row.className = 'tree-row';
-          grupo.forEach((p) => {
-            const node = document.createElement('div');
-            node.className = 'tree-node' + (/sujeto principal/i.test(p.relacion) ? ' principal' : '');
-            node.innerHTML = `<strong>${p.nombre}</strong><span>${p.relacion}</span>`;
-            row.appendChild(node);
-            nodeByName.set(p.nombre, node);
-          });
-          graphic.appendChild(row);
-        });
-
-        treeTiers.appendChild(graphic);
-
-        // Conectores según quién es hijo/a de quién de verdad (campo "padres"),
-        // no por generación genérica — así cada rama va a su papá/mamá real.
-        requestAnimationFrame(() => {
-          const containerRect = graphic.getBoundingClientRect();
-          svg.setAttribute('width', containerRect.width);
-          svg.setAttribute('height', containerRect.height);
-          svg.setAttribute('viewBox', `0 0 ${containerRect.width} ${containerRect.height}`);
-
-          function centerOf(el) {
-            const r = el.getBoundingClientRect();
-            return {
-              x: r.left + r.width / 2 - containerRect.left,
-              top: r.top - containerRect.top,
-              bottom: r.bottom - containerRect.top,
-            };
-          }
-
-          people.forEach((p) => {
-            const childEl = nodeByName.get(p.nombre);
-            if (!childEl) return;
-            const padres = (Array.isArray(p.padres) ? p.padres : [])
-              .filter((n) => n !== p.nombre && nodeByName.has(n));
-            if (!padres.length) return;
-            const childC = centerOf(childEl);
-            const parentCenters = padres.map((n) => centerOf(nodeByName.get(n)));
-            const anchorY = Math.max(...parentCenters.map((c) => c.bottom));
-            if (anchorY >= childC.top) return; // evita líneas invertidas si el dato viene raro
-            const anchorX = parentCenters.reduce((s, c) => s + c.x, 0) / parentCenters.length;
-            const midY = anchorY + (childC.top - anchorY) / 2;
-            drawLine(svg, anchorX, anchorY, anchorX, midY);
-            drawLine(svg, anchorX, midY, childC.x, midY);
-            drawLine(svg, childC.x, midY, childC.x, childC.top);
-          });
-        });
-      }
-
-      timelineList.innerHTML = '';
-      const events = data.events || [];
-      if (!events.length) {
-        timelineList.innerHTML = '<p class="empty">Todavía no hay hitos importantes registrados.</p>';
-      } else {
-        events.forEach((e) => {
-          const item = document.createElement('div');
-          item.className = 'timeline-item';
-          const year = e.anio ? `<div class="timeline-year">${e.anio}</div>` : (e.edad_aprox ? `<div class="timeline-year">~${e.edad_aprox} años</div>` : '');
-          const icon = CATEGORY_ICON[e.categoria] ? CATEGORY_ICON[e.categoria] + ' ' : '';
-          item.innerHTML = `${year}<div>${icon}${e.descripcion}</div>`;
-          timelineList.appendChild(item);
-        });
-      }
-    } catch (e) {}
-  }
+  // El árbol genealógico y la línea de tiempo ahora viven en /arbol.html
+  // (se llega por el ícono 🌳 de arriba) — ya no hay un mini-árbol acá.
 
   async function cargarStoryLog() {
     try {
@@ -1251,7 +1110,17 @@
 
   cargarAportes();
   cargarStoryLog();
-  cargarArbol();
+
+  const bookIconBtn = document.getElementById('bookIconBtn');
+  bookIconBtn.addEventListener('click', () => {
+    const existing = bookIconBtn.parentElement.querySelector('.icon-btn-msg');
+    if (existing) return;
+    const msg = document.createElement('div');
+    msg.className = 'icon-btn-msg';
+    msg.textContent = 'Muy pronto: libro de tu historia';
+    bookIconBtn.parentElement.appendChild(msg);
+    setTimeout(() => msg.remove(), 2500);
+  });
 })();
 </script>
 </body>
