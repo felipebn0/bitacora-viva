@@ -129,6 +129,24 @@ function ensureSchema() {
       )`;
       await sql`CREATE INDEX IF NOT EXISTS idx_story_log_user ON story_log(user_id)`;
 
+      // Capítulos de biografía generados con IA a partir de las historias
+      // detectadas (story_log). Se reemplazan enteros cada vez que se piden
+      // de nuevo, igual que el árbol genealógico.
+      await sql`CREATE TABLE IF NOT EXISTS chapters (
+        id SERIAL PRIMARY KEY,
+        user_id INT NOT NULL REFERENCES users(id),
+        title TEXT NOT NULL,
+        theme TEXT,
+        generated_text TEXT NOT NULL,
+        story_ids TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`;
+      // story_ids se guarda como JSON (no array nativo de Postgres): el
+      // driver de Neon por HTTP no bindea bien arrays de JS, mismo motivo
+      // por el que "padres" de family_members también es TEXT con JSON.
+      await sql`ALTER TABLE chapters ALTER COLUMN story_ids TYPE TEXT USING story_ids::text`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_chapters_user ON chapters(user_id)`;
+
       // Árbol genealógico y línea de tiempo: se reemplazan enteros cada vez
       // que se actualizan (más simple que ir haciendo diff a mano).
       await sql`CREATE TABLE IF NOT EXISTS family_members (
@@ -291,6 +309,7 @@ app.post('/api/reset-bitacora', requireAuth, rateLimit, async (req, res) => {
     const fm = await sql`DELETE FROM family_members WHERE user_id = ${req.userId} RETURNING id`;
     const te = await sql`DELETE FROM timeline_events WHERE user_id = ${req.userId} RETURNING id`;
     const sl = await sql`DELETE FROM story_log WHERE user_id = ${req.userId} RETURNING id`;
+    const ch = await sql`DELETE FROM chapters WHERE user_id = ${req.userId} RETURNING id`;
     res.json({
       ok: true,
       deleted: {
@@ -301,6 +320,7 @@ app.post('/api/reset-bitacora', requireAuth, rateLimit, async (req, res) => {
         family_members: fm.length,
         timeline_events: te.length,
         story_log: sl.length,
+        chapters: ch.length,
       },
     });
   } catch (err) {
@@ -465,7 +485,7 @@ function inferirPadresFaltantes(personas) {
   return personas;
 }
 
-function parsePadres(raw) {
+function parseJsonArray(raw) {
   if (!raw) return [];
   try {
     const arr = JSON.parse(raw);
@@ -485,7 +505,7 @@ async function updateFamilyTree(userId, newExchanges) {
 
     await ensureSchema();
     const personasPreviasRaw = await sql`SELECT nombre, relacion, detalles, padres FROM family_members WHERE user_id = ${userId}`;
-    const personasPrevias = personasPreviasRaw.map((p) => ({ ...p, padres: parsePadres(p.padres) }));
+    const personasPrevias = personasPreviasRaw.map((p) => ({ ...p, padres: parseJsonArray(p.padres) }));
     const eventosPrevios = await sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${userId} ORDER BY anio NULLS LAST, id`;
 
     const prompt = `Personas ya conocidas:\n${JSON.stringify(personasPrevias)}\n\nEventos ya conocidos:\n${JSON.stringify(eventosPrevios)}\n\nCharla nueva para integrar:\n${nuevaCharla}\n\nUsá la herramienta para devolver la lista COMPLETA actualizada de personas y eventos (lo anterior + lo nuevo, sin perder nada, corrigiendo si hay datos más precisos). Recordá las reglas: personas SOLO de la familia directa (nada de novio/novia, solo esposo/a si está casado/a); para cada persona completá "padres" con los nombres exactos de su papá y/o mamá tal como aparecen en esta misma lista, siempre que se pueda inferir (por ejemplo, por los "detalles" ya guardados tipo "hija de Oscar"); eventos SOLO hitos importantes (nacimiento, cumpleaños, viaje, graduación, matrimonio, muerte), nada de charla cotidiana ni planes sin confirmar. Si alguna persona o evento ya guardado no cumple estas reglas, quitalo de la lista.`;
@@ -837,11 +857,150 @@ app.get('/api/story-log', requireAuth, async (req, res) => {
   }
 });
 
+// --- Capítulos de biografía (generación con IA en dos pasos) ---
+// Paso 1: agrupar las historias detectadas por tema/época que realmente
+// aparecen en el material. Paso 2: por cada grupo, armar un capítulo
+// narrativo corto usando SOLO esas transcripciones. Separar los dos pasos
+// (en vez de uno solo) hace que cada llamado sea más chico y más fácil de
+// revisar si algo sale mal.
+const CHAPTER_CLASSIFY_TOOLS = [{
+  name: 'agrupar_historias_por_tema',
+  description: 'Agrupa las historias detectadas por tema o época de vida que realmente aparecen en el contenido (no una lista fija predefinida).',
+  input_schema: {
+    type: 'object',
+    properties: {
+      grupos: {
+        type: 'array',
+        description: 'Temas o épocas de vida que emergen de las historias, cada uno con las historias que le corresponden.',
+        items: {
+          type: 'object',
+          properties: {
+            theme: { type: 'string', description: 'Nombre corto del tema o época. Ej: Infancia, El trabajo, La cocina, Su primera novia' },
+            story_ids: { type: 'array', items: { type: 'number' }, description: 'Los ids (número) de las historias que pertenecen a este tema, tal como aparecen en el listado.' },
+          },
+          required: ['theme', 'story_ids'],
+        },
+      },
+    },
+    required: ['grupos'],
+  },
+}];
+
+const CHAPTER_WRITE_TOOLS = [{
+  name: 'escribir_capitulo',
+  description: 'Escribe un capítulo narrativo corto que hilvane las historias dadas, sin inventar nada que no esté en el texto fuente.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      title: { type: 'string', description: 'Título corto para el capítulo' },
+      generated_text: { type: 'string', description: 'El capítulo en prosa (2 a 4 párrafos), fiel a las transcripciones fuente' },
+    },
+    required: ['title', 'generated_text'],
+  },
+}];
+
+async function classifyStoriesByTheme(stories) {
+  const listado = stories
+    .map((s) => `#${s.id} (${new Date(s.created_at).toLocaleDateString('es-CO')}): ${s.texto}`)
+    .join('\n\n');
+  const prompt = `Estas son las historias detectadas en las charlas de esta persona (id, fecha, transcripción):\n\n${listado}\n\nProponé una lista de temas o épocas de vida que REALMENTE aparecen en este material (que emerja de lo contado, no uses una lista fija predefinida), y para cada tema indicá qué ids de historias corresponden (cada historia va en un solo tema, el que mejor le quede). Usá la herramienta para responder.`;
+
+  const response = await anthropic.messages.create({
+    model: MODEL,
+    max_tokens: 1500,
+    tools: CHAPTER_CLASSIFY_TOOLS,
+    tool_choice: { type: 'tool', name: 'agrupar_historias_por_tema' },
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  const toolUse = response.content.find((b) => b.type === 'tool_use');
+  if (!toolUse || !toolUse.input || !Array.isArray(toolUse.input.grupos)) return [];
+  return toolUse.input.grupos.slice(0, 12); // tope defensivo de temas por corrida
+}
+
+async function writeChapterFromStories(theme, stories) {
+  const fuente = stories.map((s) => `- ${s.texto}`).join('\n\n');
+  const prompt = `Estas son transcripciones textuales de historias que esta persona contó sobre el tema "${theme}":\n\n${fuente}\n\nArmá un capítulo narrativo corto (2 a 4 párrafos), narrado en tercera persona, con un tono cálido de libro de memorias familiares, que hilvane estas historias. USA SOLO lo que está en las transcripciones de arriba — nunca inventes ni completes fechas, nombres, lugares o eventos que no estén ahí. Si falta contexto para que un párrafo fluya elegante, preferí una frase más simple pero fiel a lo dicho, antes que una elegante pero inventada. Ponele también un título corto al capítulo. Usá la herramienta para responder.`;
+
+  const response = await anthropic.messages.create({
+    model: MODEL,
+    max_tokens: 1500,
+    tools: CHAPTER_WRITE_TOOLS,
+    tool_choice: { type: 'tool', name: 'escribir_capitulo' },
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  const toolUse = response.content.find((b) => b.type === 'tool_use');
+  if (!toolUse || !toolUse.input || !toolUse.input.generated_text) return null;
+  return {
+    title: toolUse.input.title ? String(toolUse.input.title).slice(0, 200) : theme,
+    generated_text: String(toolUse.input.generated_text),
+  };
+}
+
+// Dispara el flujo de dos pasos y GUARDA el resultado, reemplazando los
+// capítulos anteriores (igual que el árbol: más simple que ir haciendo diff).
+app.post('/api/chapters/generate', requireAuth, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    const stories = await sql`SELECT id, texto, created_at FROM story_log WHERE user_id = ${req.userId} ORDER BY created_at ASC`;
+    if (!stories.length) {
+      return res.json({ ok: true, message: 'Todavía no hay historias detectadas en la charla para armar capítulos.', chapters: [] });
+    }
+
+    const grupos = await classifyStoriesByTheme(stories);
+    if (!grupos.length) {
+      return res.json({ ok: true, message: 'No se pudo agrupar el material todavía. Probá de nuevo más tarde.', chapters: [] });
+    }
+
+    const byId = new Map(stories.map((s) => [s.id, s]));
+    const nuevos = [];
+    for (const g of grupos) {
+      if (!g || !g.theme) continue;
+      const ids = Array.isArray(g.story_ids) ? g.story_ids.filter((id) => byId.has(id)) : [];
+      if (!ids.length) continue;
+      const capitulo = await writeChapterFromStories(g.theme, ids.map((id) => byId.get(id)));
+      if (!capitulo) continue;
+      nuevos.push({ theme: String(g.theme).slice(0, 120), ids, ...capitulo });
+    }
+
+    if (!nuevos.length) {
+      return res.json({ ok: true, message: 'No se pudo generar ningún capítulo todavía.', chapters: [] });
+    }
+
+    await sql`DELETE FROM chapters WHERE user_id = ${req.userId}`;
+    const guardados = [];
+    for (const c of nuevos) {
+      const row = await sql`INSERT INTO chapters (user_id, title, theme, generated_text, story_ids) VALUES (
+        ${req.userId}, ${c.title}, ${c.theme}, ${c.generated_text}, ${JSON.stringify(c.ids)}
+      ) RETURNING id, title, theme, generated_text, story_ids, created_at`;
+      guardados.push({ ...row[0], story_ids: parseJsonArray(row[0].story_ids) });
+    }
+
+    res.json({ ok: true, chapters: guardados });
+  } catch (err) {
+    console.error('No se pudieron generar los capítulos:', err);
+    res.status(500).json({ error: 'No se pudieron generar los capítulos.' });
+  }
+});
+
+app.get('/api/chapters', requireAuth, async (req, res) => {
+  try {
+    await ensureSchema();
+    const rows = await sql`SELECT id, title, theme, generated_text, story_ids, created_at FROM chapters WHERE user_id = ${req.userId} ORDER BY id`;
+    const chapters = rows.map((c) => ({ ...c, story_ids: parseJsonArray(c.story_ids) }));
+    res.json({ chapters });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudieron cargar los capítulos.' });
+  }
+});
+
 app.get('/api/tree', requireAuth, async (req, res) => {
   try {
     await ensureSchema();
     const peopleRaw = await sql`SELECT nombre, relacion, detalles, padres FROM family_members WHERE user_id = ${req.userId} ORDER BY id`;
-    const people = peopleRaw.map((p) => ({ ...p, padres: parsePadres(p.padres) }));
+    const people = peopleRaw.map((p) => ({ ...p, padres: parseJsonArray(p.padres) }));
     const events = await sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${req.userId} ORDER BY anio NULLS LAST, id`;
     res.json({ people, events });
   } catch (err) {
@@ -862,7 +1021,7 @@ app.post('/api/rebuild-tree', requireAuth, rateLimit, async (req, res) => {
     await updateFamilyTree(req.userId, todo);
 
     const peopleRaw = await sql`SELECT nombre, relacion, detalles, padres FROM family_members WHERE user_id = ${req.userId} ORDER BY id`;
-    const people = peopleRaw.map((p) => ({ ...p, padres: parsePadres(p.padres) }));
+    const people = peopleRaw.map((p) => ({ ...p, padres: parseJsonArray(p.padres) }));
     const events = await sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${req.userId} ORDER BY anio NULLS LAST, id`;
     res.json({ ok: true, people, events });
   } catch (err) {
