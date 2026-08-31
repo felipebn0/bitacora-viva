@@ -442,8 +442,8 @@ function inferirPadresFaltantes(personas) {
   const porRelacionExacta = (re) => personas.filter((p) => re.test((p.relacion || '').trim()));
   const papaNode = porRelacionExacta(/^pap[aá]$/i)[0];
   const mamaNode = porRelacionExacta(/^mam[aá]$/i)[0];
-  const abuelosPaternos = porRelacionExacta(/^abuel[oa] paterno[a]?$/i).map((p) => p.nombre);
-  const abuelosMaternos = porRelacionExacta(/^abuel[oa] materno[a]?$/i).map((p) => p.nombre);
+  const abuelosPaternos = porRelacionExacta(/^abuel[oa] patern[oa]$/i).map((p) => p.nombre);
+  const abuelosMaternos = porRelacionExacta(/^abuel[oa] matern[oa]$/i).map((p) => p.nombre);
 
   personas.forEach((p) => {
     if (Array.isArray(p.padres) && p.padres.length) return; // ya lo trajo la IA, no tocar
