@@ -369,6 +369,7 @@
   let history = [];       // lo que se le manda a Claude (solo role/content)
   let sessionLog = [];    // lo que se guarda en la bitácora (incluye audio)
   let sessionKey = null;  // carpeta de audio de esta charla
+  let currentSessionDbId = null;  // fila de "sessions" de esta charla, para actualizar en vez de duplicar
   let turnIndex = 0;
   let state = 'idle';
   let pausedFromState = null;
@@ -797,11 +798,15 @@
   async function saveSessionLog() {
     if (!sessionLog.length) return;
     try {
-      await fetch('/api/save', {
+      const resp = await fetch('/api/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ history: sessionLog }),
+        body: JSON.stringify({ history: sessionLog, sessionDbId: currentSessionDbId }),
       });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.sessionDbId) currentSessionDbId = data.sessionDbId;
+      }
     } catch (e) {}
   }
 
@@ -817,6 +822,7 @@
     if (state !== 'idle' && state !== 'ended') return;
     sessionId += 1;
     pausedFromState = null;
+    currentSessionDbId = null;
     greeting.style.display = 'none';
     transcript.classList.add('visible');
     transcript.innerHTML = '';
@@ -1031,7 +1037,7 @@
     try {
       navigator.sendBeacon(
         '/api/save',
-        new Blob([JSON.stringify({ history: sessionLog })], { type: 'application/json' })
+        new Blob([JSON.stringify({ history: sessionLog, sessionDbId: currentSessionDbId })], { type: 'application/json' })
       );
     } catch (e) {}
   });

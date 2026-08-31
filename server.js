@@ -629,14 +629,30 @@ app.post('/api/save', requireAuth, async (req, res) => {
     const history = Array.isArray(req.body.history) ? req.body.history.slice(0, 100) : [];
     if (!history.length) return res.status(400).json({ error: 'Nada que guardar.' });
 
+    // Una misma charla se puede guardar varias veces (por ejemplo: se pausa
+    // y se guarda un avance parcial, y después termina de verdad) — si nos
+    // pasan el id de una fila ya guardada de esta cuenta, actualizamos esa
+    // fila en vez de crear una nueva, para no duplicar.
+    const existingId = Number.isInteger(req.body.sessionDbId) ? req.body.sessionDbId : null;
+
     await ensureSchema();
-    await sql`INSERT INTO sessions (user_id, intercambios) VALUES (${req.userId}, ${JSON.stringify(history)}::jsonb)`;
+
+    let sessionDbId = null;
+    if (existingId) {
+      const updated = await sql`UPDATE sessions SET intercambios = ${JSON.stringify(history)}::jsonb
+                                 WHERE id = ${existingId} AND user_id = ${req.userId} RETURNING id`;
+      sessionDbId = updated.length ? updated[0].id : null;
+    }
+    if (!sessionDbId) {
+      const inserted = await sql`INSERT INTO sessions (user_id, intercambios) VALUES (${req.userId}, ${JSON.stringify(history)}::jsonb) RETURNING id`;
+      sessionDbId = inserted[0].id;
+    }
 
     // Se espera de verdad (en Vercel, la función puede cortarse apenas se
     // manda la respuesta — "en segundo plano" no garantiza que termine).
     await updateMemorySummary(req.userId, history).catch((err) => console.error('No se pudo actualizar el resumen:', err));
 
-    res.json({ ok: true });
+    res.json({ ok: true, sessionDbId });
   } catch (err) {
     console.error(err);
     if (!res.headersSent) res.status(500).json({ error: 'No se pudo guardar la charla.' });
