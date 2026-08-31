@@ -242,6 +242,7 @@
 
     const nodeByName = new Map();
     const avatarByName = new Map();
+    const rowElDeNombre = new Map(); // nombre -> fila (div .tree-row) a la que pertenece
     const rowElPorFila = []; // mismo índice que filasOrdenadas (filas vacías -> null)
     filasOrdenadas.forEach((grupo) => {
       if (!grupo.length) { rowElPorFila.push(null); return; }
@@ -254,6 +255,7 @@
         row.appendChild(node);
         nodeByName.set(p.nombre, node);
         avatarByName.set(p.nombre, node.querySelector('.avatar'));
+        rowElDeNombre.set(p.nombre, row);
       });
       graphic.appendChild(row);
       rowElPorFila.push(row);
@@ -458,8 +460,12 @@
         // La línea tiene que arrancar DESPUÉS del nombre y el rol (todo el
         // .tree-node), no justo debajo del avatar — si no, pasa por encima
         // del texto en vez de por el espacio vacío entre filas.
-        const parentNodeBottoms = padresNombres.map((n) => centerOf(nodeByName.get(n)).bottom);
-        const anchorY = Math.max(...parentNodeBottoms);
+        // Usamos el borde de la FILA (altura fija, igual para todos) y no
+        // el del nodo individual — un nombre largo (ej. "Paula Franco")
+        // puede ocupar dos líneas y quedar más alto que sus vecinos, lo que
+        // corría la línea justo encima de ese texto.
+        const parentRowBottoms = padresNombres.map((n) => centerOf(rowElDeNombre.get(n)).bottom);
+        const anchorY = Math.max(...parentRowBottoms);
         if (anchorY >= childC.top) return; // evita líneas invertidas si el dato viene raro
         const anchorX = parentCenters.reduce((s, c) => s + c.x, 0) / parentCenters.length;
 
