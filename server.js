@@ -1204,7 +1204,7 @@ process.on('unhandledRejection', (err) => {
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {
-    console.log(`Bitácora Viva corriendo en http://localhost:${PORT}`);
+    console.log(`Los recuerdos de mis viejos corriendo en http://localhost:${PORT}`);
   });
 }
 

@@ -1,4 +1,4 @@
-# Backlog — ideas pendientes para Bitácora Viva
+# Backlog — ideas pendientes para Los recuerdos de mis viejos
 
 Cosas que se pidieron pero se decidió posponer, con suficiente detalle para retomarlas sin tener que repensarlas de cero.
 

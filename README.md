@@ -1,4 +1,4 @@
-# Bitácora Viva
+# Los recuerdos de mis viejos
 
 Compañero de charlas por voz para registrar la historia de vida de tu papá.
 
