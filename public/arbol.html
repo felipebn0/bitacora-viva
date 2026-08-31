@@ -201,6 +201,39 @@
     const tiers = [[], [], [], [], []];
     people.forEach((p) => { tiers[tierForRelacion(p.relacion)].push(p); });
 
+    // Orden base de cada fila: hermanos de sangre agrupados, con la pareja
+    // puente pegada entre dos grupos vecinos.
+    const filasOrdenadas = tiers.map((grupo) => (grupo.length ? ordenarConParejasJuntas(grupo, partnerOf) : []));
+
+    // Las filas más arriba (ej. abuelos) no tienen padres propios en el
+    // árbol, así que ordenarConParejasJuntas no tiene de qué agarrarse y
+    // las deja en su orden original — eso hace que, por ejemplo, la familia
+    // de la mamá quede dibujada arriba de la familia del papá. Para
+    // evitarlo, esas filas "raíz" se reordenan según dónde terminaron sus
+    // propios hijos en la fila de abajo (ya bien ordenada), para que cada
+    // familia (ej. Bernal por un lado, Nisperuza por el otro) quede
+    // alineada con su propia rama y solo se toquen donde corresponde.
+    function esFilaRaiz(fila) {
+      return fila.every((p) => !(Array.isArray(p.padres) && p.padres.length));
+    }
+    function alinearConHijos(filaSuperior, filaInferior) {
+      const indexInferior = new Map(filaInferior.map((p, i) => [p.nombre, i]));
+      const conPos = filaSuperior.map((p, i) => {
+        const hijos = filaInferior.filter((h) => Array.isArray(h.padres) && h.padres.includes(p.nombre));
+        const pos = hijos.length
+          ? hijos.reduce((s, h) => s + indexInferior.get(h.nombre), 0) / hijos.length
+          : i + 0.5; // sin hijos ubicables acá: se queda cerca de su posición original
+        return { p, pos };
+      });
+      conPos.sort((a, b) => a.pos - b.pos);
+      return conPos.map((x) => x.p);
+    }
+    for (let i = 0; i < filasOrdenadas.length - 1; i++) {
+      if (!filasOrdenadas[i].length || !esFilaRaiz(filasOrdenadas[i])) continue;
+      const siguienteConGente = filasOrdenadas.slice(i + 1).find((f) => f.length);
+      if (siguienteConGente) filasOrdenadas[i] = alinearConHijos(filasOrdenadas[i], siguienteConGente);
+    }
+
     const graphic = document.createElement('div');
     graphic.className = 'tree-graphic';
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -209,9 +242,9 @@
 
     const nodeByName = new Map();
     const avatarByName = new Map();
-    tiers.forEach((grupoOriginal) => {
-      if (!grupoOriginal.length) return;
-      const grupo = ordenarConParejasJuntas(grupoOriginal, partnerOf);
+    const rowElPorFila = []; // mismo índice que filasOrdenadas (filas vacías -> null)
+    filasOrdenadas.forEach((grupo) => {
+      if (!grupo.length) { rowElPorFila.push(null); return; }
       const row = document.createElement('div');
       row.className = 'tree-row';
       grupo.forEach((p) => {
@@ -223,11 +256,95 @@
         avatarByName.set(p.nombre, node.querySelector('.avatar'));
       });
       graphic.appendChild(row);
+      rowElPorFila.push(row);
     });
 
     wrap.appendChild(graphic);
 
+    // Alinea una fila "raíz" (sin padres propios en el árbol, ej. abuelos)
+    // con el centro real de sus hijos en la fila de abajo. El orden en la
+    // lista no alcanza para esto: cada fila se centra sola con flexbox, y
+    // si tienen cantidades de gente muy distintas (4 arriba, 9 abajo) el
+    // centrado de cada una no queda alineado en píxeles con la otra. Por
+    // eso esta fila se saca del centrado automático y cada persona/pareja
+    // se ubica a mano, justo arriba de sus propios hijos.
+    function posicionarFilaRaiz(fila, filaInferior, rowEl) {
+      const contRect = graphic.getBoundingClientRect();
+      // Ojo con el sistema de coordenadas: node.style.left posiciona
+      // relativo a rowEl (el padre position:relative), no al gráfico
+      // entero — hay que restar dónde arranca la fila.
+      const rowRectAntes = rowEl.getBoundingClientRect();
+      const rowLeftEnGrafico = rowRectAntes.left - contRect.left;
+      const rowAnchoAntes = rowRectAntes.width;
+
+      const xDe = (nombre) => {
+        const av = avatarByName.get(nombre);
+        if (!av) return null;
+        const r = av.getBoundingClientRect();
+        return r.left + r.width / 2 - contRect.left;
+      };
+      const usados = new Set();
+      const unidades = [];
+      fila.forEach((p) => {
+        if (usados.has(p.nombre)) return;
+        const partnerName = partnerOf.get(p.nombre);
+        const partner = partnerName ? fila.find((x) => x.nombre === partnerName) : null;
+        if (partner) { unidades.push([p, partner]); usados.add(p.nombre); usados.add(partner.nombre); }
+        else { unidades.push([p]); usados.add(p.nombre); }
+      });
+
+      const conCentro = unidades.map((u, i) => {
+        const nombresUnidad = u.map((p) => p.nombre);
+        const hijos = filaInferior.filter(
+          (h) => Array.isArray(h.padres) && h.padres.some((pn) => nombresUnidad.includes(pn))
+        );
+        const xs = hijos.map((h) => xDe(h.nombre)).filter((x) => x != null);
+        const centro = xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+        return { u, centro, ordenOriginal: i };
+      });
+      // Sin hijos ubicables (no debería pasar acá, pero por las dudas):
+      // se van al final, en su orden original.
+      conCentro.forEach((c) => { if (c.centro == null) c.centro = 1e6 + c.ordenOriginal; });
+      conCentro.sort((a, b) => a.centro - b.centro);
+
+      const NODE_WIDTH = 108; // igual al width de .tree-node en el CSS
+      const GAP_INTERNO = 14; // separación dentro de una pareja
+      const GAP_UNIDADES = 26; // separación mínima entre unidades distintas
+      conCentro.forEach((c) => { c.ancho = c.u.length === 2 ? NODE_WIDTH * 2 + GAP_INTERNO : NODE_WIDTH; });
+      let prevRight = -Infinity;
+      conCentro.forEach((c) => {
+        let left = c.centro - c.ancho / 2;
+        if (left < prevRight + GAP_UNIDADES) left = prevRight + GAP_UNIDADES;
+        c.left = left; // left edge del "paquete", en coordenadas del gráfico entero
+        prevRight = left + c.ancho;
+      });
+
+      // Fijar el tamaño de la fila ANTES de sacar a los hijos del flujo
+      // normal — si no, al perder su contenido la fila se encoge a 0 y
+      // "margin: 0 auto" la vuelve a centrar en otro lado, corriendo la
+      // referencia que ya calculamos.
+      rowEl.style.width = rowAnchoAntes + 'px';
+      rowEl.style.height = rowEl.offsetHeight + 'px';
+      Array.from(rowEl.children).forEach((child) => { child.style.position = 'absolute'; child.style.top = '0'; });
+      conCentro.forEach((c) => {
+        c.u.forEach((p, i) => {
+          const node = nodeByName.get(p.nombre);
+          const leftEnGrafico = c.left + i * (NODE_WIDTH + GAP_INTERNO);
+          node.style.left = (leftEnGrafico - rowLeftEnGrafico) + 'px';
+        });
+      });
+    }
+
     requestAnimationFrame(() => {
+      const filasNoVacias = filasOrdenadas.filter((f) => f.length);
+      filasNoVacias.forEach((fila, idx) => {
+        if (!esFilaRaiz(fila)) return;
+        const filaInferior = filasNoVacias[idx + 1];
+        if (!filaInferior) return;
+        const i = filasOrdenadas.indexOf(fila);
+        posicionarFilaRaiz(fila, filaInferior, rowElPorFila[i]);
+      });
+
       const containerRect = graphic.getBoundingClientRect();
       svg.setAttribute('width', containerRect.width);
       svg.setAttribute('height', containerRect.height);
