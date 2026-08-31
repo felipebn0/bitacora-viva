@@ -208,17 +208,6 @@
     cursor: pointer;
     box-shadow: 0 2px 6px -3px rgba(0,0,0,0.2);
   }
-  .icon-btn-msg {
-    position: absolute;
-    margin-top: 52px;
-    background: var(--ink);
-    color: #FBF6EA;
-    font-size: 0.8rem;
-    padding: 6px 10px;
-    border-radius: 8px;
-    white-space: nowrap;
-  }
-
   .login {
     width: min(340px, 100%);
     background: #FBF6EA;
@@ -257,12 +246,8 @@
 
   <div id="appContent">
    <div class="topbar">
-     <div style="position: relative;">
-       <a class="icon-btn" href="/arbol.html" target="_blank" rel="noopener" title="Árbol genealógico" aria-label="Árbol genealógico">🌳</a>
-     </div>
-     <div style="position: relative;">
-       <button class="icon-btn" id="bookIconBtn" type="button" title="Libro de la historia" aria-label="Libro de la historia">📖</button>
-     </div>
+     <a class="icon-btn" href="/arbol.html" target="_blank" rel="noopener" title="Árbol genealógico" aria-label="Árbol genealógico">🌳</a>
+     <a class="icon-btn" href="/capitulos.html" target="_blank" rel="noopener" title="Libro de la historia" aria-label="Libro de la historia">📖</a>
    </div>
    <div class="main-layout">
     <div class="device-col">
@@ -1110,17 +1095,6 @@
 
   cargarAportes();
   cargarStoryLog();
-
-  const bookIconBtn = document.getElementById('bookIconBtn');
-  bookIconBtn.addEventListener('click', () => {
-    const existing = bookIconBtn.parentElement.querySelector('.icon-btn-msg');
-    if (existing) return;
-    const msg = document.createElement('div');
-    msg.className = 'icon-btn-msg';
-    msg.textContent = 'Muy pronto: libro de tu historia';
-    bookIconBtn.parentElement.appendChild(msg);
-    setTimeout(() => msg.remove(), 2500);
-  });
 })();
 </script>
 </body>

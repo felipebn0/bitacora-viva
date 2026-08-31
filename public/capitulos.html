@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Libro de la historia — Bitácora Viva</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,500&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F5EFE2;
+    --ink: #2B241C;
+    --ink-soft: #8A7C63;
+    --gold-deep: #A86A26;
+    --bubble-user: #EFE6D1;
+    --font-display: "Source Serif 4", Georgia, serif;
+    --font-body: "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    padding: 28px 20px 60px;
+  }
+  header { max-width: 720px; margin: 0 auto 20px; display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  h1 { font-family: var(--font-display); font-size: 1.6rem; margin: 0; }
+  header p { color: var(--ink-soft); margin: 4px 0 0; font-size: 0.95rem; }
+  a.volver { color: var(--gold-deep); font-size: 0.9rem; text-decoration: none; border-bottom: 1px solid var(--gold-deep); }
+
+  .wrap { max-width: 720px; margin: 0 auto; }
+
+  .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+  button.generar {
+    border: none; background: var(--gold-deep); color: #FBF6EA; border-radius: 10px;
+    padding: 12px 20px; font-weight: 700; font-size: 0.95rem; cursor: pointer; font-family: var(--font-body);
+  }
+  button.generar:disabled { opacity: 0.6; cursor: default; }
+  .status { color: var(--ink-soft); font-size: 0.9rem; }
+
+  .empty { color: var(--ink-soft); font-style: italic; margin-top: 40px; }
+
+  .chapter {
+    background: #FBF6EA;
+    border: 1px solid #E7DFCC;
+    border-radius: 18px;
+    padding: 22px 26px;
+    margin-bottom: 20px;
+  }
+  .chapter .theme { color: var(--gold-deep); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; margin: 0 0 4px; }
+  .chapter h2 { font-family: var(--font-display); font-size: 1.3rem; margin: 0 0 12px; }
+  .chapter .text { white-space: pre-wrap; line-height: 1.6; font-size: 0.98rem; }
+  .chapter .meta { color: var(--ink-soft); font-size: 0.78rem; margin-top: 14px; }
+</style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Libro de la historia</h1>
+      <p>Capítulos armados con IA a partir de las historias detectadas en las charlas.</p>
+    </div>
+    <a class="volver" href="/">← volver a la bitácora</a>
+  </header>
+  <div class="wrap">
+    <div class="toolbar">
+      <button class="generar" id="generarBtn" type="button">Generar capítulos</button>
+      <span class="status" id="status"></span>
+    </div>
+    <div id="lista">
+      <p class="empty">Cargando…</p>
+    </div>
+  </div>
+
+<script>
+(function () {
+  const lista = document.getElementById('lista');
+  const status = document.getElementById('status');
+  const generarBtn = document.getElementById('generarBtn');
+
+  function renderChapters(chapters) {
+    lista.innerHTML = '';
+    if (!chapters.length) {
+      lista.innerHTML = '<p class="empty">Todavía no hay capítulos generados. Cuando haya historias detectadas en la charla, presioná "Generar capítulos".</p>';
+      return;
+    }
+    chapters.forEach((c) => {
+      const div = document.createElement('div');
+      div.className = 'chapter';
+      const fecha = c.created_at ? new Date(c.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+      div.innerHTML = `
+        <p class="theme">${c.theme || ''}</p>
+        <h2>${c.title}</h2>
+        <div class="text">${c.generated_text}</div>
+        <p class="meta">Armado a partir de ${(c.story_ids || []).length} historia(s)${fecha ? ' · ' + fecha : ''}</p>
+      `;
+      lista.appendChild(div);
+    });
+  }
+
+  async function cargar() {
+    try {
+      const resp = await fetch('/api/chapters');
+      if (resp.status === 401) {
+        lista.innerHTML = '<p class="empty">Iniciá sesión en la bitácora primero. <a class="volver" href="/">Ir a la bitácora</a></p>';
+        generarBtn.disabled = true;
+        return;
+      }
+      if (!resp.ok) throw new Error('fallo');
+      const data = await resp.json();
+      renderChapters(data.chapters || []);
+    } catch (e) {
+      lista.innerHTML = '<p class="empty">No se pudieron cargar los capítulos. Intentá de nuevo más tarde.</p>';
+    }
+  }
+
+  generarBtn.addEventListener('click', async () => {
+    generarBtn.disabled = true;
+    status.textContent = 'Generando… puede tardar un rato, no cierres esta pestaña.';
+    try {
+      const resp = await fetch('/api/chapters/generate', { method: 'POST' });
+      const data = await resp.json();
+      if (!resp.ok) {
+        status.textContent = data.error || 'No se pudieron generar los capítulos.';
+      } else if (data.message) {
+        status.textContent = data.message;
+      } else {
+        status.textContent = '';
+      }
+      if (data.chapters) renderChapters(data.chapters);
+    } catch (e) {
+      status.textContent = 'Hubo un problema para conectar.';
+    } finally {
+      generarBtn.disabled = false;
+    }
+  });
+
+  cargar();
+})();
+</script>
+</body>
+</html>
