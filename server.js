@@ -116,6 +116,18 @@ function ensureSchema() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`;
       await sql`CREATE INDEX IF NOT EXISTS idx_media_user ON media(user_id)`;
+
+      // Log de historias detectadas dentro de la charla (no las que la
+      // familia aporta a mano): cuando Claude nota que la respuesta fue una
+      // historia completa, queda acá con el audio que ya se había subido.
+      await sql`CREATE TABLE IF NOT EXISTS story_log (
+        id SERIAL PRIMARY KEY,
+        user_id INT NOT NULL REFERENCES users(id),
+        texto TEXT NOT NULL,
+        audio_url TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_story_log_user ON story_log(user_id)`;
     })();
   }
   return schemaReady;
@@ -352,7 +364,8 @@ Reglas:
 - Tono cálido, agradecido, sin apuro.
 - Cuando sientas que la charla ya cubrió una historia rica y completa (generalmente entre 12 y 20 intercambios), cierra con un mensaje cálido de despedida agradeciendo lo compartido, avisando que quedó guardado, e invitando a seguir otro día. Termina ese mensaje final, y solo ese, con la palabra exacta [FIN] en una línea aparte.
 - Nunca uses la palabra [FIN] excepto en ese cierre.
-- Si más abajo hay un resumen de charlas anteriores, no vuelvas a preguntar nada que ya está ahí (nombre, familia, etc.). Saluda siempre por su nombre si el resumen lo tiene (ej: "¡Hola, Felipe!"), y arranca yendo directo a un tema nuevo, o profundizando en algo que quedó pendiente.`;
+- Si más abajo hay un resumen de charlas anteriores, no vuelvas a preguntar nada que ya está ahí (nombre, familia, etc.). Saluda siempre por su nombre si el resumen lo tiene (ej: "¡Hola, Felipe!"), y arranca yendo directo a un tema nuevo, o profundizando en algo que quedó pendiente.
+- Si lo que la persona te acaba de contar (el último mensaje de ella) es una historia o anécdota completa de su vida — no un dato corto como un nombre, una fecha suelta, o un "sí"/"no" — agregá al final de tu respuesta, en una línea aparte, la palabra exacta [HISTORIA]. Si fue solo un dato puntual, no la agregues.`;
 
 app.post('/api/next', requireAuth, rateLimit, async (req, res) => {
   try {
@@ -386,7 +399,20 @@ app.post('/api/next', requireAuth, rateLimit, async (req, res) => {
 
     let text = response.content[0].text.trim();
     const done = text.includes('[FIN]');
-    text = text.replace('[FIN]', '').trim();
+    const esHistoria = text.includes('[HISTORIA]');
+    text = text.replace('[FIN]', '').replace('[HISTORIA]', '').trim();
+
+    if (esHistoria) {
+      const ultimaRespuesta = [...history].reverse().find((m) => m.role === 'user');
+      const audioUrl = typeof req.body.lastAudioUrl === 'string' ? req.body.lastAudioUrl.slice(0, 1000) : null;
+      if (ultimaRespuesta) {
+        try {
+          await sql`INSERT INTO story_log (user_id, texto, audio_url) VALUES (${req.userId}, ${ultimaRespuesta.content}, ${audioUrl})`;
+        } catch (err) {
+          console.error('No se pudo guardar en story_log:', err);
+        }
+      }
+    }
 
     res.json({ message: text, done });
   } catch (err) {
@@ -586,6 +612,17 @@ app.get('/api/contributions', requireAuth, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudieron cargar los aportes.' });
+  }
+});
+
+app.get('/api/story-log', requireAuth, async (req, res) => {
+  try {
+    await ensureSchema();
+    const rows = await sql`SELECT texto, audio_url, created_at FROM story_log WHERE user_id = ${req.userId} ORDER BY created_at DESC LIMIT 50`;
+    res.json({ stories: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo cargar el log de historias.' });
   }
 });
 

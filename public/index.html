@@ -274,6 +274,12 @@
       <div class="lista" id="aportesLista"></div>
     </div>
 
+    <div class="aportes">
+      <h2>Historias detectadas en la charla</h2>
+      <p class="sub">Cuando lo que cuenta parece una historia completa (no un dato corto), queda anotado acá junto con su audio.</p>
+      <div class="lista" id="storyLogLista"></div>
+    </div>
+
     <div class="logout-row">
       <button class="write-toggle" id="logoutBtn" type="button">cerrar sesión (<span id="whoami"></span>)</button>
     </div>
@@ -658,10 +664,12 @@
     setState('thinking', 'Pensando…');
     orbLabel.innerHTML = '···';
     try {
+      const lastEntry = sessionLog.length ? sessionLog[sessionLog.length - 1] : null;
+      const lastAudioUrl = lastEntry && lastEntry.role === 'user' ? lastEntry.audioFile || null : null;
       const resp = await fetch('/api/next', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ history }),
+        body: JSON.stringify({ history, lastAudioUrl }),
       });
       if (mySession !== sessionId) return;
       if (!resp.ok) throw new Error('server error');
@@ -673,6 +681,7 @@
       const logEntry = { role: 'assistant', content: data.message, timestamp: new Date().toISOString() };
       sessionLog.push(logEntry);
       addBubble('q', data.message);
+      cargarStoryLog();
       setState('speaking', 'Hablando…');
       speak(data.message, () => {
         if (mySession !== sessionId) return;
@@ -908,6 +917,25 @@
   const aporteMsg = document.getElementById('aporteMsg');
   const aportesLista = document.getElementById('aportesLista');
 
+  const storyLogLista = document.getElementById('storyLogLista');
+
+  async function cargarStoryLog() {
+    try {
+      const resp = await fetch('/api/story-log');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      storyLogLista.innerHTML = '';
+      (data.stories || []).forEach((s) => {
+        const div = document.createElement('div');
+        div.className = 'item';
+        const fecha = new Date(s.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+        const audioTag = s.audio_url ? `<audio controls src="${s.audio_url}"></audio>` : '<em>(sin audio guardado)</em>';
+        div.innerHTML = `<div>${audioTag}</div><div><strong>${fecha}:</strong> ${s.texto}</div>`;
+        storyLogLista.appendChild(div);
+      });
+    } catch (e) {}
+  }
+
   async function cargarAportes() {
     try {
       const resp = await fetch('/api/contributions');
@@ -1009,6 +1037,7 @@
   });
 
   cargarAportes();
+  cargarStoryLog();
 })();
 </script>
 </body>
