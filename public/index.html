@@ -176,6 +176,60 @@
 
   #appContent { display: none; flex-direction: column; align-items: center; }
 
+  .main-layout { display: flex; flex-direction: column; align-items: center; }
+  .left-col { display: flex; flex-direction: column; align-items: center; }
+  .right-col { display: none; }
+
+  @media (min-width: 980px) {
+    .main-layout { flex-direction: row; align-items: flex-start; gap: 28px; }
+    .right-col { display: flex; flex-direction: column; gap: 20px; width: 300px; flex-shrink: 0; position: sticky; top: 24px; }
+  }
+
+  .tree-panel {
+    background: #FBF6EA;
+    border: 1px solid #E7DFCC;
+    border-radius: 20px;
+    padding: 20px 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .tree-panel h2 { font-family: var(--font-display); font-size: 1.05rem; margin: 0; font-weight: 600; }
+  .tree-panel .sub { color: var(--ink-soft); font-size: 0.85rem; margin: 0; }
+  .tree-panel .empty { color: var(--ink-soft); font-size: 0.85rem; font-style: italic; }
+
+  .tree-tier { display: flex; flex-direction: column; gap: 4px; }
+  .tree-tier-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-soft); margin-top: 6px; }
+  .tree-tier-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tree-chip {
+    background: var(--bubble-user);
+    border-radius: 10px;
+    padding: 5px 9px;
+    font-size: 0.85rem;
+    line-height: 1.25;
+  }
+  .tree-chip strong { display: block; color: var(--ink); }
+  .tree-chip span { color: var(--ink-soft); font-size: 0.78rem; }
+
+  .timeline-item {
+    position: relative;
+    padding: 0 0 12px 16px;
+    border-left: 2px solid #E7DFCC;
+    font-size: 0.88rem;
+  }
+  .timeline-item:last-child { border-left-color: transparent; padding-bottom: 0; }
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -5px;
+    top: 3px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--moss);
+  }
+  .timeline-year { color: var(--moss); font-weight: 700; font-size: 0.78rem; }
+
   .login {
     width: min(340px, 100%);
     background: #FBF6EA;
@@ -213,6 +267,8 @@
   </div>
 
   <div id="appContent">
+   <div class="main-layout">
+    <div class="left-col">
     <div class="device">
       <h1>Bitácora Viva</h1>
       <div class="body-area">
@@ -226,6 +282,7 @@
           </button>
           <div class="state-label" id="stateLabel"></div>
           <button class="write-toggle end-toggle" id="endBtn" type="button" style="display:none;">terminar la charla</button>
+          <button class="write-toggle" id="treeModeBtn" type="button">armar árbol genealógico</button>
           <button class="write-toggle" id="writeToggle" type="button">prefiero escribir</button>
           <div class="write-row" id="writeRow">
             <input type="text" id="writeInput" placeholder="Escribí tu respuesta…" aria-label="Escribir respuesta">
@@ -282,6 +339,21 @@
       <p class="sub">Cuando lo que cuenta parece una historia completa (no un dato corto), queda anotado acá junto con su audio.</p>
       <div class="lista" id="storyLogLista"></div>
     </div>
+    </div>
+
+    <div class="right-col">
+      <div class="tree-panel">
+        <h2>Árbol genealógico</h2>
+        <p class="sub">Se va armando solo con lo que se cuenta en las charlas.</p>
+        <div id="treeTiers"></div>
+      </div>
+      <div class="tree-panel">
+        <h2>Línea de tiempo</h2>
+        <p class="sub">Momentos de su vida, en orden.</p>
+        <div id="timelineList"></div>
+      </div>
+    </div>
+   </div>
 
     <div class="logout-row">
       <button class="write-toggle" id="logoutBtn" type="button">cerrar sesión (<span id="whoami"></span>)</button>
@@ -368,11 +440,13 @@
   const voiceRow = document.getElementById('voiceRow');
   const voiceSelect = document.getElementById('voiceSelect');
   const endBtn = document.getElementById('endBtn');
+  const treeModeBtn = document.getElementById('treeModeBtn');
 
   let history = [];       // lo que se le manda a Claude (solo role/content)
   let sessionLog = [];    // lo que se guarda en la bitácora (incluye audio)
   let sessionKey = null;  // carpeta de audio de esta charla
   let currentSessionDbId = null;  // fila de "sessions" de esta charla, para actualizar en vez de duplicar
+  let sessionMode = 'historia';  // 'historia' (charla normal) o 'arbol' (armar árbol genealógico)
   let turnIndex = 0;
   let state = 'idle';
   let pausedFromState = null;
@@ -509,6 +583,7 @@
     else if (!resting) orbHint = 'Presionar para pausar la charla';
     orb.setAttribute('aria-label', orbHint);
     endBtn.style.display = resting ? 'none' : 'inline';
+    treeModeBtn.style.display = resting ? 'inline' : 'none';
   }
 
   function speakWithSystemVoice(text, onEnd) {
@@ -673,7 +748,7 @@
       const resp = await fetch('/api/next', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ history, lastAudioUrl }),
+        body: JSON.stringify({ history, lastAudioUrl, mode: sessionMode }),
       });
       if (mySession !== sessionId) return;
       if (!resp.ok) throw new Error('server error');
@@ -819,10 +894,12 @@
     writeToggle.style.display = 'none';
     releaseMic();
     await saveSessionLog();
+    cargarArbol();
   }
 
-  function startSession() {
+  function startSession(mode) {
     if (state !== 'idle' && state !== 'ended') return;
+    sessionMode = mode === 'arbol' ? 'arbol' : 'historia';
     sessionId += 1;
     pausedFromState = null;
     currentSessionDbId = null;
@@ -848,6 +925,11 @@
   }
 
   endBtn.addEventListener('click', endConversation);
+
+  treeModeBtn.addEventListener('click', () => {
+    unlockAudioPlayback();
+    startSession('arbol');
+  });
 
   orb.addEventListener('click', handleOrbPress);
 
@@ -927,6 +1009,69 @@
   const aportesLista = document.getElementById('aportesLista');
 
   const storyLogLista = document.getElementById('storyLogLista');
+
+  const treeTiers = document.getElementById('treeTiers');
+  const timelineList = document.getElementById('timelineList');
+
+  function tierForRelacion(relacion) {
+    const r = (relacion || '').toLowerCase();
+    if (/abuel/.test(r)) return { i: 0, label: 'Abuelos' };
+    if (/(pap[aá]|padre|mam[aá]|madre|t[ií]o|t[ií]a)/.test(r)) return { i: 1, label: 'Padres y tíos' };
+    if (/(nieto|nieta)/.test(r)) return { i: 4, label: 'Nietos' };
+    if (/(hijo|hija|sobrin)/.test(r)) return { i: 3, label: 'Hijos y sobrinos' };
+    return { i: 2, label: 'Hermanos, pareja y otros cercanos' };
+  }
+
+  async function cargarArbol() {
+    try {
+      const resp = await fetch('/api/tree');
+      if (!resp.ok) return;
+      const data = await resp.json();
+
+      treeTiers.innerHTML = '';
+      const people = data.people || [];
+      if (!people.length) {
+        treeTiers.innerHTML = '<p class="empty">Todavía no hay nadie registrado — va a ir apareciendo a medida que se charla.</p>';
+      } else {
+        const tiers = [[], [], [], [], []];
+        people.forEach((p) => { tiers[tierForRelacion(p.relacion).i].push(p); });
+        const labels = ['Abuelos', 'Padres y tíos', 'Hermanos, pareja y otros cercanos', 'Hijos y sobrinos', 'Nietos'];
+        tiers.forEach((grupo, i) => {
+          if (!grupo.length) return;
+          const tierDiv = document.createElement('div');
+          tierDiv.className = 'tree-tier';
+          const label = document.createElement('div');
+          label.className = 'tree-tier-label';
+          label.textContent = labels[i];
+          tierDiv.appendChild(label);
+          const row = document.createElement('div');
+          row.className = 'tree-tier-row';
+          grupo.forEach((p) => {
+            const chip = document.createElement('div');
+            chip.className = 'tree-chip';
+            chip.innerHTML = `<strong>${p.nombre}</strong><span>${p.relacion}${p.detalles ? ' — ' + p.detalles : ''}</span>`;
+            row.appendChild(chip);
+          });
+          tierDiv.appendChild(row);
+          treeTiers.appendChild(tierDiv);
+        });
+      }
+
+      timelineList.innerHTML = '';
+      const events = data.events || [];
+      if (!events.length) {
+        timelineList.innerHTML = '<p class="empty">Todavía no hay momentos registrados.</p>';
+      } else {
+        events.forEach((e) => {
+          const item = document.createElement('div');
+          item.className = 'timeline-item';
+          const year = e.anio ? `<div class="timeline-year">${e.anio}</div>` : (e.edad_aprox ? `<div class="timeline-year">~${e.edad_aprox} años</div>` : '');
+          item.innerHTML = `${year}<div>${e.descripcion}</div>`;
+          timelineList.appendChild(item);
+        });
+      }
+    } catch (e) {}
+  }
 
   async function cargarStoryLog() {
     try {
@@ -1040,6 +1185,7 @@
 
   cargarAportes();
   cargarStoryLog();
+  cargarArbol();
 })();
 </script>
 </body>

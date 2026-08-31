@@ -283,9 +283,20 @@ app.post('/api/reset-bitacora', requireAuth, rateLimit, async (req, res) => {
     const r = await sql`DELETE FROM resumen WHERE user_id = ${req.userId} RETURNING user_id`;
     const n = await sql`DELETE FROM family_notes WHERE user_id = ${req.userId} RETURNING id`;
     const m = await sql`DELETE FROM media WHERE user_id = ${req.userId} RETURNING id`;
+    const fm = await sql`DELETE FROM family_members WHERE user_id = ${req.userId} RETURNING id`;
+    const te = await sql`DELETE FROM timeline_events WHERE user_id = ${req.userId} RETURNING id`;
+    const sl = await sql`DELETE FROM story_log WHERE user_id = ${req.userId} RETURNING id`;
     res.json({
       ok: true,
-      deleted: { sessions: s.length, resumen: r.length, family_notes: n.length, media: m.length },
+      deleted: {
+        sessions: s.length,
+        resumen: r.length,
+        family_notes: n.length,
+        media: m.length,
+        family_members: fm.length,
+        timeline_events: te.length,
+        story_log: sl.length,
+      },
     });
   } catch (err) {
     console.error(err);
@@ -372,6 +383,109 @@ async function updateMemorySummary(userId, newExchanges) {
   }
 }
 
+// --- Árbol genealógico y línea de tiempo ---
+// Se extraen con "tool use" forzado: le pedimos a Claude una herramienta
+// específica en vez de texto libre, así el resultado siempre tiene la
+// forma exacta que esperamos (mucho más confiable que un marcador de texto).
+const TREE_TOOLS = [{
+  name: 'actualizar_arbol_y_linea_de_tiempo',
+  description: 'Devuelve la lista completa y actualizada de personas y eventos conocidos de la vida de esta persona, integrando lo nuevo con lo que ya se sabía.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      personas: {
+        type: 'array',
+        description: 'Todas las personas conocidas hasta ahora (familiares y gente cercana), lista completa, no solo las nuevas.',
+        items: {
+          type: 'object',
+          properties: {
+            nombre: { type: 'string' },
+            relacion: { type: 'string', description: 'Ej: papá, mamá, hermano mayor, abuela materna, tío, esposa, hijo, amigo cercano' },
+            detalles: { type: 'string', description: 'Un dato breve si se conoce, opcional' },
+          },
+          required: ['nombre', 'relacion'],
+        },
+      },
+      eventos: {
+        type: 'array',
+        description: 'Todos los momentos/eventos de vida conocidos hasta ahora, lista completa, ordenados cronológicamente si se puede.',
+        items: {
+          type: 'object',
+          properties: {
+            descripcion: { type: 'string' },
+            anio: { type: 'number', description: 'Año aproximado si se puede inferir; si no, omitir' },
+            edad_aprox: { type: 'number', description: 'Edad aproximada de la persona en ese momento, si se sabe; si no, omitir' },
+          },
+          required: ['descripcion'],
+        },
+      },
+    },
+    required: ['personas', 'eventos'],
+  },
+}];
+
+async function updateFamilyTree(userId, newExchanges) {
+  try {
+    const nuevaCharla = (newExchanges || [])
+      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .map((m) => (m.role === 'assistant' ? 'Entrevistadora: ' : 'Él contó: ') + m.content)
+      .join('\n');
+    if (!nuevaCharla.trim()) return;
+
+    await ensureSchema();
+    const personasPrevias = await sql`SELECT nombre, relacion, detalles FROM family_members WHERE user_id = ${userId}`;
+    const eventosPrevios = await sql`SELECT descripcion, anio, edad_aprox FROM timeline_events WHERE user_id = ${userId} ORDER BY anio NULLS LAST, id`;
+
+    const prompt = `Personas ya conocidas:\n${JSON.stringify(personasPrevias)}\n\nEventos ya conocidos:\n${JSON.stringify(eventosPrevios)}\n\nCharla nueva para integrar:\n${nuevaCharla}\n\nUsá la herramienta para devolver la lista COMPLETA actualizada de personas y eventos (lo anterior + lo nuevo, sin perder nada, corrigiendo si hay datos más precisos).`;
+
+    const response = await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: 1200,
+      tools: TREE_TOOLS,
+      tool_choice: { type: 'tool', name: 'actualizar_arbol_y_linea_de_tiempo' },
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const toolUse = response.content.find((b) => b.type === 'tool_use');
+    if (!toolUse || !toolUse.input) return;
+    const personas = Array.isArray(toolUse.input.personas) ? toolUse.input.personas.slice(0, 60) : [];
+    const eventos = Array.isArray(toolUse.input.eventos) ? toolUse.input.eventos.slice(0, 100) : [];
+
+    await sql`DELETE FROM family_members WHERE user_id = ${userId}`;
+    for (const p of personas) {
+      if (!p || !p.nombre || !p.relacion) continue;
+      await sql`INSERT INTO family_members (user_id, nombre, relacion, detalles) VALUES (
+        ${userId}, ${String(p.nombre).slice(0, 120)}, ${String(p.relacion).slice(0, 80)}, ${p.detalles ? String(p.detalles).slice(0, 300) : null}
+      )`;
+    }
+
+    await sql`DELETE FROM timeline_events WHERE user_id = ${userId}`;
+    for (const e of eventos) {
+      if (!e || !e.descripcion) continue;
+      const anio = Number.isFinite(e.anio) ? Math.round(e.anio) : null;
+      const edad = Number.isFinite(e.edad_aprox) ? Math.round(e.edad_aprox) : null;
+      await sql`INSERT INTO timeline_events (user_id, descripcion, anio, edad_aprox) VALUES (
+        ${userId}, ${String(e.descripcion).slice(0, 300)}, ${anio}, ${edad}
+      )`;
+    }
+  } catch (err) {
+    console.error('No se pudo actualizar el árbol genealógico:', err);
+  }
+}
+
+const ARBOL_SYSTEM_PROMPT = `Eres una entrevistadora cálida y paciente, colombiana, que está ayudando a armar el árbol genealógico de una persona mayor. Hablas en español de Colombia, tuteando siempre (usa "tú", nunca "usted" ni "vos"), con oraciones simples y cortas, fáciles de escuchar en voz alta.
+
+Esta charla es distinta a las charlas normales: no se trata de contar anécdotas largas, sino de ir armando con calidez la lista de su familia — quiénes son, cómo se llaman, cómo se relacionan con ella. Tus reacciones son breves (una frase corta, no un párrafo) para poder cubrir más gente.
+
+Reglas:
+- Una sola pregunta por turno.
+- Andá cubriendo, en este orden aproximado (sin ser rígida si la persona ya adelantó algo): sus papás (nombres), sus hermanos (nombres, si es mayor o menor), sus abuelos por los dos lados (nombres, si los llegó a conocer), sus tíos más cercanos, si tiene pareja (nombre), y si tiene hijos (nombres).
+- Para cada persona, si hay lugar, pedí un dato breve que la identifique (a qué se dedicaba, cómo era) — pero sin extenderte, esto es para saber quién es quién, no para contar toda su historia.
+- Modismos colombianos suaves y variados (qué más, listo, de una, qué chévere, ¿cierto?, pues sí, qué belleza) sin exagerar, nunca jerga juvenil ni groserías.
+- Cuando sientas que ya cubriste una buena parte del árbol familiar (generalmente entre 10 y 18 intercambios, o antes si la persona no tiene mucho más para agregar), cerrá con un mensaje cálido agradeciendo, avisando que el árbol quedó guardado, e invitando a retomar las charlas normales o seguir el árbol otro día. Termina ese mensaje, y solo ese, con la palabra exacta [FIN] en una línea aparte.
+- Nunca uses [FIN] excepto en ese cierre.
+- Si más abajo hay personas ya conocidas, no vuelvas a preguntar por ellas.`;
+
 const SYSTEM_PROMPT = `Eres una entrevistadora cálida y paciente, colombiana, que ayuda a una persona mayor a contar la historia de su vida. Hablas en español de Colombia, tuteando siempre a la persona (usa "tú", nunca "usted" ni "vos": "¿cómo estás?", "cuéntame", "tienes"), con oraciones simples y cortas, fáciles de escuchar en voz alta.
 
 Usa modismos colombianos suaves y variados, propios de un trato respetuoso con una persona mayor (por ejemplo: "qué más", "listo", "de una", "qué chévere", "¿cierto?", "pues sí", "qué belleza", "qué interesante", "cuéntame más", "ay, no", "qué pena", "imagínate", "eso sí", "uy") — variá cuál usás en cada turno, no repitas siempre las mismas dos o tres. Nunca jerga juvenil o vulgar como "bacano", "berraquera" o groserías. El tono es animado y cercano, pero con la calidez respetuosa con la que se habla con un mayor, no como con un amigo de la misma edad.
@@ -392,6 +506,15 @@ Reglas:
 
 const HISTORIA_MIN_CHARS = 180; // umbral simple: una respuesta larga y elaborada = historia; un dato corto no.
 
+async function loadKnownFamilyMembers(userId) {
+  await ensureSchema();
+  const rows = await sql`SELECT nombre, relacion, detalles FROM family_members WHERE user_id = ${userId}`;
+  if (!rows.length) return '';
+  return `\n\nPersonas que ya se conocen (no vuelvas a preguntar por estas, priorizá las que faltan):\n${rows
+    .map((p) => `- ${p.nombre} (${p.relacion})${p.detalles ? ': ' + p.detalles : ''}`)
+    .join('\n')}`;
+}
+
 app.post('/api/next', requireAuth, rateLimit, async (req, res) => {
   try {
     const history = Array.isArray(req.body.history) ? req.body.history.slice(0, 60) : [];
@@ -401,19 +524,24 @@ app.post('/api/next', requireAuth, rateLimit, async (req, res) => {
       }
       if (m.content.length > 4000) m.content = m.content.slice(0, 4000);
     }
-    const messages = history.length
-      ? history
-      : [{
-          role: 'user',
-          content: '(La persona acaba de presionar el botón para empezar a charlar. Si el resumen tiene su nombre, saludala por su nombre. Si no, saludala cálidamente y preguntale cómo se llama.)',
-        }];
+    const mode = req.body.mode === 'arbol' ? 'arbol' : 'historia';
+    const startPrompt = mode === 'arbol'
+      ? '(La persona acaba de presionar el botón para armar el árbol genealógico. Saludala cálidamente por su nombre si lo sabés, contale brevemente que hoy vas a preguntarle por su familia para armar el árbol, y arrancá preguntando por sus papás.)'
+      : '(La persona acaba de presionar el botón para empezar a charlar. Si el resumen tiene su nombre, saludala por su nombre. Si no, saludala cálidamente y preguntale cómo se llama.)';
+    const messages = history.length ? history : [{ role: 'user', content: startPrompt }];
 
     const memoria = await loadMemorySummary(req.userId);
-    const familia = await loadFamilyContext(req.userId);
-    const system =
-      SYSTEM_PROMPT +
-      (memoria ? `\n\nResumen de charlas anteriores (no repitas lo que ya está acá):\n${memoria}` : '') +
-      familia;
+    let system;
+    if (mode === 'arbol') {
+      const conocidos = await loadKnownFamilyMembers(req.userId);
+      system = ARBOL_SYSTEM_PROMPT + conocidos;
+    } else {
+      const familia = await loadFamilyContext(req.userId);
+      system =
+        SYSTEM_PROMPT +
+        (memoria ? `\n\nResumen de charlas anteriores (no repitas lo que ya está acá):\n${memoria}` : '') +
+        familia;
+    }
 
     const response = await anthropic.messages.create({
       model: MODEL,
@@ -651,6 +779,18 @@ app.get('/api/story-log', requireAuth, async (req, res) => {
   }
 });
 
+app.get('/api/tree', requireAuth, async (req, res) => {
+  try {
+    await ensureSchema();
+    const people = await sql`SELECT nombre, relacion, detalles FROM family_members WHERE user_id = ${req.userId} ORDER BY id`;
+    const events = await sql`SELECT descripcion, anio, edad_aprox FROM timeline_events WHERE user_id = ${req.userId} ORDER BY anio NULLS LAST, id`;
+    res.json({ people, events });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo cargar el árbol genealógico.' });
+  }
+});
+
 app.post('/api/save', requireAuth, async (req, res) => {
   try {
     const history = Array.isArray(req.body.history) ? req.body.history.slice(0, 100) : [];
@@ -677,7 +817,11 @@ app.post('/api/save', requireAuth, async (req, res) => {
 
     // Se espera de verdad (en Vercel, la función puede cortarse apenas se
     // manda la respuesta — "en segundo plano" no garantiza que termine).
-    await updateMemorySummary(req.userId, history).catch((err) => console.error('No se pudo actualizar el resumen:', err));
+    // Las dos actualizaciones van en paralelo porque son independientes.
+    await Promise.all([
+      updateMemorySummary(req.userId, history).catch((err) => console.error('No se pudo actualizar el resumen:', err)),
+      updateFamilyTree(req.userId, history).catch((err) => console.error('No se pudo actualizar el árbol:', err)),
+    ]);
 
     res.json({ ok: true, sessionDbId });
   } catch (err) {
