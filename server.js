@@ -364,8 +364,9 @@ Reglas:
 - Tono cálido, agradecido, sin apuro.
 - Cuando sientas que la charla ya cubrió una historia rica y completa (generalmente entre 12 y 20 intercambios), cierra con un mensaje cálido de despedida agradeciendo lo compartido, avisando que quedó guardado, e invitando a seguir otro día. Termina ese mensaje final, y solo ese, con la palabra exacta [FIN] en una línea aparte.
 - Nunca uses la palabra [FIN] excepto en ese cierre.
-- Si más abajo hay un resumen de charlas anteriores, no vuelvas a preguntar nada que ya está ahí (nombre, familia, etc.). Saluda siempre por su nombre si el resumen lo tiene (ej: "¡Hola, Felipe!"), y arranca yendo directo a un tema nuevo, o profundizando en algo que quedó pendiente.
-- Si lo que la persona te acaba de contar (el último mensaje de ella) es una historia o anécdota completa de su vida — no un dato corto como un nombre, una fecha suelta, o un "sí"/"no" — agregá al final de tu respuesta, en una línea aparte, la palabra exacta [HISTORIA]. Si fue solo un dato puntual, no la agregues.`;
+- Si más abajo hay un resumen de charlas anteriores, no vuelvas a preguntar nada que ya está ahí (nombre, familia, etc.). Saluda siempre por su nombre si el resumen lo tiene (ej: "¡Hola, Felipe!"), y arranca yendo directo a un tema nuevo, o profundizando en algo que quedó pendiente.`;
+
+const HISTORIA_MIN_CHARS = 180; // umbral simple: una respuesta larga y elaborada = historia; un dato corto no.
 
 app.post('/api/next', requireAuth, rateLimit, async (req, res) => {
   try {
@@ -399,22 +400,19 @@ app.post('/api/next', requireAuth, rateLimit, async (req, res) => {
 
     let text = response.content[0].text.trim();
     const done = text.includes('[FIN]');
-    const esHistoria = text.includes('[HISTORIA]');
-    text = text.replace('[FIN]', '').replace('[HISTORIA]', '').trim();
+    text = text.replace('[FIN]', '').trim();
 
-    if (esHistoria) {
-      const ultimaRespuesta = [...history].reverse().find((m) => m.role === 'user');
+    const ultimaRespuesta = [...history].reverse().find((m) => m.role === 'user');
+    if (ultimaRespuesta && ultimaRespuesta.content.length >= HISTORIA_MIN_CHARS) {
       const audioUrl = typeof req.body.lastAudioUrl === 'string' ? req.body.lastAudioUrl.slice(0, 1000) : null;
-      if (ultimaRespuesta) {
-        try {
-          await sql`INSERT INTO story_log (user_id, texto, audio_url) VALUES (${req.userId}, ${ultimaRespuesta.content}, ${audioUrl})`;
-        } catch (err) {
-          console.error('No se pudo guardar en story_log:', err);
-        }
+      try {
+        await sql`INSERT INTO story_log (user_id, texto, audio_url) VALUES (${req.userId}, ${ultimaRespuesta.content}, ${audioUrl})`;
+      } catch (err) {
+        console.error('No se pudo guardar en story_log:', err);
       }
     }
 
-    res.json({ message: text, done, _debugRaw: response.content[0].text.trim() });
+    res.json({ message: text, done });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo generar la siguiente pregunta.' });
