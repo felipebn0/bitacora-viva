@@ -149,6 +149,7 @@ function ensureSchema() {
         edad_aprox INT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`;
+      await sql`ALTER TABLE timeline_events ADD COLUMN IF NOT EXISTS categoria TEXT`;
       await sql`CREATE INDEX IF NOT EXISTS idx_timeline_events_user ON timeline_events(user_id)`;
     })();
   }
@@ -389,18 +390,18 @@ async function updateMemorySummary(userId, newExchanges) {
 // forma exacta que esperamos (mucho más confiable que un marcador de texto).
 const TREE_TOOLS = [{
   name: 'actualizar_arbol_y_linea_de_tiempo',
-  description: 'Devuelve la lista completa y actualizada de personas y eventos conocidos de la vida de esta persona, integrando lo nuevo con lo que ya se sabía.',
+  description: 'Devuelve la lista completa y actualizada de familiares directos y de los hitos importantes de la vida de esta persona, integrando lo nuevo con lo que ya se sabía.',
   input_schema: {
     type: 'object',
     properties: {
       personas: {
         type: 'array',
-        description: 'Todas las personas conocidas hasta ahora (familiares y gente cercana), lista completa, no solo las nuevas.',
+        description: 'SOLO familia directa: papás, hermanos, abuelos, tíos, esposo/esposa (pareja YA CASADA), hijos, nietos, sobrinos, primos. NUNCA incluir novio/novia ni ex novio/ex novia (una pareja solo cuenta si está casada), ni amigos, ni compañeros de trabajo. Lista completa, no solo las nuevas.',
         items: {
           type: 'object',
           properties: {
             nombre: { type: 'string' },
-            relacion: { type: 'string', description: 'Ej: papá, mamá, hermano mayor, abuela materna, tío, esposa, hijo, amigo cercano' },
+            relacion: { type: 'string', description: 'Parentesco directo. Ej: papá, mamá, hermano mayor, abuela materna, tío, esposa, esposo, hijo, nieto, sobrino, primo. Nunca "novio" ni "novia".' },
             detalles: { type: 'string', description: 'Un dato breve si se conoce, opcional' },
           },
           required: ['nombre', 'relacion'],
@@ -408,15 +409,16 @@ const TREE_TOOLS = [{
       },
       eventos: {
         type: 'array',
-        description: 'Todos los momentos/eventos de vida conocidos hasta ahora, lista completa, ordenados cronológicamente si se puede.',
+        description: 'SOLO hitos importantes de la vida (nacimientos, cumpleaños, viajes, graduaciones, matrimonios, muertes u otra fecha realmente significativa). NUNCA charla cotidiana, opiniones, gustos, ni planes sin confirmar. Lista completa, ordenada cronológicamente si se puede.',
         items: {
           type: 'object',
           properties: {
             descripcion: { type: 'string' },
+            categoria: { type: 'string', enum: ['nacimiento', 'cumpleaños', 'viaje', 'graduación', 'matrimonio', 'muerte', 'otro hito importante'] },
             anio: { type: 'number', description: 'Año aproximado si se puede inferir; si no, omitir' },
             edad_aprox: { type: 'number', description: 'Edad aproximada de la persona en ese momento, si se sabe; si no, omitir' },
           },
-          required: ['descripcion'],
+          required: ['descripcion', 'categoria'],
         },
       },
     },
@@ -434,9 +436,9 @@ async function updateFamilyTree(userId, newExchanges) {
 
     await ensureSchema();
     const personasPrevias = await sql`SELECT nombre, relacion, detalles FROM family_members WHERE user_id = ${userId}`;
-    const eventosPrevios = await sql`SELECT descripcion, anio, edad_aprox FROM timeline_events WHERE user_id = ${userId} ORDER BY anio NULLS LAST, id`;
+    const eventosPrevios = await sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${userId} ORDER BY anio NULLS LAST, id`;
 
-    const prompt = `Personas ya conocidas:\n${JSON.stringify(personasPrevias)}\n\nEventos ya conocidos:\n${JSON.stringify(eventosPrevios)}\n\nCharla nueva para integrar:\n${nuevaCharla}\n\nUsá la herramienta para devolver la lista COMPLETA actualizada de personas y eventos (lo anterior + lo nuevo, sin perder nada, corrigiendo si hay datos más precisos).`;
+    const prompt = `Personas ya conocidas:\n${JSON.stringify(personasPrevias)}\n\nEventos ya conocidos:\n${JSON.stringify(eventosPrevios)}\n\nCharla nueva para integrar:\n${nuevaCharla}\n\nUsá la herramienta para devolver la lista COMPLETA actualizada de personas y eventos (lo anterior + lo nuevo, sin perder nada, corrigiendo si hay datos más precisos). Recordá las reglas: personas SOLO de la familia directa (nada de novio/novia, solo esposo/a si está casado/a); eventos SOLO hitos importantes (nacimiento, cumpleaños, viaje, graduación, matrimonio, muerte), nada de charla cotidiana ni planes sin confirmar. Si alguna persona o evento ya guardado no cumple estas reglas, quitalo de la lista.`;
 
     const response = await anthropic.messages.create({
       model: MODEL,
@@ -448,12 +450,14 @@ async function updateFamilyTree(userId, newExchanges) {
 
     const toolUse = response.content.find((b) => b.type === 'tool_use');
     if (!toolUse || !toolUse.input) return;
-    const personas = Array.isArray(toolUse.input.personas) ? toolUse.input.personas.slice(0, 60) : [];
+    // Filtro defensivo por si el modelo se cuela: nada de novio/novia en el árbol.
+    const personas = (Array.isArray(toolUse.input.personas) ? toolUse.input.personas : [])
+      .filter((p) => p && p.nombre && p.relacion && !/\bnovi[oa]\b/i.test(p.relacion))
+      .slice(0, 60);
     const eventos = Array.isArray(toolUse.input.eventos) ? toolUse.input.eventos.slice(0, 100) : [];
 
     await sql`DELETE FROM family_members WHERE user_id = ${userId}`;
     for (const p of personas) {
-      if (!p || !p.nombre || !p.relacion) continue;
       await sql`INSERT INTO family_members (user_id, nombre, relacion, detalles) VALUES (
         ${userId}, ${String(p.nombre).slice(0, 120)}, ${String(p.relacion).slice(0, 80)}, ${p.detalles ? String(p.detalles).slice(0, 300) : null}
       )`;
@@ -464,8 +468,9 @@ async function updateFamilyTree(userId, newExchanges) {
       if (!e || !e.descripcion) continue;
       const anio = Number.isFinite(e.anio) ? Math.round(e.anio) : null;
       const edad = Number.isFinite(e.edad_aprox) ? Math.round(e.edad_aprox) : null;
-      await sql`INSERT INTO timeline_events (user_id, descripcion, anio, edad_aprox) VALUES (
-        ${userId}, ${String(e.descripcion).slice(0, 300)}, ${anio}, ${edad}
+      const categoria = e.categoria ? String(e.categoria).slice(0, 40) : null;
+      await sql`INSERT INTO timeline_events (user_id, descripcion, anio, edad_aprox, categoria) VALUES (
+        ${userId}, ${String(e.descripcion).slice(0, 300)}, ${anio}, ${edad}, ${categoria}
       )`;
     }
   } catch (err) {
@@ -783,7 +788,7 @@ app.get('/api/tree', requireAuth, async (req, res) => {
   try {
     await ensureSchema();
     const people = await sql`SELECT nombre, relacion, detalles FROM family_members WHERE user_id = ${req.userId} ORDER BY id`;
-    const events = await sql`SELECT descripcion, anio, edad_aprox FROM timeline_events WHERE user_id = ${req.userId} ORDER BY anio NULLS LAST, id`;
+    const events = await sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${req.userId} ORDER BY anio NULLS LAST, id`;
     res.json({ people, events });
   } catch (err) {
     console.error(err);
@@ -803,7 +808,7 @@ app.post('/api/rebuild-tree', requireAuth, rateLimit, async (req, res) => {
     await updateFamilyTree(req.userId, todo);
 
     const people = await sql`SELECT nombre, relacion, detalles FROM family_members WHERE user_id = ${req.userId} ORDER BY id`;
-    const events = await sql`SELECT descripcion, anio, edad_aprox FROM timeline_events WHERE user_id = ${req.userId} ORDER BY anio NULLS LAST, id`;
+    const events = await sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${req.userId} ORDER BY anio NULLS LAST, id`;
     res.json({ ok: true, people, events });
   } catch (err) {
     console.error(err);

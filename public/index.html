@@ -198,18 +198,23 @@
   .tree-panel .sub { color: var(--ink-soft); font-size: 0.85rem; margin: 0; }
   .tree-panel .empty { color: var(--ink-soft); font-size: 0.85rem; font-style: italic; }
 
-  .tree-tier { display: flex; flex-direction: column; gap: 4px; }
-  .tree-tier-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-soft); margin-top: 6px; }
-  .tree-tier-row { display: flex; flex-wrap: wrap; gap: 6px; }
-  .tree-chip {
+  .tree-graphic { position: relative; display: flex; flex-direction: column; gap: 26px; padding-top: 2px; }
+  .tree-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; position: relative; z-index: 1; }
+  .tree-lines { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 0; overflow: visible; }
+  .tree-lines line { stroke: #D6CBA9; stroke-width: 1.5; }
+  .tree-node {
     background: var(--bubble-user);
-    border-radius: 10px;
-    padding: 5px 9px;
-    font-size: 0.85rem;
+    border-radius: 12px;
+    padding: 6px 10px;
+    font-size: 0.82rem;
     line-height: 1.25;
+    text-align: center;
+    min-width: 56px;
   }
-  .tree-chip strong { display: block; color: var(--ink); }
-  .tree-chip span { color: var(--ink-soft); font-size: 0.78rem; }
+  .tree-node strong { display: block; color: var(--ink); }
+  .tree-node span { display: block; color: var(--ink-soft); font-size: 0.72rem; }
+  .tree-node.principal { background: var(--gold-deep); box-shadow: 0 4px 10px -4px rgba(0,0,0,0.4); }
+  .tree-node.principal strong, .tree-node.principal span { color: #FBF6EA; }
 
   .timeline-item {
     position: relative;
@@ -1015,12 +1020,31 @@
 
   function tierForRelacion(relacion) {
     const r = (relacion || '').toLowerCase();
-    if (/abuel/.test(r)) return { i: 0, label: 'Abuelos' };
-    if (/(pap[aá]|padre|mam[aá]|madre|t[ií]o|t[ií]a)/.test(r)) return { i: 1, label: 'Padres y tíos' };
-    if (/(nieto|nieta)/.test(r)) return { i: 4, label: 'Nietos' };
-    if (/(hijo|hija|sobrin)/.test(r)) return { i: 3, label: 'Hijos y sobrinos' };
-    return { i: 2, label: 'Hermanos, pareja y otros cercanos' };
+    if (/abuel/.test(r)) return 0;
+    if (/(pap[aá]|padre|mam[aá]|madre|t[ií]o|t[ií]a)/.test(r)) return 1;
+    if (/(nieto|nieta)/.test(r)) return 4;
+    if (/(hijo|hija|sobrin)/.test(r)) return 3;
+    return 2; // hermanos, esposo/a, primos, sujeto principal
   }
+
+  // Novio/novia no cuenta como familia directa en el árbol (solo esposo/a) —
+  // filtro extra acá por si algo se cuela, el backend ya filtra también.
+  function esNovio(relacion) {
+    return /\bnovi[oa]\b/i.test(relacion || '');
+  }
+
+  function drawLine(svg, x1, y1, x2, y2) {
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+    line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+    svg.appendChild(line);
+  }
+
+  const CATEGORY_ICON = {
+    'nacimiento': '👶', 'cumpleaños': '🎂', 'viaje': '✈️',
+    'graduación': '🎓', 'matrimonio': '💍', 'muerte': '🕊️',
+    'otro hito importante': '⭐',
+  };
 
   async function cargarArbol() {
     try {
@@ -1029,44 +1053,74 @@
       const data = await resp.json();
 
       treeTiers.innerHTML = '';
-      const people = data.people || [];
+      const people = (data.people || []).filter((p) => !esNovio(p.relacion));
       if (!people.length) {
         treeTiers.innerHTML = '<p class="empty">Todavía no hay nadie registrado — va a ir apareciendo a medida que se charla.</p>';
       } else {
         const tiers = [[], [], [], [], []];
-        people.forEach((p) => { tiers[tierForRelacion(p.relacion).i].push(p); });
-        const labels = ['Abuelos', 'Padres y tíos', 'Hermanos, pareja y otros cercanos', 'Hijos y sobrinos', 'Nietos'];
-        tiers.forEach((grupo, i) => {
-          if (!grupo.length) return;
-          const tierDiv = document.createElement('div');
-          tierDiv.className = 'tree-tier';
-          const label = document.createElement('div');
-          label.className = 'tree-tier-label';
-          label.textContent = labels[i];
-          tierDiv.appendChild(label);
+        people.forEach((p) => { tiers[tierForRelacion(p.relacion)].push(p); });
+
+        const graphic = document.createElement('div');
+        graphic.className = 'tree-graphic';
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('class', 'tree-lines');
+        graphic.appendChild(svg);
+
+        const rowEls = [];
+        tiers.forEach((grupo) => {
+          if (!grupo.length) { rowEls.push(null); return; }
           const row = document.createElement('div');
-          row.className = 'tree-tier-row';
+          row.className = 'tree-row';
           grupo.forEach((p) => {
-            const chip = document.createElement('div');
-            chip.className = 'tree-chip';
-            chip.innerHTML = `<strong>${p.nombre}</strong><span>${p.relacion}${p.detalles ? ' — ' + p.detalles : ''}</span>`;
-            row.appendChild(chip);
+            const node = document.createElement('div');
+            node.className = 'tree-node' + (/sujeto principal/i.test(p.relacion) ? ' principal' : '');
+            node.innerHTML = `<strong>${p.nombre}</strong><span>${p.relacion}</span>`;
+            row.appendChild(node);
           });
-          tierDiv.appendChild(row);
-          treeTiers.appendChild(tierDiv);
+          graphic.appendChild(row);
+          rowEls.push(row);
+        });
+
+        treeTiers.appendChild(graphic);
+
+        // Conectores tipo árbol genealógico entre generaciones consecutivas.
+        requestAnimationFrame(() => {
+          const containerRect = graphic.getBoundingClientRect();
+          svg.setAttribute('width', containerRect.width);
+          svg.setAttribute('height', containerRect.height);
+          svg.setAttribute('viewBox', `0 0 ${containerRect.width} ${containerRect.height}`);
+
+          const filled = rowEls.filter(Boolean);
+          for (let i = 0; i < filled.length - 1; i++) {
+            const rectA = filled[i].getBoundingClientRect();
+            const nodesB = Array.from(filled[i + 1].children);
+            const centersB = nodesB.map((n) => {
+              const r = n.getBoundingClientRect();
+              return { x: r.left + r.width / 2 - containerRect.left, y: r.top - containerRect.top };
+            });
+            const trunkX = rectA.left + rectA.width / 2 - containerRect.left;
+            const trunkYStart = rectA.bottom - containerRect.top;
+            const busY = trunkYStart + 10;
+
+            drawLine(svg, trunkX, trunkYStart, trunkX, busY);
+            const xs = centersB.map((c) => c.x).concat(trunkX);
+            drawLine(svg, Math.min(...xs), busY, Math.max(...xs), busY);
+            centersB.forEach((c) => drawLine(svg, c.x, busY, c.x, c.y));
+          }
         });
       }
 
       timelineList.innerHTML = '';
       const events = data.events || [];
       if (!events.length) {
-        timelineList.innerHTML = '<p class="empty">Todavía no hay momentos registrados.</p>';
+        timelineList.innerHTML = '<p class="empty">Todavía no hay hitos importantes registrados.</p>';
       } else {
         events.forEach((e) => {
           const item = document.createElement('div');
           item.className = 'timeline-item';
           const year = e.anio ? `<div class="timeline-year">${e.anio}</div>` : (e.edad_aprox ? `<div class="timeline-year">~${e.edad_aprox} años</div>` : '');
-          item.innerHTML = `${year}<div>${e.descripcion}</div>`;
+          const icon = CATEGORY_ICON[e.categoria] ? CATEGORY_ICON[e.categoria] + ' ' : '';
+          item.innerHTML = `${year}<div>${icon}${e.descripcion}</div>`;
           timelineList.appendChild(item);
         });
       }
