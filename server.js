@@ -71,6 +71,12 @@ function ensureSchema() {
         password_hash TEXT NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`;
+      // name/email: se agregaron para el registro abierto desde la landing
+      // (public/landing.html) — las cuentas creadas a mano con SETUP_KEY
+      // desde antes no tienen estos datos, por eso quedan nullable.
+      await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS name TEXT`;
+      await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT`;
+      await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL`;
 
       // sessions/resumen ya existían de una versión sin cuentas — se agrega
       // user_id de forma aditiva (nunca se borra nada existente).
@@ -271,6 +277,43 @@ app.post('/api/register', rateLimit, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo crear el usuario.' });
+  }
+});
+
+// Registro abierto desde la landing pública (public/landing.html) — sin
+// clave de invitación, a diferencia de /api/register (pensado para que
+// Felipe cree cuentas a mano con SETUP_KEY). El correo hace de usuario
+// para el login, así el formulario de "Usuario" que ya existe sigue
+// funcionando sin tocarlo.
+app.post('/api/signup', rateLimit, async (req, res) => {
+  try {
+    const { name, email, password } = req.body || {};
+    const cleanName = String(name || '').trim().slice(0, 100);
+    const cleanEmail = String(email || '').trim().toLowerCase().slice(0, 200);
+    if (!cleanName) return res.status(400).json({ error: 'Falta el nombre.' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return res.status(400).json({ error: 'El correo no parece válido.' });
+    }
+    if (!password || String(password).length < 6) {
+      return res.status(400).json({ error: 'La clave debe tener al menos 6 caracteres.' });
+    }
+    await ensureSchema();
+    const existing = await sql`SELECT id FROM users WHERE email = ${cleanEmail} OR username = ${cleanEmail}`;
+    if (existing.length) return res.status(409).json({ error: 'Ya existe una cuenta con ese correo.' });
+    const hash = await bcrypt.hash(password, 10);
+    const rows = await sql`
+      INSERT INTO users (username, name, email, password_hash)
+      VALUES (${cleanEmail}, ${cleanName}, ${cleanEmail}, ${hash})
+      RETURNING id, username
+    `;
+    setSessionCookie(req, res, { userId: rows[0].id, username: rows[0].username });
+    res.json({ ok: true, username: rows[0].username });
+  } catch (err) {
+    console.error(err);
+    if (err && err.code === '23505') {
+      return res.status(409).json({ error: 'Ya existe una cuenta con ese correo.' });
+    }
+    res.status(500).json({ error: 'No se pudo crear la cuenta.' });
   }
 });
 
