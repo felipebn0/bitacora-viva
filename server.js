@@ -128,6 +128,28 @@ function ensureSchema() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`;
       await sql`CREATE INDEX IF NOT EXISTS idx_story_log_user ON story_log(user_id)`;
+
+      // Árbol genealógico y línea de tiempo: se reemplazan enteros cada vez
+      // que se actualizan (más simple que ir haciendo diff a mano).
+      await sql`CREATE TABLE IF NOT EXISTS family_members (
+        id SERIAL PRIMARY KEY,
+        user_id INT NOT NULL REFERENCES users(id),
+        nombre TEXT NOT NULL,
+        relacion TEXT NOT NULL,
+        detalles TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_family_members_user ON family_members(user_id)`;
+
+      await sql`CREATE TABLE IF NOT EXISTS timeline_events (
+        id SERIAL PRIMARY KEY,
+        user_id INT NOT NULL REFERENCES users(id),
+        descripcion TEXT NOT NULL,
+        anio INT,
+        edad_aprox INT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_timeline_events_user ON timeline_events(user_id)`;
     })();
   }
   return schemaReady;
@@ -404,7 +426,10 @@ app.post('/api/next', requireAuth, rateLimit, async (req, res) => {
     const done = text.includes('[FIN]');
     text = text.replace('[FIN]', '').trim();
 
-    const ultimaRespuesta = [...history].reverse().find((m) => m.role === 'user');
+    // Los mensajes "sintéticos" que le mandamos a Claude por dentro (avisos
+    // de que se presionó un botón, no algo que la persona realmente dijo)
+    // van siempre entre paréntesis — se excluyen del log de historias.
+    const ultimaRespuesta = [...history].reverse().find((m) => m.role === 'user' && !/^\(.*\)$/.test(m.content.trim()));
     if (ultimaRespuesta && ultimaRespuesta.content.length >= HISTORIA_MIN_CHARS) {
       const audioUrl = typeof req.body.lastAudioUrl === 'string' ? req.body.lastAudioUrl.slice(0, 1000) : null;
       try {
