@@ -138,9 +138,13 @@ function ensureSchema() {
         title TEXT NOT NULL,
         theme TEXT,
         generated_text TEXT NOT NULL,
-        story_ids INTEGER[],
+        story_ids TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`;
+      // story_ids se guarda como JSON (no array nativo de Postgres): el
+      // driver de Neon por HTTP no bindea bien arrays de JS, mismo motivo
+      // por el que "padres" de family_members también es TEXT con JSON.
+      await sql`ALTER TABLE chapters ALTER COLUMN story_ids TYPE TEXT USING story_ids::text`;
       await sql`CREATE INDEX IF NOT EXISTS idx_chapters_user ON chapters(user_id)`;
 
       // Árbol genealógico y línea de tiempo: se reemplazan enteros cada vez
@@ -481,7 +485,7 @@ function inferirPadresFaltantes(personas) {
   return personas;
 }
 
-function parsePadres(raw) {
+function parseJsonArray(raw) {
   if (!raw) return [];
   try {
     const arr = JSON.parse(raw);
@@ -501,7 +505,7 @@ async function updateFamilyTree(userId, newExchanges) {
 
     await ensureSchema();
     const personasPreviasRaw = await sql`SELECT nombre, relacion, detalles, padres FROM family_members WHERE user_id = ${userId}`;
-    const personasPrevias = personasPreviasRaw.map((p) => ({ ...p, padres: parsePadres(p.padres) }));
+    const personasPrevias = personasPreviasRaw.map((p) => ({ ...p, padres: parseJsonArray(p.padres) }));
     const eventosPrevios = await sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${userId} ORDER BY anio NULLS LAST, id`;
 
     const prompt = `Personas ya conocidas:\n${JSON.stringify(personasPrevias)}\n\nEventos ya conocidos:\n${JSON.stringify(eventosPrevios)}\n\nCharla nueva para integrar:\n${nuevaCharla}\n\nUsá la herramienta para devolver la lista COMPLETA actualizada de personas y eventos (lo anterior + lo nuevo, sin perder nada, corrigiendo si hay datos más precisos). Recordá las reglas: personas SOLO de la familia directa (nada de novio/novia, solo esposo/a si está casado/a); para cada persona completá "padres" con los nombres exactos de su papá y/o mamá tal como aparecen en esta misma lista, siempre que se pueda inferir (por ejemplo, por los "detalles" ya guardados tipo "hija de Oscar"); eventos SOLO hitos importantes (nacimiento, cumpleaños, viaje, graduación, matrimonio, muerte), nada de charla cotidiana ni planes sin confirmar. Si alguna persona o evento ya guardado no cumple estas reglas, quitalo de la lista.`;
@@ -968,9 +972,9 @@ app.post('/api/chapters/generate', requireAuth, rateLimit, async (req, res) => {
     const guardados = [];
     for (const c of nuevos) {
       const row = await sql`INSERT INTO chapters (user_id, title, theme, generated_text, story_ids) VALUES (
-        ${req.userId}, ${c.title}, ${c.theme}, ${c.generated_text}, ${c.ids}
+        ${req.userId}, ${c.title}, ${c.theme}, ${c.generated_text}, ${JSON.stringify(c.ids)}
       ) RETURNING id, title, theme, generated_text, story_ids, created_at`;
-      guardados.push(row[0]);
+      guardados.push({ ...row[0], story_ids: parseJsonArray(row[0].story_ids) });
     }
 
     res.json({ ok: true, chapters: guardados });
@@ -983,7 +987,8 @@ app.post('/api/chapters/generate', requireAuth, rateLimit, async (req, res) => {
 app.get('/api/chapters', requireAuth, async (req, res) => {
   try {
     await ensureSchema();
-    const chapters = await sql`SELECT id, title, theme, generated_text, story_ids, created_at FROM chapters WHERE user_id = ${req.userId} ORDER BY id`;
+    const rows = await sql`SELECT id, title, theme, generated_text, story_ids, created_at FROM chapters WHERE user_id = ${req.userId} ORDER BY id`;
+    const chapters = rows.map((c) => ({ ...c, story_ids: parseJsonArray(c.story_ids) }));
     res.json({ chapters });
   } catch (err) {
     console.error(err);
@@ -995,7 +1000,7 @@ app.get('/api/tree', requireAuth, async (req, res) => {
   try {
     await ensureSchema();
     const peopleRaw = await sql`SELECT nombre, relacion, detalles, padres FROM family_members WHERE user_id = ${req.userId} ORDER BY id`;
-    const people = peopleRaw.map((p) => ({ ...p, padres: parsePadres(p.padres) }));
+    const people = peopleRaw.map((p) => ({ ...p, padres: parseJsonArray(p.padres) }));
     const events = await sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${req.userId} ORDER BY anio NULLS LAST, id`;
     res.json({ people, events });
   } catch (err) {
@@ -1016,7 +1021,7 @@ app.post('/api/rebuild-tree', requireAuth, rateLimit, async (req, res) => {
     await updateFamilyTree(req.userId, todo);
 
     const peopleRaw = await sql`SELECT nombre, relacion, detalles, padres FROM family_members WHERE user_id = ${req.userId} ORDER BY id`;
-    const people = peopleRaw.map((p) => ({ ...p, padres: parsePadres(p.padres) }));
+    const people = peopleRaw.map((p) => ({ ...p, padres: parseJsonArray(p.padres) }));
     const events = await sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${req.userId} ORDER BY anio NULLS LAST, id`;
     res.json({ ok: true, people, events });
   } catch (err) {
