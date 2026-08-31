@@ -414,7 +414,7 @@ app.post('/api/next', requireAuth, rateLimit, async (req, res) => {
       }
     }
 
-    res.json({ message: text, done });
+    res.json({ message: text, done, _debugRaw: response.content[0].text.trim() });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo generar la siguiente pregunta.' });
