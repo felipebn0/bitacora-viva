@@ -435,6 +435,36 @@ const TREE_TOOLS = [{
   },
 }];
 
+// Respaldo determinístico: si el modelo dejó "padres" vacío en los casos más
+// obvios (sujeto principal, papá/mamá, tíos), lo completamos por regla fija
+// en vez de depender solo de que la IA lo infiera bien.
+function inferirPadresFaltantes(personas) {
+  const porRelacionExacta = (re) => personas.filter((p) => re.test((p.relacion || '').trim()));
+  const papaNode = porRelacionExacta(/^pap[aá]$/i)[0];
+  const mamaNode = porRelacionExacta(/^mam[aá]$/i)[0];
+  const abuelosPaternos = porRelacionExacta(/^abuel[oa] paterno$/i).map((p) => p.nombre);
+  const abuelosMaternos = porRelacionExacta(/^abuel[oa] materno$/i).map((p) => p.nombre);
+
+  personas.forEach((p) => {
+    if (Array.isArray(p.padres) && p.padres.length) return; // ya lo trajo la IA, no tocar
+    const rel = (p.relacion || '').trim().toLowerCase();
+    if (rel === 'sujeto principal' && papaNode && mamaNode) {
+      p.padres = [papaNode.nombre, mamaNode.nombre];
+    } else if (/^pap[aá]$/.test(rel) && abuelosPaternos.length) {
+      p.padres = abuelosPaternos.slice(0, 2);
+    } else if (/^mam[aá]$/.test(rel) && abuelosMaternos.length) {
+      p.padres = abuelosMaternos.slice(0, 2);
+    } else if (/^t[ií]o paterno$|^t[ií]a paterna$/.test(rel) && abuelosPaternos.length) {
+      p.padres = abuelosPaternos.slice(0, 2);
+    } else if (/^t[ií]o materno$|^t[ií]a materna$/.test(rel) && abuelosMaternos.length) {
+      p.padres = abuelosMaternos.slice(0, 2);
+    } else if (/hermano|hermana/.test(rel) && papaNode && mamaNode) {
+      p.padres = [papaNode.nombre, mamaNode.nombre];
+    }
+  });
+  return personas;
+}
+
 function parsePadres(raw) {
   if (!raw) return [];
   try {
@@ -471,9 +501,11 @@ async function updateFamilyTree(userId, newExchanges) {
     const toolUse = response.content.find((b) => b.type === 'tool_use');
     if (!toolUse || !toolUse.input) return;
     // Filtro defensivo por si el modelo se cuela: nada de novio/novia en el árbol.
-    const personas = (Array.isArray(toolUse.input.personas) ? toolUse.input.personas : [])
-      .filter((p) => p && p.nombre && p.relacion && !/\bnovi[oa]\b/i.test(p.relacion))
-      .slice(0, 60);
+    const personas = inferirPadresFaltantes(
+      (Array.isArray(toolUse.input.personas) ? toolUse.input.personas : [])
+        .filter((p) => p && p.nombre && p.relacion && !/\bnovi[oa]\b/i.test(p.relacion))
+        .slice(0, 60)
+    );
     const eventos = Array.isArray(toolUse.input.eventos) ? toolUse.input.eventos.slice(0, 100) : [];
 
     await sql`DELETE FROM family_members WHERE user_id = ${userId}`;
