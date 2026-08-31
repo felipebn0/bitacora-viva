@@ -373,6 +373,26 @@
         }
       }
 
+      // Al reubicar filas a mano, alguna puede terminar más ancha que el
+      // ancho "natural" que el navegador calculó antes (ej. una fila con
+      // varias parejas que se van corriendo a la derecha para no pisarse).
+      // El gráfico entero se re-mide según dónde quedó parado todo el
+      // mundo de verdad, para que el achicado automático de más abajo y
+      // las líneas SVG no corten ni midan mal el contenido.
+      {
+        const contRectPre = graphic.getBoundingClientRect();
+        const nodos = Array.from(nodeByName.values());
+        const lefts = nodos.map((n) => n.getBoundingClientRect().left - contRectPre.left);
+        const rights = nodos.map((n) => n.getBoundingClientRect().right - contRectPre.left);
+        const minLeft = Math.min(0, ...lefts);
+        const maxRight = Math.max(contRectPre.width, ...rights);
+        // Si algo quedó a la izquierda del borde, corremos el gráfico ENTERO
+        // (no cada nodo suelto) para no desalinear lo que ya está bien
+        // alineado entre sí.
+        graphic.style.marginLeft = (minLeft < 0 ? -minLeft : 0) + 'px';
+        graphic.style.width = (maxRight - minLeft) + 'px';
+      }
+
       const containerRect = graphic.getBoundingClientRect();
       svg.setAttribute('width', containerRect.width);
       svg.setAttribute('height', containerRect.height);
