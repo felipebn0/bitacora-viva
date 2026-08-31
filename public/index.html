@@ -260,14 +260,17 @@
       <textarea id="aporteTexto" placeholder="Ej: papá conoció a mamá en una fiesta de la universidad…"></textarea>
       <button id="aporteTextoBtn" type="button">Agregar historia</button>
 
-      <hr>
-
-      <label for="aporteArchivo">Foto o video (hasta 4MB)</label>
-      <input type="file" id="aporteArchivo" accept="image/*,video/*">
-      <input type="text" id="aporteCaption" placeholder="¿Quién aparece? ¿Qué momento es?">
-      <button id="aporteArchivoBtn" type="button">Subir foto/video</button>
-
       <p class="msg" id="aporteMsg"></p>
+
+      <!-- Foto/video: escondido por ahora, no es relevante para esta parte.
+           El código sigue funcionando, ver #aportePhotoBlock. -->
+      <div id="aportePhotoBlock" style="display:none;">
+        <hr>
+        <label for="aporteArchivo">Foto o video (hasta 4MB)</label>
+        <input type="file" id="aporteArchivo" accept="image/*,video/*">
+        <input type="text" id="aporteCaption" placeholder="¿Quién aparece? ¿Qué momento es?">
+        <button id="aporteArchivoBtn" type="button">Subir foto/video</button>
+      </div>
 
       <hr>
 
@@ -948,21 +951,14 @@
       if (!resp.ok) return;
       const data = await resp.json();
       aportesLista.innerHTML = '';
-      const items = [
-        ...(data.notes || []).map((n) => ({ ...n, kind: 'nota' })),
-        ...(data.media || []).map((m) => ({ ...m, kind: 'media' })),
-      ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      // Fotos/video escondidas por ahora (ver aportePhotoBlock) — solo se
+      // listan las historias de texto.
+      const items = (data.notes || []).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
       items.forEach((it) => {
         const div = document.createElement('div');
         div.className = 'item';
-        if (it.kind === 'nota') {
-          div.innerHTML = `<strong>${it.contributor || 'Familia'}:</strong> ${it.texto}`;
-        } else if (it.type === 'video') {
-          div.innerHTML = `<video controls src="${it.url}"></video><div><strong>${it.contributor || 'Familia'}:</strong> ${it.caption || ''}</div>`;
-        } else {
-          div.innerHTML = `<img src="${it.url}" alt=""><div><strong>${it.contributor || 'Familia'}:</strong> ${it.caption || ''}</div>`;
-        }
+        div.innerHTML = `<strong>${it.contributor || 'Familia'}:</strong> ${it.texto}`;
         aportesLista.appendChild(div);
       });
     } catch (e) {}
