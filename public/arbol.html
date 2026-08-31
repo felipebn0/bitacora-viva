@@ -147,6 +147,31 @@
       grupos.get(k).push(p);
     });
 
+    // Si dos personas de DOS grupos de hermanos distintos son pareja entre
+    // sí (ej. Fernando de un lado, Marta del otro, cada uno con sus propios
+    // padres), acomodamos esos dos grupos para que la pareja quede en el
+    // borde de contacto — como en un árbol clásico, papá pegado a mamá en
+    // el medio y los tíos de cada lado hacia afuera — en vez de dejar a
+    // uno de los dos perdido lejos del otro.
+    for (let i = 0; i < ordenClaves.length - 1; i++) {
+      const grupoA = grupos.get(ordenClaves[i]);
+      const grupoB = grupos.get(ordenClaves[i + 1]);
+      let puenteA = null;
+      let puenteB = null;
+      for (const pa of grupoA) {
+        const partnerName = partnerOf.get(pa.nombre);
+        if (!partnerName) continue;
+        const pb = grupoB.find((x) => x.nombre === partnerName);
+        if (pb) { puenteA = pa; puenteB = pb; break; }
+      }
+      if (puenteA && puenteB) {
+        grupoA.splice(grupoA.indexOf(puenteA), 1);
+        grupoA.push(puenteA); // al final de su grupo, tocando al siguiente
+        grupoB.splice(grupoB.indexOf(puenteB), 1);
+        grupoB.unshift(puenteB); // al principio del suyo, tocando al anterior
+      }
+    }
+
     const result = [];
     const usadosSinPadres = new Set();
     ordenClaves.forEach((k) => {
