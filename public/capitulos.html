@@ -62,7 +62,7 @@
       <h1>Libro de la historia</h1>
       <p>Capítulos armados con IA a partir de las historias detectadas en las charlas.</p>
     </div>
-    <a class="volver" href="/">← volver a la bitácora</a>
+    <a class="volver" href="/app.html">← volver a la bitácora</a>
   </header>
   <div class="wrap">
     <div class="toolbar">
@@ -104,7 +104,7 @@
     try {
       const resp = await fetch('/api/chapters');
       if (resp.status === 401) {
-        lista.innerHTML = '<p class="empty">Iniciá sesión en la bitácora primero. <a class="volver" href="/">Ir a la bitácora</a></p>';
+        lista.innerHTML = '<p class="empty">Iniciá sesión en la bitácora primero. <a class="volver" href="/app.html">Ir a la bitácora</a></p>';
         generarBtn.disabled = true;
         return;
       }
