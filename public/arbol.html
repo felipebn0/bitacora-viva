@@ -107,9 +107,9 @@
     svg.setAttribute('class', 'tree-lines');
     graphic.appendChild(svg);
 
-    const rowEls = [];
+    const nodeByName = new Map();
     tiers.forEach((grupo) => {
-      if (!grupo.length) { rowEls.push(null); return; }
+      if (!grupo.length) return;
       const row = document.createElement('div');
       row.className = 'tree-row';
       grupo.forEach((p) => {
@@ -117,36 +117,46 @@
         node.className = 'tree-node' + (/sujeto principal/i.test(p.relacion) ? ' principal' : '');
         node.innerHTML = `<strong>${p.nombre}</strong><span>${p.relacion}</span>`;
         row.appendChild(node);
+        nodeByName.set(p.nombre, node);
       });
       graphic.appendChild(row);
-      rowEls.push(row);
     });
 
     wrap.appendChild(graphic);
 
+    // Conectores según quién es hijo/a de quién de verdad (campo "padres"),
+    // no por generación genérica — así cada rama va a su papá/mamá real.
     requestAnimationFrame(() => {
       const containerRect = graphic.getBoundingClientRect();
       svg.setAttribute('width', containerRect.width);
       svg.setAttribute('height', containerRect.height);
       svg.setAttribute('viewBox', `0 0 ${containerRect.width} ${containerRect.height}`);
 
-      const filled = rowEls.filter(Boolean);
-      for (let i = 0; i < filled.length - 1; i++) {
-        const rectA = filled[i].getBoundingClientRect();
-        const nodesB = Array.from(filled[i + 1].children);
-        const centersB = nodesB.map((n) => {
-          const r = n.getBoundingClientRect();
-          return { x: r.left + r.width / 2 - containerRect.left, y: r.top - containerRect.top };
-        });
-        const trunkX = rectA.left + rectA.width / 2 - containerRect.left;
-        const trunkYStart = rectA.bottom - containerRect.top;
-        const busY = trunkYStart + 16;
-
-        drawLine(svg, trunkX, trunkYStart, trunkX, busY);
-        const xs = centersB.map((c) => c.x).concat(trunkX);
-        drawLine(svg, Math.min(...xs), busY, Math.max(...xs), busY);
-        centersB.forEach((c) => drawLine(svg, c.x, busY, c.x, c.y));
+      function centerOf(el) {
+        const r = el.getBoundingClientRect();
+        return {
+          x: r.left + r.width / 2 - containerRect.left,
+          top: r.top - containerRect.top,
+          bottom: r.bottom - containerRect.top,
+        };
       }
+
+      people.forEach((p) => {
+        const childEl = nodeByName.get(p.nombre);
+        if (!childEl) return;
+        const padres = (Array.isArray(p.padres) ? p.padres : [])
+          .filter((n) => n !== p.nombre && nodeByName.has(n));
+        if (!padres.length) return;
+        const childC = centerOf(childEl);
+        const parentCenters = padres.map((n) => centerOf(nodeByName.get(n)));
+        const anchorY = Math.max(...parentCenters.map((c) => c.bottom));
+        if (anchorY >= childC.top) return; // evita líneas invertidas si el dato viene raro
+        const anchorX = parentCenters.reduce((s, c) => s + c.x, 0) / parentCenters.length;
+        const midY = anchorY + (childC.top - anchorY) / 2;
+        drawLine(svg, anchorX, anchorY, anchorX, midY);
+        drawLine(svg, anchorX, midY, childC.x, midY);
+        drawLine(svg, childC.x, midY, childC.x, childC.top);
+      });
     });
   }
 

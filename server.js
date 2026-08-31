@@ -139,6 +139,10 @@ function ensureSchema() {
         detalles TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`;
+      // padres: JSON con los nombres (tal cual aparecen acá) de los padres de
+      // esta persona, para poder dibujar el árbol con las ramas reales en vez
+      // de agrupar por generación nomás.
+      await sql`ALTER TABLE family_members ADD COLUMN IF NOT EXISTS padres TEXT`;
       await sql`CREATE INDEX IF NOT EXISTS idx_family_members_user ON family_members(user_id)`;
 
       await sql`CREATE TABLE IF NOT EXISTS timeline_events (
@@ -403,6 +407,11 @@ const TREE_TOOLS = [{
             nombre: { type: 'string' },
             relacion: { type: 'string', description: 'Parentesco directo. Ej: papá, mamá, hermano mayor, abuela materna, tío, esposa, esposo, hijo, nieto, sobrino, primo. Nunca "novio" ni "novia".' },
             detalles: { type: 'string', description: 'Un dato breve si se conoce, opcional' },
+            padres: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'MUY IMPORTANTE para armar el árbol bien: nombres de esta persona reales padre/madre (o los dos), escritos EXACTAMENTE igual a como aparece su "nombre" en esta misma lista de personas, para poder conectar las ramas correctamente. Ej: si Ema es hija de Oscar, acá va ["Oscar"] (o ["Oscar","Paula Franco"] si se sabe también la mamá). Dejar vacío [] si es de la generación más alta (abuelos) o si no se sabe.',
+            },
           },
           required: ['nombre', 'relacion'],
         },
@@ -426,6 +435,16 @@ const TREE_TOOLS = [{
   },
 }];
 
+function parsePadres(raw) {
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
 async function updateFamilyTree(userId, newExchanges) {
   try {
     const nuevaCharla = (newExchanges || [])
@@ -435,10 +454,11 @@ async function updateFamilyTree(userId, newExchanges) {
     if (!nuevaCharla.trim()) return;
 
     await ensureSchema();
-    const personasPrevias = await sql`SELECT nombre, relacion, detalles FROM family_members WHERE user_id = ${userId}`;
+    const personasPreviasRaw = await sql`SELECT nombre, relacion, detalles, padres FROM family_members WHERE user_id = ${userId}`;
+    const personasPrevias = personasPreviasRaw.map((p) => ({ ...p, padres: parsePadres(p.padres) }));
     const eventosPrevios = await sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${userId} ORDER BY anio NULLS LAST, id`;
 
-    const prompt = `Personas ya conocidas:\n${JSON.stringify(personasPrevias)}\n\nEventos ya conocidos:\n${JSON.stringify(eventosPrevios)}\n\nCharla nueva para integrar:\n${nuevaCharla}\n\nUsá la herramienta para devolver la lista COMPLETA actualizada de personas y eventos (lo anterior + lo nuevo, sin perder nada, corrigiendo si hay datos más precisos). Recordá las reglas: personas SOLO de la familia directa (nada de novio/novia, solo esposo/a si está casado/a); eventos SOLO hitos importantes (nacimiento, cumpleaños, viaje, graduación, matrimonio, muerte), nada de charla cotidiana ni planes sin confirmar. Si alguna persona o evento ya guardado no cumple estas reglas, quitalo de la lista.`;
+    const prompt = `Personas ya conocidas:\n${JSON.stringify(personasPrevias)}\n\nEventos ya conocidos:\n${JSON.stringify(eventosPrevios)}\n\nCharla nueva para integrar:\n${nuevaCharla}\n\nUsá la herramienta para devolver la lista COMPLETA actualizada de personas y eventos (lo anterior + lo nuevo, sin perder nada, corrigiendo si hay datos más precisos). Recordá las reglas: personas SOLO de la familia directa (nada de novio/novia, solo esposo/a si está casado/a); para cada persona completá "padres" con los nombres exactos de su papá y/o mamá tal como aparecen en esta misma lista, siempre que se pueda inferir (por ejemplo, por los "detalles" ya guardados tipo "hija de Oscar"); eventos SOLO hitos importantes (nacimiento, cumpleaños, viaje, graduación, matrimonio, muerte), nada de charla cotidiana ni planes sin confirmar. Si alguna persona o evento ya guardado no cumple estas reglas, quitalo de la lista.`;
 
     const response = await anthropic.messages.create({
       model: MODEL,
@@ -458,8 +478,9 @@ async function updateFamilyTree(userId, newExchanges) {
 
     await sql`DELETE FROM family_members WHERE user_id = ${userId}`;
     for (const p of personas) {
-      await sql`INSERT INTO family_members (user_id, nombre, relacion, detalles) VALUES (
-        ${userId}, ${String(p.nombre).slice(0, 120)}, ${String(p.relacion).slice(0, 80)}, ${p.detalles ? String(p.detalles).slice(0, 300) : null}
+      const padres = Array.isArray(p.padres) ? p.padres.filter((x) => typeof x === 'string' && x.trim()).slice(0, 2) : [];
+      await sql`INSERT INTO family_members (user_id, nombre, relacion, detalles, padres) VALUES (
+        ${userId}, ${String(p.nombre).slice(0, 120)}, ${String(p.relacion).slice(0, 80)}, ${p.detalles ? String(p.detalles).slice(0, 300) : null}, ${padres.length ? JSON.stringify(padres) : null}
       )`;
     }
 
@@ -787,7 +808,8 @@ app.get('/api/story-log', requireAuth, async (req, res) => {
 app.get('/api/tree', requireAuth, async (req, res) => {
   try {
     await ensureSchema();
-    const people = await sql`SELECT nombre, relacion, detalles FROM family_members WHERE user_id = ${req.userId} ORDER BY id`;
+    const peopleRaw = await sql`SELECT nombre, relacion, detalles, padres FROM family_members WHERE user_id = ${req.userId} ORDER BY id`;
+    const people = peopleRaw.map((p) => ({ ...p, padres: parsePadres(p.padres) }));
     const events = await sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${req.userId} ORDER BY anio NULLS LAST, id`;
     res.json({ people, events });
   } catch (err) {
@@ -807,7 +829,8 @@ app.post('/api/rebuild-tree', requireAuth, rateLimit, async (req, res) => {
 
     await updateFamilyTree(req.userId, todo);
 
-    const people = await sql`SELECT nombre, relacion, detalles FROM family_members WHERE user_id = ${req.userId} ORDER BY id`;
+    const peopleRaw = await sql`SELECT nombre, relacion, detalles, padres FROM family_members WHERE user_id = ${req.userId} ORDER BY id`;
+    const people = peopleRaw.map((p) => ({ ...p, padres: parsePadres(p.padres) }));
     const events = await sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${req.userId} ORDER BY anio NULLS LAST, id`;
     res.json({ ok: true, people, events });
   } catch (err) {
