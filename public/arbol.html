@@ -261,14 +261,28 @@
 
     wrap.appendChild(graphic);
 
-    // Alinea una fila "raíz" (sin padres propios en el árbol, ej. abuelos)
-    // con el centro real de sus hijos en la fila de abajo. El orden en la
-    // lista no alcanza para esto: cada fila se centra sola con flexbox, y
-    // si tienen cantidades de gente muy distintas (4 arriba, 9 abajo) el
-    // centrado de cada una no queda alineado en píxeles con la otra. Por
-    // eso esta fila se saca del centrado automático y cada persona/pareja
-    // se ubica a mano, justo arriba de sus propios hijos.
-    function posicionarFilaRaiz(fila, filaInferior, rowEl) {
+    function agruparEnUnidades(fila) {
+      const usados = new Set();
+      const unidades = [];
+      fila.forEach((p) => {
+        if (usados.has(p.nombre)) return;
+        const partnerName = partnerOf.get(p.nombre);
+        const partner = partnerName ? fila.find((x) => x.nombre === partnerName) : null;
+        if (partner) { unidades.push([p, partner]); usados.add(p.nombre); usados.add(partner.nombre); }
+        else { unidades.push([p]); usados.add(p.nombre); }
+      });
+      return unidades;
+    }
+
+    // Reubica una fila a mano (en vez de dejar que cada una se centre sola
+    // con flexbox) para que quede alineada en píxeles con una fila vecina
+    // YA finalizada: "abajo" la alinea con sus propios hijos (para la fila
+    // más alta del árbol, que no tiene padres propios acá); "arriba" la
+    // alinea con sus propios padres (para el resto). Sin esto, filas con
+    // cantidades de gente muy distintas (4 arriba, 9 en el medio, 6 abajo)
+    // no quedan alineadas aunque el orden sea correcto, y las líneas
+    // terminan cruzándose por en medio de gente que no tiene nada que ver.
+    function posicionarFila(fila, filaReferencia, direccion, rowEl) {
       const contRect = graphic.getBoundingClientRect();
       // Ojo con el sistema de coordenadas: node.style.left posiciona
       // relativo a rowEl (el padre position:relative), no al gráfico
@@ -283,27 +297,27 @@
         const r = av.getBoundingClientRect();
         return r.left + r.width / 2 - contRect.left;
       };
-      const usados = new Set();
-      const unidades = [];
-      fila.forEach((p) => {
-        if (usados.has(p.nombre)) return;
-        const partnerName = partnerOf.get(p.nombre);
-        const partner = partnerName ? fila.find((x) => x.nombre === partnerName) : null;
-        if (partner) { unidades.push([p, partner]); usados.add(p.nombre); usados.add(partner.nombre); }
-        else { unidades.push([p]); usados.add(p.nombre); }
-      });
 
+      const unidades = agruparEnUnidades(fila);
       const conCentro = unidades.map((u, i) => {
         const nombresUnidad = u.map((p) => p.nombre);
-        const hijos = filaInferior.filter(
-          (h) => Array.isArray(h.padres) && h.padres.some((pn) => nombresUnidad.includes(pn))
-        );
-        const xs = hijos.map((h) => xDe(h.nombre)).filter((x) => x != null);
+        let xs;
+        if (direccion === 'abajo') {
+          const hijos = filaReferencia.filter(
+            (h) => Array.isArray(h.padres) && h.padres.some((pn) => nombresUnidad.includes(pn))
+          );
+          xs = hijos.map((h) => xDe(h.nombre)).filter((x) => x != null);
+        } else {
+          const nombresPadres = new Set();
+          u.forEach((p) => (Array.isArray(p.padres) ? p.padres : []).forEach((pn) => nombresPadres.add(pn)));
+          xs = Array.from(nombresPadres).map((n) => xDe(n)).filter((x) => x != null);
+        }
         const centro = xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
         return { u, centro, ordenOriginal: i };
       });
-      // Sin hijos ubicables (no debería pasar acá, pero por las dudas):
-      // se van al final, en su orden original.
+      // Sin referencia ubicable (ej. un cuñado sin padres propios y encima
+      // sin pareja en esta fila — no debería pasar, pero por las dudas):
+      // se va al final, en su orden original.
       conCentro.forEach((c) => { if (c.centro == null) c.centro = 1e6 + c.ordenOriginal; });
       conCentro.sort((a, b) => a.centro - b.centro);
 
@@ -336,14 +350,28 @@
     }
 
     requestAnimationFrame(() => {
-      const filasNoVacias = filasOrdenadas.filter((f) => f.length);
-      filasNoVacias.forEach((fila, idx) => {
-        if (!esFilaRaiz(fila)) return;
-        const filaInferior = filasNoVacias[idx + 1];
-        if (!filaInferior) return;
-        const i = filasOrdenadas.indexOf(fila);
-        posicionarFilaRaiz(fila, filaInferior, rowElPorFila[i]);
-      });
+      // Fila "ancla": la más numerosa se deja tal cual (centrada sola con
+      // flexbox, ya bien ordenada) y todas las demás se alinean respecto a
+      // ella en cascada — hacia arriba mirando a sus hijos, hacia abajo
+      // mirando a sus padres — para que cada fila quede alineada en
+      // píxeles con la de al lado, no solo en el orden de la lista.
+      const filasConIndice = filasOrdenadas
+        .map((fila, i) => ({ fila, i }))
+        .filter((x) => x.fila.length);
+
+      if (filasConIndice.length > 1) {
+        let anclaIdx = 0;
+        filasConIndice.forEach((x, idx) => {
+          if (x.fila.length > filasConIndice[anclaIdx].fila.length) anclaIdx = idx;
+        });
+
+        for (let idx = anclaIdx - 1; idx >= 0; idx--) {
+          posicionarFila(filasConIndice[idx].fila, filasConIndice[idx + 1].fila, 'abajo', rowElPorFila[filasConIndice[idx].i]);
+        }
+        for (let idx = anclaIdx + 1; idx < filasConIndice.length; idx++) {
+          posicionarFila(filasConIndice[idx].fila, filasConIndice[idx - 1].fila, 'arriba', rowElPorFila[filasConIndice[idx].i]);
+        }
+      }
 
       const containerRect = graphic.getBoundingClientRect();
       svg.setAttribute('width', containerRect.width);
