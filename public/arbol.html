@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Árbol genealógico — Bitácora Viva</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,500&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F5EFE2;
+    --ink: #2B241C;
+    --ink-soft: #8A7C63;
+    --gold-deep: #A86A26;
+    --bubble-user: #EFE6D1;
+    --font-display: "Source Serif 4", Georgia, serif;
+    --font-body: "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    padding: 28px 20px 60px;
+  }
+  header { max-width: 1400px; margin: 0 auto 24px; display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  h1 { font-family: var(--font-display); font-size: 1.6rem; margin: 0; }
+  header p { color: var(--ink-soft); margin: 4px 0 0; font-size: 0.95rem; }
+  a.volver { color: var(--gold-deep); font-size: 0.9rem; text-decoration: none; border-bottom: 1px solid var(--gold-deep); }
+
+  .wrap { max-width: 1400px; margin: 0 auto; overflow-x: auto; padding-bottom: 12px; }
+  .empty, .msg { color: var(--ink-soft); font-style: italic; text-align: center; margin-top: 60px; }
+
+  .tree-graphic { position: relative; display: flex; flex-direction: column; gap: 40px; padding: 10px; width: max-content; min-width: 100%; }
+  .tree-row { display: flex; flex-wrap: nowrap; justify-content: center; gap: 18px; position: relative; z-index: 1; width: max-content; margin: 0 auto; }
+  .tree-lines { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 0; overflow: visible; }
+  .tree-lines line { stroke: #B7A87E; stroke-width: 2; }
+  .tree-node {
+    background: var(--bubble-user);
+    border-radius: 14px;
+    padding: 10px 16px;
+    font-size: 0.95rem;
+    line-height: 1.3;
+    text-align: center;
+    min-width: 96px;
+    white-space: nowrap;
+    box-shadow: 0 2px 6px -3px rgba(0,0,0,0.2);
+  }
+  .tree-node strong { display: block; color: var(--ink); font-size: 1rem; }
+  .tree-node span { display: block; color: var(--ink-soft); font-size: 0.8rem; }
+  .tree-node.principal { background: var(--gold-deep); box-shadow: 0 6px 14px -6px rgba(0,0,0,0.4); }
+  .tree-node.principal strong, .tree-node.principal span { color: #FBF6EA; }
+</style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Árbol genealógico</h1>
+      <p>Se va armando solo con lo que se cuenta en las charlas.</p>
+    </div>
+    <a class="volver" href="/">← volver a la bitácora</a>
+  </header>
+  <div class="wrap" id="wrap">
+    <p class="msg">Cargando…</p>
+  </div>
+
+<script>
+(function () {
+  const wrap = document.getElementById('wrap');
+
+  function tierForRelacion(relacion) {
+    const r = (relacion || '').toLowerCase();
+    if (/abuel/.test(r)) return 0;
+    if (/(pap[aá]|padre|mam[aá]|madre|t[ií]o|t[ií]a)/.test(r)) return 1;
+    if (/(nieto|nieta)/.test(r)) return 4;
+    if (/(hijo|hija|sobrin)/.test(r)) return 3;
+    return 2; // hermanos, esposo/a, primos, sujeto principal
+  }
+
+  function esNovio(relacion) {
+    return /\bnovi[oa]\b/i.test(relacion || '');
+  }
+
+  function drawLine(svg, x1, y1, x2, y2) {
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+    line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+    svg.appendChild(line);
+  }
+
+  function renderTree(people) {
+    wrap.innerHTML = '';
+    if (!people.length) {
+      wrap.innerHTML = '<p class="empty">Todavía no hay nadie registrado — va a ir apareciendo a medida que se charla.</p>';
+      return;
+    }
+
+    const tiers = [[], [], [], [], []];
+    people.forEach((p) => { tiers[tierForRelacion(p.relacion)].push(p); });
+
+    const graphic = document.createElement('div');
+    graphic.className = 'tree-graphic';
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'tree-lines');
+    graphic.appendChild(svg);
+
+    const rowEls = [];
+    tiers.forEach((grupo) => {
+      if (!grupo.length) { rowEls.push(null); return; }
+      const row = document.createElement('div');
+      row.className = 'tree-row';
+      grupo.forEach((p) => {
+        const node = document.createElement('div');
+        node.className = 'tree-node' + (/sujeto principal/i.test(p.relacion) ? ' principal' : '');
+        node.innerHTML = `<strong>${p.nombre}</strong><span>${p.relacion}</span>`;
+        row.appendChild(node);
+      });
+      graphic.appendChild(row);
+      rowEls.push(row);
+    });
+
+    wrap.appendChild(graphic);
+
+    requestAnimationFrame(() => {
+      const containerRect = graphic.getBoundingClientRect();
+      svg.setAttribute('width', containerRect.width);
+      svg.setAttribute('height', containerRect.height);
+      svg.setAttribute('viewBox', `0 0 ${containerRect.width} ${containerRect.height}`);
+
+      const filled = rowEls.filter(Boolean);
+      for (let i = 0; i < filled.length - 1; i++) {
+        const rectA = filled[i].getBoundingClientRect();
+        const nodesB = Array.from(filled[i + 1].children);
+        const centersB = nodesB.map((n) => {
+          const r = n.getBoundingClientRect();
+          return { x: r.left + r.width / 2 - containerRect.left, y: r.top - containerRect.top };
+        });
+        const trunkX = rectA.left + rectA.width / 2 - containerRect.left;
+        const trunkYStart = rectA.bottom - containerRect.top;
+        const busY = trunkYStart + 16;
+
+        drawLine(svg, trunkX, trunkYStart, trunkX, busY);
+        const xs = centersB.map((c) => c.x).concat(trunkX);
+        drawLine(svg, Math.min(...xs), busY, Math.max(...xs), busY);
+        centersB.forEach((c) => drawLine(svg, c.x, busY, c.x, c.y));
+      }
+    });
+  }
+
+  async function cargar() {
+    try {
+      const resp = await fetch('/api/tree');
+      if (resp.status === 401) {
+        wrap.innerHTML = '<p class="msg">Iniciá sesión en la bitácora primero. <a class="volver" href="/">Ir a la bitácora</a></p>';
+        return;
+      }
+      if (!resp.ok) throw new Error('fallo');
+      const data = await resp.json();
+      const people = (data.people || []).filter((p) => !esNovio(p.relacion));
+      renderTree(people);
+    } catch (e) {
+      wrap.innerHTML = '<p class="msg">No se pudo cargar el árbol. Intentá de nuevo más tarde.</p>';
+    }
+  }
+
+  cargar();
+  window.addEventListener('resize', cargar);
+})();
+</script>
+</body>
+</html>

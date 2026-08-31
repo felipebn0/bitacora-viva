@@ -198,8 +198,9 @@
   .tree-panel .sub { color: var(--ink-soft); font-size: 0.85rem; margin: 0; }
   .tree-panel .empty { color: var(--ink-soft); font-size: 0.85rem; font-style: italic; }
 
-  .tree-graphic { position: relative; display: flex; flex-direction: column; gap: 26px; padding-top: 2px; }
-  .tree-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; position: relative; z-index: 1; }
+  #treeTiers { overflow-x: auto; padding-bottom: 4px; }
+  .tree-graphic { position: relative; display: flex; flex-direction: column; gap: 26px; padding-top: 2px; width: max-content; min-width: 100%; }
+  .tree-row { display: flex; flex-wrap: nowrap; justify-content: center; gap: 10px; position: relative; z-index: 1; width: max-content; margin: 0 auto; }
   .tree-lines { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 0; overflow: visible; }
   .tree-lines line { stroke: #B7A87E; stroke-width: 2; }
   .tree-node {
@@ -349,7 +350,7 @@
     <div class="right-col">
       <div class="tree-panel">
         <h2>Árbol genealógico</h2>
-        <p class="sub">Se va armando solo con lo que se cuenta en las charlas.</p>
+        <p class="sub">Se va armando solo con lo que se cuenta en las charlas. <a href="/arbol.html" target="_blank" rel="noopener" style="color: var(--gold-deep);">Ver completo →</a></p>
         <div id="treeTiers"></div>
       </div>
       <!-- Línea de tiempo: escondida por ahora. El código (cargarArbol,
