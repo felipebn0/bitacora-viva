@@ -300,6 +300,23 @@
         drawLine(svg, anchorX, midY, childC.x, midY);
         drawLine(svg, childC.x, midY, childC.x, childC.top);
       });
+
+      // El árbol suele ser más ancho que la pantalla (muchos tíos, sobrinos,
+      // etc.) — en vez de depender de que se note que hay scroll horizontal,
+      // lo achicamos para que entre completo. Si haría falta achicarlo
+      // demasiado (letra ilegible), preferimos dejar el scroll.
+      const disponibleAncho = wrap.clientWidth;
+      const naturalAncho = graphic.scrollWidth;
+      const MIN_ESCALA = 0.45;
+      if (naturalAncho > disponibleAncho) {
+        const escala = Math.max(MIN_ESCALA, disponibleAncho / naturalAncho);
+        graphic.style.transform = `scale(${escala})`;
+        graphic.style.transformOrigin = 'top left';
+        wrap.style.height = (graphic.offsetHeight * escala) + 'px';
+      } else {
+        graphic.style.transform = '';
+        wrap.style.height = '';
+      }
     });
   }
 
