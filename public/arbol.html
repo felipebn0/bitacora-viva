@@ -335,10 +335,10 @@
         prevRight = left + c.ancho;
       });
       if (window.__debugArbol) {
-        console.log('[arbol]', fila.map((p) => p.nombre).join(','), {
+        console.log('[arbol] ' + fila.map((p) => p.nombre).join(',') + ' ' + JSON.stringify({
           contRectLeft: contRect.left, rowLeftEnGrafico, rowAnchoAntes,
           conCentro: conCentro.map((c) => ({ u: c.u.map((p) => p.nombre).join('+'), centro: c.centro, left: c.left })),
-        });
+        }));
       }
 
       // Fijar el tamaño Y LA POSICIÓN de la fila ANTES de sacar a los hijos
