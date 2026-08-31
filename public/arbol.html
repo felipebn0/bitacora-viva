@@ -333,11 +333,15 @@
         prevRight = left + c.ancho;
       });
 
-      // Fijar el tamaño de la fila ANTES de sacar a los hijos del flujo
-      // normal — si no, al perder su contenido la fila se encoge a 0 y
-      // "margin: 0 auto" la vuelve a centrar en otro lado, corriendo la
-      // referencia que ya calculamos.
+      // Fijar el tamaño Y LA POSICIÓN de la fila ANTES de sacar a los hijos
+      // del flujo normal. "margin: 0 auto" centra la fila según el ancho
+      // ACTUAL del gráfico, que sigue cambiando a medida que se procesan
+      // más filas (cada una se puede terminar quedando más ancha) — así que
+      // dejarlo en auto corre esta fila de lugar más tarde, sin avisar.
+      // Por eso se reemplaza por un margen fijo, calculado una sola vez acá.
       rowEl.style.width = rowAnchoAntes + 'px';
+      rowEl.style.marginLeft = rowLeftEnGrafico + 'px';
+      rowEl.style.marginRight = '0';
       rowEl.style.height = rowEl.offsetHeight + 'px';
       Array.from(rowEl.children).forEach((child) => { child.style.position = 'absolute'; child.style.top = '0'; });
       conCentro.forEach((c) => {
