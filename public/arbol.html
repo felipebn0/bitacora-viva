@@ -334,12 +334,6 @@
         c.left = left; // left edge del "paquete", en coordenadas del gráfico entero
         prevRight = left + c.ancho;
       });
-      if (window.__debugArbol) {
-        console.log('[arbol] ' + fila.map((p) => p.nombre).join(',') + ' ' + JSON.stringify({
-          contRectLeft: contRect.left, rowLeftEnGrafico, rowAnchoAntes,
-          conCentro: conCentro.map((c) => ({ u: c.u.map((p) => p.nombre).join('+'), centro: c.centro, left: c.left })),
-        }));
-      }
 
       // Fijar el tamaño Y LA POSICIÓN de la fila ANTES de sacar a los hijos
       // del flujo normal. "margin: 0 auto" centra la fila según el ancho
@@ -376,6 +370,20 @@
         filasConIndice.forEach((x, idx) => {
           if (x.fila.length > filasConIndice[anclaIdx].fila.length) anclaIdx = idx;
         });
+
+        // La fila ancla también se fija con margen explícito, ANTES de
+        // tocar cualquier otra — si no, sigue centrada con "margin: 0 auto"
+        // y se corre sola más tarde cuando el gráfico crece (al recalcular
+        // el ancho al final), desalineando todo lo que ya se había puesto
+        // en relación a su posición original.
+        {
+          const anclaRowEl = rowElPorFila[filasConIndice[anclaIdx].i];
+          const contRect0 = graphic.getBoundingClientRect();
+          const anclaRect = anclaRowEl.getBoundingClientRect();
+          anclaRowEl.style.width = anclaRect.width + 'px';
+          anclaRowEl.style.marginLeft = (anclaRect.left - contRect0.left) + 'px';
+          anclaRowEl.style.marginRight = '0';
+        }
 
         for (let idx = anclaIdx - 1; idx >= 0; idx--) {
           posicionarFila(filasConIndice[idx].fila, filasConIndice[idx + 1].fila, 'abajo', rowElPorFila[filasConIndice[idx].i]);
