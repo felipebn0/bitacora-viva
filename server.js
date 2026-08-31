@@ -531,7 +531,7 @@ app.post('/api/next', requireAuth, rateLimit, async (req, res) => {
     }
     const mode = req.body.mode === 'arbol' ? 'arbol' : 'historia';
     const startPrompt = mode === 'arbol'
-      ? '(La persona acaba de presionar el botón para armar el árbol genealógico. Saludala cálidamente por su nombre si lo sabés, contale brevemente que hoy vas a preguntarle por su familia para armar el árbol, y arrancá preguntando por sus papás.)'
+      ? '(La persona acaba de presionar el botón para armar el árbol genealógico. Saludala cálidamente por su nombre si lo sabés, contale brevemente que hoy vas a preguntarle por su familia para armar el árbol, y arrancá preguntando por la primera persona que falte — revisá la lista de "personas que ya se conocen" más abajo antes de preguntar, y si ya están sus papás, saltá directo a hermanos, abuelos, tíos, pareja o hijos, lo que falte.)'
       : '(La persona acaba de presionar el botón para empezar a charlar. Si el resumen tiene su nombre, saludala por su nombre. Si no, saludala cálidamente y preguntale cómo se llama.)';
     const messages = history.length ? history : [{ role: 'user', content: startPrompt }];
 
