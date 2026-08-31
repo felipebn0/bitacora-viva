@@ -13,6 +13,7 @@
     --ink: #2B241C;
     --ink-soft: #8A7C63;
     --gold-deep: #A86A26;
+    --moss: #5B6B45;
     --bubble-user: #EFE6D1;
     --font-display: "Source Serif 4", Georgia, serif;
     --font-body: "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif;
@@ -25,42 +26,50 @@
     color: var(--ink);
     font-family: var(--font-body);
     padding: 28px 20px 60px;
+    position: relative;
+    overflow-x: hidden;
   }
-  header { max-width: 1400px; margin: 0 auto 24px; display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
-  h1 { font-family: var(--font-display); font-size: 1.6rem; margin: 0; }
-  header p { color: var(--ink-soft); margin: 4px 0 0; font-size: 0.95rem; }
-  a.volver { color: var(--gold-deep); font-size: 0.9rem; text-decoration: none; border-bottom: 1px solid var(--gold-deep); }
+  .leaf { position: fixed; font-size: 2.4rem; opacity: 0.25; pointer-events: none; z-index: 0; }
+  .leaf.tl { top: 10px; left: 10px; transform: rotate(-15deg); }
+  .leaf.tr { top: 10px; right: 10px; transform: rotate(20deg) scaleX(-1); }
+  .leaf.bl { bottom: 10px; left: 10px; transform: rotate(160deg) scaleX(-1); }
+  .leaf.br { bottom: 10px; right: 10px; transform: rotate(-160deg); }
 
-  .wrap { max-width: 1400px; margin: 0 auto; overflow-x: auto; padding-bottom: 12px; }
+  header { max-width: 1400px; margin: 0 auto 28px; display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; position: relative; z-index: 1; text-align: center; }
+  h1 { font-family: var(--font-display); font-size: 1.8rem; margin: 0; width: 100%; text-align: center; }
+  header p { color: var(--ink-soft); margin: 4px 0 0; font-size: 0.95rem; width: 100%; text-align: center; }
+  a.volver { color: var(--gold-deep); font-size: 0.9rem; text-decoration: none; border-bottom: 1px solid var(--gold-deep); position: absolute; right: 0; top: 0; }
+
+  .wrap { max-width: 1400px; margin: 0 auto; overflow-x: auto; padding-bottom: 12px; position: relative; z-index: 1; }
   .empty, .msg { color: var(--ink-soft); font-style: italic; text-align: center; margin-top: 60px; }
 
-  .tree-graphic { position: relative; display: flex; flex-direction: column; gap: 40px; padding: 10px; width: max-content; min-width: 100%; }
-  .tree-row { display: flex; flex-wrap: nowrap; justify-content: center; gap: 18px; position: relative; z-index: 1; width: max-content; margin: 0 auto; }
+  .tree-graphic { position: relative; display: flex; flex-direction: column; gap: 52px; padding: 10px; width: max-content; min-width: 100%; }
+  .tree-row { display: flex; flex-wrap: nowrap; justify-content: center; gap: 26px; position: relative; z-index: 1; width: max-content; margin: 0 auto; }
   .tree-lines { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 0; overflow: visible; }
   .tree-lines line { stroke: #B7A87E; stroke-width: 2; }
-  .tree-node {
+
+  .tree-node { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 108px; }
+  .avatar {
+    width: 68px; height: 68px; border-radius: 50%;
     background: var(--bubble-user);
-    border-radius: 14px;
-    padding: 10px 16px;
-    font-size: 0.95rem;
-    line-height: 1.3;
-    text-align: center;
-    min-width: 96px;
-    white-space: nowrap;
-    box-shadow: 0 2px 6px -3px rgba(0,0,0,0.2);
+    border: 3px solid var(--moss);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; color: var(--moss);
+    box-shadow: 0 4px 10px -4px rgba(0,0,0,0.25);
   }
-  .tree-node strong { display: block; color: var(--ink); font-size: 1rem; }
-  .tree-node span { display: block; color: var(--ink-soft); font-size: 0.8rem; }
-  .tree-node.principal { background: var(--gold-deep); box-shadow: 0 6px 14px -6px rgba(0,0,0,0.4); }
-  .tree-node.principal strong, .tree-node.principal span { color: #FBF6EA; }
+  .tree-node.principal .avatar { background: var(--gold-deep); border-color: var(--gold-deep); color: #FBF6EA; }
+  .tree-node strong { display: block; color: var(--ink); font-size: 0.9rem; line-height: 1.2; }
+  .tree-node span { display: block; color: var(--ink-soft); font-size: 0.75rem; }
 </style>
 </head>
 <body>
+  <span class="leaf tl">🌿</span>
+  <span class="leaf tr">🌿</span>
+  <span class="leaf bl">🌿</span>
+  <span class="leaf br">🌿</span>
   <header>
-    <div>
-      <h1>Árbol genealógico</h1>
-      <p>Se va armando solo con lo que se cuenta en las charlas.</p>
-    </div>
+    <h1>Árbol genealógico</h1>
+    <p>Se va armando solo con lo que se cuenta en las charlas.</p>
     <a class="volver" href="/">← volver a la bitácora</a>
   </header>
   <div class="wrap" id="wrap">
@@ -84,11 +93,53 @@
     return /\bnovi[oa]\b/i.test(relacion || '');
   }
 
+  function initials(nombre) {
+    return (nombre || '')
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((w) => w[0])
+      .join('')
+      .toUpperCase();
+  }
+
   function drawLine(svg, x1, y1, x2, y2) {
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     line.setAttribute('x1', x1); line.setAttribute('y1', y1);
     line.setAttribute('x2', x2); line.setAttribute('y2', y2);
     svg.appendChild(line);
+  }
+
+  // Detecta parejas (dos personas que comparten hijos, según "padres") para
+  // poder sentarlas juntas y unirlas con una línea horizontal — así se ve
+  // claro quién es pareja de quién, y de esa pareja sale la línea hacia sus
+  // hijos, en vez de una sola persona suelta.
+  function detectarParejas(people) {
+    const partnerOf = new Map();
+    people.forEach((p) => {
+      const padres = Array.isArray(p.padres) ? p.padres : [];
+      if (padres.length === 2) {
+        const [a, b] = padres;
+        if (a !== b) { partnerOf.set(a, b); partnerOf.set(b, a); }
+      }
+    });
+    return partnerOf;
+  }
+
+  function ordenarConParejasJuntas(grupo, partnerOf) {
+    const result = [];
+    const used = new Set();
+    grupo.forEach((p) => {
+      if (used.has(p.nombre)) return;
+      result.push(p);
+      used.add(p.nombre);
+      const partnerName = partnerOf.get(p.nombre);
+      if (partnerName) {
+        const partner = grupo.find((x) => x.nombre === partnerName && !used.has(x.nombre));
+        if (partner) { result.push(partner); used.add(partner.nombre); }
+      }
+    });
+    return result;
   }
 
   function renderTree(people) {
@@ -97,6 +148,8 @@
       wrap.innerHTML = '<p class="empty">Todavía no hay nadie registrado — va a ir apareciendo a medida que se charla.</p>';
       return;
     }
+
+    const partnerOf = detectarParejas(people);
 
     const tiers = [[], [], [], [], []];
     people.forEach((p) => { tiers[tierForRelacion(p.relacion)].push(p); });
@@ -108,24 +161,25 @@
     graphic.appendChild(svg);
 
     const nodeByName = new Map();
-    tiers.forEach((grupo) => {
-      if (!grupo.length) return;
+    const avatarByName = new Map();
+    tiers.forEach((grupoOriginal) => {
+      if (!grupoOriginal.length) return;
+      const grupo = ordenarConParejasJuntas(grupoOriginal, partnerOf);
       const row = document.createElement('div');
       row.className = 'tree-row';
       grupo.forEach((p) => {
         const node = document.createElement('div');
         node.className = 'tree-node' + (/sujeto principal/i.test(p.relacion) ? ' principal' : '');
-        node.innerHTML = `<strong>${p.nombre}</strong><span>${p.relacion}</span>`;
+        node.innerHTML = `<div class="avatar">${initials(p.nombre)}</div><strong>${p.nombre}</strong><span>${p.relacion}</span>`;
         row.appendChild(node);
         nodeByName.set(p.nombre, node);
+        avatarByName.set(p.nombre, node.querySelector('.avatar'));
       });
       graphic.appendChild(row);
     });
 
     wrap.appendChild(graphic);
 
-    // Conectores según quién es hijo/a de quién de verdad (campo "padres"),
-    // no por generación genérica — así cada rama va a su papá/mamá real.
     requestAnimationFrame(() => {
       const containerRect = graphic.getBoundingClientRect();
       svg.setAttribute('width', containerRect.width);
@@ -136,19 +190,40 @@
         const r = el.getBoundingClientRect();
         return {
           x: r.left + r.width / 2 - containerRect.left,
+          y: r.top + r.height / 2 - containerRect.top,
           top: r.top - containerRect.top,
           bottom: r.bottom - containerRect.top,
         };
       }
 
+      // Línea horizontal entre parejas (a la altura de las fotos), una sola
+      // vez por pareja.
+      const dibujadas = new Set();
       people.forEach((p) => {
-        const childEl = nodeByName.get(p.nombre);
-        if (!childEl) return;
-        const padres = (Array.isArray(p.padres) ? p.padres : [])
-          .filter((n) => n !== p.nombre && nodeByName.has(n));
-        if (!padres.length) return;
-        const childC = centerOf(childEl);
-        const parentCenters = padres.map((n) => centerOf(nodeByName.get(n)));
+        const partnerName = partnerOf.get(p.nombre);
+        if (!partnerName) return;
+        const key = [p.nombre, partnerName].sort().join('|');
+        if (dibujadas.has(key)) return;
+        const a = avatarByName.get(p.nombre);
+        const b = avatarByName.get(partnerName);
+        if (!a || !b) return;
+        dibujadas.add(key);
+        const ca = centerOf(a);
+        const cb = centerOf(b);
+        if (Math.abs(ca.y - cb.y) > 2) return; // solo si quedaron en la misma fila
+        drawLine(svg, ca.x, ca.y, cb.x, cb.y);
+      });
+
+      // Línea de padre/madre real hacia cada hijo (campo "padres"), no por
+      // generación genérica — así cada rama va a quien corresponde de verdad.
+      people.forEach((p) => {
+        const childAvatar = avatarByName.get(p.nombre);
+        if (!childAvatar) return;
+        const padresNombres = (Array.isArray(p.padres) ? p.padres : [])
+          .filter((n) => n !== p.nombre && avatarByName.has(n));
+        if (!padresNombres.length) return;
+        const childC = centerOf(childAvatar);
+        const parentCenters = padresNombres.map((n) => centerOf(avatarByName.get(n)));
         const anchorY = Math.max(...parentCenters.map((c) => c.bottom));
         if (anchorY >= childC.top) return; // evita líneas invertidas si el dato viene raro
         const anchorX = parentCenters.reduce((s, c) => s + c.x, 0) / parentCenters.length;
