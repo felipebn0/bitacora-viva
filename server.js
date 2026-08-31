@@ -440,7 +440,7 @@ async function updateFamilyTree(userId, newExchanges) {
 
     const response = await anthropic.messages.create({
       model: MODEL,
-      max_tokens: 1200,
+      max_tokens: 2500,
       tools: TREE_TOOLS,
       tool_choice: { type: 'tool', name: 'actualizar_arbol_y_linea_de_tiempo' },
       messages: [{ role: 'user', content: prompt }],
