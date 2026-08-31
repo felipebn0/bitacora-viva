@@ -791,6 +791,26 @@ app.get('/api/tree', requireAuth, async (req, res) => {
   }
 });
 
+// Repasa TODAS las charlas ya guardadas (de antes de que existiera el árbol,
+// o si se quiere reconstruir desde cero) y actualiza personas/eventos.
+app.post('/api/rebuild-tree', requireAuth, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    const sessions = await sql`SELECT intercambios FROM sessions WHERE user_id = ${req.userId} ORDER BY fecha ASC`;
+    const todo = sessions.flatMap((s) => s.intercambios || []);
+    if (!todo.length) return res.json({ ok: true, message: 'No hay charlas guardadas todavía.' });
+
+    await updateFamilyTree(req.userId, todo);
+
+    const people = await sql`SELECT nombre, relacion, detalles FROM family_members WHERE user_id = ${req.userId} ORDER BY id`;
+    const events = await sql`SELECT descripcion, anio, edad_aprox FROM timeline_events WHERE user_id = ${req.userId} ORDER BY anio NULLS LAST, id`;
+    res.json({ ok: true, people, events });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo reconstruir el árbol.' });
+  }
+});
+
 app.post('/api/save', requireAuth, async (req, res) => {
   try {
     const history = Array.isArray(req.body.history) ? req.body.history.slice(0, 100) : [];
