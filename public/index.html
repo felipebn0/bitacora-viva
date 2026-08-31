@@ -1,1101 +1,567 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bitácora Viva</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,500&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --bg: #F5EFE2;
-    --ink: #2B241C;
-    --ink-soft: #8A7C63;
-    --gold: #C98A3C;
-    --gold-deep: #A86A26;
-    --moss: #5B6B45;
-    --bubble-user: #EFE6D1;
-    --ring: rgba(201, 138, 60, 0.35);
-    --font-display: "Source Serif 4", Georgia, serif;
-    --font-body: "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    min-height: 100vh;
-    background: var(--bg);
-    color: var(--ink);
-    font-family: var(--font-body);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
-  }
-  @media (prefers-reduced-motion: reduce) {
-    * { animation-duration: 0.001ms !important; }
-  }
-  .device {
-    width: min(440px, 100%);
-    min-height: 560px;
-    background: #FBF6EA;
-    border-radius: 28px;
-    box-shadow: 0 30px 60px -25px rgba(0,0,0,0.35);
-    padding: 32px;
-    display: flex;
-    flex-direction: column;
-    gap: 18px;
-  }
-  h1 {
-    font-family: var(--font-display);
-    font-size: 1.4rem;
-    margin: 0;
-    text-align: center;
-    font-weight: 600;
-  }
-  .body-area {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 18px;
-    text-align: center;
-  }
-  .greeting .sub { color: var(--ink-soft); font-size: 0.95rem; max-width: 26ch; margin: 0 auto; }
-  .transcript {
-    display: none;
-    flex-direction: column;
-    gap: 12px;
-    width: 100%;
-    overflow-y: auto;
-    max-height: 380px;
-    flex: 1;
-  }
-  .transcript.visible { display: flex; }
-  .bubble { max-width: 90%; text-align: left; }
-  .bubble.q { align-self: flex-start; font-family: var(--font-display); font-style: italic; color: var(--moss); font-size: 1.05rem; }
-  .bubble.a { align-self: flex-end; background: var(--bubble-user); padding: 8px 12px; border-radius: 12px; border-bottom-right-radius: 3px; font-size: 0.95rem; }
-  .orb-zone { display: grid; justify-items: center; gap: 12px; }
-  .orb {
-    width: 168px; height: 168px; border-radius: 50%; border: none; cursor: pointer;
-    position: relative; display: grid; place-items: center;
-    background: radial-gradient(circle at 35% 30%, var(--gold), var(--gold-deep));
-    color: #FBF6EA; font-family: var(--font-body); font-weight: 700; font-size: 1.05rem;
-    box-shadow: 0 10px 26px -10px rgba(168,106,38,0.55);
-  }
-  .orb::before {
-    content: ""; position: absolute; inset: -14px; border-radius: 50%;
-    border: 2px solid var(--ring); animation: breathe 3.2s ease-in-out infinite;
-  }
-  @keyframes breathe { 0%,100% { transform: scale(1); opacity: .6; } 50% { transform: scale(1.08); opacity: .15; } }
-  .orb[data-state="listening"] { background: radial-gradient(circle at 35% 30%, #D9A15C, var(--gold-deep)); }
-  .orb[data-state="listening"]::before { animation-duration: 1.4s; }
-  .orb[data-state="speaking"], .orb[data-state="thinking"] { background: radial-gradient(circle at 35% 30%, #6E7F53, var(--moss)); }
-  .orb[data-state="paused"] { background: radial-gradient(circle at 35% 30%, #B5A98C, #8A7C63); }
-  .orb[data-state="paused"]::before { animation: none; opacity: 0.3; }
-  .state-label { font-size: 0.9rem; color: var(--ink-soft); min-height: 1.3em; }
-  .write-toggle { background: none; border: none; color: var(--moss); text-decoration: underline; cursor: pointer; font-family: var(--font-body); }
-  .end-toggle { color: #a33; font-size: 0.85rem; }
-  .write-row { display: none; gap: 8px; width: 100%; max-width: 280px; }
-  .write-row.visible { display: flex; }
-  .write-row input, .write-row select { flex: 1; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 12px; font-family: var(--font-body); background: #fff; color: var(--ink); }
-  .write-row button { border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px; padding: 0 14px; font-weight: 700; cursor: pointer; }
-  .error { color: #a33; font-size: 0.85rem; }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bitácora Viva — Historias que siguen vivas</title>
+  <meta name="description" content="Conserva las historias, la voz y los recuerdos de tu familia en una bitácora viva que puedes volver a escuchar, consultar y compartir. Creá tu cuenta gratis." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,500&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#F5EFE2;
+      --paper:#FBF6EA;
+      --paper-2:#FFFDF7;
+      --ink:#2B241C;
+      --ink-soft:#7D705C;
+      --gold:#C98A3C;
+      --gold-deep:#A86A26;
+      --moss:#5B6B45;
+      --moss-deep:#3F4D31;
+      --line:#E5DBC6;
+      --bubble:#EFE6D1;
+      --shadow:0 28px 80px rgba(69,54,34,.12);
+      --serif:"Source Serif 4", Georgia, serif;
+      --sans:"Atkinson Hyperlegible", system-ui, sans-serif;
+    }
 
-  .familia {
-    display: none; /* oculto en mobile por ahora; vuelve a aparecer en pantallas grandes */
-    width: min(440px, 100%);
-    margin: 28px auto 0;
-    background: #FBF6EA;
-    border: 1px solid #E7DFCC;
-    border-radius: 20px;
-    padding: 22px 24px;
-    flex-direction: column;
-    gap: 12px;
-  }
-  .familia h2 {
-    font-family: var(--font-display);
-    font-size: 1.1rem;
-    margin: 0;
-    font-weight: 600;
-  }
-  .familia .sub { color: var(--ink-soft); font-size: 0.9rem; margin: 0; }
-  .familia-chat {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    max-height: 260px;
-    overflow-y: auto;
-  }
-  .familia-bubble { max-width: 92%; font-size: 0.92rem; line-height: 1.4; }
-  .familia-bubble.q { align-self: flex-end; background: var(--bubble-user); padding: 8px 12px; border-radius: 12px; border-bottom-right-radius: 3px; }
-  .familia-bubble.a { align-self: flex-start; color: var(--ink); }
-  .familia-bubble.thinking { align-self: flex-start; color: var(--ink-soft); font-style: italic; }
-  .familia-input-row { display: flex; gap: 8px; }
-  .familia-input-row input { flex: 1; border: 1px solid #E7DFCC; border-radius: 10px; padding: 10px 12px; font-family: var(--font-body); background: #fff; color: var(--ink); }
-  .familia-input-row button { border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px; padding: 0 16px; font-weight: 700; cursor: pointer; }
-  .familia-input-row button:disabled { opacity: 0.6; cursor: default; }
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{
+      margin:0;
+      color:var(--ink);
+      background:
+        radial-gradient(circle at 15% 8%, rgba(201,138,60,.12), transparent 30%),
+        radial-gradient(circle at 85% 14%, rgba(91,107,69,.10), transparent 26%),
+        var(--bg);
+      font-family:var(--sans);
+      line-height:1.5;
+    }
+    a{color:inherit}
+    button,input{font:inherit}
+    .wrap{width:min(1180px, calc(100% - 40px)); margin:0 auto}
 
-  .aportes {
-    width: min(440px, 100%);
-    margin: 28px auto 0;
-    background: #FBF6EA;
-    border: 1px solid #E7DFCC;
-    border-radius: 20px;
-    padding: 22px 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-  .aportes h2 { font-family: var(--font-display); font-size: 1.1rem; margin: 0; font-weight: 600; }
-  .aportes .sub { color: var(--ink-soft); font-size: 0.9rem; margin: 0; }
-  .aportes label { font-size: 0.85rem; color: var(--ink-soft); margin-bottom: -6px; }
-  .aportes input[type="text"], .aportes textarea, .aportes input[type="file"] {
-    border: 1px solid #E7DFCC; border-radius: 10px; padding: 10px 12px;
-    font-family: var(--font-body); background: #fff; color: var(--ink); font-size: 0.95rem;
-  }
-  .aportes textarea { resize: vertical; min-height: 70px; }
-  .aportes button {
-    border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px;
-    padding: 10px 16px; font-weight: 700; cursor: pointer; font-family: var(--font-body); align-self: flex-start;
-  }
-  .aportes button:disabled { opacity: 0.6; cursor: default; }
-  .aportes hr { border: none; border-top: 1px solid #E7DFCC; margin: 4px 0; }
-  .aportes .msg { font-size: 0.85rem; min-height: 1.2em; color: var(--moss); }
-  .aportes .lista { display: flex; flex-direction: column; gap: 10px; max-height: 220px; overflow-y: auto; }
-  .aportes .lista img { max-width: 100%; border-radius: 10px; display: block; }
-  .aportes .lista video { max-width: 100%; border-radius: 10px; display: block; }
-  .aportes .lista .item { font-size: 0.85rem; color: var(--ink-soft); }
-  .aportes .lista .item strong { color: var(--ink); }
+    /* NAV */
+    nav{
+      position:sticky; top:0; z-index:20;
+      backdrop-filter:blur(14px);
+      background:rgba(245,239,226,.78);
+      border-bottom:1px solid rgba(229,219,198,.72);
+    }
+    .nav-inner{height:76px; display:flex; align-items:center; justify-content:space-between; gap:24px}
+    .brand{display:flex; align-items:center; gap:11px; text-decoration:none; font-family:var(--serif); font-size:1.28rem; font-weight:600}
+    .brand-mark{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 35% 30%,var(--gold),var(--gold-deep));box-shadow:0 8px 24px rgba(168,106,38,.22);position:relative}
+    .brand-mark:after{content:"";width:10px;height:10px;border:2px solid #FFF8EA;border-radius:50%}
+    .nav-links{display:flex;gap:26px;align-items:center}
+    .nav-links a{text-decoration:none;color:var(--ink-soft);font-size:.95rem}
+    .nav-links a:hover{color:var(--ink)}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:999px;padding:13px 20px;text-decoration:none;font-weight:700;border:1px solid transparent;transition:.22s ease;cursor:pointer}
+    .btn-primary{background:var(--moss);color:#fffaf0;box-shadow:0 10px 24px rgba(63,77,49,.18)}
+    .btn-primary:hover{transform:translateY(-2px);background:var(--moss-deep)}
+    .btn-secondary{border-color:var(--line);background:rgba(255,253,247,.65);color:var(--ink)}
+    .btn-secondary:hover{background:var(--paper-2)}
 
-  @media (min-width: 700px) {
-    .familia { display: flex; }
-  }
+    /* HERO */
+    .hero{padding:86px 0 78px;overflow:hidden}
+    .hero-grid{display:grid;grid-template-columns:1.06fr .94fr;align-items:center;gap:70px}
+    .eyebrow{display:inline-flex;align-items:center;gap:9px;color:var(--moss);font-size:.86rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:20px}
+    .eyebrow:before{content:"";width:34px;height:1px;background:var(--moss)}
+    h1,h2,h3{font-family:var(--serif);font-weight:600;line-height:1.04;letter-spacing:-.025em}
+    h1{font-size:clamp(3.2rem,7vw,6.5rem);margin:0 0 24px;max-width:10ch}
+    h1 em{font-style:italic;color:var(--moss);font-weight:500}
+    .hero-copy p{font-size:1.14rem;color:var(--ink-soft);max-width:57ch;margin:0 0 30px}
+    .hero-actions{display:flex;gap:12px;flex-wrap:wrap}
+    .trust-row{display:flex;gap:18px;flex-wrap:wrap;margin-top:28px;color:var(--ink-soft);font-size:.9rem}
+    .trust-row span{display:flex;align-items:center;gap:7px}
+    .dot{width:6px;height:6px;background:var(--gold);border-radius:50%}
 
-  #appContent { display: none; flex-direction: column; align-items: center; }
+    .hero-device-wrap{position:relative;display:grid;place-items:center;min-height:620px}
+    .hero-device-wrap:before{content:"";position:absolute;width:520px;height:520px;border-radius:50%;background:radial-gradient(circle, rgba(201,138,60,.20), rgba(201,138,60,0) 68%);filter:blur(4px)}
+    .device{width:min(430px,100%);background:var(--paper-2);border:1px solid rgba(229,219,198,.9);border-radius:34px;box-shadow:var(--shadow);padding:28px;position:relative;z-index:1}
+    .device-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+    .device-title{font-family:var(--serif);font-size:1.1rem;font-weight:600}
+    .device-icons{display:flex;gap:8px}
+    .mini-icon{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;background:var(--paper)}
+    .demo-panel{min-height:445px;border-radius:26px;background:linear-gradient(180deg,#FBF6EA,#F7F0E2);padding:28px 22px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;position:relative;overflow:hidden}
+    .demo-panel:after{content:"";position:absolute;inset:auto -35% -50% -35%;height:220px;background:radial-gradient(circle,rgba(91,107,69,.11),transparent 68%)}
+    .demo-kicker{font-family:var(--serif);font-style:italic;color:var(--moss);margin-bottom:16px}
+    .orb{width:168px;height:168px;border-radius:50%;border:0;background:radial-gradient(circle at 35% 30%,var(--gold),var(--gold-deep));color:#fff8ea;font-weight:700;box-shadow:0 16px 36px rgba(168,106,38,.28);position:relative;cursor:pointer;z-index:1;transition:.3s ease}
+    .orb:before,.orb:after{content:"";position:absolute;inset:-15px;border:1px solid rgba(201,138,60,.34);border-radius:50%;animation:breathe 3s ease-in-out infinite}
+    .orb:after{inset:-29px;opacity:.45;animation-delay:.6s}
+    .orb.listening{background:radial-gradient(circle at 35% 30%,#718159,var(--moss-deep))}
+    .orb.listening:before,.orb.listening:after{border-color:rgba(91,107,69,.35);animation-duration:1.35s}
+    @keyframes breathe{0%,100%{transform:scale(1);opacity:.7}50%{transform:scale(1.08);opacity:.14}}
+    .demo-state{color:var(--ink-soft);font-size:.9rem;margin-top:24px;min-height:1.4em;z-index:1}
+    .demo-question{margin-top:20px;font-family:var(--serif);font-style:italic;color:var(--moss);max-width:25ch;min-height:48px;z-index:1}
+    .memory-chip{position:absolute;background:#FFFDF7;border:1px solid var(--line);box-shadow:0 10px 25px rgba(65,52,37,.1);border-radius:16px;padding:12px 14px;font-size:.82rem;color:var(--ink-soft);z-index:2}
+    .chip-a{top:84px;right:-36px;transform:rotate(4deg)}
+    .chip-b{bottom:80px;left:-52px;transform:rotate(-4deg)}
+    .memory-chip strong{color:var(--ink);display:block;margin-bottom:2px}
 
-  .main-layout { display: flex; flex-direction: column; align-items: center; }
-  .device-col { display: flex; flex-direction: column; align-items: center; width: 100%; }
-  .panels-col { display: flex; flex-direction: column; align-items: center; width: 100%; }
+    /* SHARED */
+    section{padding:96px 0}
+    .section-head{max-width:760px;margin-bottom:54px}
+    .section-head.center{text-align:center;margin-left:auto;margin-right:auto}
+    h2{font-size:clamp(2.4rem,5vw,4.6rem);margin:0 0 18px}
+    .section-head p{font-size:1.08rem;color:var(--ink-soft);margin:0;max-width:65ch}
+    .quiet{color:var(--ink-soft)}
 
-  @media (min-width: 980px) {
-    .main-layout { flex-direction: row; align-items: flex-start; justify-content: center; gap: 28px; }
-    .device-col { width: min(440px, 100%); flex-shrink: 0; order: 2; position: sticky; top: 24px; }
-    .panels-col { width: min(420px, 100%); flex-shrink: 0; order: 1; }
-  }
+    /* PROBLEM */
+    .problem{background:var(--ink);color:#F9F1E3;position:relative;overflow:hidden}
+    .problem:before{content:"“";position:absolute;font-family:var(--serif);font-size:30rem;line-height:.6;right:4%;top:20px;color:rgba(255,255,255,.035)}
+    .problem-grid{display:grid;grid-template-columns:.9fr 1.1fr;gap:80px;align-items:start}
+    .problem h2{max-width:10ch}
+    .questions{display:grid;gap:12px}
+    .question-card{padding:18px 20px;border:1px solid rgba(255,255,255,.12);border-radius:18px;background:rgba(255,255,255,.035);font-family:var(--serif);font-style:italic;font-size:1.14rem;color:#EADFCB}
+    .problem-note{margin-top:22px;color:#BAAD97}
 
-  .topbar {
-    width: 100%;
-    max-width: 900px;
-    margin: 0 auto 18px;
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-  }
-  .icon-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    background: #FBF6EA;
-    border: 1px solid #E7DFCC;
-    font-size: 1.3rem;
-    text-decoration: none;
-    cursor: pointer;
-    box-shadow: 0 2px 6px -3px rgba(0,0,0,0.2);
-  }
-  .login {
-    width: min(340px, 100%);
-    background: #FBF6EA;
-    border-radius: 28px;
-    box-shadow: 0 30px 60px -25px rgba(0,0,0,0.35);
-    padding: 32px;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-  .login h1 { margin: 0 0 4px; }
-  .login p.sub { color: var(--ink-soft); font-size: 0.9rem; margin: 0 0 6px; text-align: center; }
-  .login input {
-    border: 1px solid #E7DFCC; border-radius: 10px; padding: 12px 14px;
-    font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink);
-  }
-  .login button {
-    border: none; background: var(--gold-deep); color: #FBF6EA; border-radius: 10px;
-    padding: 12px; font-weight: 700; font-size: 1rem; cursor: pointer; font-family: var(--font-body);
-  }
-  .login button:disabled { opacity: 0.6; cursor: default; }
-  .login .error { min-height: 1.2em; text-align: center; }
+    /* STEPS */
+    .steps-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+    .step{background:rgba(255,253,247,.64);border:1px solid var(--line);border-radius:24px;padding:28px;min-height:320px;display:flex;flex-direction:column}
+    .step-num{font-family:var(--serif);font-size:3rem;color:var(--gold);line-height:1;margin-bottom:auto}
+    .step h3{font-size:1.75rem;margin:28px 0 12px}
+    .step p{color:var(--ink-soft);margin:0}
 
-  .logout-row { text-align: center; margin-top: 20px; }
-</style>
+    /* PRODUCT */
+    .product{background:linear-gradient(180deg,rgba(255,253,247,.62),rgba(245,239,226,0))}
+    .product-window{background:#FFFDF7;border:1px solid var(--line);border-radius:30px;box-shadow:var(--shadow);overflow:hidden}
+    .window-bar{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;background:#FBF6EA}
+    .traffic{display:flex;gap:7px}.traffic i{display:block;width:9px;height:9px;border-radius:50%;background:#D7CBB6}.traffic i:nth-child(2){background:#C9B189}.traffic i:nth-child(3){background:#8E9C75}
+    .window-content{display:grid;grid-template-columns:1.15fr .85fr;min-height:520px}
+    .conversation{padding:38px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:16px}
+    .bubble{max-width:82%;padding:13px 16px;border-radius:16px}
+    .bubble.q{align-self:flex-start;padding-left:0;font-family:var(--serif);font-style:italic;color:var(--moss);font-size:1.18rem}
+    .bubble.a{align-self:flex-end;background:var(--bubble)}
+    .audio-card{margin-top:auto;border:1px solid var(--line);border-radius:18px;padding:16px;display:flex;align-items:center;gap:13px;background:#FBF6EA}
+    .play{width:42px;height:42px;border:0;border-radius:50%;background:var(--moss);color:white;cursor:pointer}
+    .wave{flex:1;height:32px;background:repeating-linear-gradient(90deg,var(--gold) 0 2px,transparent 2px 7px);mask:linear-gradient(180deg,transparent 0%,#000 22%,#000 78%,transparent 100%);opacity:.55}
+    .story-side{padding:34px;background:#FCF8EF}
+    .story-side h3{font-size:1.5rem;margin:0 0 18px}
+    .chapter{padding:14px 0;border-bottom:1px solid var(--line)}
+    .chapter small{color:var(--gold-deep);font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+    .chapter b{display:block;margin-top:3px}
+    .tree-mini{margin-top:28px;border:1px dashed #CFBE9E;border-radius:18px;padding:18px;text-align:center}
+    .tree-row{display:flex;justify-content:center;gap:8px;align-items:center;flex-wrap:wrap}.person{padding:8px 12px;border-radius:999px;background:#EEE5D2}.arrow{color:var(--moss)}
+
+    /* VOICE */
+    .voice-grid{display:grid;grid-template-columns:.95fr 1.05fr;gap:74px;align-items:center}
+    .voice-art{position:relative;min-height:450px;display:grid;place-items:center}
+    .portrait{width:min(390px,90%);aspect-ratio:4/5;border-radius:190px 190px 26px 26px;background:
+      radial-gradient(circle at 55% 28%, #D8C39D 0 9%, transparent 10%),
+      radial-gradient(circle at 48% 34%, #6B5C47 0 17%, transparent 18%),
+      linear-gradient(145deg,#DDD2BA,#BDAF93 50%,#82785F);position:relative;overflow:hidden;box-shadow:var(--shadow)}
+    .portrait:after{content:"";position:absolute;left:10%;right:10%;bottom:12%;height:26%;border-radius:50% 50% 18px 18px;background:#596648}
+    .voice-wave{position:absolute;right:-10px;bottom:44px;width:250px;height:82px;background:#FFFDF7;border:1px solid var(--line);border-radius:20px;box-shadow:0 14px 40px rgba(65,52,37,.13);display:flex;align-items:center;padding:0 20px;gap:14px}
+    .voice-wave .play{flex:0 0 auto}.voice-wave .wave{height:38px}
+    .voice-copy .lead{font-family:var(--serif);font-size:1.7rem;color:var(--moss);max-width:22ch;margin:0 0 22px}
+    .voice-copy p{color:var(--ink-soft);font-size:1.05rem}
+
+    /* FAMILY */
+    .family-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+    .family-card{background:#FFFDF7;border:1px solid var(--line);border-radius:22px;padding:24px;min-height:210px}
+    .family-card .who{display:flex;align-items:center;gap:12px;margin-bottom:18px}.avatar{width:42px;height:42px;border-radius:50%;background:linear-gradient(145deg,#D7C7AA,#918268);display:grid;place-items:center;color:#fff;font-family:var(--serif);font-weight:600}
+    .family-card blockquote{font-family:var(--serif);font-style:italic;font-size:1.1rem;margin:0;color:#52483A}
+
+    /* PRIVACY */
+    .privacy{padding-top:70px}.privacy-box{display:grid;grid-template-columns:.85fr 1.15fr;gap:50px;background:var(--moss-deep);color:#F9F1E3;border-radius:32px;padding:48px}
+    .privacy h2{font-size:clamp(2.3rem,4vw,3.7rem);margin-bottom:12px}.privacy p{color:#D9DCCF}
+    .privacy-list{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}.privacy-item{border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:18px;background:rgba(255,255,255,.035)}.privacy-item b{display:block;margin-bottom:6px}.privacy-item span{color:#CCD0C2;font-size:.92rem}
+
+    /* REGISTRO */
+    .registro{padding:110px 0;position:relative;overflow:hidden}
+    .registro:before{content:"";position:absolute;width:520px;height:520px;border-radius:50%;background:radial-gradient(circle,rgba(201,138,60,.16),transparent 68%);right:-180px;top:-130px;pointer-events:none}
+    .registro-box{position:relative;display:grid;grid-template-columns:.9fr 1.1fr;gap:64px;align-items:center;background:var(--ink);color:#F9F1E3;border-radius:34px;padding:58px;overflow:hidden}
+    .registro-copy h2{font-size:clamp(2.7rem,5vw,4.8rem);margin:0 0 18px;max-width:9ch}
+    .registro-copy p{color:#CFC2AE;font-size:1.05rem;max-width:48ch;margin:0}
+    .registro-points{display:grid;gap:12px;margin-top:28px;color:#E9DECC;font-size:.94rem}
+    .registro-points span{display:flex;gap:10px;align-items:flex-start}
+    .registro-points i{width:7px;height:7px;border-radius:50%;background:#D9B479;margin-top:8px;flex:0 0 auto}
+    .signup-card{background:#FFFDF7;color:var(--ink);border-radius:26px;padding:30px;box-shadow:0 22px 54px rgba(0,0,0,.18)}
+    .signup-card h3{font-size:1.85rem;margin:0 0 6px}
+    .signup-card > p{margin:0 0 24px;color:var(--ink-soft);font-size:.94rem}
+    .signup-form{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .field{display:flex;flex-direction:column;gap:7px;min-width:0}
+    .field label{font-size:.86rem;font-weight:700;color:#51483D}
+    .field input{width:100%;min-height:48px;border:1px solid var(--line);background:#fff;border-radius:12px;padding:11px 13px;color:var(--ink);outline:none;transition:.18s ease}
+    .field input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(201,138,60,.13)}
+    .field-hint{grid-column:1/-1;color:var(--ink-soft);font-size:.76rem;margin:-8px 0 0}
+    .signup-form .submit{grid-column:1/-1;width:100%;border:0;margin-top:2px}
+    .form-status{grid-column:1/-1;min-height:1.4em;font-size:.88rem;margin:0;color:var(--moss);font-weight:700}
+    .form-status.error{color:#9B3A32}
+    .form-note{grid-column:1/-1;color:var(--ink-soft);font-size:.76rem;margin:-4px 0 0}
+    .signup-alt{grid-column:1/-1;text-align:center;font-size:.86rem;color:var(--ink-soft);margin:0}
+    .signup-alt a{color:var(--gold-deep);font-weight:700;text-decoration:none}
+
+    /* CTA */
+    .final-cta{text-align:center;padding:120px 0}.final-cta .inner{max-width:840px;margin:auto}.final-cta h2{font-size:clamp(3rem,6.5vw,6rem)}.final-cta p{font-family:var(--serif);font-style:italic;color:var(--ink-soft);font-size:1.3rem;margin:0 0 30px}
+
+    footer{border-top:1px solid var(--line);padding:34px 0 48px;color:var(--ink-soft);font-size:.9rem}.footer-row{display:flex;justify-content:space-between;gap:20px;align-items:center;flex-wrap:wrap}.footer-links{display:flex;gap:20px}.footer-links a{text-decoration:none}
+
+    /* REVEAL */
+    .reveal{opacity:0;transform:translateY(16px);transition:.7s ease}.reveal.show{opacity:1;transform:none}
+
+    @media(max-width:980px){
+      .nav-links a:not(.nav-cta){display:none}
+      .hero{padding-top:62px}
+      .hero-grid,.problem-grid,.voice-grid,.privacy-box,.registro-box{grid-template-columns:1fr;gap:46px}
+      .hero-copy{text-align:center}.hero-copy h1{margin-left:auto;margin-right:auto}.hero-copy p{margin-left:auto;margin-right:auto}.hero-actions,.trust-row{justify-content:center}.eyebrow{justify-content:center}.hero-device-wrap{min-height:560px}
+      .chip-a{right:-10px}.chip-b{left:-10px}
+      .steps-grid,.family-cards{grid-template-columns:1fr}
+      .step{min-height:250px}
+      .window-content{grid-template-columns:1fr}.conversation{border-right:0;border-bottom:1px solid var(--line)}
+      .privacy-list{grid-template-columns:1fr 1fr}
+    }
+    @media(max-width:640px){
+      .wrap{width:min(100% - 24px,1180px)}
+      .nav-inner{height:68px}.nav-cta{display:none}
+      .hero{padding:48px 0 60px}h1{font-size:3.65rem}.hero-device-wrap{min-height:510px}.device{padding:16px;border-radius:26px}.demo-panel{min-height:410px;padding:22px 14px}.orb{width:142px;height:142px}.memory-chip{display:none}
+      section{padding:72px 0}h2{font-size:2.8rem}.problem-grid{gap:32px}
+      .window-content{min-height:auto}.conversation,.story-side{padding:24px}.bubble{max-width:92%}
+      .voice-art{min-height:380px}.voice-wave{right:0;width:220px}.portrait{width:300px}
+      .privacy-box{padding:30px 22px}.privacy-list{grid-template-columns:1fr}
+      .registro{padding:78px 0}.registro-box{padding:30px 22px;border-radius:26px}.signup-card{padding:22px}.signup-form{grid-template-columns:1fr}
+      .final-cta{padding:90px 0}.footer-row{align-items:flex-start;flex-direction:column}
+    }
+    @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation:none!important;transition:none!important}.reveal{opacity:1;transform:none}}
+  </style>
 </head>
 <body>
-  <div class="login" id="loginScreen">
-    <h1>Bitácora Viva</h1>
-    <p class="sub">Iniciá sesión para entrar a tu bitácora.</p>
-    <input type="text" id="loginUser" placeholder="Usuario" autocomplete="username">
-    <input type="password" id="loginPass" placeholder="Clave" autocomplete="current-password">
-    <button id="loginBtn" type="button">Entrar</button>
-    <p class="error" id="loginError"></p>
-  </div>
+  <nav>
+    <div class="wrap nav-inner">
+      <a href="#inicio" class="brand" aria-label="Bitácora Viva, inicio">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>Bitácora Viva</span>
+      </a>
+      <div class="nav-links">
+        <a href="#como-funciona">Cómo funciona</a>
+        <a href="#producto">La experiencia</a>
+        <a href="#familia">Familia</a>
+        <a href="#privacidad">Privacidad</a>
+        <a href="/app.html">Iniciar sesión</a>
+        <a class="btn btn-primary nav-cta" href="#registro">Crear cuenta</a>
+      </div>
+    </div>
+  </nav>
 
-  <div id="appContent">
-   <div class="topbar">
-     <a class="icon-btn" href="/arbol.html" target="_blank" rel="noopener" title="Árbol genealógico" aria-label="Árbol genealógico">🌳</a>
-     <a class="icon-btn" href="/capitulos.html" target="_blank" rel="noopener" title="Libro de la historia" aria-label="Libro de la historia">📖</a>
-   </div>
-   <div class="main-layout">
-    <div class="device-col">
-    <div class="device">
-      <h1>Bitácora Viva</h1>
-      <div class="body-area">
-        <div class="greeting" id="greeting">
-          <div class="sub">Presioná el botón para empezar a charlar.</div>
-        </div>
-        <div class="transcript" id="transcript" aria-live="polite"></div>
-        <div class="orb-zone">
-          <button class="orb" id="orb" data-state="idle" aria-label="Presionar para comenzar la charla">
-            <span id="orbLabel">Presioná<br>para hablar</span>
-          </button>
-          <div class="state-label" id="stateLabel"></div>
-          <button class="write-toggle end-toggle" id="endBtn" type="button" style="display:none;">terminar la charla</button>
-          <button class="write-toggle" id="treeModeBtn" type="button">armar árbol genealógico</button>
-          <button class="write-toggle" id="writeToggle" type="button">prefiero escribir</button>
-          <div class="write-row" id="writeRow">
-            <input type="text" id="writeInput" placeholder="Escribí tu respuesta…" aria-label="Escribir respuesta">
-            <button id="writeSend" type="button">Enviar</button>
+  <main>
+    <section class="hero" id="inicio">
+      <div class="wrap hero-grid">
+        <div class="hero-copy reveal">
+          <div class="eyebrow">Un legado contado con tu propia voz</div>
+          <h1>Las historias de tu familia merecen <em>seguir vivas.</em></h1>
+          <p>Conversaciones guiadas que convierten recuerdos, anécdotas y voces en una historia familiar que puedes volver a escuchar, consultar y compartir.</p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#registro">Crear mi cuenta</a>
+            <a class="btn btn-secondary" href="#como-funciona">Ver cómo funciona ↓</a>
           </div>
-          <button class="write-toggle" id="voiceToggle" type="button">cambiar voz</button>
-          <div class="write-row" id="voiceRow">
-            <select id="voiceSelect" aria-label="Elegir voz"></select>
+          <div class="trust-row">
+            <span><i class="dot"></i> Conversa por voz</span>
+            <span><i class="dot"></i> Conserva recuerdos</span>
+            <span><i class="dot"></i> Involucra a tu familia</span>
           </div>
         </div>
+
+        <div class="hero-device-wrap reveal">
+          <div class="memory-chip chip-a"><strong>Nuevo recuerdo</strong>“La casa de los abuelos...”</div>
+          <div class="memory-chip chip-b"><strong>Historia guardada</strong>Infancia · 4 min de audio</div>
+          <div class="device">
+            <div class="device-top">
+              <div class="device-title">Bitácora Viva</div>
+              <div class="device-icons"><span class="mini-icon">🌳</span><span class="mini-icon">📖</span></div>
+            </div>
+            <div class="demo-panel">
+              <div class="demo-kicker">Una conversación. Un recuerdo que queda.</div>
+              <button class="orb" id="demoOrb" aria-label="Probar demostración"><span id="orbText">Presiona<br>para hablar</span></button>
+              <div class="demo-state" id="demoState">Prueba el botón</div>
+              <div class="demo-question" id="demoQuestion">“Quiero guardar una historia de mi familia.”</div>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
-    </div>
+    </section>
 
-    <div class="panels-col">
-    <div class="familia">
-      <h2>Preguntale a la bitácora</h2>
-      <p class="sub">Escribí una pregunta sobre lo que tu papá ya contó (nombres, lugares, historias…).</p>
-      <div class="familia-chat" id="familiaChat"></div>
-      <div class="familia-input-row">
-        <input type="text" id="familiaInput" placeholder="Ej: ¿cómo se llamaban sus papás?">
-        <button id="familiaAsk" type="button">Preguntar</button>
+    <section class="problem">
+      <div class="wrap problem-grid">
+        <div class="reveal">
+          <div class="eyebrow" style="color:#D9B479">Lo que no se pregunta, puede perderse</div>
+          <h2>Hay historias que solo existen mientras alguien pueda contarlas.</h2>
+        </div>
+        <div class="reveal">
+          <div class="questions">
+            <div class="question-card">“¿Cómo conociste a mamá?”</div>
+            <div class="question-card">“¿Cómo eran tus papás cuando eras niño?”</div>
+            <div class="question-card">“¿Cuál fue uno de los días más importantes de tu vida?”</div>
+            <div class="question-card">“¿Qué historia quieres que nunca olvidemos?”</div>
+          </div>
+          <p class="problem-note">Bitácora Viva ayuda a tener esas conversaciones hoy para que la familia pueda volver a ellas mañana.</p>
+        </div>
       </div>
-    </div>
+    </section>
 
-    <div class="aportes">
-      <h2>Aportar a la bitácora</h2>
-      <p class="sub">Historias, fotos o videos para ayudar a profundizar la charla.</p>
-
-      <label for="aporteNombre">Tu nombre</label>
-      <input type="text" id="aporteNombre" placeholder="Ej: Marcela">
-
-      <label for="aporteTexto">Contá una historia o recuerdo</label>
-      <textarea id="aporteTexto" placeholder="Ej: papá conoció a mamá en una fiesta de la universidad…"></textarea>
-      <button id="aporteTextoBtn" type="button">Agregar historia</button>
-
-      <p class="msg" id="aporteMsg"></p>
-
-      <!-- Foto/video: escondido por ahora, no es relevante para esta parte.
-           El código sigue funcionando, ver #aportePhotoBlock. -->
-      <div id="aportePhotoBlock" style="display:none;">
-        <hr>
-        <label for="aporteArchivo">Foto o video (hasta 4MB)</label>
-        <input type="file" id="aporteArchivo" accept="image/*,video/*">
-        <input type="text" id="aporteCaption" placeholder="¿Quién aparece? ¿Qué momento es?">
-        <button id="aporteArchivoBtn" type="button">Subir foto/video</button>
+    <section id="como-funciona">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <div class="eyebrow">Cómo funciona</div>
+          <h2>Hablar es suficiente.</h2>
+          <p>No hace falta escribir una biografía ni saber por dónde empezar. La experiencia acompaña la conversación, organiza los recuerdos y los deja listos para volver a encontrarlos.</p>
+        </div>
+        <div class="steps-grid">
+          <article class="step reveal"><div class="step-num">01</div><h3>Conversa</h3><p>Presiona un botón y empieza a hablar. La bitácora escucha, hace preguntas y sigue el hilo de forma natural.</p></article>
+          <article class="step reveal"><div class="step-num">02</div><h3>Construye la historia</h3><p>Nombres, lugares, relaciones, etapas de vida y anécdotas comienzan a formar una memoria familiar organizada.</p></article>
+          <article class="step reveal"><div class="step-num">03</div><h3>Vuelve a ella</h3><p>Escucha los audios, recorre capítulos y pregúntale a la bitácora por personas, momentos o recuerdos ya contados.</p></article>
+        </div>
       </div>
+    </section>
 
-      <hr>
+    <section class="product" id="producto">
+      <div class="wrap">
+        <div class="section-head center reveal">
+          <div class="eyebrow" style="justify-content:center">Una memoria que se puede explorar</div>
+          <h2>No es un archivo. Es una historia viva.</h2>
+          <p>Las conversaciones pueden convertirse en recuerdos consultables, capítulos y conexiones familiares.</p>
+        </div>
+        <div class="product-window reveal">
+          <div class="window-bar"><div class="traffic"><i></i><i></i><i></i></div><span class="quiet">Bitácora familiar</span><span>•••</span></div>
+          <div class="window-content">
+            <div class="conversation">
+              <div class="bubble q">Cuéntame de la casa donde creciste.</div>
+              <div class="bubble a">Era una casa pequeña, pero siempre estaba llena de gente. Mi mamá cocinaba los domingos y mis hermanos llegaban desde temprano...</div>
+              <div class="bubble q">¿Hay algún domingo que recuerdes especialmente?</div>
+              <div class="bubble a">Sí. El día que mi hermano volvió después de varios años. Nadie sabía que venía.</div>
+              <div class="audio-card"><button class="play" id="playDemo" aria-label="Reproducir demo">▶</button><div><strong>Escuchar recuerdo</strong><div class="quiet" style="font-size:.82rem">02:14 · voz original</div></div><div class="wave" id="waveDemo"></div></div>
+            </div>
+            <aside class="story-side">
+              <h3>Libro de la historia</h3>
+              <div class="chapter"><small>Capítulo 01</small><b>La casa donde crecimos</b></div>
+              <div class="chapter"><small>Capítulo 02</small><b>Conocer a mamá</b></div>
+              <div class="chapter"><small>Capítulo 03</small><b>El primer trabajo</b></div>
+              <div class="tree-mini"><div class="quiet" style="margin-bottom:12px">Árbol familiar</div><div class="tree-row"><span class="person">Abuelo</span><span class="arrow">→</span><span class="person">Papá</span><span class="arrow">→</span><span class="person">Hijos</span></div></div>
+            </aside>
+          </div>
+        </div>
+      </div>
+    </section>
 
-      <div class="lista" id="aportesLista"></div>
+    <section>
+      <div class="wrap voice-grid">
+        <div class="voice-art reveal">
+          <div class="portrait" role="img" aria-label="Representación abstracta de un retrato familiar"></div>
+          <div class="voice-wave"><button class="play" aria-label="Reproducir recuerdo">▶</button><div class="wave"></div></div>
+        </div>
+        <div class="voice-copy reveal">
+          <div class="eyebrow">Más que palabras</div>
+          <h2>No solo guarda lo que dijo. Guarda cómo lo dijo.</h2>
+          <p class="lead">Su voz. Sus pausas. Su forma de contar las cosas.</p>
+          <p>Una foto conserva cómo alguien se veía. Bitácora Viva también puede conservar cómo sonaba una historia cuando esa persona la contó.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="familia">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <div class="eyebrow">La memoria es colectiva</div>
+          <h2>Una historia nunca pertenece a una sola persona.</h2>
+          <p>Otros miembros de la familia pueden sumar recuerdos y enriquecer lo que ya fue contado.</p>
+        </div>
+        <div class="family-cards">
+          <article class="family-card reveal"><div class="who"><div class="avatar">M</div><div><b>Marcela</b><div class="quiet">agregó una historia</div></div></div><blockquote>“Papá conoció a mamá en una fiesta de la universidad. Lo que nunca cuenta es que llegó tardísimo.”</blockquote></article>
+          <article class="family-card reveal"><div class="who"><div class="avatar">J</div><div><b>Julián</b><div class="quiet">recordó un detalle</div></div></div><blockquote>“Ese viaje a la costa fue en 1987. Yo todavía tengo una foto de todos frente al hotel.”</blockquote></article>
+          <article class="family-card reveal"><div class="who"><div class="avatar">A</div><div><b>Andrea</b><div class="quiet">hizo una pregunta</div></div></div><blockquote>“¿Cómo se llamaban los papás del abuelo y en qué ciudad vivían?”</blockquote></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="privacy" id="privacidad">
+      <div class="wrap">
+        <div class="privacy-box reveal">
+          <div><div class="eyebrow" style="color:#D9B479">Recuerdos personales</div><h2>Tu historia tiene que sentirse tuya.</h2><p>La privacidad no debería ser un detalle secundario cuando lo que se guarda son voces, recuerdos y relaciones familiares.</p></div>
+          <div class="privacy-list">
+            <div class="privacy-item"><b>🔒 Bitácora privada</b><span>Acceso pensado para la familia y las personas que autorices.</span></div>
+            <div class="privacy-item"><b>🎙️ Audios protegidos</b><span>La voz y las historias forman parte del archivo familiar.</span></div>
+            <div class="privacy-item"><b>👨‍👩‍👧 Acceso familiar</b><span>Cada familia puede decidir quién participa y quién consulta.</span></div>
+            <div class="privacy-item"><b>📖 Tú decides qué compartir</b><span>La historia puede crecer sin dejar de sentirse íntima.</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="registro" id="registro">
+      <div class="wrap">
+        <div class="registro-box reveal">
+          <div class="registro-copy">
+            <div class="eyebrow" style="color:#D9B479">Empezá hoy</div>
+            <h2>Creá tu bitácora en menos de un minuto.</h2>
+            <p>Con nombre, correo y clave alcanza. En cuanto te registres entrás directo a la herramienta y podés empezar la primera charla.</p>
+            <div class="registro-points">
+              <span><i></i> Tu bitácora queda lista para volver a ella cuando quieras.</span>
+              <span><i></i> Invitá después a tu familia a sumar historias, fotos y preguntas.</span>
+              <span><i></i> Sin lista de espera: tu cuenta se crea al instante.</span>
+            </div>
+          </div>
+
+          <div class="signup-card">
+            <h3>Creá tu cuenta</h3>
+            <p>Nombre, correo y clave. Así de simple.</p>
+            <form class="signup-form" id="signupForm" novalidate>
+              <div class="field">
+                <label for="suName">Nombre</label>
+                <input id="suName" name="name" type="text" autocomplete="name" placeholder="Tu nombre" required>
+              </div>
+              <div class="field">
+                <label for="suEmail">Correo electrónico</label>
+                <input id="suEmail" name="email" type="email" autocomplete="email" placeholder="nombre@correo.com" required>
+              </div>
+              <div class="field">
+                <label for="suPass">Clave</label>
+                <input id="suPass" name="password" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres" minlength="6" required>
+              </div>
+              <div class="field">
+                <label for="suPass2">Confirmar clave</label>
+                <input id="suPass2" name="password2" type="password" autocomplete="new-password" placeholder="Repetí la clave" minlength="6" required>
+              </div>
+              <p class="field-hint">Mínimo 6 caracteres.</p>
+
+              <button class="btn btn-primary submit" id="signupSubmit" type="submit">Crear cuenta y entrar</button>
+              <p class="form-status" id="signupStatus" role="status" aria-live="polite"></p>
+              <p class="form-note">Tus datos se usan solo para tu cuenta en Bitácora Viva.</p>
+              <p class="signup-alt">¿Ya tenés cuenta? <a href="/app.html">Iniciá sesión</a>.</p>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="final-cta" id="empezar">
+      <div class="wrap inner reveal">
+        <div class="eyebrow" style="justify-content:center">Una historia empieza con una pregunta</div>
+        <h2>Algún día vas a querer escuchar esa historia una vez más.</h2>
+        <p>Guárdala mientras todavía puede ser contada.</p>
+        <a class="btn btn-primary" href="#registro">Crear mi cuenta</a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap footer-row">
+      <div class="brand"><span class="brand-mark" style="width:30px;height:30px"></span><span>Bitácora Viva</span></div>
+      <div>Las historias pasan. Los recuerdos pueden quedarse.</div>
+      <div class="footer-links"><a href="#como-funciona">Cómo funciona</a><a href="#registro">Crear cuenta</a><a href="/app.html">Iniciar sesión</a><a href="#privacidad">Privacidad</a></div>
     </div>
+  </footer>
 
-    <div class="aportes">
-      <h2>Historias detectadas en la charla</h2>
-      <p class="sub">Cuando lo que cuenta parece una historia completa (no un dato corto), queda anotado acá junto con su audio.</p>
-      <div class="lista" id="storyLogLista"></div>
-    </div>
-    </div>
-   </div>
+  <script>
+    // Demo orb (decorativo, no llama al backend)
+    const orb = document.getElementById('demoOrb');
+    const orbText = document.getElementById('orbText');
+    const state = document.getElementById('demoState');
+    const question = document.getElementById('demoQuestion');
+    let active = false;
+    const demoQuestions = [
+      '“¿Cuál es uno de tus primeros recuerdos de infancia?”',
+      '“¿Quién era la persona que más te hacía reír en tu familia?”',
+      '“¿Qué lugar de tu infancia todavía puedes imaginar perfectamente?”'
+    ];
+    let qIndex = 0;
+    orb.addEventListener('click', () => {
+      active = !active;
+      orb.classList.toggle('listening', active);
+      if (active) {
+        orbText.innerHTML = 'Escuchando<br>…';
+        state.textContent = 'Cuéntame el recuerdo con tus propias palabras';
+        question.textContent = demoQuestions[qIndex % demoQuestions.length];
+        qIndex++;
+      } else {
+        orbText.innerHTML = 'Presiona<br>para hablar';
+        state.textContent = 'Recuerdo guardado';
+        question.textContent = '“La historia queda lista para volver a encontrarla.”';
+      }
+    });
 
-    <div class="logout-row">
-      <button class="write-toggle" id="logoutBtn" type="button">cerrar sesión (<span id="whoami"></span>)</button>
-    </div>
-  </div>
+    // Reproducción decorativa (sin audio real)
+    const playDemo = document.getElementById('playDemo');
+    const waveDemo = document.getElementById('waveDemo');
+    let playing = false;
+    playDemo.addEventListener('click', () => {
+      playing = !playing;
+      playDemo.textContent = playing ? '❚❚' : '▶';
+      waveDemo.style.opacity = playing ? '.95' : '.55';
+      waveDemo.style.transform = playing ? 'scaleY(1.18)' : 'scaleY(1)';
+      waveDemo.style.transition = 'all .25s ease';
+    });
 
-<script>
-(function () {
-  const loginScreen = document.getElementById('loginScreen');
-  const appContent = document.getElementById('appContent');
-  const loginUser = document.getElementById('loginUser');
-  const loginPass = document.getElementById('loginPass');
-  const loginBtn = document.getElementById('loginBtn');
-  const loginError = document.getElementById('loginError');
-  const logoutBtn = document.getElementById('logoutBtn');
-  const whoami = document.getElementById('whoami');
+    // Registro: crea la cuenta contra POST /api/signup y, si sale bien,
+    // ya queda la sesión iniciada (la respuesta pone la cookie), así que
+    // basta con mandar a la app.
+    const signupForm = document.getElementById('signupForm');
+    const signupStatus = document.getElementById('signupStatus');
+    const signupSubmit = document.getElementById('signupSubmit');
 
-  function showApp(username) {
-    loginScreen.style.display = 'none';
-    appContent.style.display = 'flex';
-    whoami.textContent = username || '';
-  }
+    signupForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      signupStatus.classList.remove('error');
+      signupStatus.textContent = '';
 
-  function showLogin() {
-    appContent.style.display = 'none';
-    loginScreen.style.display = 'flex';
-    loginPass.value = '';
-    loginUser.focus();
-  }
+      const name = document.getElementById('suName').value.trim();
+      const email = document.getElementById('suEmail').value.trim();
+      const password = document.getElementById('suPass').value;
+      const password2 = document.getElementById('suPass2').value;
 
-  async function doLogin() {
-    const username = loginUser.value.trim();
-    const password = loginPass.value;
-    if (!username || !password) return;
-    loginBtn.disabled = true;
-    loginError.textContent = '';
-    try {
-      const resp = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      });
-      const data = await resp.json();
-      if (!resp.ok) {
-        loginError.textContent = data.error || 'No se pudo iniciar sesión.';
-        loginBtn.disabled = false;
+      if (!signupForm.checkValidity()) {
+        signupForm.reportValidity();
         return;
       }
-      window.location.reload();
-    } catch (e) {
-      loginError.textContent = 'Hubo un problema para conectar.';
-      loginBtn.disabled = false;
-    }
-  }
-
-  loginBtn.addEventListener('click', doLogin);
-  loginPass.addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
-  loginUser.addEventListener('keydown', (e) => { if (e.key === 'Enter') loginPass.focus(); });
-
-  logoutBtn.addEventListener('click', async () => {
-    try { await fetch('/api/logout', { method: 'POST' }); } catch (e) {}
-    window.location.reload();
-  });
-
-  fetch('/api/me')
-    .then((resp) => (resp.ok ? resp.json() : Promise.reject()))
-    .then((data) => showApp(data.username))
-    .catch(() => showLogin());
-})();
-</script>
-
-<script>
-(function () {
-  const orb = document.getElementById('orb');
-  const orbLabel = document.getElementById('orbLabel');
-  const stateLabel = document.getElementById('stateLabel');
-  const greeting = document.getElementById('greeting');
-  const transcript = document.getElementById('transcript');
-  const writeToggle = document.getElementById('writeToggle');
-  const writeRow = document.getElementById('writeRow');
-  const writeInput = document.getElementById('writeInput');
-  const writeSend = document.getElementById('writeSend');
-  const voiceToggle = document.getElementById('voiceToggle');
-  const voiceRow = document.getElementById('voiceRow');
-  const voiceSelect = document.getElementById('voiceSelect');
-  const endBtn = document.getElementById('endBtn');
-  const treeModeBtn = document.getElementById('treeModeBtn');
-
-  let history = [];       // lo que se le manda a Claude (solo role/content)
-  let sessionLog = [];    // lo que se guarda en la bitácora (incluye audio)
-  let sessionKey = null;  // carpeta de audio de esta charla
-  let currentSessionDbId = null;  // fila de "sessions" de esta charla, para actualizar en vez de duplicar
-  let sessionMode = 'historia';  // 'historia' (charla normal) o 'arbol' (armar árbol genealógico)
-  let turnIndex = 0;
-  let state = 'idle';
-  let pausedFromState = null;
-  let sessionId = 0;
-  let mediaStream = null;
-  let mediaRecorder = null;
-  let audioChunks = [];
-
-  // Respaldo gratis: si el servidor no puede transcribir (por ejemplo, sin
-  // crédito de ElevenLabs), usamos el reconocimiento de voz del navegador
-  // como plan B. Solo existe en Chrome de escritorio, no en iPad/Safari —
-  // por eso es respaldo y no el camino principal.
-  function initFallbackRecognition() {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) return null;
-    const r = new SR();
-    r.lang = 'es-CO';
-    r.continuous = true;
-    r.interimResults = true;
-    r.maxAlternatives = 1;
-    return r;
-  }
-  const fallbackRecognition = initFallbackRecognition();
-  let fallbackTranscript = '';
-  if (fallbackRecognition) {
-    fallbackRecognition.onresult = (e) => {
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) {
-          fallbackTranscript += (fallbackTranscript ? ' ' : '') + e.results[i][0].transcript;
-        }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        signupStatus.classList.add('error');
+        signupStatus.textContent = 'El correo no parece válido.';
+        return;
       }
-    };
-    fallbackRecognition.onerror = () => {};
-  }
-
-  async function startRecordingAudio() {
-    try {
-      if (!mediaStream) {
-        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (password.length < 6) {
+        signupStatus.classList.add('error');
+        signupStatus.textContent = 'La clave debe tener al menos 6 caracteres.';
+        return;
       }
-      audioChunks = [];
-      mediaRecorder = new MediaRecorder(mediaStream);
-      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
-      mediaRecorder.start();
-    } catch (e) {
-      mediaRecorder = null; // sin permiso de mic aparte: seguimos solo con el texto
-    }
-  }
+      if (password !== password2) {
+        signupStatus.classList.add('error');
+        signupStatus.textContent = 'Las claves no coinciden.';
+        return;
+      }
 
-  function stopRecordingAudio() {
-    return new Promise((resolve) => {
-      if (!mediaRecorder || mediaRecorder.state === 'inactive') { resolve(null); return; }
-      mediaRecorder.onstop = () => resolve(new Blob(audioChunks, { type: 'audio/webm' }));
-      mediaRecorder.stop();
-    });
-  }
-
-  function releaseMic() {
-    stopVoiceActivityDetection();
-    if (audioContext) { audioContext.close(); audioContext = null; }
-    if (mediaStream) {
-      mediaStream.getTracks().forEach((t) => t.stop());
-      mediaStream = null;
-    }
-  }
-
-  async function uploadAudio(blob, role, index, contentType) {
-    if (!sessionKey || !blob) return null;
-    try {
-      const resp = await fetch(
-        `/api/save-audio?sessionId=${encodeURIComponent(sessionKey)}&index=${index}&role=${role}`,
-        { method: 'POST', headers: { 'Content-Type': contentType }, body: blob }
-      );
-      if (!resp.ok) return null;
-      const data = await resp.json();
-      return data.file || null;
-    } catch (e) { return null; }
-  }
-  let voices = [];
-  let selectedVoice = null;
-
-  function scoreVoice(v) {
-    const n = v.name.toLowerCase();
-    let score = 0;
-    if (n.includes('google')) score += 3;
-    if (n.includes('enhanced') || n.includes('mejorada') || n.includes('premium') || n.includes('neural')) score += 4;
-    if (/^es-co$/i.test(v.lang) || n.includes('colombia')) score += 5;
-    if (/^es-(es|419|us|mx|ar)$/i.test(v.lang)) score += 1;
-    if (v.localService === false) score += 1;
-    return score;
-  }
-
-  function populateVoiceSelect() {
-    voiceSelect.innerHTML = '';
-    voices.forEach((v) => {
-      const opt = document.createElement('option');
-      opt.value = v.name;
-      opt.textContent = v.name + ' (' + v.lang + ')';
-      voiceSelect.appendChild(opt);
-    });
-  }
-
-  function loadVoices() {
-    const all = speechSynthesis.getVoices();
-    voices = all.filter((v) => v.lang && v.lang.toLowerCase().startsWith('es'));
-    if (!voices.length) voices = all;
-    if (!voices.length) return;
-    populateVoiceSelect();
-    const savedName = localStorage.getItem('bitacoraVoiceName');
-    const saved = savedName && voices.find((v) => v.name === savedName);
-    selectedVoice = saved || [...voices].sort((a, b) => scoreVoice(b) - scoreVoice(a))[0];
-    voiceSelect.value = selectedVoice.name;
-  }
-
-  voiceSelect.addEventListener('change', () => {
-    selectedVoice = voices.find((v) => v.name === voiceSelect.value) || null;
-    if (selectedVoice) localStorage.setItem('bitacoraVoiceName', selectedVoice.name);
-  });
-
-  voiceToggle.addEventListener('click', () => voiceRow.classList.toggle('visible'));
-
-  if ('speechSynthesis' in window) {
-    loadVoices();
-    speechSynthesis.onvoiceschanged = loadVoices;
-  }
-
-  function setState(next, label) {
-    state = next;
-    orb.dataset.state = next;
-    stateLabel.textContent = label || '';
-    const resting = next === 'idle' || next === 'ended';
-    let orbHint = 'Presionar para comenzar la charla';
-    if (next === 'paused') orbHint = 'Presionar para seguir la charla';
-    else if (!resting) orbHint = 'Presionar para pausar la charla';
-    orb.setAttribute('aria-label', orbHint);
-    endBtn.style.display = resting ? 'none' : 'inline';
-    treeModeBtn.style.display = resting ? 'inline' : 'none';
-  }
-
-  function speakWithSystemVoice(text, onEnd) {
-    if (!('speechSynthesis' in window)) { if (onEnd) onEnd(); return; }
-    try {
-      const utter = new SpeechSynthesisUtterance(text);
-      utter.lang = selectedVoice ? selectedVoice.lang : 'es-CO';
-      if (selectedVoice) utter.voice = selectedVoice;
-      utter.rate = 0.95;
-      utter.onend = onEnd || null;
-      utter.onerror = onEnd || null;
-      speechSynthesis.speak(utter);
-    } catch (e) { if (onEnd) onEnd(); }
-  }
-
-  // Un solo elemento <audio>, reutilizado en todo el turno. En iPad/Safari,
-  // reproducir audio que no viene pegado a un toque se bloquea — reusar el
-  // mismo elemento que se "desbloqueó" con el primer toque evita que caiga
-  // a la voz del sistema (Siri) a mitad de charla.
-  let ttsAudioEl = null;
-  const SILENT_AUDIO = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEAQB8AAEAfAAABAAgAAABkYXRhAAAAAA==';
-
-  function unlockAudioPlayback() {
-    if (!ttsAudioEl) ttsAudioEl = new Audio();
-    ttsAudioEl.src = SILENT_AUDIO;
-    ttsAudioEl.play().catch(() => {});
-  }
-
-  async function speak(text, onEnd, logEntry, index) {
-    try {
-      const resp = await fetch('/api/speak', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-      });
-      if (!resp.ok) throw new Error('tts-unavailable');
-      const blob = await resp.blob();
-      if (logEntry && index != null) {
-        uploadAudio(blob, 'assistant', index, 'audio/mpeg').then((file) => {
-          if (file) logEntry.audioFile = file;
+      signupSubmit.disabled = true;
+      signupStatus.textContent = 'Creando tu cuenta…';
+      try {
+        const response = await fetch('/api/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, password })
         });
-      }
-      const url = URL.createObjectURL(blob);
-      if (!ttsAudioEl) ttsAudioEl = new Audio();
-      ttsAudioEl.src = url;
-      ttsAudioEl.onended = () => { URL.revokeObjectURL(url); if (onEnd) onEnd(); };
-      ttsAudioEl.onerror = () => { URL.revokeObjectURL(url); speakWithSystemVoice(text, onEnd); };
-      await ttsAudioEl.play();
-    } catch (err) {
-      // la voz del sistema no se puede grabar: solo queda el texto para este turno
-      speakWithSystemVoice(text, onEnd);
-    }
-  }
-
-  function addBubble(kind, text) {
-    const div = document.createElement('div');
-    div.className = 'bubble ' + kind;
-    div.textContent = text;
-    transcript.appendChild(div);
-    transcript.scrollTop = transcript.scrollHeight;
-  }
-
-  // Detección de pausas por volumen (en vez del reconocimiento de voz del
-  // navegador, que Safari/iPad no soportan): mientras haya sonido, seguimos
-  // escuchando; recién cuando pasan SILENCE_MS sin volumen, cerramos la
-  // grabación y la mandamos al servidor para transcribirla.
-  const SILENCE_MS = 2000; // pausa tolerada antes de dar la respuesta por terminada
-  const VAD_THRESHOLD = 0.02; // umbral de volumen para considerar que hay voz
-  let audioContext = null;
-  let analyser = null;
-  let vadRafId = null;
-  let vadActive = false;
-  let lastLoudTime = 0;
-
-  function startVoiceActivityDetection() {
-    if (!mediaStream) return;
-    if (!audioContext) {
-      audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    if (audioContext.state === 'suspended') audioContext.resume();
-    const source = audioContext.createMediaStreamSource(mediaStream);
-    analyser = audioContext.createAnalyser();
-    analyser.fftSize = 512;
-    source.connect(analyser);
-
-    const data = new Uint8Array(analyser.frequencyBinCount);
-    lastLoudTime = Date.now();
-    vadActive = true;
-
-    function tick() {
-      if (!vadActive) return;
-      analyser.getByteTimeDomainData(data);
-      let sumSquares = 0;
-      for (let i = 0; i < data.length; i++) {
-        const v = (data[i] - 128) / 128;
-        sumSquares += v * v;
-      }
-      const rms = Math.sqrt(sumSquares / data.length);
-      if (rms > VAD_THRESHOLD) lastLoudTime = Date.now();
-
-      if (Date.now() - lastLoudTime > SILENCE_MS) {
-        stopVoiceActivityDetection();
-        finalizeSpokenAnswer();
-        return;
-      }
-      vadRafId = requestAnimationFrame(tick);
-    }
-    tick();
-  }
-
-  function stopVoiceActivityDetection() {
-    vadActive = false;
-    if (vadRafId) cancelAnimationFrame(vadRafId);
-    vadRafId = null;
-  }
-
-  async function transcribeAudio(blob) {
-    try {
-      const resp = await fetch('/api/transcribe', {
-        method: 'POST',
-        headers: { 'Content-Type': blob.type || 'audio/webm' },
-        body: blob,
-      });
-      if (!resp.ok) return '';
-      const data = await resp.json();
-      return (data.text || '').trim();
-    } catch (e) {
-      return '';
-    }
-  }
-
-  async function finalizeSpokenAnswer() {
-    if (fallbackRecognition) { try { fallbackRecognition.stop(); } catch (e) {} }
-    const audioBlob = await stopRecordingAudio();
-    if (!audioBlob || audioBlob.size < 800) {
-      writeRow.classList.add('visible');
-      writeInput.focus();
-      stateLabel.textContent = 'No te escuché bien — escribí tu respuesta o presioná de nuevo.';
-      return;
-    }
-    setState('thinking', 'Transcribiendo…');
-    let text = await transcribeAudio(audioBlob);
-    if (!text && fallbackTranscript.trim()) {
-      text = fallbackTranscript.trim(); // el servidor no pudo: usamos lo que captó el navegador
-    }
-    if (text) {
-      handleAnswer(text, audioBlob);
-    } else {
-      writeRow.classList.add('visible');
-      writeInput.focus();
-      stateLabel.textContent = 'No te escuché bien — escribí tu respuesta o presioná de nuevo.';
-    }
-  }
-
-  async function fetchNext() {
-    const mySession = sessionId;
-    setState('thinking', 'Pensando…');
-    orbLabel.innerHTML = '···';
-    try {
-      const lastEntry = sessionLog.length ? sessionLog[sessionLog.length - 1] : null;
-      const lastAudioUrl = lastEntry && lastEntry.role === 'user' ? lastEntry.audioFile || null : null;
-      const resp = await fetch('/api/next', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ history, lastAudioUrl, mode: sessionMode }),
-      });
-      if (mySession !== sessionId) return;
-      if (!resp.ok) throw new Error('server error');
-      const data = await resp.json();
-      if (mySession !== sessionId) return;
-      turnIndex += 1;
-      const myTurn = turnIndex;
-      history.push({ role: 'assistant', content: data.message });
-      const logEntry = { role: 'assistant', content: data.message, timestamp: new Date().toISOString() };
-      sessionLog.push(logEntry);
-      addBubble('q', data.message);
-      cargarStoryLog();
-      setState('speaking', 'Hablando…');
-      speak(data.message, () => {
-        if (mySession !== sessionId) return;
-        if (data.done) {
-          finishSession();
-        } else {
-          listenForAnswer();
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          signupStatus.classList.add('error');
+          signupStatus.textContent = data.error || 'No se pudo crear la cuenta.';
+          signupSubmit.disabled = false;
+          return;
         }
-      }, logEntry, myTurn);
-    } catch (err) {
-      if (mySession !== sessionId) return;
-      stateLabel.textContent = 'Hubo un problema para conectar. Probá de nuevo.';
-      setState('idle', stateLabel.textContent);
-      orbLabel.innerHTML = 'Presioná<br>para hablar';
-      releaseMic();
-      await saveSessionLog(); // no perder lo ya hablado por un problema de red
-    }
-  }
-
-  async function endConversation() {
-    stopVoiceActivityDetection();
-    if (fallbackRecognition) { try { fallbackRecognition.abort(); } catch (e) {} }
-    sessionId += 1; // invalida cualquier respuesta pendiente de este turno
-    if ('speechSynthesis' in window) speechSynthesis.cancel();
-    if (ttsAudioEl) { try { ttsAudioEl.pause(); } catch (e) {} }
-    await stopRecordingAudio();
-    writeRow.classList.remove('visible');
-
-    history.push({
-      role: 'user',
-      content:
-        '(La persona quiere terminar la charla por ahora, a mitad de la conversación. Cierra con un mensaje cálido y empático que incluya un mini resumen de 1 o 2 frases de lo que se habló hoy, y las ganas de seguir charlando otro día. Termina ese mensaje, y solo ese, con [FIN].)',
+        signupStatus.textContent = '¡Listo! Entrando…';
+        window.location.href = '/app.html';
+      } catch (error) {
+        signupStatus.classList.add('error');
+        signupStatus.textContent = 'Hubo un problema para conectar.';
+        signupSubmit.disabled = false;
+      }
     });
 
-    fetchNext();
-  }
-
-  async function pauseConversation() {
-    pausedFromState = state;
-    stopVoiceActivityDetection();
-    if (fallbackRecognition) { try { fallbackRecognition.abort(); } catch (e) {} }
-    if ('speechSynthesis' in window) speechSynthesis.cancel();
-    if (ttsAudioEl) { try { ttsAudioEl.pause(); } catch (e) {} }
-    sessionId += 1; // invalida cualquier respuesta pendiente de este turno
-    await stopRecordingAudio();
-    writeRow.classList.remove('visible');
-    setState('paused', 'En pausa — presioná para seguir');
-    orbLabel.innerHTML = 'Presioná<br>para seguir';
-    saveSessionLog(); // por si no vuelve: que no se pierda lo hablado hasta acá
-  }
-
-  function resumeConversation() {
-    const mySession = ++sessionId;
-    if (pausedFromState === 'thinking') {
-      fetchNext(); // se había pausado antes de recibir la pregunta nueva
-      return;
-    }
-    const lastAssistant = [...history].reverse().find((m) => m.role === 'assistant');
-    if (!lastAssistant) { fetchNext(); return; }
-    setState('speaking', 'Hablando…');
-    orbLabel.innerHTML = '···';
-    speak(lastAssistant.content, () => {
-      if (mySession !== sessionId) return;
-      listenForAnswer();
-    });
-  }
-
-  async function listenForAnswer() {
-    setState('listening', 'Escuchando…');
-    orbLabel.innerHTML = 'Escuchando<br>…';
-    writeToggle.style.display = 'inline';
-    if (!window.MediaRecorder || !navigator.mediaDevices) {
-      writeRow.classList.add('visible');
-      writeInput.focus();
-      return; // sin soporte: queda "prefiero escribir"
-    }
-    await startRecordingAudio();
-    if (!mediaStream || !mediaRecorder) {
-      // no dio permiso de micrófono o falló: no nos quedamos trabados "escuchando" para siempre
-      stateLabel.textContent = 'No pude usar el micrófono — escribí tu respuesta.';
-      writeRow.classList.add('visible');
-      writeInput.focus();
-      return;
-    }
-    startVoiceActivityDetection();
-    if (fallbackRecognition) {
-      fallbackTranscript = '';
-      try { fallbackRecognition.start(); } catch (e) {}
-    }
-  }
-
-  async function handleAnswer(text, audioBlob) {
-    if (!text || !text.trim()) return;
-    if (audioBlob === undefined && mediaRecorder && mediaRecorder.state !== 'inactive') {
-      stopVoiceActivityDetection();
-      await stopRecordingAudio(); // vino de "escribir": se descarta la grabación en curso
-    }
-    addBubble('a', text.trim());
-    turnIndex += 1;
-    const myTurn = turnIndex;
-    history.push({ role: 'user', content: text.trim() });
-    const logEntry = { role: 'user', content: text.trim(), timestamp: new Date().toISOString() };
-    sessionLog.push(logEntry);
-    writeRow.classList.remove('visible');
-    writeInput.value = '';
-    if (audioBlob) {
-      const file = await uploadAudio(audioBlob, 'user', myTurn, 'audio/webm');
-      if (file) logEntry.audioFile = file;
-    }
-    fetchNext();
-  }
-
-  async function saveSessionLog() {
-    if (!sessionLog.length) return;
-    try {
-      const resp = await fetch('/api/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ history: sessionLog, sessionDbId: currentSessionDbId }),
+    // Scroll reveals
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('show');
+          io.unobserve(entry.target);
+        }
       });
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data.sessionDbId) currentSessionDbId = data.sessionDbId;
-      }
-    } catch (e) {}
-  }
-
-  async function finishSession() {
-    setState('ended', '');
-    orbLabel.innerHTML = 'Presioná<br>para otra charla';
-    writeToggle.style.display = 'none';
-    releaseMic();
-    await saveSessionLog();
-  }
-
-  function startSession(mode) {
-    if (state !== 'idle' && state !== 'ended') return;
-    sessionMode = mode === 'arbol' ? 'arbol' : 'historia';
-    sessionId += 1;
-    pausedFromState = null;
-    currentSessionDbId = null;
-    greeting.style.display = 'none';
-    transcript.classList.add('visible');
-    transcript.innerHTML = '';
-    history = [];
-    sessionLog = [];
-    turnIndex = 0;
-    sessionKey = new Date().toISOString().replace(/[:.]/g, '-');
-    fetchNext();
-  }
-
-  function handleOrbPress() {
-    if (state === 'idle' || state === 'ended') {
-      unlockAudioPlayback();
-      startSession();
-    } else if (state === 'paused') {
-      resumeConversation();
-    } else {
-      pauseConversation();
-    }
-  }
-
-  endBtn.addEventListener('click', endConversation);
-
-  treeModeBtn.addEventListener('click', () => {
-    unlockAudioPlayback();
-    startSession('arbol');
-  });
-
-  orb.addEventListener('click', handleOrbPress);
-
-  // Botón físico: el encoder USB de arcade manda una tecla al presionarlo.
-  // Cambiá BUTTON_KEY por la tecla que detectes en el paso de prueba (ver README).
-  const BUTTON_KEY = 'Enter';
-  document.addEventListener('keydown', (e) => {
-    const tag = (e.target && e.target.tagName) || '';
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return; // no pisar el Enter de los cuadros de texto
-    if (e.key === BUTTON_KEY) {
-      e.preventDefault();
-      handleOrbPress();
-    }
-  });
-
-  writeToggle.addEventListener('click', () => {
-    writeRow.classList.toggle('visible');
-    if (writeRow.classList.contains('visible')) writeInput.focus();
-  });
-  writeSend.addEventListener('click', () => handleAnswer(writeInput.value));
-  writeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleAnswer(writeInput.value); });
-
-  if (!window.MediaRecorder || !navigator.mediaDevices) {
-    writeToggle.textContent = 'escribir respuesta';
-  }
-
-  // --- Preguntale a la bitácora ---
-  const familiaChat = document.getElementById('familiaChat');
-  const familiaInput = document.getElementById('familiaInput');
-  const familiaAsk = document.getElementById('familiaAsk');
-
-  function addFamiliaBubble(kind, text) {
-    const div = document.createElement('div');
-    div.className = 'familia-bubble ' + kind;
-    div.textContent = text;
-    familiaChat.appendChild(div);
-    familiaChat.scrollTop = familiaChat.scrollHeight;
-    return div;
-  }
-
-  async function askFamilia() {
-    if (familiaAsk.disabled) return; // ya hay una pregunta en curso
-    const q = familiaInput.value.trim();
-    if (!q) return;
-    addFamiliaBubble('q', q);
-    familiaInput.value = '';
-    familiaAsk.disabled = true;
-    const thinking = addFamiliaBubble('thinking', 'Buscando en la bitácora…');
-    try {
-      const resp = await fetch('/api/ask-familia', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: q }),
-      });
-      const data = await resp.json();
-      thinking.remove();
-      addFamiliaBubble('a', data.answer || 'No se pudo responder.');
-    } catch (e) {
-      thinking.remove();
-      addFamiliaBubble('a', 'Hubo un problema para conectar.');
-    }
-    familiaAsk.disabled = false;
-    familiaInput.focus();
-  }
-
-  familiaAsk.addEventListener('click', askFamilia);
-  familiaInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') askFamilia(); });
-
-  // --- Aportar a la bitácora (historias, fotos, videos) ---
-  const aporteNombre = document.getElementById('aporteNombre');
-  const aporteTexto = document.getElementById('aporteTexto');
-  const aporteTextoBtn = document.getElementById('aporteTextoBtn');
-  const aporteArchivo = document.getElementById('aporteArchivo');
-  const aporteCaption = document.getElementById('aporteCaption');
-  const aporteArchivoBtn = document.getElementById('aporteArchivoBtn');
-  const aporteMsg = document.getElementById('aporteMsg');
-  const aportesLista = document.getElementById('aportesLista');
-
-  const storyLogLista = document.getElementById('storyLogLista');
-
-  // El árbol genealógico y la línea de tiempo ahora viven en /arbol.html
-  // (se llega por el ícono 🌳 de arriba) — ya no hay un mini-árbol acá.
-
-  async function cargarStoryLog() {
-    try {
-      const resp = await fetch('/api/story-log');
-      if (!resp.ok) return;
-      const data = await resp.json();
-      storyLogLista.innerHTML = '';
-      (data.stories || []).forEach((s) => {
-        const div = document.createElement('div');
-        div.className = 'item';
-        const fecha = new Date(s.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
-        const audioTag = s.audio_url ? `<audio controls src="${s.audio_url}"></audio>` : '<em>(sin audio guardado)</em>';
-        div.innerHTML = `<div>${audioTag}</div><div><strong>${fecha}:</strong> ${s.texto}</div>`;
-        storyLogLista.appendChild(div);
-      });
-    } catch (e) {}
-  }
-
-  async function cargarAportes() {
-    try {
-      const resp = await fetch('/api/contributions');
-      if (!resp.ok) return;
-      const data = await resp.json();
-      aportesLista.innerHTML = '';
-      // Fotos/video escondidas por ahora (ver aportePhotoBlock) — solo se
-      // listan las historias de texto.
-      const items = (data.notes || []).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-      items.forEach((it) => {
-        const div = document.createElement('div');
-        div.className = 'item';
-        div.innerHTML = `<strong>${it.contributor || 'Familia'}:</strong> ${it.texto}`;
-        aportesLista.appendChild(div);
-      });
-    } catch (e) {}
-  }
-
-  async function agregarHistoria() {
-    const contributor = aporteNombre.value.trim();
-    const text = aporteTexto.value.trim();
-    if (!text) return;
-    aporteTextoBtn.disabled = true;
-    aporteMsg.textContent = '';
-    try {
-      const resp = await fetch('/api/contribute-story', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contributor, text }),
-      });
-      const data = await resp.json();
-      if (resp.ok) {
-        aporteTexto.value = '';
-        aporteMsg.textContent = 'Historia agregada. Gracias.';
-        cargarAportes();
-      } else {
-        aporteMsg.textContent = data.error || 'No se pudo agregar.';
-      }
-    } catch (e) {
-      aporteMsg.textContent = 'Hubo un problema para conectar.';
-    }
-    aporteTextoBtn.disabled = false;
-  }
-
-  async function subirArchivo() {
-    const file = aporteArchivo.files[0];
-    if (!file) return;
-    if (file.size > 4 * 1024 * 1024) {
-      aporteMsg.textContent = 'El archivo pesa más de 4MB — probá con uno más chico por ahora.';
-      return;
-    }
-    const contributor = encodeURIComponent(aporteNombre.value.trim());
-    const caption = encodeURIComponent(aporteCaption.value.trim());
-    aporteArchivoBtn.disabled = true;
-    aporteMsg.textContent = 'Subiendo…';
-    try {
-      const resp = await fetch(`/api/contribute-media?contributor=${contributor}&caption=${caption}`, {
-        method: 'POST',
-        headers: { 'Content-Type': file.type || 'application/octet-stream' },
-        body: file,
-      });
-      const data = await resp.json();
-      if (resp.ok) {
-        aporteArchivo.value = '';
-        aporteCaption.value = '';
-        aporteMsg.textContent = 'Subido correctamente.';
-        cargarAportes();
-      } else {
-        aporteMsg.textContent = data.error || 'No se pudo subir.';
-      }
-    } catch (e) {
-      aporteMsg.textContent = 'Hubo un problema para conectar.';
-    }
-    aporteArchivoBtn.disabled = false;
-  }
-
-  aporteTextoBtn.addEventListener('click', agregarHistoria);
-  aporteArchivoBtn.addEventListener('click', subirArchivo);
-
-  // Si se cierra la pestaña o se navega a otro lado a mitad de charla,
-  // intentamos guardar lo que se alcanzó a hablar en vez de perderlo.
-  window.addEventListener('pagehide', () => {
-    if (!sessionLog.length) return;
-    if (state === 'idle' || state === 'ended') return;
-    try {
-      navigator.sendBeacon(
-        '/api/save',
-        new Blob([JSON.stringify({ history: sessionLog, sessionDbId: currentSessionDbId })], { type: 'application/json' })
-      );
-    } catch (e) {}
-  });
-
-  cargarAportes();
-  cargarStoryLog();
-})();
-</script>
+    }, {threshold:.12});
+    document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+  </script>
 </body>
 </html>

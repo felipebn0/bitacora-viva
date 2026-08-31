@@ -70,7 +70,7 @@
   <header>
     <h1>Árbol genealógico</h1>
     <p>Se va armando solo con lo que se cuenta en las charlas.</p>
-    <a class="volver" href="/">← volver a la bitácora</a>
+    <a class="volver" href="/app.html">← volver a la bitácora</a>
   </header>
   <div class="wrap" id="wrap">
     <p class="msg">Cargando…</p>
@@ -324,7 +324,7 @@
     try {
       const resp = await fetch('/api/tree');
       if (resp.status === 401) {
-        wrap.innerHTML = '<p class="msg">Iniciá sesión en la bitácora primero. <a class="volver" href="/">Ir a la bitácora</a></p>';
+        wrap.innerHTML = '<p class="msg">Iniciá sesión en la bitácora primero. <a class="volver" href="/app.html">Ir a la bitácora</a></p>';
         return;
       }
       if (!resp.ok) throw new Error('fallo');

@@ -47,7 +47,7 @@ npm install
 npm run dev
 ```
 
-Abrí **Chrome** en [http://localhost:3000](http://localhost:3000) (Chrome es el que mejor soporta el micrófono del navegador).
+Abrí **Chrome** en [http://localhost:3000/app.html](http://localhost:3000/app.html) (Chrome es el que mejor soporta el micrófono del navegador). La raíz (`http://localhost:3000`) muestra la landing pública con el registro; `/app.html` es la herramienta en sí.
 
 ## Cómo se usa
 
@@ -93,13 +93,13 @@ Copiá `DATABASE_URL` y `BLOB_READ_WRITE_TOKEN` desde **Storage** en el dashboar
 Antes de tocar la Raspberry Pi, probá el encoder en tu Mac:
 
 1. Conectá el encoder USB (con el botón ya cableado) a un puerto USB de tu computadora.
-2. Abrí `http://localhost:3000` en Chrome y abrí la consola (`Cmd+Option+J`).
+2. Abrí `http://localhost:3000/app.html` en Chrome y abrí la consola (`Cmd+Option+J`).
 3. Pegá esto en la consola y presioná Enter:
    ```js
    document.addEventListener('keydown', (e) => console.log('Tecla detectada:', e.key));
    ```
 4. Presioná el botón físico. La consola te va a mostrar algo como `Tecla detectada: Enter` o `Tecla detectada: 1`.
-5. Si no es `Enter`, abrí [index.html](public/index.html), buscá la línea `const BUTTON_KEY = 'Enter';` y reemplazala por la tecla que detectaste (por ejemplo `'1'` o `' '` para espacio).
+5. Si no es `Enter`, abrí [app.html](public/app.html), buscá la línea `const BUTTON_KEY = 'Enter';` y reemplazala por la tecla que detectaste (por ejemplo `'1'` o `' '` para espacio).
 
 Con esto ya podés probar toda la charla apretando solo el botón físico, sin tocar la pantalla.
 
@@ -111,7 +111,7 @@ Con esto ya podés probar toda la charla apretando solo el botón físico, sin t
 4. Conectá el micrófono/parlante USB y el encoder con el botón.
 5. Para que la Pi prenda directo en la charla, sin que nadie tenga que abrir nada:
    - Service de systemd para que el servidor arranque solo al prender la Pi (le paso el archivo cuando lleguemos a este paso).
-   - Chromium en "modo kiosco" (pantalla completa, sin barra de direcciones) apuntando a `http://localhost:3000`, configurado para abrir solo al encender.
+   - Chromium en "modo kiosco" (pantalla completa, sin barra de direcciones) apuntando a `http://localhost:3000/app.html` (no a la raíz, que ahora muestra la landing pública), configurado para abrir solo al encender.
 6. La pantalla es opcional: la charla funciona por voz y el botón. Si no querés pantalla, alcanza con que Chromium corra en segundo plano (headless) mientras el audio funcione igual.
 
 Avisame cuando tengas la Pi en mano y armamos el paso 2 en detalle (el service de systemd y el modo kiosco exactos dependen de qué versión de Raspberry Pi OS instales).
