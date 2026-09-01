@@ -138,6 +138,14 @@
     align-self: center; display: none;
   }
 
+  .quien-historia { display: flex; flex-direction: column; gap: 8px; }
+  .quien-historia-row { display: flex; gap: 18px; }
+  .quien-historia-row label { display: flex; align-items: center; gap: 6px; font-size: 0.92rem; cursor: pointer; }
+  .quien-historia input[type="text"] {
+    border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 12px;
+    font-family: var(--font-body); background: #fff; color: var(--ink); font-size: 0.92rem;
+  }
+
   .logout-row { text-align: center; margin-top: 8px; }
   .write-toggle { background: none; border: none; color: var(--moss); text-decoration: underline; cursor: pointer; font-family: var(--font-body); font-size: 0.9rem; }
 </style>
@@ -172,6 +180,15 @@
 
     <div class="aportes">
       <h2>Aportar una historia</h2>
+
+      <div class="quien-historia" id="quienHistoria">
+        <p class="sub" style="text-align:left;">¿De quién es esta historia?</p>
+        <div class="quien-historia-row">
+          <label><input type="radio" name="quienHistoria" value="propia" checked> Mía</label>
+          <label><input type="radio" name="quienHistoria" value="otra"> De otra persona</label>
+        </div>
+        <input type="text" id="protagonistaInput" placeholder="¿De quién es esta historia?" style="display:none;">
+      </div>
 
       <div class="aporte-chat" id="aporteChat"></div>
 
@@ -339,6 +356,26 @@
   let historyLocal = [];
   let audioUrlsLocal = [];
   let charlaTerminada = false;
+  let esperandoAclaracion = false; // true justo después de que la IA pidió parentesco/año que faltaban
+
+  // --- ¿De quién es esta historia? ---
+  const protagonistaInput = document.getElementById('protagonistaInput');
+  const quienRadios = document.querySelectorAll('input[name="quienHistoria"]');
+  quienRadios.forEach((r) => {
+    r.addEventListener('change', () => {
+      const esOtra = document.querySelector('input[name="quienHistoria"]:checked').value === 'otra';
+      protagonistaInput.style.display = esOtra ? '' : 'none';
+      if (!esOtra) protagonistaInput.value = '';
+    });
+  });
+  function protagonistaActual() {
+    const esOtra = document.querySelector('input[name="quienHistoria"]:checked').value === 'otra';
+    return esOtra ? protagonistaInput.value.trim() : '';
+  }
+  function bloquearSelectorProtagonista(bloquear) {
+    quienRadios.forEach((r) => { r.disabled = bloquear; });
+    protagonistaInput.disabled = bloquear;
+  }
 
   function agregarBurbuja(kind, text) {
     const div = document.createElement('div');
@@ -353,11 +390,16 @@
     historyLocal = [];
     audioUrlsLocal = [];
     charlaTerminada = false;
+    esperandoAclaracion = false;
     aporteChat.innerHTML = '';
     aporteMsg.textContent = '';
     otraHistoriaBtn.style.display = 'none';
     orb.style.display = '';
     document.getElementById('subirAudioBtn').style.display = '';
+    bloquearSelectorProtagonista(false);
+    document.querySelector('input[name="quienHistoria"][value="propia"]').checked = true;
+    protagonistaInput.style.display = 'none';
+    protagonistaInput.value = '';
   }
 
   async function enviarTurno() {
@@ -366,7 +408,7 @@
       const resp = await fetch(conOwner('/api/contribute-chat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ history: historyLocal, audioUrls: audioUrlsLocal }),
+        body: JSON.stringify({ history: historyLocal, audioUrls: audioUrlsLocal, protagonista: protagonistaActual() }),
       });
       const data = await resp.json();
       thinking.remove();
@@ -376,6 +418,7 @@
       }
       historyLocal.push({ role: 'assistant', content: data.message });
       agregarBurbuja('a', data.message);
+      esperandoAclaracion = !!data.needsBasicInfo;
       if (data.done) {
         charlaTerminada = true;
         orb.style.display = 'none';
@@ -404,8 +447,58 @@
   let audioChunks = [];
   let grabando = false;
 
+  // Igual que en la charla principal: no hace falta presionar de nuevo
+  // para "cortar" — mientras haya voz seguimos grabando, y recién cuando
+  // pasan unos segundos de silencio se corta y se manda solo.
+  const SILENCE_MS = 2000;
+  const VAD_THRESHOLD = 0.02;
+  let audioContext = null;
+  let analyser = null;
+  let vadRafId = null;
+  let vadActive = false;
+  let lastLoudTime = 0;
+
+  function startVAD() {
+    if (!mediaStream) return;
+    if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioContext.state === 'suspended') audioContext.resume();
+    const source = audioContext.createMediaStreamSource(mediaStream);
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 512;
+    source.connect(analyser);
+
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    lastLoudTime = Date.now();
+    vadActive = true;
+
+    function tick() {
+      if (!vadActive) return;
+      analyser.getByteTimeDomainData(data);
+      let sumSquares = 0;
+      for (let i = 0; i < data.length; i++) {
+        const v = (data[i] - 128) / 128;
+        sumSquares += v * v;
+      }
+      const rms = Math.sqrt(sumSquares / data.length);
+      if (rms > VAD_THRESHOLD) lastLoudTime = Date.now();
+      if (Date.now() - lastLoudTime > SILENCE_MS) {
+        stopVAD();
+        terminarGrabacion();
+        return;
+      }
+      vadRafId = requestAnimationFrame(tick);
+    }
+    tick();
+  }
+
+  function stopVAD() {
+    vadActive = false;
+    if (vadRafId) cancelAnimationFrame(vadRafId);
+    vadRafId = null;
+  }
+
   async function empezarGrabacion() {
-    if (charlaTerminada) return;
+    if (charlaTerminada || grabando) return;
     try {
       mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
@@ -422,9 +515,10 @@
     mediaRecorder.start();
     grabando = true;
     orb.dataset.state = 'listening';
-    orb.innerHTML = 'Presiona<br>para terminar';
-    recStatus.textContent = '⏺️ Grabando…';
+    orb.innerHTML = 'Te<br>escucho…';
+    recStatus.textContent = '⏺️ Grabando… se corta sola cuando hagas una pausa.';
     subirAudioBtn.disabled = true;
+    startVAD();
   }
 
   function detenerGrabacionRaw() {
@@ -437,19 +531,29 @@
 
   // Sube el audio, lo transcribe, y manda ese texto como el siguiente turno
   // de la charla — se usa tanto para lo grabado en vivo como para un
-  // archivo de audio ya existente que suban.
+  // archivo de audio ya existente que suban. Si este turno es solo la
+  // respuesta a una aclaración de parentesco/año que faltaba, ese audio
+  // corto NO se guarda — solo se transcribe para seguir la charla.
   async function procesarAudio(blob, contentType) {
-    try {
-      const upResp = await fetch(conOwner('/api/contribute-audio'), {
-        method: 'POST',
-        headers: { 'Content-Type': contentType },
-        body: blob,
-      });
-      if (upResp.ok) {
-        const upData = await upResp.json();
-        if (upData.url) audioUrlsLocal.push(upData.url);
-      }
-    } catch (e) {}
+    // Ya arrancó a contar — no tiene sentido cambiar de quién es la
+    // historia a mitad de camino.
+    bloquearSelectorProtagonista(true);
+
+    const esSoloAclaracion = esperandoAclaracion;
+
+    if (!esSoloAclaracion) {
+      try {
+        const upResp = await fetch(conOwner('/api/contribute-audio'), {
+          method: 'POST',
+          headers: { 'Content-Type': contentType },
+          body: blob,
+        });
+        if (upResp.ok) {
+          const upData = await upResp.json();
+          if (upData.url) audioUrlsLocal.push(upData.url);
+        }
+      } catch (e) {}
+    }
 
     let texto = '';
     try {
@@ -472,6 +576,8 @@
   }
 
   async function terminarGrabacion() {
+    if (!grabando) return;
+    stopVAD();
     grabando = false;
     orb.dataset.state = 'thinking';
     orb.innerHTML = 'Un<br>momento…';
@@ -547,7 +653,8 @@
         const urls = (it.audio_urls && it.audio_urls.length) ? it.audio_urls : (it.audio_url ? [it.audio_url] : []);
         const audioTags = urls.map((u) => `<audio controls src="${u}"></audio>`).join('');
         const quien = it.contributor ? it.contributor + (it.parentesco ? ` (${it.parentesco})` : '') : 'Familia';
-        div.innerHTML = `<strong>${quien}:</strong> ${it.texto}${audioTags}`;
+        const etiqueta = it.protagonista ? `Historia de ${it.protagonista} — compartida por ${quien}` : quien;
+        div.innerHTML = `<strong>${etiqueta}:</strong> ${it.texto}${audioTags}`;
         aportesLista.appendChild(div);
       });
     } catch (e) {}

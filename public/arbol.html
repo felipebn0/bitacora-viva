@@ -42,6 +42,12 @@
   h1 { font-family: var(--font-display); font-size: 1.8rem; margin: 0; width: 100%; text-align: center; }
   header p { color: var(--ink-soft); margin: 4px 0 0; font-size: 0.95rem; width: 100%; text-align: center; }
   a.volver { color: var(--gold-deep); font-size: 0.9rem; text-decoration: none; border-bottom: 1px solid var(--gold-deep); position: absolute; right: 0; top: 0; }
+  .rebuild-btn {
+    position: absolute; right: 0; top: 26px;
+    background: none; border: none; color: var(--ink-soft); font-size: 0.82rem;
+    text-decoration: underline; cursor: pointer; font-family: var(--font-body); padding: 0;
+  }
+  .rebuild-btn:disabled { opacity: 0.6; cursor: default; }
 
   .wrap { max-width: 1400px; margin: 0 auto; overflow-x: auto; padding-bottom: 12px; position: relative; z-index: 1; }
   .empty, .msg { color: var(--ink-soft); font-style: italic; text-align: center; margin-top: 60px; }
@@ -94,6 +100,7 @@
     <h1>Árbol genealógico</h1>
     <p>Se va armando solo con lo que se cuenta en las charlas.</p>
     <a class="volver" href="/app.html">← volver a la bitácora</a>
+    <button class="rebuild-btn" id="rebuildBtn" type="button">🔄 reconstruir árbol</button>
   </header>
   <div class="wrap" id="wrap">
     <p class="msg">Cargando…</p>
@@ -634,6 +641,30 @@
       colabSection.style.display = 'block';
     } catch (e) {}
   }
+
+  // Vuelve a repasar TODAS las charlas guardadas con las reglas más
+  // recientes — útil cuando se corrige un bug de cómo se arma el árbol,
+  // para que se aplique también a lo que ya se había armado antes.
+  const rebuildBtn = document.getElementById('rebuildBtn');
+  rebuildBtn.addEventListener('click', async () => {
+    if (!confirm('Esto vuelve a armar el árbol repasando todas tus charlas de nuevo, con las reglas más recientes. Las correcciones manuales que hayas hecho a mano se pueden perder si esas charlas todavía sugieren otra cosa. ¿Continuar?')) return;
+    rebuildBtn.disabled = true;
+    rebuildBtn.textContent = 'Reconstruyendo…';
+    try {
+      const resp = await fetch('/api/rebuild-tree', { method: 'POST' });
+      if (resp.ok) {
+        cargar();
+        cargarColaboradores();
+      } else {
+        const data = await resp.json().catch(() => ({}));
+        alert(data.error || 'No se pudo reconstruir el árbol.');
+      }
+    } catch (e) {
+      alert('Hubo un problema para conectar.');
+    }
+    rebuildBtn.disabled = false;
+    rebuildBtn.textContent = '🔄 reconstruir árbol';
+  });
 
   cargar();
   cargarColaboradores();

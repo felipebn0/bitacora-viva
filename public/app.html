@@ -1101,9 +1101,10 @@
         const div = document.createElement('div');
         div.className = 'item';
         const quien = n.contributor ? n.contributor + (n.parentesco ? ` (${n.parentesco})` : '') : 'Familia';
+        const etiqueta = n.protagonista ? `Historia de ${n.protagonista} — compartida por ${quien}` : quien;
         const urls = (n.audio_urls && n.audio_urls.length) ? n.audio_urls : (n.audio_url ? [n.audio_url] : []);
         const audioTags = urls.map((u) => `<audio controls src="${u}"></audio>`).join('');
-        div.innerHTML = `<strong>${quien}:</strong> ${n.texto}${audioTags}`;
+        div.innerHTML = `<strong>${etiqueta}:</strong> ${n.texto}${audioTags}`;
         lista.appendChild(div);
       });
       panel.style.display = 'flex';
