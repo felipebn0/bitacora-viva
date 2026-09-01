@@ -305,7 +305,7 @@ app.get('/api/me', async (req, res) => {
     let ownerName = null;
     if (ownerUserId) {
       const ownerRows = await sql`SELECT name, username FROM users WHERE id = ${ownerUserId}`;
-      ownerName = (ownerRows[0] && (ownerRows[0].name || ownerRows[0].username)) || null;
+      ownerName = capitalizarNombre((ownerRows[0] && (ownerRows[0].name || ownerRows[0].username)) || '') || null;
     }
     res.json({ username: session.username, isCollaborator: !!ownerUserId, ownerName });
   } catch (err) {
@@ -313,6 +313,35 @@ app.get('/api/me', async (req, res) => {
     res.json({ username: session.username, isCollaborator: false, ownerName: null });
   }
 });
+
+// Deja un nombre propio (o "Nombre Apellido") con mayúscula inicial en cada
+// palabra — para cuando llega en minúsculas (a veces pasa con nombres
+// dictados por voz, o tipeados de una sin pensarlo). Las partículas de
+// apellidos compuestos (de, del, la, los, las, y) se dejan en minúscula
+// salvo que sean la primera palabra.
+const PARTICULAS_NOMBRE = new Set(['de', 'del', 'la', 'los', 'las', 'y']);
+function capitalizarNombre(str) {
+  const s = String(str || '').trim();
+  if (!s) return s;
+  return s
+    .split(/\s+/)
+    .map((palabra, i) => {
+      const lower = palabra.toLowerCase();
+      if (i > 0 && PARTICULAS_NOMBRE.has(lower)) return lower;
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(' ');
+}
+
+// Deja en mayúscula la primera letra de un texto libre (respuesta,
+// transcripción, historia) — no toca el resto, para no arruinar acrónimos
+// o nombres propios que ya vengan bien escritos más adelante en el texto.
+function capitalizarInicio(str) {
+  const s = String(str || '');
+  const m = s.match(/^(\s*)([\s\S])([\s\S]*)$/);
+  if (!m) return s;
+  return m[1] + m[2].toUpperCase() + m[3];
+}
 
 function randomInviteCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sin 0/O ni 1/I/L, se confunden al leer
@@ -380,7 +409,7 @@ app.post('/api/register', rateLimit, async (req, res) => {
 app.post('/api/signup', rateLimit, async (req, res) => {
   try {
     const { name, email, password, inviteCode } = req.body || {};
-    const cleanName = String(name || '').trim().slice(0, 100);
+    const cleanName = capitalizarNombre(String(name || '').trim().slice(0, 100));
     const cleanEmail = String(email || '').trim().toLowerCase().slice(0, 200);
     if (!cleanName) return res.status(400).json({ error: 'Falta el nombre.' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
@@ -681,7 +710,11 @@ async function updateFamilyTree(userId, newExchanges) {
       (Array.isArray(toolUse.input.personas) ? toolUse.input.personas : [])
         .filter((p) => p && p.nombre && p.relacion && !/\bnovi[oa]\b/i.test(p.relacion))
         .slice(0, 60)
-    );
+    ).map((p) => ({
+      ...p,
+      nombre: capitalizarNombre(p.nombre),
+      padres: Array.isArray(p.padres) ? p.padres.map(capitalizarNombre) : p.padres,
+    }));
     const eventos = Array.isArray(toolUse.input.eventos) ? toolUse.input.eventos.slice(0, 100) : [];
 
     // Para la campanita de aviso en el ícono del árbol: nombres que
@@ -699,7 +732,7 @@ async function updateFamilyTree(userId, newExchanges) {
     for (const p of personas) {
       const padres = Array.isArray(p.padres) ? p.padres.filter((x) => typeof x === 'string' && x.trim()).slice(0, 2) : [];
       await sql`INSERT INTO family_members (user_id, nombre, relacion, detalles, padres) VALUES (
-        ${userId}, ${String(p.nombre).slice(0, 120)}, ${String(p.relacion).slice(0, 80)}, ${p.detalles ? String(p.detalles).slice(0, 300) : null}, ${padres.length ? JSON.stringify(padres) : null}
+        ${userId}, ${String(p.nombre).slice(0, 120)}, ${String(p.relacion).slice(0, 80)}, ${p.detalles ? capitalizarInicio(String(p.detalles).slice(0, 300)) : null}, ${padres.length ? JSON.stringify(padres) : null}
       )`;
     }
 
@@ -710,7 +743,7 @@ async function updateFamilyTree(userId, newExchanges) {
       const edad = Number.isFinite(e.edad_aprox) ? Math.round(e.edad_aprox) : null;
       const categoria = e.categoria ? String(e.categoria).slice(0, 40) : null;
       await sql`INSERT INTO timeline_events (user_id, descripcion, anio, edad_aprox, categoria) VALUES (
-        ${userId}, ${String(e.descripcion).slice(0, 300)}, ${anio}, ${edad}, ${categoria}
+        ${userId}, ${capitalizarInicio(String(e.descripcion).slice(0, 300))}, ${anio}, ${edad}, ${categoria}
       )`;
     }
   } catch (err) {
@@ -757,7 +790,7 @@ async function loadKnownFamilyMembers(userId) {
   const rows = await sql`SELECT nombre, relacion, detalles FROM family_members WHERE user_id = ${userId}`;
   if (!rows.length) return '';
   return `\n\nPersonas que ya se conocen (no vuelvas a preguntar por estas, prioriza las que faltan):\n${rows
-    .map((p) => `- ${p.nombre} (${p.relacion})${p.detalles ? ': ' + p.detalles : ''}`)
+    .map((p) => `- ${capitalizarNombre(p.nombre)} (${p.relacion})${p.detalles ? ': ' + p.detalles : ''}`)
     .join('\n')}`;
 }
 
@@ -822,7 +855,7 @@ app.post('/api/next', requireAuth, bloquearColaborador, rateLimit, async (req, r
     if (ultimaRespuesta && ultimaRespuesta.content.length >= HISTORIA_MIN_CHARS) {
       const audioUrl = typeof req.body.lastAudioUrl === 'string' ? req.body.lastAudioUrl.slice(0, 1000) : null;
       try {
-        await sql`INSERT INTO story_log (user_id, texto, audio_url) VALUES (${req.userId}, ${ultimaRespuesta.content}, ${audioUrl})`;
+        await sql`INSERT INTO story_log (user_id, texto, audio_url) VALUES (${req.userId}, ${capitalizarInicio(ultimaRespuesta.content)}, ${audioUrl})`;
       } catch (err) {
         console.error('No se pudo guardar en story_log:', err);
       }
@@ -972,10 +1005,10 @@ app.post('/api/save-audio', requireAuth, bloquearColaborador, express.raw({ type
 app.post('/api/contribute-story', requireAuth, rateLimit, async (req, res) => {
   try {
     let { contributor, text, audioUrl } = req.body || {};
-    text = (text || '').trim();
+    text = capitalizarInicio((text || '').trim());
     if (!text) return res.status(400).json({ error: 'Falta el texto de la historia.' });
     if (text.length > 4000) text = text.slice(0, 4000);
-    const cleanContributor = (contributor || '').trim().slice(0, 60) || null;
+    const cleanContributor = capitalizarNombre((contributor || '').trim().slice(0, 60)) || null;
     const cleanAudioUrl = typeof audioUrl === 'string' ? audioUrl.slice(0, 1000) : null;
 
     await ensureSchema();
@@ -1021,9 +1054,11 @@ app.get('/api/contribute-intro', requireAuth, rateLimit, async (req, res) => {
       });
     }
 
-    const prompt = `Vas a ayudar a preparar a un familiar que va a grabar, con su propia voz, un recuerdo o anécdota sobre ${ownerNombre || 'esta persona'} para sumarlo a su bitácora de vida.
+    const prompt = `Vas a ayudar a preparar a un familiar (el colaborador) que va a grabar, con su propia voz, un recuerdo o anécdota sobre la vida de ${ownerNombre || 'esta persona'} para sumarlo a su bitácora de vida.
 
-Con lo que ya se sabe (abajo), escribe una invitación breve y cálida (2-3 frases, español de Colombia, tuteo, nunca "vos" ni "usted") sugiriéndole de qué podría hablar — idealmente algo que todavía no esté cubierto, o que ayude a completar un hueco. Si hay nombres o fechas conocidas que sirvan para ubicar mejor la historia (por ejemplo una época, un lugar, una persona), menciónalos para que la persona pueda anclar su recuerdo a eso. No inventes datos que no estén abajo.
+Importante sobre a quién le hablas: le hablas al COLABORADOR, no a ${ownerNombre || 'la persona'}. Los datos de abajo (personas conocidas, resumen) describen la vida de ${ownerNombre || 'esta persona'} — las relaciones familiares que aparecen ahí (papá, tío, hermano, etc.) son respecto a ${ownerNombre || 'esa persona'}, NO respecto al colaborador. Nunca digas "tu tío Juan" ni nada que dé a entender que esas personas son familiares del colaborador: di simplemente "Juan" o, si hace falta aclarar, "Juan, el tío de ${ownerNombre || 'ella'}". El colaborador puede haber vivido ese momento junto a ${ownerNombre || 'esta persona'} o haberlo escuchado contar — la historia es sobre la vida de ${ownerNombre || 'esta persona'}, no sobre la del colaborador.
+
+Con lo que ya se sabe (abajo), escribe una invitación breve y cálida (2-3 frases, español de Colombia, tuteo, nunca "vos" ni "usted") sugiriéndole al colaborador de qué podría hablar — idealmente algo que todavía no esté cubierto, o que ayude a completar un hueco. Si hay nombres, lugares o fechas conocidas que sirvan para ubicar mejor la historia (por ejemplo una época, una casa, una persona presente), menciónalos con la aclaración de a quién pertenecen (ej: "la casa en Los Andes donde vivió ${ownerNombre || 'ella'}"), para que el colaborador pueda anclar su recuerdo a eso. No inventes datos que no estén abajo.
 
 ${conocidos || ''}
 ${memoria ? `\nResumen de lo que ya se ha contado:\n${memoria.slice(0, 1500)}` : ''}`;
@@ -1053,7 +1088,7 @@ app.post('/api/contribute-media', requireAuth, express.raw({ type: '*/*', limit:
     const { contributor, caption } = req.query;
     const contentType = req.get('Content-Type') || 'application/octet-stream';
     const type = contentType.startsWith('video') ? 'video' : 'foto';
-    const cleanContributor = String(contributor || '').trim().slice(0, 60) || null;
+    const cleanContributor = capitalizarNombre(String(contributor || '').trim().slice(0, 60)) || null;
     const cleanCaption = String(caption || '').trim().slice(0, 500) || null;
     const ext = (contentType.split('/')[1] || 'bin').replace(/[^a-z0-9]/gi, '').slice(0, 10) || 'bin';
 
@@ -1078,8 +1113,10 @@ app.post('/api/contribute-media', requireAuth, express.raw({ type: '*/*', limit:
 app.get('/api/contributions', requireAuth, async (req, res) => {
   try {
     await ensureSchema();
-    const notes = await sql`SELECT contributor, texto, audio_url, created_at FROM family_notes WHERE user_id = ${req.profileUserId} ORDER BY created_at DESC LIMIT 30`;
-    const media = await sql`SELECT type, url, caption, contributor, created_at FROM media WHERE user_id = ${req.profileUserId} ORDER BY created_at DESC LIMIT 30`;
+    const notesRaw = await sql`SELECT contributor, texto, audio_url, created_at FROM family_notes WHERE user_id = ${req.profileUserId} ORDER BY created_at DESC LIMIT 30`;
+    const mediaRaw = await sql`SELECT type, url, caption, contributor, created_at FROM media WHERE user_id = ${req.profileUserId} ORDER BY created_at DESC LIMIT 30`;
+    const notes = notesRaw.map((n) => ({ ...n, contributor: capitalizarNombre(n.contributor), texto: capitalizarInicio(n.texto) }));
+    const media = mediaRaw.map((m) => ({ ...m, contributor: capitalizarNombre(m.contributor) }));
     res.json({ notes, media });
   } catch (err) {
     console.error(err);
@@ -1091,7 +1128,7 @@ app.get('/api/story-log', requireAuth, bloquearColaborador, async (req, res) => 
   try {
     await ensureSchema();
     const rows = await sql`SELECT texto, audio_url, created_at FROM story_log WHERE user_id = ${req.userId} ORDER BY created_at DESC LIMIT 50`;
-    res.json({ stories: rows });
+    res.json({ stories: rows.map((r) => ({ ...r, texto: capitalizarInicio(r.texto) })) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo cargar el log de historias.' });
@@ -1255,7 +1292,11 @@ app.get('/api/tree', requireAuth, bloquearColaborador, async (req, res) => {
   try {
     await ensureSchema();
     const peopleRaw = await sql`SELECT nombre, relacion, detalles, padres FROM family_members WHERE user_id = ${req.userId} ORDER BY id`;
-    const people = peopleRaw.map((p) => ({ ...p, padres: parseJsonArray(p.padres) }));
+    const people = peopleRaw.map((p) => ({
+      ...p,
+      nombre: capitalizarNombre(p.nombre),
+      padres: parseJsonArray(p.padres).map(capitalizarNombre),
+    }));
     const events = await sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${req.userId} ORDER BY anio NULLS LAST, id`;
     res.json({ people, events });
   } catch (err) {
@@ -1300,7 +1341,11 @@ app.post('/api/rebuild-tree', requireAuth, bloquearColaborador, rateLimit, async
     await updateFamilyTree(req.userId, todo);
 
     const peopleRaw = await sql`SELECT nombre, relacion, detalles, padres FROM family_members WHERE user_id = ${req.userId} ORDER BY id`;
-    const people = peopleRaw.map((p) => ({ ...p, padres: parseJsonArray(p.padres) }));
+    const people = peopleRaw.map((p) => ({
+      ...p,
+      nombre: capitalizarNombre(p.nombre),
+      padres: parseJsonArray(p.padres).map(capitalizarNombre),
+    }));
     const events = await sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${req.userId} ORDER BY anio NULLS LAST, id`;
     res.json({ ok: true, people, events });
   } catch (err) {

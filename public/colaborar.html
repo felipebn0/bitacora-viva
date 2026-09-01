@@ -15,7 +15,9 @@
     --bg: #F5EFE2;
     --ink: #2B241C;
     --ink-soft: #8A7C63;
+    --gold: #C98A3C;
     --gold-deep: #A86A26;
+    --ring: rgba(201, 138, 60, 0.35);
     --moss: #5B6B45;
     --bubble-user: #EFE6D1;
     --font-display: "Source Serif 4", Georgia, serif;
@@ -105,14 +107,25 @@
 
   .intro-box { background: #F5EFE2; border-radius: 12px; padding: 12px 14px; font-size: 0.92rem; line-height: 1.4; display: flex; flex-direction: column; gap: 8px; }
   .intro-box .write-toggle { align-self: flex-start; font-size: 0.85rem; }
-  .record-row { display: flex; align-items: center; gap: 12px; }
-  .record-btn {
-    border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px;
-    padding: 10px 16px; font-weight: 700; cursor: pointer; font-family: var(--font-body);
+
+  .orb-zone { display: grid; justify-items: center; gap: 10px; padding: 8px 0 4px; }
+  .orb {
+    width: 128px; height: 128px; border-radius: 50%; border: none; cursor: pointer;
+    position: relative; display: grid; place-items: center;
+    background: radial-gradient(circle at 35% 30%, var(--gold), var(--gold-deep));
+    color: #FBF6EA; font-family: var(--font-body); font-weight: 700; font-size: 0.92rem;
+    box-shadow: 0 10px 26px -10px rgba(168,106,38,0.55);
   }
-  .record-btn.recording { background: #A83A2E; }
-  .record-btn:disabled { opacity: 0.6; cursor: default; }
-  .rec-status { font-size: 0.85rem; color: var(--ink-soft); }
+  .orb:disabled { opacity: 0.6; cursor: default; }
+  .orb::before {
+    content: ""; position: absolute; inset: -12px; border-radius: 50%;
+    border: 2px solid var(--ring); animation: breathe 3.2s ease-in-out infinite;
+  }
+  @keyframes breathe { 0%,100% { transform: scale(1); opacity: .6; } 50% { transform: scale(1.08); opacity: .15; } }
+  .orb[data-state="listening"] { background: radial-gradient(circle at 35% 30%, #D9A15C, var(--gold-deep)); }
+  .orb[data-state="listening"]::before { animation-duration: 1.4s; }
+  .orb[data-state="thinking"] { background: radial-gradient(circle at 35% 30%, #6E7F53, var(--moss)); }
+  .state-label { font-size: 0.85rem; color: var(--ink-soft); min-height: 1.2em; text-align: center; }
 
   .logout-row { text-align: center; margin-top: 8px; }
   .write-toggle { background: none; border: none; color: var(--moss); text-decoration: underline; cursor: pointer; font-family: var(--font-body); font-size: 0.9rem; }
@@ -155,14 +168,10 @@
       <label for="aporteNombre">Tu nombre</label>
       <input type="text" id="aporteNombre" placeholder="Ej: Marcela">
 
-      <div class="record-row">
-        <button class="record-btn" id="grabarBtn" type="button">🎙️ Grabar historia</button>
-        <span class="rec-status" id="recStatus"></span>
+      <div class="orb-zone">
+        <button class="orb" id="orb" data-state="idle" type="button" aria-label="Presiona para grabar tu historia">Presiona<br>para hablar</button>
+        <div class="state-label" id="recStatus">Presiona el botón y cuenta tu historia.</div>
       </div>
-
-      <label for="aporteTexto">O escríbela (se completa sola si grabas)</label>
-      <textarea id="aporteTexto" placeholder="Ej: papá conoció a mamá en una fiesta de la universidad…"></textarea>
-      <button id="aporteTextoBtn" type="button">Agregar historia</button>
 
       <p class="msg" id="aporteMsg"></p>
 
@@ -290,16 +299,12 @@
 
   // --- Aportar una historia ---
   const aporteNombre = document.getElementById('aporteNombre');
-  const aporteTexto = document.getElementById('aporteTexto');
-  const aporteTextoBtn = document.getElementById('aporteTextoBtn');
   const aporteMsg = document.getElementById('aporteMsg');
   const aportesLista = document.getElementById('aportesLista');
   const introTexto = document.getElementById('introTexto');
   const introEscuchar = document.getElementById('introEscuchar');
-  const grabarBtn = document.getElementById('grabarBtn');
+  const orb = document.getElementById('orb');
   const recStatus = document.getElementById('recStatus');
-
-  let aporteAudioUrl = null;
 
   async function cargarIntro() {
     try {
@@ -351,8 +356,8 @@
     mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
     mediaRecorder.start();
     grabando = true;
-    grabarBtn.textContent = '⏹️ Detener';
-    grabarBtn.classList.add('recording');
+    orb.dataset.state = 'listening';
+    orb.innerHTML = 'Presiona<br>para terminar';
     recStatus.textContent = '⏺️ Grabando…';
   }
 
@@ -366,20 +371,27 @@
 
   async function terminarGrabacion() {
     grabando = false;
-    grabarBtn.textContent = '🎙️ Grabar historia';
-    grabarBtn.classList.remove('recording');
-    grabarBtn.disabled = true;
+    orb.dataset.state = 'thinking';
+    orb.innerHTML = 'Un<br>momento…';
+    orb.disabled = true;
     recStatus.textContent = 'Procesando el audio…';
 
     const blob = await detenerGrabacionRaw();
     if (mediaStream) { mediaStream.getTracks().forEach((t) => t.stop()); mediaStream = null; }
 
+    const reset = () => {
+      orb.dataset.state = 'idle';
+      orb.innerHTML = 'Presiona<br>para hablar';
+      orb.disabled = false;
+    };
+
     if (!blob || !blob.size) {
-      recStatus.textContent = '';
-      grabarBtn.disabled = false;
+      recStatus.textContent = 'Presiona el botón y cuenta tu historia.';
+      reset();
       return;
     }
 
+    let audioUrl = null;
     try {
       const upResp = await fetch('/api/contribute-audio', {
         method: 'POST',
@@ -388,10 +400,11 @@
       });
       if (upResp.ok) {
         const upData = await upResp.json();
-        aporteAudioUrl = upData.url || null;
+        audioUrl = upData.url || null;
       }
     } catch (e) {}
 
+    let texto = '';
     try {
       const trResp = await fetch('/api/transcribe', {
         method: 'POST',
@@ -400,30 +413,30 @@
       });
       if (trResp.ok) {
         const trData = await trResp.json();
-        if (trData.text) {
-          aporteTexto.value = aporteTexto.value.trim()
-            ? aporteTexto.value.trim() + ' ' + trData.text
-            : trData.text;
-        }
-        recStatus.textContent = 'Listo — revisa el texto y confirma.';
-      } else {
-        recStatus.textContent = 'No se pudo transcribir, pero el audio quedó guardado. Puedes escribir el texto a mano.';
+        texto = (trData.text || '').trim();
       }
-    } catch (e) {
-      recStatus.textContent = 'No se pudo transcribir, pero el audio quedó guardado. Puedes escribir el texto a mano.';
-    }
+    } catch (e) {}
 
-    grabarBtn.disabled = false;
+    if (!texto && !audioUrl) {
+      recStatus.textContent = 'No se pudo guardar el audio. Intenta de nuevo.';
+      reset();
+      return;
+    }
+    if (!texto) texto = '(historia contada por audio, sin transcripción disponible)';
+
+    await guardarAporte(texto, audioUrl);
+    reset();
   }
 
-  grabarBtn.addEventListener('click', () => {
+  orb.addEventListener('click', () => {
     if (grabando) { terminarGrabacion(); return; }
     empezarGrabacion();
   });
 
   if (!window.MediaRecorder || !navigator.mediaDevices) {
-    grabarBtn.disabled = true;
-    grabarBtn.title = 'Este navegador no permite grabar audio.';
+    orb.disabled = true;
+    orb.title = 'Este navegador no permite grabar audio.';
+    recStatus.textContent = 'Este navegador no permite grabar audio.';
   }
 
   async function cargarAportes() {
@@ -443,36 +456,27 @@
     } catch (e) {}
   }
 
-  async function agregarHistoria() {
+  async function guardarAporte(text, audioUrl) {
     const contributor = aporteNombre.value.trim();
-    const text = aporteTexto.value.trim();
-    if (!text) return;
-    aporteTextoBtn.disabled = true;
     aporteMsg.textContent = '';
     try {
       const resp = await fetch('/api/contribute-story', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contributor, text, audioUrl: aporteAudioUrl }),
+        body: JSON.stringify({ contributor, text, audioUrl }),
       });
       const data = await resp.json();
       if (resp.ok) {
-        aporteTexto.value = '';
-        aporteAudioUrl = null;
-        recStatus.textContent = '';
-        aporteMsg.textContent = 'Historia agregada. Gracias.';
+        aporteMsg.textContent = 'Historia guardada. Gracias.';
         cargarAportes();
         cargarIntro();
       } else {
-        aporteMsg.textContent = data.error || 'No se pudo agregar.';
+        aporteMsg.textContent = data.error || 'No se pudo guardar.';
       }
     } catch (e) {
       aporteMsg.textContent = 'Hubo un problema para conectar.';
     }
-    aporteTextoBtn.disabled = false;
   }
-
-  aporteTextoBtn.addEventListener('click', agregarHistoria);
 
   cargarIntro();
   cargarAportes();
