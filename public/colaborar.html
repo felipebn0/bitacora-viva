@@ -160,6 +160,8 @@
       <div class="orb-zone">
         <button class="orb" id="orb" data-state="idle" type="button" aria-label="Presiona para grabar tu historia">Presiona<br>para hablar</button>
         <div class="state-label" id="recStatus">Presiona el botón y cuenta tu historia.</div>
+        <button class="write-toggle" id="subirAudioBtn" type="button">o sube una nota de voz que ya tengas</button>
+        <input type="file" id="subirAudioInput" accept="audio/*" style="display:none;">
       </div>
 
       <p class="msg" id="aporteMsg"></p>
@@ -340,6 +342,7 @@
     orb.dataset.state = 'listening';
     orb.innerHTML = 'Presiona<br>para terminar';
     recStatus.textContent = '⏺️ Grabando…';
+    subirAudioBtn.disabled = true;
   }
 
   function detenerGrabacionRaw() {
@@ -348,6 +351,41 @@
       mediaRecorder.onstop = () => resolve(new Blob(audioChunks, { type: 'audio/webm' }));
       mediaRecorder.stop();
     });
+  }
+
+  // Sube el audio, lo transcribe y guarda el aporte — se usa tanto para lo
+  // grabado en vivo como para un archivo de audio ya existente que suban.
+  async function procesarAudio(blob, contentType) {
+    let audioUrl = null;
+    try {
+      const upResp = await fetch('/api/contribute-audio', {
+        method: 'POST',
+        headers: { 'Content-Type': contentType },
+        body: blob,
+      });
+      if (upResp.ok) {
+        const upData = await upResp.json();
+        audioUrl = upData.url || null;
+      }
+    } catch (e) {}
+
+    let texto = '';
+    try {
+      const trResp = await fetch('/api/transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': contentType },
+        body: blob,
+      });
+      if (trResp.ok) {
+        const trData = await trResp.json();
+        texto = (trData.text || '').trim();
+      }
+    } catch (e) {}
+
+    if (!texto && !audioUrl) return false;
+    if (!texto) texto = '(historia contada por audio, sin transcripción disponible)';
+    await guardarAporte(texto, audioUrl);
+    return true;
   }
 
   async function terminarGrabacion() {
@@ -364,6 +402,7 @@
       orb.dataset.state = 'idle';
       orb.innerHTML = 'Presiona<br>para hablar';
       orb.disabled = false;
+      subirAudioBtn.disabled = false;
     };
 
     if (!blob || !blob.size) {
@@ -372,40 +411,8 @@
       return;
     }
 
-    let audioUrl = null;
-    try {
-      const upResp = await fetch('/api/contribute-audio', {
-        method: 'POST',
-        headers: { 'Content-Type': 'audio/webm' },
-        body: blob,
-      });
-      if (upResp.ok) {
-        const upData = await upResp.json();
-        audioUrl = upData.url || null;
-      }
-    } catch (e) {}
-
-    let texto = '';
-    try {
-      const trResp = await fetch('/api/transcribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'audio/webm' },
-        body: blob,
-      });
-      if (trResp.ok) {
-        const trData = await trResp.json();
-        texto = (trData.text || '').trim();
-      }
-    } catch (e) {}
-
-    if (!texto && !audioUrl) {
-      recStatus.textContent = 'No se pudo guardar el audio. Intenta de nuevo.';
-      reset();
-      return;
-    }
-    if (!texto) texto = '(historia contada por audio, sin transcripción disponible)';
-
-    await guardarAporte(texto, audioUrl);
+    const ok = await procesarAudio(blob, 'audio/webm');
+    recStatus.textContent = ok ? '' : 'No se pudo guardar el audio. Intenta de nuevo.';
     reset();
   }
 
@@ -419,6 +426,30 @@
     orb.title = 'Este navegador no permite grabar audio.';
     recStatus.textContent = 'Este navegador no permite grabar audio.';
   }
+
+  // --- Subir una nota de voz que ya tengas guardada ---
+  const subirAudioBtn = document.getElementById('subirAudioBtn');
+  const subirAudioInput = document.getElementById('subirAudioInput');
+  const MAX_AUDIO_FILE_BYTES = 4 * 1024 * 1024; // Vercel corta pedidos de más de ~4.5MB
+
+  subirAudioBtn.addEventListener('click', () => subirAudioInput.click());
+
+  subirAudioInput.addEventListener('change', async () => {
+    const file = subirAudioInput.files[0];
+    subirAudioInput.value = '';
+    if (!file) return;
+    if (file.size > MAX_AUDIO_FILE_BYTES) {
+      recStatus.textContent = 'El archivo pesa más de 4MB — prueba con uno más corto por ahora.';
+      return;
+    }
+    subirAudioBtn.disabled = true;
+    orb.disabled = true;
+    recStatus.textContent = 'Procesando el audio…';
+    const ok = await procesarAudio(file, file.type || 'audio/mp4');
+    recStatus.textContent = ok ? '' : 'No se pudo guardar el audio. Intenta de nuevo.';
+    subirAudioBtn.disabled = false;
+    orb.disabled = false;
+  });
 
   async function cargarAportes() {
     try {

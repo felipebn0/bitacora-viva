@@ -343,6 +343,36 @@ function capitalizarInicio(str) {
   return m[1] + m[2].toUpperCase() + m[3];
 }
 
+// Deriva una extensión de archivo razonable a partir del Content-Type de un
+// audio — se usa tanto para el nombre que se guarda en Blob storage como
+// para el nombre que se le manda a ElevenLabs (algunos formatos, como las
+// notas de voz de WhatsApp .opus/.ogg o las de iPhone .m4a, se detectan
+// mejor con la extensión correcta que con un .webm genérico).
+const AUDIO_EXT_MAP = {
+  'audio/webm': 'webm',
+  'audio/mpeg': 'mp3',
+  'audio/mp3': 'mp3',
+  'audio/ogg': 'ogg',
+  'audio/opus': 'ogg',
+  'audio/mp4': 'm4a',
+  'audio/x-m4a': 'm4a',
+  'audio/m4a': 'm4a',
+  'audio/aac': 'aac',
+  'audio/wav': 'wav',
+  'audio/x-wav': 'wav',
+  'audio/wave': 'wav',
+  'audio/3gpp': '3gp',
+  'audio/3gpp2': '3g2',
+  'audio/amr': 'amr',
+  'audio/flac': 'flac',
+};
+function extensionForAudio(contentType) {
+  const ct = String(contentType || '').split(';')[0].trim().toLowerCase();
+  if (AUDIO_EXT_MAP[ct]) return AUDIO_EXT_MAP[ct];
+  const sub = (ct.split('/')[1] || 'webm').replace(/^x-/, '').replace(/[^a-z0-9]/g, '').slice(0, 8);
+  return sub || 'webm';
+}
+
 function randomInviteCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sin 0/O ni 1/I/L, se confunden al leer
   let code = '';
@@ -932,7 +962,7 @@ app.post('/api/transcribe', requireAuth, rateLimit, express.raw({ type: '*/*', l
     const formData = new FormData();
     formData.append('model_id', 'scribe_v1');
     formData.append('language_code', 'spa');
-    formData.append('file', new Blob([req.body], { type: contentType }), 'audio.webm');
+    formData.append('file', new Blob([req.body], { type: contentType }), `audio.${extensionForAudio(contentType)}`);
 
     const resp = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
       method: 'POST',
@@ -1027,8 +1057,7 @@ app.post('/api/contribute-audio', requireAuth, express.raw({ type: '*/*', limit:
   try {
     if (!req.body || !req.body.length) return res.status(400).json({ error: 'Falta el audio.' });
     const contentType = req.get('Content-Type') || 'audio/webm';
-    const ext = contentType.includes('mpeg') ? 'mp3' : 'webm';
-    const filename = `audio/aportes/${req.profileUserId}/${Date.now()}.${ext}`;
+    const filename = `audio/aportes/${req.profileUserId}/${Date.now()}.${extensionForAudio(contentType)}`;
     const blob = await put(filename, req.body, { access: 'public', contentType, addRandomSuffix: true });
     res.json({ ok: true, url: blob.url });
   } catch (err) {
