@@ -345,6 +345,10 @@
         <p class="sub" style="max-width: 340px; margin: 0 auto 8px;">Compartí este código con familiares — se crean su propia cuenta y pueden aportar historias y preguntarle a la bitácora, sin ver ni tocar tus charlas.</p>
         <p style="font-family: var(--font-display); font-size: 1.4rem; font-weight: 700; letter-spacing: 0.1em; margin: 0 0 4px;" id="inviteCode">…</p>
         <button class="write-toggle" id="inviteCopyBtn" type="button">copiar código</button>
+        <div style="margin-top: 10px;">
+          <button class="write-toggle" id="collaboratorsToggle" type="button">ver quiénes colaboran contigo</button>
+          <div id="collaboratorsList" style="display:none; margin-top: 8px;"></div>
+        </div>
       </div>
       <button class="write-toggle" id="logoutBtn" type="button">cerrar sesión (<span id="whoami"></span>)</button>
     </div>
@@ -433,6 +437,27 @@
       inviteCopyBtn.textContent = 'copiado ✓';
       setTimeout(() => { inviteCopyBtn.textContent = 'copiar código'; }, 1800);
     } catch (e) {}
+  });
+
+  const collaboratorsToggle = document.getElementById('collaboratorsToggle');
+  const collaboratorsList = document.getElementById('collaboratorsList');
+  let collaboratorsLoaded = false;
+  collaboratorsToggle.addEventListener('click', async () => {
+    const visible = collaboratorsList.style.display !== 'none';
+    if (visible) { collaboratorsList.style.display = 'none'; return; }
+    collaboratorsList.style.display = 'block';
+    if (collaboratorsLoaded) return;
+    try {
+      const resp = await fetch('/api/my-collaborators');
+      const data = await resp.json();
+      const colaboradores = (resp.ok && data.colaboradores) || [];
+      collaboratorsList.innerHTML = colaboradores.length
+        ? colaboradores.map((c) => `<div class="sub">${c.nombre}</div>`).join('')
+        : '<p class="sub">Todavía nadie se ha unido con tu código.</p>';
+      collaboratorsLoaded = true;
+    } catch (e) {
+      collaboratorsList.innerHTML = '<p class="sub">No se pudo cargar.</p>';
+    }
   });
 
   const joinCollabBtn = document.getElementById('joinCollabBtn');

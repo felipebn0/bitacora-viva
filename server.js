@@ -490,6 +490,58 @@ app.get('/api/collaboration-info', requireAuth, async (req, res) => {
   }
 });
 
+// Las bitácoras a las que ESTA cuenta se sumó como colaboradora — para
+// mostrar en colaborar.html un ir-y-venir entre ellas sin pedir el código
+// de nuevo cada vez. Solo lo suyo, nunca lo de otras cuentas.
+app.get('/api/my-collaborations', requireAuth, async (req, res) => {
+  try {
+    await ensureSchema();
+    const rows = await sql`
+      SELECT u.id AS owner_id, u.name, u.username
+      FROM collaborations c
+      JOIN users u ON u.id = c.owner_user_id
+      WHERE c.collaborator_user_id = ${req.userId}
+      ORDER BY c.created_at ASC
+    `;
+    const historias = rows.map((r) => ({ ownerId: r.owner_id, ownerName: capitalizarNombre(r.name || r.username) }));
+    // Cuenta 100% colaboradora de siempre (owner_user_id fijo desde el
+    // signup) — si no está ya en la lista de arriba, la sumamos también.
+    if (req.isCollaborator && !historias.some((h) => h.ownerId === req.profileUserId)) {
+      const ownerRows = await sql`SELECT name, username FROM users WHERE id = ${req.profileUserId}`;
+      if (ownerRows.length) {
+        historias.unshift({ ownerId: req.profileUserId, ownerName: capitalizarNombre(ownerRows[0].name || ownerRows[0].username) });
+      }
+    }
+    res.json({ historias });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo cargar tus colaboraciones.' });
+  }
+});
+
+// Quiénes tienen acceso de colaborador a MI bitácora — cuentas 100%
+// colaboradoras (owner_user_id fijo) más las que se sumaron con el botón
+// "colaborar con otra historia" (tabla collaborations). Solo para el dueño.
+app.get('/api/my-collaborators', requireAuth, bloquearColaborador, async (req, res) => {
+  try {
+    await ensureSchema();
+    const fijos = await sql`SELECT name, username, created_at FROM users WHERE owner_user_id = ${req.userId}`;
+    const sumados = await sql`
+      SELECT u.name, u.username, c.created_at
+      FROM collaborations c
+      JOIN users u ON u.id = c.collaborator_user_id
+      WHERE c.owner_user_id = ${req.userId}
+    `;
+    const colaboradores = [...fijos, ...sumados]
+      .map((r) => ({ nombre: capitalizarNombre(r.name || r.username), desde: r.created_at }))
+      .sort((a, b) => new Date(a.desde) - new Date(b.desde));
+    res.json({ colaboradores });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo cargar quiénes colaboran contigo.' });
+  }
+});
+
 app.post('/api/register', rateLimit, async (req, res) => {
   try {
     const { username, password, setupKey } = req.body || {};

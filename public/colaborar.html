@@ -64,6 +64,23 @@
   header { max-width: 440px; width: 100%; text-align: center; margin-bottom: 20px; }
   .owner-name { font-family: var(--font-display); font-size: 1.7rem; font-weight: 700; color: var(--gold-deep); margin: 6px 0 2px; }
 
+  .topbar { width: 100%; max-width: 440px; display: flex; justify-content: flex-end; gap: 10px; margin-bottom: 10px; }
+  .icon-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 40px; height: 40px; border-radius: 50%;
+    background: #FBF6EA; border: 1px solid #E7DFCC; font-size: 1.15rem;
+    text-decoration: none; cursor: pointer; box-shadow: 0 2px 6px -3px rgba(0,0,0,0.2);
+  }
+
+  .collab-switch { width: 100%; max-width: 440px; margin: 0 0 18px; text-align: center; }
+  .collab-switch .sub { margin-bottom: 6px; }
+  .collab-switch-list { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .collab-switch-list a {
+    display: inline-block; padding: 6px 14px; border-radius: 20px; font-size: 0.85rem;
+    text-decoration: none; color: var(--ink); background: #FBF6EA; border: 1px solid #E7DFCC;
+  }
+  .collab-switch-list a.active { background: var(--gold-deep); color: #FBF6EA; border-color: var(--gold-deep); font-weight: 700; }
+
   .familia, .aportes {
     width: min(440px, 100%);
     margin: 0 auto 20px;
@@ -146,11 +163,22 @@
   </div>
 
   <div id="appContent">
+    <div class="topbar" id="ownTopbar" style="display:none;">
+      <a class="icon-btn" href="/app.html" title="Volver a mi historia" aria-label="Volver a mi historia">↩️</a>
+      <a class="icon-btn" href="/arbol.html" target="_blank" rel="noopener" title="Mi árbol genealógico" aria-label="Mi árbol genealógico">🌳</a>
+      <a class="icon-btn" href="/capitulos.html" target="_blank" rel="noopener" title="Mi libro de la historia" aria-label="Mi libro de la historia">📖</a>
+    </div>
+
     <header>
       <h1>Aportar a la bitácora</h1>
       <p class="owner-name" id="ownerName">&nbsp;</p>
       <p class="sub">Comparte una historia o consulta lo que ya se contó.</p>
     </header>
+
+    <div class="collab-switch" id="collabSwitch" style="display:none;">
+      <p class="sub">Tus colaboraciones:</p>
+      <div class="collab-switch-list" id="collabSwitchList"></div>
+    </div>
 
     <div class="aportes">
       <h2>Aportar una historia</h2>
@@ -263,9 +291,43 @@
     window.location.reload();
   });
 
+  const ownTopbar = document.getElementById('ownTopbar');
+  const collabSwitch = document.getElementById('collabSwitch');
+  const collabSwitchList = document.getElementById('collabSwitchList');
+
+  // "Tus colaboraciones": solo las de esta cuenta (el servidor ya filtra
+  // por quién está logueado, nunca ve las de otros) — para saltar entre
+  // ellas sin volver a pedir el código cada vez.
+  async function cargarMisColaboraciones(ownerIdActivo, nombreActivoFallback) {
+    try {
+      const resp = await fetch('/api/my-collaborations');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const historias = data.historias || [];
+      if (historias.length < 2) return; // con una sola no hace falta el selector
+      collabSwitchList.innerHTML = '';
+      historias.forEach((h) => {
+        const a = document.createElement('a');
+        a.href = '/colaborar.html?owner=' + h.ownerId;
+        a.textContent = h.ownerName;
+        const esActiva = ownerIdActivo
+          ? String(h.ownerId) === String(ownerIdActivo)
+          : h.ownerName === nombreActivoFallback;
+        if (esActiva) a.classList.add('active');
+        collabSwitchList.appendChild(a);
+      });
+      collabSwitch.style.display = 'block';
+    } catch (e) {}
+  }
+
   fetch('/api/me')
     .then((resp) => (resp.ok ? resp.json() : Promise.reject()))
     .then(async (data) => {
+      // Solo una cuenta que tiene su propia bitácora (no es 100%
+      // colaboradora) puede "volver a su historia" — una cuenta 100%
+      // colaboradora no tiene árbol, capítulos ni charla propia.
+      if (!data.isCollaborator) ownTopbar.style.display = 'flex';
+
       if (activeOwnerId) {
         // Se llegó acá con un código de otra historia (botón "colaborar con
         // otra historia" en app.html) — puede ser una cuenta dueña normal
@@ -276,6 +338,7 @@
           if (!resp.ok) { window.location.href = '/app.html'; return; }
           const info = await resp.json();
           showApp({ username: data.username, ownerName: info.ownerName });
+          cargarMisColaboraciones(activeOwnerId);
         } catch (e) {
           window.location.href = '/app.html';
         }
@@ -285,6 +348,7 @@
       // dueña normal, la mandamos a la app completa.
       if (!data.isCollaborator) { window.location.href = '/app.html'; return; }
       showApp(data);
+      cargarMisColaboraciones(null, data.ownerName);
     })
     .catch(() => showLogin());
 
