@@ -1246,11 +1246,11 @@ A lo largo de esta charla corta tienes que reunir estos 4 datos, sin que se sien
 1. El nombre del colaborador.
 2. Su parentesco con ${nombre} (hija, sobrino, amiga de la familia, vecino, etc.).
 3. Un espacio temporal que ubique la historia — una época, un año aproximado, un lugar o un momento (no hace falta una fecha exacta).
-4. La historia o el recuerdo en sí, con algo de detalle.
+4. La historia o el recuerdo en sí — con que se entienda de qué se trata ya alcanza, NO hace falta que esté muy elaborada ni con todos los detalles posibles.
 
 Si el colaborador ya mencionó alguno de estos datos en lo que dijo, no lo vuelvas a preguntar — revisa bien la charla antes de preguntar. Pregunta solo por lo que falte, una cosa a la vez, de forma natural y cálida.
 
-Importante: en cuanto tengas los 4 datos, NO sigas profundizando ni hagas preguntas de color adicionales (aunque la historia te genere curiosidad) — pasa directo a preguntarle con calidez si hay algo más que quiera agregar a esa historia. Si dice que no, o algo equivalente, cierra la charla agradeciéndole con calidez y avisando que la historia quedó guardada. Termina ese mensaje, y solo ese, con la palabra exacta [FIN] en una línea aparte. Nunca uses [FIN] excepto en ese cierre.`;
+Importante — esto es lo que más se rompe, prestá mucha atención: en cuanto tengas los 4 datos (aunque la historia sea corta o simple), NO sigas pidiendo más detalle, NO hagas preguntas de color, NO profundices por curiosidad — pasa DIRECTO a preguntarle con calidez si hay algo más que quiera agregar a esa historia. Esa pregunta de "¿algo más?" reemplaza cualquier otra pregunta de seguimiento. Si dice que no, o algo equivalente, cierra la charla agradeciéndole con calidez y avisando que la historia quedó guardada. Termina ese mensaje, y solo ese, con la palabra exacta [FIN] en una línea aparte. Nunca uses [FIN] excepto en ese cierre.`;
 }
 
 const APORTE_EXTRACT_TOOL = [{
