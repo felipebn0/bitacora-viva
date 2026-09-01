@@ -460,7 +460,18 @@
         mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       }
       audioChunks = [];
-      mediaRecorder = new MediaRecorder(mediaStream);
+      // Vercel rechaza pedidos de más de ~4.5MB (FUNCTION_PAYLOAD_TOO_LARGE),
+      // y eso es justo lo que le pasaba a las respuestas largas — las
+      // "historias" que más nos interesa guardar con audio. Con la calidad
+      // por defecto del navegador (~128kbps) alcanzaba con 4-5 minutos
+      // hablando para pasarse. Bajando el bitrate (la voz sigue entendiéndose
+      // bien) da margen para charlas mucho más largas antes de toparse con
+      // el límite.
+      try {
+        mediaRecorder = new MediaRecorder(mediaStream, { audioBitsPerSecond: 40000 });
+      } catch (e) {
+        mediaRecorder = new MediaRecorder(mediaStream); // por si el navegador no soporta la opción
+      }
       mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
       mediaRecorder.start();
     } catch (e) {
