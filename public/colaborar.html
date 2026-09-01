@@ -109,22 +109,23 @@
   .intro-box .write-toggle { align-self: flex-start; font-size: 0.85rem; }
 
   .orb-zone { display: grid; justify-items: center; gap: 10px; padding: 8px 0 4px; }
-  .orb {
+  .orb-zone .orb {
     width: 128px; height: 128px; border-radius: 50%; border: none; cursor: pointer;
     position: relative; display: grid; place-items: center;
     background: radial-gradient(circle at 35% 30%, var(--gold), var(--gold-deep));
     color: #FBF6EA; font-family: var(--font-body); font-weight: 700; font-size: 0.92rem;
     box-shadow: 0 10px 26px -10px rgba(168,106,38,0.55);
+    align-self: center;
   }
-  .orb:disabled { opacity: 0.6; cursor: default; }
-  .orb::before {
+  .orb-zone .orb:disabled { opacity: 0.6; cursor: default; }
+  .orb-zone .orb::before {
     content: ""; position: absolute; inset: -12px; border-radius: 50%;
     border: 2px solid var(--ring); animation: breathe 3.2s ease-in-out infinite;
   }
   @keyframes breathe { 0%,100% { transform: scale(1); opacity: .6; } 50% { transform: scale(1.08); opacity: .15; } }
-  .orb[data-state="listening"] { background: radial-gradient(circle at 35% 30%, #D9A15C, var(--gold-deep)); }
-  .orb[data-state="listening"]::before { animation-duration: 1.4s; }
-  .orb[data-state="thinking"] { background: radial-gradient(circle at 35% 30%, #6E7F53, var(--moss)); }
+  .orb-zone .orb[data-state="listening"] { background: radial-gradient(circle at 35% 30%, #D9A15C, var(--gold-deep)); }
+  .orb-zone .orb[data-state="listening"]::before { animation-duration: 1.4s; }
+  .orb-zone .orb[data-state="thinking"] { background: radial-gradient(circle at 35% 30%, #6E7F53, var(--moss)); }
   .state-label { font-size: 0.85rem; color: var(--ink-soft); min-height: 1.2em; text-align: center; }
 
   .logout-row { text-align: center; margin-top: 8px; }
