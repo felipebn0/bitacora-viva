@@ -133,6 +133,12 @@ function ensureSchema() {
       // audio — se guardan todos acá como JSON. audio_url (singular) sigue
       // sirviendo para los aportes viejos de un solo audio.
       await sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS audio_urls TEXT`;
+      // Quién (qué CUENTA logueada) aportó esta historia — distinto de
+      // "contributor", que es el nombre libre que la charla extrajo. Con
+      // esto un colaborador solo ve sus propias historias aportadas, nunca
+      // las de otros colaboradores de la misma bitácora; el dueño sigue
+      // viéndolas todas.
+      await sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS contributed_by INT REFERENCES users(id)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_family_notes_user ON family_notes(user_id)`;
 
       // Un usuario dueño de su propia bitácora también puede sumarse como
@@ -1201,7 +1207,7 @@ app.post('/api/contribute-story', requireAuth, rateLimit, async (req, res) => {
     const cleanAudioUrl = typeof audioUrl === 'string' ? audioUrl.slice(0, 1000) : null;
 
     await ensureSchema();
-    await sql`INSERT INTO family_notes (user_id, contributor, parentesco, texto, audio_url) VALUES (${ownerId}, ${cleanContributor}, ${cleanParentesco}, ${text}, ${cleanAudioUrl})`;
+    await sql`INSERT INTO family_notes (user_id, contributor, parentesco, texto, audio_url, contributed_by) VALUES (${ownerId}, ${cleanContributor}, ${cleanParentesco}, ${text}, ${cleanAudioUrl}, ${req.userId})`;
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -1269,7 +1275,7 @@ const APORTE_EXTRACT_TOOL = [{
   },
 }];
 
-async function finalizarAporte(ownerId, fullHistory, audioUrls) {
+async function finalizarAporte(ownerId, fullHistory, audioUrls, contributedByUserId) {
   try {
     const transcript = fullHistory
       .filter((m) => !/^\(.*\)$/.test(m.content.trim())) // sin los avisos internos entre paréntesis
@@ -1294,7 +1300,7 @@ async function finalizarAporte(ownerId, fullHistory, audioUrls) {
       : null;
 
     await ensureSchema();
-    await sql`INSERT INTO family_notes (user_id, contributor, parentesco, texto, audio_urls) VALUES (${ownerId}, ${cleanContributor}, ${cleanParentesco}, ${texto}, ${audioUrlsJson})`;
+    await sql`INSERT INTO family_notes (user_id, contributor, parentesco, texto, audio_urls, contributed_by) VALUES (${ownerId}, ${cleanContributor}, ${cleanParentesco}, ${texto}, ${audioUrlsJson}, ${contributedByUserId})`;
     return true;
   } catch (err) {
     console.error('No se pudo guardar el aporte final:', err);
@@ -1348,7 +1354,7 @@ app.post('/api/contribute-chat', requireAuth, rateLimit, async (req, res) => {
     let saved = false;
     if (done) {
       const audioUrls = Array.isArray(req.body.audioUrls) ? req.body.audioUrls : [];
-      saved = await finalizarAporte(ownerId, messages.concat([{ role: 'assistant', content: text }]), audioUrls);
+      saved = await finalizarAporte(ownerId, messages.concat([{ role: 'assistant', content: text }]), audioUrls, req.userId);
     }
 
     res.json({ message: text, done, saved });
@@ -1396,8 +1402,15 @@ app.get('/api/contributions', requireAuth, async (req, res) => {
     const ownerId = await resolveProfileUserId(req);
     if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
     await ensureSchema();
-    const notesRaw = await sql`SELECT id, contributor, parentesco, texto, audio_url, audio_urls, created_at FROM family_notes WHERE user_id = ${ownerId} ORDER BY created_at DESC LIMIT 30`;
-    const mediaRaw = await sql`SELECT type, url, caption, contributor, created_at FROM media WHERE user_id = ${ownerId} ORDER BY created_at DESC LIMIT 30`;
+    // El dueño ve todos los aportes de su bitácora; un colaborador solo ve
+    // los que él mismo aportó, nunca los de otros colaboradores.
+    const esDueño = ownerId === req.userId;
+    const notesRaw = esDueño
+      ? await sql`SELECT id, contributor, parentesco, texto, audio_url, audio_urls, created_at FROM family_notes WHERE user_id = ${ownerId} ORDER BY created_at DESC LIMIT 30`
+      : await sql`SELECT id, contributor, parentesco, texto, audio_url, audio_urls, created_at FROM family_notes WHERE user_id = ${ownerId} AND contributed_by = ${req.userId} ORDER BY created_at DESC LIMIT 30`;
+    const mediaRaw = esDueño
+      ? await sql`SELECT type, url, caption, contributor, created_at FROM media WHERE user_id = ${ownerId} ORDER BY created_at DESC LIMIT 30`
+      : [];
     const notes = notesRaw.map((n) => ({
       ...n,
       contributor: capitalizarNombre(n.contributor),
