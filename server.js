@@ -129,6 +129,10 @@ function ensureSchema() {
       await sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS discussed BOOLEAN NOT NULL DEFAULT false`;
       await sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS audio_url TEXT`;
       await sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS parentesco TEXT`;
+      // Con la charla de aportar (varios turnos), puede haber más de un
+      // audio — se guardan todos acá como JSON. audio_url (singular) sigue
+      // sirviendo para los aportes viejos de un solo audio.
+      await sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS audio_urls TEXT`;
       await sql`CREATE INDEX IF NOT EXISTS idx_family_notes_user ON family_notes(user_id)`;
 
       // Un usuario dueño de su propia bitácora también puede sumarse como
@@ -1223,47 +1227,132 @@ app.post('/api/contribute-audio', requireAuth, express.raw({ type: '*/*', limit:
   }
 });
 
-// Sugerencia breve, generada con IA, de qué podría contar quien va a
-// aportar una historia — usa los nombres y fechas ya conocidos del árbol
-// y del resumen para ayudar a ubicar mejor lo que cuente.
-app.get('/api/contribute-intro', requireAuth, rateLimit, async (req, res) => {
+// Solo lugares, épocas o momentos — nunca nombres de personas — para
+// invitar a un colaborador a contar algo sin mencionar a nadie puntual.
+async function loadKnownMoments(userId) {
+  await ensureSchema();
+  const rows = await sql`SELECT descripcion, anio, categoria FROM timeline_events WHERE user_id = ${userId} ORDER BY anio NULLS LAST LIMIT 15`;
+  if (!rows.length) return '';
+  return rows.map((e) => `- ${e.descripcion}${e.anio ? ' (' + e.anio + ')' : ''}`).join('\n');
+}
+
+function buildAporteSystemPrompt(ownerNombre) {
+  const nombre = ownerNombre || 'esta persona';
+  return `Eres una entrevistadora cálida y paciente, colombiana, que está ayudando a un familiar (el colaborador) a aportar un recuerdo sobre la vida de ${nombre} para sumarlo a su bitácora de vida. Hablas en español de Colombia, tuteando siempre al colaborador (usa "tú", nunca "usted" ni "vos"), con oraciones simples, cálidas y cortas.
+
+Le hablas al COLABORADOR, no a ${nombre}. Nunca digas "tu tío Juan" ni des a entender que las personas que se mencionen son familiares del colaborador — usa los nombres propios sin esa aclaración, o acláralo como "Juan, el tío de ${nombre}" si hace falta.
+
+A lo largo de esta charla corta tienes que reunir estos 4 datos, sin que se sienta como un formulario:
+1. El nombre del colaborador.
+2. Su parentesco con ${nombre} (hija, sobrino, amiga de la familia, vecino, etc.).
+3. Un espacio temporal que ubique la historia — una época, un año aproximado, un lugar o un momento (no hace falta una fecha exacta).
+4. La historia o el recuerdo en sí, con algo de detalle.
+
+Si el colaborador ya mencionó alguno de estos datos en lo que dijo, no lo vuelvas a preguntar — revisa bien la charla antes de preguntar. Pregunta solo por lo que falte, una cosa a la vez, de forma natural y cálida.
+
+En cuanto ya tengas los 4 datos, pregúntale con calidez si hay algo más que quiera agregar a esa historia. Si dice que no, o algo equivalente, cierra la charla agradeciéndole con calidez y avisando que la historia quedó guardada. Termina ese mensaje, y solo ese, con la palabra exacta [FIN] en una línea aparte. Nunca uses [FIN] excepto en ese cierre.`;
+}
+
+const APORTE_EXTRACT_TOOL = [{
+  name: 'guardar_aporte',
+  description: 'Extrae los datos estructurados de la historia que un colaborador aportó, a partir de toda la charla.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      contributor: { type: 'string', description: 'Nombre del colaborador que contó la historia.' },
+      parentesco: { type: 'string', description: 'Parentesco del colaborador con la persona dueña de la bitácora.' },
+      texto: { type: 'string', description: 'La historia o recuerdo contado, redactado como un texto fluido y completo, incluyendo el espacio temporal (época, año o lugar) que se haya mencionado.' },
+    },
+    required: ['texto'],
+  },
+}];
+
+async function finalizarAporte(ownerId, fullHistory, audioUrls) {
   try {
-    const ownerId = await resolveProfileUserId(req);
-    if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
-    await ensureSchema();
-    const conocidos = await loadKnownFamilyMembers(ownerId);
-    const memoria = await loadMemorySummary(ownerId);
-    const ownerRow = await sql`SELECT name FROM users WHERE id = ${ownerId}`;
-    const ownerNombre = (ownerRow[0] && ownerRow[0].name) || null;
-
-    if (!conocidos && !memoria) {
-      return res.json({
-        intro: `Cuenta cualquier recuerdo que tengas${ownerNombre ? ' de ' + ownerNombre : ''} — una anécdota, una costumbre, algo gracioso o algo importante. Si puedes ubicarlo con una fecha aproximada o con los nombres de quienes estaban ahí, mejor: eso ayuda a encajarlo con el resto de su historia.`,
-      });
-    }
-
-    const prompt = `Vas a ayudar a preparar a un familiar (el colaborador) que va a grabar, con su propia voz, un recuerdo o anécdota sobre la vida de ${ownerNombre || 'esta persona'} para sumarlo a su bitácora de vida.
-
-Importante sobre a quién le hablas: le hablas al COLABORADOR, no a ${ownerNombre || 'la persona'}. Los datos de abajo (personas conocidas, resumen) describen la vida de ${ownerNombre || 'esta persona'} — las relaciones familiares que aparecen ahí (papá, tío, hermano, etc.) son respecto a ${ownerNombre || 'esa persona'}, NO respecto al colaborador. Nunca digas "tu tío Juan" ni nada que dé a entender que esas personas son familiares del colaborador: di simplemente "Juan" o, si hace falta aclarar, "Juan, el tío de ${ownerNombre || 'ella'}". El colaborador puede haber vivido ese momento junto a ${ownerNombre || 'esta persona'} o haberlo escuchado contar — la historia es sobre la vida de ${ownerNombre || 'esta persona'}, no sobre la del colaborador.
-
-Con lo que ya se sabe (abajo), escribe una invitación breve y cálida (2-3 frases, español de Colombia, tuteo, nunca "vos" ni "usted") sugiriéndole al colaborador de qué podría hablar — idealmente algo que todavía no esté cubierto, o que ayude a completar un hueco. Si hay nombres, lugares o fechas conocidas que sirvan para ubicar mejor la historia (por ejemplo una época, una casa, una persona presente), menciónalos con la aclaración de a quién pertenecen (ej: "la casa en Los Andes donde vivió ${ownerNombre || 'ella'}"), para que el colaborador pueda anclar su recuerdo a eso. No inventes datos que no estén abajo.
-
-${conocidos || ''}
-${memoria ? `\nResumen de lo que ya se ha contado:\n${memoria.slice(0, 1500)}` : ''}`;
+    const transcript = fullHistory
+      .filter((m) => !/^\(.*\)$/.test(m.content.trim())) // sin los avisos internos entre paréntesis
+      .map((m) => `${m.role === 'user' ? 'Colaborador' : 'Entrevistadora'}: ${m.content}`)
+      .join('\n');
 
     const response = await anthropic.messages.create({
       model: MODEL,
-      max_tokens: 200,
-      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 600,
+      tools: APORTE_EXTRACT_TOOL,
+      tool_choice: { type: 'tool', name: 'guardar_aporte' },
+      messages: [{ role: 'user', content: `Esta fue la charla completa con un familiar que aportó una historia:\n\n${transcript}\n\nExtrae los datos.` }],
+    });
+    const toolUse = response.content.find((b) => b.type === 'tool_use');
+    if (!toolUse || !toolUse.input || !String(toolUse.input.texto || '').trim()) return false;
+
+    const cleanContributor = capitalizarNombre(String(toolUse.input.contributor || '').trim().slice(0, 60)) || null;
+    const cleanParentesco = capitalizarNombre(String(toolUse.input.parentesco || '').trim().slice(0, 60)) || null;
+    const texto = capitalizarInicio(String(toolUse.input.texto).trim().slice(0, 4000));
+    const audioUrlsJson = Array.isArray(audioUrls) && audioUrls.length
+      ? JSON.stringify(audioUrls.filter((u) => typeof u === 'string').slice(0, 10))
+      : null;
+
+    await ensureSchema();
+    await sql`INSERT INTO family_notes (user_id, contributor, parentesco, texto, audio_urls) VALUES (${ownerId}, ${cleanContributor}, ${cleanParentesco}, ${texto}, ${audioUrlsJson})`;
+    return true;
+  } catch (err) {
+    console.error('No se pudo guardar el aporte final:', err);
+    return false;
+  }
+}
+
+// La charla de aportar una historia — turno por turno, igual de forma que
+// /api/next pero para un colaborador contando un recuerdo. Cuando ya tiene
+// nombre, parentesco, espacio temporal e historia, cierra con [FIN] y acá
+// mismo se guarda (ver finalizarAporte).
+app.post('/api/contribute-chat', requireAuth, rateLimit, async (req, res) => {
+  try {
+    const ownerId = await resolveProfileUserId(req);
+    if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
+
+    const history = Array.isArray(req.body.history) ? req.body.history.slice(0, 40) : [];
+    for (const m of history) {
+      if (!m || (m.role !== 'user' && m.role !== 'assistant') || typeof m.content !== 'string') {
+        return res.status(400).json({ error: 'Historial inválido.' });
+      }
+      if (m.content.length > 4000) m.content = m.content.slice(0, 4000);
+    }
+
+    await ensureSchema();
+    const ownerRow = await sql`SELECT name, username FROM users WHERE id = ${ownerId}`;
+    const ownerNombre = capitalizarNombre((ownerRow[0] && (ownerRow[0].name || ownerRow[0].username)) || '') || null;
+
+    let messages;
+    if (!history.length) {
+      const momentos = await loadKnownMoments(ownerId);
+      const startPrompt = `(El colaborador acaba de empezar a aportar una historia sobre ${ownerNombre || 'esta persona'}. Salúdalo con calidez e invítalo a contar un recuerdo. Puedes dar una pista mencionando lugares, épocas o momentos conocidos de su vida (por ejemplo "su infancia en Los Andes" o "su época en el colegio") — pero NUNCA menciones el nombre propio de ninguna persona específica, solo lugares o momentos.${momentos ? '\n\nMomentos conocidos (usa solo esto como pista, nunca nombres de personas):\n' + momentos : ''}\n\nEste primer mensaje es solo la invitación cálida a contar algo — no preguntes todavía por su nombre ni parentesco, eso lo vas a ir pidiendo naturalmente después según lo que falte.)`;
+      messages = [{ role: 'user', content: startPrompt }];
+    } else {
+      messages = history;
+    }
+
+    const system = buildAporteSystemPrompt(ownerNombre);
+
+    const response = await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: 300,
+      system,
+      messages,
     });
 
-    const intro = response.content[0].text.trim();
-    res.json({ intro });
+    let text = response.content[0].text.trim();
+    const done = text.includes('[FIN]');
+    text = text.replace('[FIN]', '').trim();
+
+    let saved = false;
+    if (done) {
+      const audioUrls = Array.isArray(req.body.audioUrls) ? req.body.audioUrls : [];
+      saved = await finalizarAporte(ownerId, messages.concat([{ role: 'assistant', content: text }]), audioUrls);
+    }
+
+    res.json({ message: text, done, saved });
   } catch (err) {
     console.error(err);
-    res.json({
-      intro: 'Cuenta cualquier recuerdo que tengas — una anécdota, una costumbre, algo gracioso o algo importante. Si puedes ubicarlo con una fecha aproximada o con los nombres de quienes estaban ahí, mejor.',
-    });
+    res.status(500).json({ error: 'No se pudo continuar la charla.' });
   }
 });
 
@@ -1305,9 +1394,14 @@ app.get('/api/contributions', requireAuth, async (req, res) => {
     const ownerId = await resolveProfileUserId(req);
     if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
     await ensureSchema();
-    const notesRaw = await sql`SELECT id, contributor, parentesco, texto, audio_url, created_at FROM family_notes WHERE user_id = ${ownerId} ORDER BY created_at DESC LIMIT 30`;
+    const notesRaw = await sql`SELECT id, contributor, parentesco, texto, audio_url, audio_urls, created_at FROM family_notes WHERE user_id = ${ownerId} ORDER BY created_at DESC LIMIT 30`;
     const mediaRaw = await sql`SELECT type, url, caption, contributor, created_at FROM media WHERE user_id = ${ownerId} ORDER BY created_at DESC LIMIT 30`;
-    const notes = notesRaw.map((n) => ({ ...n, contributor: capitalizarNombre(n.contributor), texto: capitalizarInicio(n.texto) }));
+    const notes = notesRaw.map((n) => ({
+      ...n,
+      contributor: capitalizarNombre(n.contributor),
+      texto: capitalizarInicio(n.texto),
+      audio_urls: parseJsonArray(n.audio_urls),
+    }));
     const media = mediaRaw.map((m) => ({ ...m, contributor: capitalizarNombre(m.contributor) }));
     res.json({ notes, media });
   } catch (err) {
@@ -1717,6 +1811,11 @@ app.post('/api/ask-familia', requireAuth, rateLimit, async (req, res) => {
   try {
     const ownerId = await resolveProfileUserId(req);
     if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
+    // Por ahora los colaboradores solo aportan información, no preguntan
+    // sobre la bitácora — eso queda para más adelante, con accesos especiales.
+    if (ownerId !== req.userId) {
+      return res.status(403).json({ error: 'Por ahora los colaboradores solo pueden aportar información, no consultar la bitácora.' });
+    }
 
     let question = (req.body.question || '').trim();
     if (!question) return res.status(400).json({ error: 'Falta la pregunta.' });

@@ -81,7 +81,7 @@
   }
   .collab-switch-list a.active { background: var(--gold-deep); color: #FBF6EA; border-color: var(--gold-deep); font-weight: 700; }
 
-  .familia, .aportes {
+  .aportes {
     width: min(440px, 100%);
     margin: 0 auto 20px;
     background: #FBF6EA;
@@ -92,37 +92,21 @@
     flex-direction: column;
     gap: 12px;
   }
-  .familia h2, .aportes h2 { font-family: var(--font-display); font-size: 1.1rem; margin: 0; font-weight: 600; }
-  .familia .sub, .aportes .sub { color: var(--ink-soft); font-size: 0.9rem; margin: 0; text-align: left; }
-  .familia-chat { display: flex; flex-direction: column; gap: 10px; max-height: 260px; overflow-y: auto; }
-  .familia-bubble { max-width: 92%; font-size: 0.92rem; line-height: 1.4; }
-  .familia-bubble.q { align-self: flex-end; background: var(--bubble-user); padding: 8px 12px; border-radius: 12px; border-bottom-right-radius: 3px; }
-  .familia-bubble.a { align-self: flex-start; color: var(--ink); }
-  .familia-bubble.thinking { align-self: flex-start; color: var(--ink-soft); font-style: italic; }
-  .familia-input-row { display: flex; gap: 8px; }
-  .familia-input-row input { flex: 1; border: 1px solid #E7DFCC; border-radius: 10px; padding: 10px 12px; font-family: var(--font-body); background: #fff; color: var(--ink); }
-  .familia-input-row button { border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px; padding: 0 16px; font-weight: 700; cursor: pointer; }
-  .familia-input-row button:disabled { opacity: 0.6; cursor: default; }
+  .aportes h2 { font-family: var(--font-display); font-size: 1.1rem; margin: 0; font-weight: 600; }
+  .aportes .sub { color: var(--ink-soft); font-size: 0.9rem; margin: 0; text-align: left; }
 
-  .aportes label { font-size: 0.85rem; color: var(--ink-soft); margin-bottom: -6px; }
-  .aportes input[type="text"], .aportes textarea {
-    border: 1px solid #E7DFCC; border-radius: 10px; padding: 10px 12px;
-    font-family: var(--font-body); background: #fff; color: var(--ink); font-size: 0.95rem;
-  }
-  .aportes textarea { resize: vertical; min-height: 70px; }
-  .aportes button {
-    border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px;
-    padding: 10px 16px; font-weight: 700; cursor: pointer; font-family: var(--font-body); align-self: flex-start;
-  }
-  .aportes button:disabled { opacity: 0.6; cursor: default; }
+  .aporte-chat { display: flex; flex-direction: column; gap: 10px; max-height: 280px; overflow-y: auto; }
+  .aporte-bubble { max-width: 92%; font-size: 0.92rem; line-height: 1.4; }
+  .aporte-bubble.q { align-self: flex-end; background: var(--bubble-user); padding: 8px 12px; border-radius: 12px; border-bottom-right-radius: 3px; }
+  .aporte-bubble.a { align-self: flex-start; color: var(--ink); }
+  .aporte-bubble.thinking { align-self: flex-start; color: var(--ink-soft); font-style: italic; }
+
   .aportes hr { border: none; border-top: 1px solid #E7DFCC; margin: 4px 0; }
   .aportes .msg { font-size: 0.85rem; min-height: 1.2em; color: var(--moss); }
   .aportes .lista { display: flex; flex-direction: column; gap: 10px; max-height: 220px; overflow-y: auto; }
   .aportes .lista .item { font-size: 0.85rem; color: var(--ink-soft); }
   .aportes .lista .item strong { color: var(--ink); }
   .aportes .lista .item audio { width: 100%; margin-top: 4px; }
-
-  .intro-box { background: #F5EFE2; border-radius: 12px; padding: 12px 14px; font-size: 0.92rem; line-height: 1.4; display: flex; flex-direction: column; gap: 8px; }
 
   .orb-zone { display: grid; justify-items: center; gap: 10px; padding: 8px 0 4px; }
   .orb-zone .orb {
@@ -146,6 +130,12 @@
   .orb-zone .write-toggle {
     background: none; border: none; padding: 0; border-radius: 0;
     color: var(--moss); text-decoration: underline; font-weight: 400;
+  }
+
+  .otra-historia-btn {
+    border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px;
+    padding: 10px 16px; font-weight: 700; cursor: pointer; font-family: var(--font-body);
+    align-self: center; display: none;
   }
 
   .logout-row { text-align: center; margin-top: 8px; }
@@ -172,7 +162,7 @@
     <header>
       <h1>Aportar a la bitácora</h1>
       <p class="owner-name" id="ownerName">&nbsp;</p>
-      <p class="sub">Comparte una historia o consulta lo que ya se contó.</p>
+      <p class="sub">Cuenta una historia — la entrevistadora te va guiando.</p>
     </header>
 
     <div class="collab-switch" id="collabSwitch" style="display:none;">
@@ -182,39 +172,23 @@
 
     <div class="aportes">
       <h2>Aportar una historia</h2>
-      <div class="intro-box">
-        <span id="introTexto">Cuenta algo que recuerdes — una anécdota, un dato, un momento.</span>
-      </div>
-      <p class="sub">Antes de grabar, empieza diciendo tu nombre y tu parentesco — y después cuenta tu historia.</p>
 
-      <label for="aporteNombre">Tu nombre</label>
-      <input type="text" id="aporteNombre" placeholder="Ej: Marcela">
-
-      <label for="aporteParentesco">Tu parentesco</label>
-      <input type="text" id="aporteParentesco" placeholder="Ej: Hija, sobrino, amiga de la familia…">
+      <div class="aporte-chat" id="aporteChat"></div>
 
       <div class="orb-zone">
         <button class="orb" id="orb" data-state="idle" type="button" aria-label="Presiona para grabar tu historia">Presiona<br>para hablar</button>
-        <div class="state-label" id="recStatus">Presiona el botón y cuenta tu historia.</div>
+        <div class="state-label" id="recStatus"></div>
         <button class="write-toggle" id="subirAudioBtn" type="button">o sube una nota de voz que ya tengas</button>
         <input type="file" id="subirAudioInput" accept="audio/*" style="display:none;">
       </div>
+
+      <button class="otra-historia-btn" id="otraHistoriaBtn" type="button">Contar otra historia</button>
 
       <p class="msg" id="aporteMsg"></p>
 
       <hr>
 
       <div class="lista" id="aportesLista"></div>
-    </div>
-
-    <div class="familia">
-      <h2>Preguntale a la bitácora</h2>
-      <p class="sub">Escribí una pregunta sobre lo que ya se contó (nombres, lugares, historias…).</p>
-      <div class="familia-chat" id="familiaChat"></div>
-      <div class="familia-input-row">
-        <input type="text" id="familiaInput" placeholder="Ej: ¿cómo se llamaban sus papás?">
-        <button id="familiaAsk" type="button">Preguntar</button>
-      </div>
     </div>
 
     <div class="logout-row">
@@ -339,6 +313,7 @@
           const info = await resp.json();
           showApp({ username: data.username, ownerName: info.ownerName });
           cargarMisColaboraciones(activeOwnerId);
+          iniciarAporte();
         } catch (e) {
           window.location.href = '/app.html';
         }
@@ -349,70 +324,79 @@
       if (!data.isCollaborator) { window.location.href = '/app.html'; return; }
       showApp(data);
       cargarMisColaboraciones(null, data.ownerName);
+      iniciarAporte();
     })
     .catch(() => showLogin());
 
-  // --- Preguntale a la bitácora ---
-  const familiaChat = document.getElementById('familiaChat');
-  const familiaInput = document.getElementById('familiaInput');
-  const familiaAsk = document.getElementById('familiaAsk');
+  // --- Aportar una historia: charla turno por turno con la IA ---
+  const aporteMsg = document.getElementById('aporteMsg');
+  const aportesLista = document.getElementById('aportesLista');
+  const aporteChat = document.getElementById('aporteChat');
+  const orb = document.getElementById('orb');
+  const recStatus = document.getElementById('recStatus');
+  const otraHistoriaBtn = document.getElementById('otraHistoriaBtn');
 
-  function addFamiliaBubble(kind, text) {
+  let historyLocal = [];
+  let audioUrlsLocal = [];
+  let charlaTerminada = false;
+
+  function agregarBurbuja(kind, text) {
     const div = document.createElement('div');
-    div.className = 'familia-bubble ' + kind;
+    div.className = 'aporte-bubble ' + kind;
     div.textContent = text;
-    familiaChat.appendChild(div);
-    familiaChat.scrollTop = familiaChat.scrollHeight;
+    aporteChat.appendChild(div);
+    aporteChat.scrollTop = aporteChat.scrollHeight;
     return div;
   }
 
-  async function askFamilia() {
-    if (familiaAsk.disabled) return;
-    const q = familiaInput.value.trim();
-    if (!q) return;
-    addFamiliaBubble('q', q);
-    familiaInput.value = '';
-    familiaAsk.disabled = true;
-    const thinking = addFamiliaBubble('thinking', 'Buscando en la bitácora…');
+  function resetChat() {
+    historyLocal = [];
+    audioUrlsLocal = [];
+    charlaTerminada = false;
+    aporteChat.innerHTML = '';
+    aporteMsg.textContent = '';
+    otraHistoriaBtn.style.display = 'none';
+    orb.style.display = '';
+    document.getElementById('subirAudioBtn').style.display = '';
+  }
+
+  async function enviarTurno() {
+    const thinking = agregarBurbuja('thinking', 'Pensando…');
     try {
-      const resp = await fetch('/api/ask-familia', {
+      const resp = await fetch(conOwner('/api/contribute-chat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: q, owner: activeOwnerId }),
+        body: JSON.stringify({ history: historyLocal, audioUrls: audioUrlsLocal }),
       });
       const data = await resp.json();
       thinking.remove();
-      addFamiliaBubble('a', data.answer || 'No se pudo responder.');
+      if (!resp.ok) {
+        agregarBurbuja('a', data.error || 'No se pudo continuar la charla.');
+        return;
+      }
+      historyLocal.push({ role: 'assistant', content: data.message });
+      agregarBurbuja('a', data.message);
+      if (data.done) {
+        charlaTerminada = true;
+        orb.style.display = 'none';
+        document.getElementById('subirAudioBtn').style.display = 'none';
+        recStatus.textContent = '';
+        aporteMsg.textContent = data.saved ? 'Historia guardada. Gracias.' : 'La charla terminó, pero hubo un problema para guardarla.';
+        otraHistoriaBtn.style.display = 'inline-block';
+        if (data.saved) { cargarAportes(); }
+      }
     } catch (e) {
       thinking.remove();
-      addFamiliaBubble('a', 'Hubo un problema para conectar.');
+      agregarBurbuja('a', 'Hubo un problema para conectar.');
     }
-    familiaAsk.disabled = false;
-    familiaInput.focus();
   }
 
-  familiaAsk.addEventListener('click', askFamilia);
-  familiaInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') askFamilia(); });
-
-  // --- Aportar una historia ---
-  const aporteNombre = document.getElementById('aporteNombre');
-  const aporteParentesco = document.getElementById('aporteParentesco');
-  const aporteMsg = document.getElementById('aporteMsg');
-  const aportesLista = document.getElementById('aportesLista');
-  const introTexto = document.getElementById('introTexto');
-  const orb = document.getElementById('orb');
-  const recStatus = document.getElementById('recStatus');
-
-  async function cargarIntro() {
-    try {
-      const resp = await fetch(conOwner('/api/contribute-intro'));
-      if (!resp.ok) return;
-      const data = await resp.json();
-      if (data.intro) {
-        introTexto.textContent = data.intro;
-      }
-    } catch (e) {}
+  function iniciarAporte() {
+    resetChat();
+    enviarTurno();
   }
+
+  otraHistoriaBtn.addEventListener('click', iniciarAporte);
 
   // --- Grabar la historia con la voz ---
   let mediaStream = null;
@@ -421,6 +405,7 @@
   let grabando = false;
 
   async function empezarGrabacion() {
+    if (charlaTerminada) return;
     try {
       mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
@@ -450,10 +435,10 @@
     });
   }
 
-  // Sube el audio, lo transcribe y guarda el aporte — se usa tanto para lo
-  // grabado en vivo como para un archivo de audio ya existente que suban.
+  // Sube el audio, lo transcribe, y manda ese texto como el siguiente turno
+  // de la charla — se usa tanto para lo grabado en vivo como para un
+  // archivo de audio ya existente que suban.
   async function procesarAudio(blob, contentType) {
-    let audioUrl = null;
     try {
       const upResp = await fetch(conOwner('/api/contribute-audio'), {
         method: 'POST',
@@ -462,7 +447,7 @@
       });
       if (upResp.ok) {
         const upData = await upResp.json();
-        audioUrl = upData.url || null;
+        if (upData.url) audioUrlsLocal.push(upData.url);
       }
     } catch (e) {}
 
@@ -479,9 +464,10 @@
       }
     } catch (e) {}
 
-    if (!texto && !audioUrl) return false;
-    if (!texto) texto = '(historia contada por audio, sin transcripción disponible)';
-    await guardarAporte(texto, audioUrl);
+    if (!texto) return false;
+    historyLocal.push({ role: 'user', content: texto });
+    agregarBurbuja('q', texto);
+    await enviarTurno();
     return true;
   }
 
@@ -503,13 +489,13 @@
     };
 
     if (!blob || !blob.size) {
-      recStatus.textContent = 'Presiona el botón y cuenta tu historia.';
+      recStatus.textContent = '';
       reset();
       return;
     }
 
     const ok = await procesarAudio(blob, 'audio/webm');
-    recStatus.textContent = ok ? '' : 'No se pudo guardar el audio. Intenta de nuevo.';
+    recStatus.textContent = ok ? '' : 'No se pudo entender el audio. Intenta de nuevo.';
     reset();
   }
 
@@ -529,7 +515,7 @@
   const subirAudioInput = document.getElementById('subirAudioInput');
   const MAX_AUDIO_FILE_BYTES = 4 * 1024 * 1024; // Vercel corta pedidos de más de ~4.5MB
 
-  subirAudioBtn.addEventListener('click', () => subirAudioInput.click());
+  subirAudioBtn.addEventListener('click', () => { if (!charlaTerminada) subirAudioInput.click(); });
 
   subirAudioInput.addEventListener('change', async () => {
     const file = subirAudioInput.files[0];
@@ -543,7 +529,7 @@
     orb.disabled = true;
     recStatus.textContent = 'Procesando el audio…';
     const ok = await procesarAudio(file, file.type || 'audio/mp4');
-    recStatus.textContent = ok ? '' : 'No se pudo guardar el audio. Intenta de nuevo.';
+    recStatus.textContent = ok ? '' : 'No se pudo entender el audio. Intenta de nuevo.';
     subirAudioBtn.disabled = false;
     orb.disabled = false;
   });
@@ -558,38 +544,15 @@
       items.forEach((it) => {
         const div = document.createElement('div');
         div.className = 'item';
-        const audioTag = it.audio_url ? `<audio controls src="${it.audio_url}"></audio>` : '';
+        const urls = (it.audio_urls && it.audio_urls.length) ? it.audio_urls : (it.audio_url ? [it.audio_url] : []);
+        const audioTags = urls.map((u) => `<audio controls src="${u}"></audio>`).join('');
         const quien = it.contributor ? it.contributor + (it.parentesco ? ` (${it.parentesco})` : '') : 'Familia';
-        div.innerHTML = `<strong>${quien}:</strong> ${it.texto}${audioTag}`;
+        div.innerHTML = `<strong>${quien}:</strong> ${it.texto}${audioTags}`;
         aportesLista.appendChild(div);
       });
     } catch (e) {}
   }
 
-  async function guardarAporte(text, audioUrl) {
-    const contributor = aporteNombre.value.trim();
-    const parentesco = aporteParentesco.value.trim();
-    aporteMsg.textContent = '';
-    try {
-      const resp = await fetch('/api/contribute-story', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contributor, parentesco, text, audioUrl, owner: activeOwnerId }),
-      });
-      const data = await resp.json();
-      if (resp.ok) {
-        aporteMsg.textContent = 'Historia guardada. Gracias.';
-        cargarAportes();
-        cargarIntro();
-      } else {
-        aporteMsg.textContent = data.error || 'No se pudo guardar.';
-      }
-    } catch (e) {
-      aporteMsg.textContent = 'Hubo un problema para conectar.';
-    }
-  }
-
-  cargarIntro();
   cargarAportes();
 })();
 </script>

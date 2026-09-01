@@ -175,7 +175,8 @@
         const item = document.createElement('div');
         item.className = 'aporte-item';
         const quien = n.contributor ? n.contributor + (n.parentesco ? ` (${n.parentesco})` : '') : 'Familia';
-        const audioTag = n.audio_url ? `<audio controls src="${n.audio_url}"></audio>` : '';
+        const urls = (n.audio_urls && n.audio_urls.length) ? n.audio_urls : (n.audio_url ? [n.audio_url] : []);
+        const audioTag = urls.map((u) => `<audio controls src="${u}"></audio>`).join('');
         item.innerHTML = `
           <p class="quien">${quien}</p>
           <div class="texto">${n.texto}</div>
