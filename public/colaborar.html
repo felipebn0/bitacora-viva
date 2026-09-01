@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Aportar — Los recuerdos de mis viejos</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/images/favicon-192.png">
+<link rel="apple-touch-icon" href="/images/favicon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,500&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
@@ -98,6 +101,18 @@
   .aportes .lista { display: flex; flex-direction: column; gap: 10px; max-height: 220px; overflow-y: auto; }
   .aportes .lista .item { font-size: 0.85rem; color: var(--ink-soft); }
   .aportes .lista .item strong { color: var(--ink); }
+  .aportes .lista .item audio { width: 100%; margin-top: 4px; }
+
+  .intro-box { background: #F5EFE2; border-radius: 12px; padding: 12px 14px; font-size: 0.92rem; line-height: 1.4; display: flex; flex-direction: column; gap: 8px; }
+  .intro-box .write-toggle { align-self: flex-start; font-size: 0.85rem; }
+  .record-row { display: flex; align-items: center; gap: 12px; }
+  .record-btn {
+    border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px;
+    padding: 10px 16px; font-weight: 700; cursor: pointer; font-family: var(--font-body);
+  }
+  .record-btn.recording { background: #A83A2E; }
+  .record-btn:disabled { opacity: 0.6; cursor: default; }
+  .rec-status { font-size: 0.85rem; color: var(--ink-soft); }
 
   .logout-row { text-align: center; margin-top: 8px; }
   .write-toggle { background: none; border: none; color: var(--moss); text-decoration: underline; cursor: pointer; font-family: var(--font-body); font-size: 0.9rem; }
@@ -132,12 +147,20 @@
 
     <div class="aportes">
       <h2>Aportar una historia</h2>
-      <p class="sub">Cuenta algo que recuerdes — una anécdota, un dato, un momento.</p>
+      <div class="intro-box">
+        <span id="introTexto">Cuenta algo que recuerdes — una anécdota, un dato, un momento.</span>
+        <button class="write-toggle" id="introEscuchar" type="button" style="display:none;">🔊 escuchar</button>
+      </div>
 
       <label for="aporteNombre">Tu nombre</label>
       <input type="text" id="aporteNombre" placeholder="Ej: Marcela">
 
-      <label for="aporteTexto">Cuenta una historia o recuerdo</label>
+      <div class="record-row">
+        <button class="record-btn" id="grabarBtn" type="button">🎙️ Grabar historia</button>
+        <span class="rec-status" id="recStatus"></span>
+      </div>
+
+      <label for="aporteTexto">O escríbela (se completa sola si grabas)</label>
       <textarea id="aporteTexto" placeholder="Ej: papá conoció a mamá en una fiesta de la universidad…"></textarea>
       <button id="aporteTextoBtn" type="button">Agregar historia</button>
 
@@ -271,6 +294,137 @@
   const aporteTextoBtn = document.getElementById('aporteTextoBtn');
   const aporteMsg = document.getElementById('aporteMsg');
   const aportesLista = document.getElementById('aportesLista');
+  const introTexto = document.getElementById('introTexto');
+  const introEscuchar = document.getElementById('introEscuchar');
+  const grabarBtn = document.getElementById('grabarBtn');
+  const recStatus = document.getElementById('recStatus');
+
+  let aporteAudioUrl = null;
+
+  async function cargarIntro() {
+    try {
+      const resp = await fetch('/api/contribute-intro');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (data.intro) {
+        introTexto.textContent = data.intro;
+        introEscuchar.style.display = '';
+      }
+    } catch (e) {}
+  }
+
+  introEscuchar.addEventListener('click', async () => {
+    introEscuchar.disabled = true;
+    try {
+      const resp = await fetch('/api/speak', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: introTexto.textContent }),
+      });
+      if (resp.ok) {
+        const blob = await resp.blob();
+        new Audio(URL.createObjectURL(blob)).play();
+      }
+    } catch (e) {}
+    introEscuchar.disabled = false;
+  });
+
+  // --- Grabar la historia con la voz ---
+  let mediaStream = null;
+  let mediaRecorder = null;
+  let audioChunks = [];
+  let grabando = false;
+
+  async function empezarGrabacion() {
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e) {
+      recStatus.textContent = 'No se pudo acceder al micrófono.';
+      return;
+    }
+    audioChunks = [];
+    try {
+      mediaRecorder = new MediaRecorder(mediaStream, { audioBitsPerSecond: 40000 });
+    } catch (e) {
+      mediaRecorder = new MediaRecorder(mediaStream);
+    }
+    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
+    mediaRecorder.start();
+    grabando = true;
+    grabarBtn.textContent = '⏹️ Detener';
+    grabarBtn.classList.add('recording');
+    recStatus.textContent = '⏺️ Grabando…';
+  }
+
+  function detenerGrabacionRaw() {
+    return new Promise((resolve) => {
+      if (!mediaRecorder || mediaRecorder.state === 'inactive') { resolve(null); return; }
+      mediaRecorder.onstop = () => resolve(new Blob(audioChunks, { type: 'audio/webm' }));
+      mediaRecorder.stop();
+    });
+  }
+
+  async function terminarGrabacion() {
+    grabando = false;
+    grabarBtn.textContent = '🎙️ Grabar historia';
+    grabarBtn.classList.remove('recording');
+    grabarBtn.disabled = true;
+    recStatus.textContent = 'Procesando el audio…';
+
+    const blob = await detenerGrabacionRaw();
+    if (mediaStream) { mediaStream.getTracks().forEach((t) => t.stop()); mediaStream = null; }
+
+    if (!blob || !blob.size) {
+      recStatus.textContent = '';
+      grabarBtn.disabled = false;
+      return;
+    }
+
+    try {
+      const upResp = await fetch('/api/contribute-audio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'audio/webm' },
+        body: blob,
+      });
+      if (upResp.ok) {
+        const upData = await upResp.json();
+        aporteAudioUrl = upData.url || null;
+      }
+    } catch (e) {}
+
+    try {
+      const trResp = await fetch('/api/transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'audio/webm' },
+        body: blob,
+      });
+      if (trResp.ok) {
+        const trData = await trResp.json();
+        if (trData.text) {
+          aporteTexto.value = aporteTexto.value.trim()
+            ? aporteTexto.value.trim() + ' ' + trData.text
+            : trData.text;
+        }
+        recStatus.textContent = 'Listo — revisa el texto y confirma.';
+      } else {
+        recStatus.textContent = 'No se pudo transcribir, pero el audio quedó guardado. Puedes escribir el texto a mano.';
+      }
+    } catch (e) {
+      recStatus.textContent = 'No se pudo transcribir, pero el audio quedó guardado. Puedes escribir el texto a mano.';
+    }
+
+    grabarBtn.disabled = false;
+  }
+
+  grabarBtn.addEventListener('click', () => {
+    if (grabando) { terminarGrabacion(); return; }
+    empezarGrabacion();
+  });
+
+  if (!window.MediaRecorder || !navigator.mediaDevices) {
+    grabarBtn.disabled = true;
+    grabarBtn.title = 'Este navegador no permite grabar audio.';
+  }
 
   async function cargarAportes() {
     try {
@@ -282,7 +436,8 @@
       items.forEach((it) => {
         const div = document.createElement('div');
         div.className = 'item';
-        div.innerHTML = `<strong>${it.contributor || 'Familia'}:</strong> ${it.texto}`;
+        const audioTag = it.audio_url ? `<audio controls src="${it.audio_url}"></audio>` : '';
+        div.innerHTML = `<strong>${it.contributor || 'Familia'}:</strong> ${it.texto}${audioTag}`;
         aportesLista.appendChild(div);
       });
     } catch (e) {}
@@ -298,13 +453,16 @@
       const resp = await fetch('/api/contribute-story', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contributor, text }),
+        body: JSON.stringify({ contributor, text, audioUrl: aporteAudioUrl }),
       });
       const data = await resp.json();
       if (resp.ok) {
         aporteTexto.value = '';
+        aporteAudioUrl = null;
+        recStatus.textContent = '';
         aporteMsg.textContent = 'Historia agregada. Gracias.';
         cargarAportes();
+        cargarIntro();
       } else {
         aporteMsg.textContent = data.error || 'No se pudo agregar.';
       }
@@ -316,6 +474,7 @@
 
   aporteTextoBtn.addEventListener('click', agregarHistoria);
 
+  cargarIntro();
   cargarAportes();
 })();
 </script>

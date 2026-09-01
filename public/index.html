@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Los recuerdos de mis viejos — Historias que siguen vivas</title>
   <meta name="description" content="Conserva las historias, la voz y los recuerdos de tu familia en un lugar al que puedes volver a escuchar, consultar y compartir. Crea tu cuenta gratis." />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicon-192.png">
+  <link rel="apple-touch-icon" href="/images/favicon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,500&display=swap" rel="stylesheet">
@@ -51,8 +54,7 @@
     }
     .nav-inner{height:76px; display:flex; align-items:center; justify-content:space-between; gap:24px}
     .brand{display:flex; align-items:center; gap:11px; text-decoration:none; font-family:var(--serif); font-size:1.28rem; font-weight:600}
-    .brand-mark{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 35% 30%,var(--gold),var(--gold-deep));box-shadow:0 8px 24px rgba(168,106,38,.22);position:relative}
-    .brand-mark:after{content:"";width:10px;height:10px;border:2px solid #FFF8EA;border-radius:50%}
+    .brand-mark{width:38px;height:38px;object-fit:contain;display:block}
     .nav-links{display:flex;gap:26px;align-items:center}
     .nav-links a{text-decoration:none;color:var(--ink-soft);font-size:.95rem}
     .nav-links a:hover{color:var(--ink)}
@@ -160,6 +162,9 @@
     /* FAMILY */
     .family-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
     .family-card{background:#FFFDF7;border:1px solid var(--line);border-radius:22px;padding:24px;min-height:210px}
+    .soon-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:18px}
+    .soon-card{background:#FFFDF7;border:1px dashed var(--line);border-radius:22px;padding:24px;position:relative}
+    .soon-badge{display:inline-block;background:var(--moss);color:#FBF6EA;font-size:.68rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:3px 10px;border-radius:20px;margin-bottom:12px}
     .family-card .who{display:flex;align-items:center;gap:12px;margin-bottom:18px}.avatar{width:42px;height:42px;border-radius:50%;background:linear-gradient(145deg,#D7C7AA,#918268);display:grid;place-items:center;color:#fff;font-family:var(--serif);font-weight:600}
     .family-card blockquote{font-family:var(--serif);font-style:italic;font-size:1.1rem;margin:0;color:#52483A}
 
@@ -180,6 +185,9 @@
     .signup-card{background:#FFFDF7;color:var(--ink);border-radius:26px;padding:30px;box-shadow:0 22px 54px rgba(0,0,0,.18)}
     .signup-card h3{font-size:1.85rem;margin:0 0 6px}
     .signup-card > p{margin:0 0 24px;color:var(--ink-soft);font-size:.94rem}
+    .signup-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px;background:var(--paper-2,#F5EFE2);border-radius:12px;padding:4px}
+    .signup-tab{border:none;background:none;border-radius:9px;padding:12px 10px;font-family:inherit;font-size:.86rem;font-weight:700;color:var(--ink-soft);cursor:pointer;line-height:1.25}
+    .signup-tab.active{background:#fff;color:var(--ink);box-shadow:0 4px 12px -4px rgba(0,0,0,.18)}
     .signup-form{display:grid;grid-template-columns:1fr 1fr;gap:16px}
     .field{display:flex;flex-direction:column;gap:7px;min-width:0}
     .field label{font-size:.86rem;font-weight:700;color:#51483D}
@@ -232,7 +240,7 @@
   <nav>
     <div class="wrap nav-inner">
       <a href="#inicio" class="brand" aria-label="Los recuerdos de mis viejos, inicio">
-        <span class="brand-mark" aria-hidden="true"></span>
+        <img class="brand-mark" src="/images/logo-icon.png" alt="" aria-hidden="true">
         <span>Los recuerdos de mis viejos</span>
       </a>
       <div class="nav-links">
@@ -387,6 +395,48 @@
       </div>
     </section>
 
+    <section id="proximamente">
+      <div class="wrap">
+        <div class="section-head center reveal">
+          <div class="eyebrow" style="justify-content:center">Lo que viene</div>
+          <h2>Próximamente</h2>
+          <p>Seguimos construyendo la bitácora. Esto es lo que se viene.</p>
+        </div>
+        <div class="soon-cards reveal">
+          <div class="soon-card">
+            <span class="soon-badge">Próximamente</span>
+            <div style="font-size:1.8rem;margin-bottom:10px">📷</div>
+            <b style="display:block;margin-bottom:4px">Fotos y videos</b>
+            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Súbelos para que cuenten, en sus propias palabras, cómo vivieron esas fechas.</p>
+          </div>
+          <div class="soon-card">
+            <span class="soon-badge">Próximamente</span>
+            <div style="font-size:1.8rem;margin-bottom:10px">🍲</div>
+            <b style="display:block;margin-bottom:4px">Recetas</b>
+            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Para que esa "receta de la abuela" perdure, contada con su propia voz.</p>
+          </div>
+          <div class="soon-card">
+            <span class="soon-badge">Próximamente</span>
+            <div style="font-size:1.8rem;margin-bottom:10px">🙏</div>
+            <b style="display:block;margin-bottom:4px">Oraciones</b>
+            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Las que solían recitar, para que las escuches y las recites junto a ellos.</p>
+          </div>
+          <div class="soon-card">
+            <span class="soon-badge">Próximamente</span>
+            <div style="font-size:1.8rem;margin-bottom:10px">🎵</div>
+            <b style="display:block;margin-bottom:4px">Memorias musicales</b>
+            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Un archivo con la música de su vida, para que también la puedan disfrutar, no solo conversar.</p>
+          </div>
+          <div class="soon-card">
+            <span class="soon-badge">Próximamente</span>
+            <div style="font-size:1.8rem;margin-bottom:10px">🎙️</div>
+            <b style="display:block;margin-bottom:4px">Historias ya grabadas</b>
+            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Sube audios de historias que ya se contaron antes, para guardarlas también.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section class="privacy" id="privacidad">
       <div class="wrap">
         <div class="privacy-box reveal">
@@ -416,8 +466,12 @@
           </div>
 
           <div class="signup-card">
-            <h3>Crea tu cuenta</h3>
-            <p>Nombre, correo y clave. Así de simple.</p>
+            <h3 id="signupTitle">Crea tu cuenta</h3>
+            <p id="signupSubtitle">Nombre, correo y clave. Así de simple.</p>
+            <div class="signup-tabs" role="tablist">
+              <button type="button" class="signup-tab active" id="tabNueva" role="tab" aria-selected="true">Crear mi bitácora</button>
+              <button type="button" class="signup-tab" id="tabColaborar" role="tab" aria-selected="false">Unirme con un código</button>
+            </div>
             <form class="signup-form" id="signupForm" novalidate>
               <div class="field">
                 <label for="suName">Nombre</label>
@@ -433,11 +487,10 @@
               </div>
               <div class="field">
                 <label for="suPass2">Confirmar clave</label>
-                <input id="suPass2" name="password2" type="password" autocomplete="new-password" placeholder="Repetí la clave" minlength="6" required>
+                <input id="suPass2" name="password2" type="password" autocomplete="new-password" placeholder="Repite la clave" minlength="6" required>
               </div>
               <p class="field-hint">Mínimo 6 caracteres.</p>
 
-              <button class="family-code-toggle" id="familyCodeToggle" type="button">¿Tienes un código de familia? Únete en vez de crear una bitácora nueva</button>
               <div class="field" id="familyCodeField" style="display:none;">
                 <label for="suCode">Código de familia</label>
                 <input id="suCode" name="inviteCode" type="text" placeholder="Ej: AB12CD" maxlength="6" style="text-transform:uppercase;">
@@ -466,7 +519,7 @@
 
   <footer>
     <div class="wrap footer-row">
-      <div class="brand"><span class="brand-mark" style="width:30px;height:30px"></span><span>Los recuerdos de mis viejos</span></div>
+      <div class="brand"><img class="brand-mark" src="/images/logo-icon.png" alt="" aria-hidden="true" style="width:30px;height:30px"><span>Los recuerdos de mis viejos</span></div>
       <div>Las historias pasan. Los recuerdos pueden quedarse.</div>
       <div class="footer-links"><a href="#como-funciona">Cómo funciona</a><a href="#registro">Crear cuenta</a><a href="/app.html">Iniciar sesión</a><a href="#privacidad">Privacidad</a></div>
     </div>
@@ -519,22 +572,35 @@
     const signupStatus = document.getElementById('signupStatus');
     const signupSubmit = document.getElementById('signupSubmit');
 
-    // Alternativa a crear una bitácora nueva: unirse como colaborador con
-    // el código que comparte quien ya tiene una (ver botón "invitar
-    // familiares" dentro de la app).
-    const familyCodeToggle = document.getElementById('familyCodeToggle');
+    // Dos caminos bien separados: crear una bitácora nueva, o unirse como
+    // colaborador con el código que comparte quien ya tiene una (ver botón
+    // "invitar familiares" dentro de la app) — mismos datos (nombre, correo,
+    // clave), la única diferencia es el código.
+    const tabNueva = document.getElementById('tabNueva');
+    const tabColaborar = document.getElementById('tabColaborar');
+    const signupTitle = document.getElementById('signupTitle');
+    const signupSubtitle = document.getElementById('signupSubtitle');
     const familyCodeField = document.getElementById('familyCodeField');
     const familyCodeNote = document.getElementById('familyCodeNote');
     const suCode = document.getElementById('suCode');
-    familyCodeToggle.addEventListener('click', () => {
-      const showing = familyCodeField.style.display !== 'none';
-      familyCodeField.style.display = showing ? 'none' : 'block';
-      familyCodeNote.style.display = showing ? 'none' : 'block';
-      familyCodeToggle.textContent = showing
-        ? '¿Tienes un código de familia? Únete en vez de crear una bitácora nueva'
-        : 'Prefiero crear una bitácora nueva';
-      if (showing) suCode.value = '';
-    });
+
+    function setSignupMode(esColaborador) {
+      tabNueva.classList.toggle('active', !esColaborador);
+      tabNueva.setAttribute('aria-selected', String(!esColaborador));
+      tabColaborar.classList.toggle('active', esColaborador);
+      tabColaborar.setAttribute('aria-selected', String(esColaborador));
+      familyCodeField.style.display = esColaborador ? 'block' : 'none';
+      familyCodeNote.style.display = esColaborador ? 'block' : 'none';
+      if (!esColaborador) suCode.value = '';
+      signupTitle.textContent = esColaborador ? 'Únete a una familia' : 'Crea tu cuenta';
+      signupSubtitle.textContent = esColaborador
+        ? 'Nombre, correo, clave y el código que te compartieron.'
+        : 'Nombre, correo y clave. Así de simple.';
+      signupSubmit.textContent = esColaborador ? 'Unirme y entrar' : 'Crear cuenta y entrar';
+    }
+
+    tabNueva.addEventListener('click', () => setSignupMode(false));
+    tabColaborar.addEventListener('click', () => setSignupMode(true));
 
     signupForm.addEventListener('submit', async (event) => {
       event.preventDefault();

@@ -86,6 +86,12 @@ function ensureSchema() {
       await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS owner_user_id INT REFERENCES users(id)`;
       await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_invite_code ON users(invite_code) WHERE invite_code IS NOT NULL`;
 
+      // Nombres nuevos que se agregaron al árbol genealógico (por charla o
+      // por reconstrucción) y todavía no se vieron en /arbol.html — para la
+      // campanita de aviso en el ícono del árbol. JSON con la lista de
+      // nombres; se vacía cuando la persona entra a ver el árbol.
+      await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS tree_pending_names TEXT`;
+
       // sessions/resumen ya existían de una versión sin cuentas — se agrega
       // user_id de forma aditiva (nunca se borra nada existente).
       await sql`CREATE TABLE IF NOT EXISTS sessions (
@@ -121,6 +127,7 @@ function ensureSchema() {
       // familiar aportó esta historia (para abrir la próxima charla con
       // eso), igual que "discussed" en la tabla media de acá abajo.
       await sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS discussed BOOLEAN NOT NULL DEFAULT false`;
+      await sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS audio_url TEXT`;
       await sql`CREATE INDEX IF NOT EXISTS idx_family_notes_user ON family_notes(user_id)`;
 
       await sql`CREATE TABLE IF NOT EXISTS media (
@@ -677,6 +684,17 @@ async function updateFamilyTree(userId, newExchanges) {
     );
     const eventos = Array.isArray(toolUse.input.eventos) ? toolUse.input.eventos.slice(0, 100) : [];
 
+    // Para la campanita de aviso en el ícono del árbol: nombres que
+    // aparecen ahora y no estaban en la lista previa.
+    const nombresPrevios = new Set(personasPrevias.map((p) => p.nombre));
+    const nombresNuevos = personas.map((p) => p.nombre).filter((n) => !nombresPrevios.has(n));
+    if (nombresNuevos.length) {
+      const rows = await sql`SELECT tree_pending_names FROM users WHERE id = ${userId}`;
+      const pendientes = new Set(parseJsonArray(rows[0] && rows[0].tree_pending_names));
+      nombresNuevos.forEach((n) => pendientes.add(n));
+      await sql`UPDATE users SET tree_pending_names = ${JSON.stringify(Array.from(pendientes))} WHERE id = ${userId}`;
+    }
+
     await sql`DELETE FROM family_members WHERE user_id = ${userId}`;
     for (const p of personas) {
       const padres = Array.isArray(p.padres) ? p.padres.filter((x) => typeof x === 'string' && x.trim()).slice(0, 2) : [];
@@ -870,7 +888,7 @@ async function speakWithAzure(text) {
   return Buffer.from(await resp.arrayBuffer());
 }
 
-app.post('/api/transcribe', requireAuth, bloquearColaborador, rateLimit, express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
+app.post('/api/transcribe', requireAuth, rateLimit, express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
   try {
     if (!req.body || !req.body.length) return res.status(400).json({ error: 'Falta audio.' });
     if (!ELEVEN_KEY) {
@@ -902,7 +920,7 @@ app.post('/api/transcribe', requireAuth, bloquearColaborador, rateLimit, express
   }
 });
 
-app.post('/api/speak', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
+app.post('/api/speak', requireAuth, rateLimit, async (req, res) => {
   try {
     let text = (req.body.text || '').trim();
     if (!text) return res.status(400).json({ error: 'Falta texto.' });
@@ -953,18 +971,76 @@ app.post('/api/save-audio', requireAuth, bloquearColaborador, express.raw({ type
 
 app.post('/api/contribute-story', requireAuth, rateLimit, async (req, res) => {
   try {
-    let { contributor, text } = req.body || {};
+    let { contributor, text, audioUrl } = req.body || {};
     text = (text || '').trim();
     if (!text) return res.status(400).json({ error: 'Falta el texto de la historia.' });
     if (text.length > 4000) text = text.slice(0, 4000);
     const cleanContributor = (contributor || '').trim().slice(0, 60) || null;
+    const cleanAudioUrl = typeof audioUrl === 'string' ? audioUrl.slice(0, 1000) : null;
 
     await ensureSchema();
-    await sql`INSERT INTO family_notes (user_id, contributor, texto) VALUES (${req.profileUserId}, ${cleanContributor}, ${text})`;
+    await sql`INSERT INTO family_notes (user_id, contributor, texto, audio_url) VALUES (${req.profileUserId}, ${cleanContributor}, ${text}, ${cleanAudioUrl})`;
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo guardar la historia.' });
+  }
+});
+
+// Sube el audio de un aporte (colaborador contando una historia con su voz)
+// a Blob storage — separado de /api/save-audio porque ese está pensado para
+// las charlas normales (sessionId/index/role) y este no tiene esa forma.
+app.post('/api/contribute-audio', requireAuth, express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
+  try {
+    if (!req.body || !req.body.length) return res.status(400).json({ error: 'Falta el audio.' });
+    const contentType = req.get('Content-Type') || 'audio/webm';
+    const ext = contentType.includes('mpeg') ? 'mp3' : 'webm';
+    const filename = `audio/aportes/${req.profileUserId}/${Date.now()}.${ext}`;
+    const blob = await put(filename, req.body, { access: 'public', contentType, addRandomSuffix: true });
+    res.json({ ok: true, url: blob.url });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo guardar el audio.' });
+  }
+});
+
+// Sugerencia breve, generada con IA, de qué podría contar quien va a
+// aportar una historia — usa los nombres y fechas ya conocidos del árbol
+// y del resumen para ayudar a ubicar mejor lo que cuente.
+app.get('/api/contribute-intro', requireAuth, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    const conocidos = await loadKnownFamilyMembers(req.profileUserId);
+    const memoria = await loadMemorySummary(req.profileUserId);
+    const ownerRow = await sql`SELECT name FROM users WHERE id = ${req.profileUserId}`;
+    const ownerNombre = (ownerRow[0] && ownerRow[0].name) || null;
+
+    if (!conocidos && !memoria) {
+      return res.json({
+        intro: `Cuenta cualquier recuerdo que tengas${ownerNombre ? ' de ' + ownerNombre : ''} — una anécdota, una costumbre, algo gracioso o algo importante. Si puedes ubicarlo con una fecha aproximada o con los nombres de quienes estaban ahí, mejor: eso ayuda a encajarlo con el resto de su historia.`,
+      });
+    }
+
+    const prompt = `Vas a ayudar a preparar a un familiar que va a grabar, con su propia voz, un recuerdo o anécdota sobre ${ownerNombre || 'esta persona'} para sumarlo a su bitácora de vida.
+
+Con lo que ya se sabe (abajo), escribe una invitación breve y cálida (2-3 frases, español de Colombia, tuteo, nunca "vos" ni "usted") sugiriéndole de qué podría hablar — idealmente algo que todavía no esté cubierto, o que ayude a completar un hueco. Si hay nombres o fechas conocidas que sirvan para ubicar mejor la historia (por ejemplo una época, un lugar, una persona), menciónalos para que la persona pueda anclar su recuerdo a eso. No inventes datos que no estén abajo.
+
+${conocidos || ''}
+${memoria ? `\nResumen de lo que ya se ha contado:\n${memoria.slice(0, 1500)}` : ''}`;
+
+    const response = await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: 200,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const intro = response.content[0].text.trim();
+    res.json({ intro });
+  } catch (err) {
+    console.error(err);
+    res.json({
+      intro: 'Cuenta cualquier recuerdo que tengas — una anécdota, una costumbre, algo gracioso o algo importante. Si puedes ubicarlo con una fecha aproximada o con los nombres de quienes estaban ahí, mejor.',
+    });
   }
 });
 
@@ -1002,7 +1078,7 @@ app.post('/api/contribute-media', requireAuth, express.raw({ type: '*/*', limit:
 app.get('/api/contributions', requireAuth, async (req, res) => {
   try {
     await ensureSchema();
-    const notes = await sql`SELECT contributor, texto, created_at FROM family_notes WHERE user_id = ${req.profileUserId} ORDER BY created_at DESC LIMIT 30`;
+    const notes = await sql`SELECT contributor, texto, audio_url, created_at FROM family_notes WHERE user_id = ${req.profileUserId} ORDER BY created_at DESC LIMIT 30`;
     const media = await sql`SELECT type, url, caption, contributor, created_at FROM media WHERE user_id = ${req.profileUserId} ORDER BY created_at DESC LIMIT 30`;
     res.json({ notes, media });
   } catch (err) {
@@ -1188,6 +1264,30 @@ app.get('/api/tree', requireAuth, bloquearColaborador, async (req, res) => {
   }
 });
 
+// Campanita de aviso en el ícono del árbol: quién se agregó desde la
+// última vez que se abrió /arbol.html.
+app.get('/api/tree/pending', requireAuth, bloquearColaborador, async (req, res) => {
+  try {
+    await ensureSchema();
+    const rows = await sql`SELECT tree_pending_names FROM users WHERE id = ${req.userId}`;
+    res.json({ names: parseJsonArray(rows[0] && rows[0].tree_pending_names) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo consultar el árbol.' });
+  }
+});
+
+app.post('/api/tree/mark-seen', requireAuth, bloquearColaborador, async (req, res) => {
+  try {
+    await ensureSchema();
+    await sql`UPDATE users SET tree_pending_names = NULL WHERE id = ${req.userId}`;
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo actualizar.' });
+  }
+});
+
 // Repasa TODAS las charlas ya guardadas (de antes de que existiera el árbol,
 // o si se quiere reconstruir desde cero) y actualiza personas/eventos.
 app.post('/api/rebuild-tree', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
@@ -1251,8 +1351,8 @@ app.post('/api/save', requireAuth, bloquearColaborador, async (req, res) => {
 const FAMILY_SYSTEM_PROMPT_BASE = `Tienes acceso al resumen de charlas donde una persona mayor fue contando la historia de su vida. Tu trabajo es responder preguntas de su familia sobre lo que él contó, basándote únicamente en esa información.
 
 Reglas:
-- Respondé en español, cálido pero directo, en 2-4 oraciones.
-- Si la información no está disponible, decilo con claridad: no inventes ni completes con suposiciones.
+- Responde en español, cálido pero directo, en 2-4 oraciones.
+- Si la información no está disponible, dilo con claridad: no inventes ni completes con suposiciones.
 - Habla de él en tercera persona ("contó que...", "dijo que...").
 - Si el resumen no tiene el detalle necesario para responder con precisión (una cita exacta, una fecha, algo muy específico), usa la herramienta "buscar_en_transcripciones" para leer las charlas completas antes de responder.`;
 

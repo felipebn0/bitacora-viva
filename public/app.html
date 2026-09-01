@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Los recuerdos de mis viejos</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/images/favicon-192.png">
+<link rel="apple-touch-icon" href="/images/favicon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,500&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
@@ -194,6 +197,7 @@
     justify-content: flex-end;
     gap: 10px;
   }
+  .icon-btn-wrap { position: relative; display: inline-flex; }
   .icon-btn {
     display: inline-flex;
     align-items: center;
@@ -208,6 +212,24 @@
     cursor: pointer;
     box-shadow: 0 2px 6px -3px rgba(0,0,0,0.2);
   }
+  .icon-badge {
+    display: none;
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    border-radius: 10px;
+    background: #A83A2E;
+    color: #FBF6EA;
+    font-size: 0.72rem;
+    font-weight: 700;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--bg);
+  }
+  .icon-badge.visible { display: flex; }
   .login {
     width: min(340px, 100%);
     background: #FBF6EA;
@@ -247,7 +269,10 @@
 
   <div id="appContent">
    <div class="topbar">
-     <a class="icon-btn" href="/arbol.html" target="_blank" rel="noopener" title="Árbol genealógico" aria-label="Árbol genealógico">🌳</a>
+     <div class="icon-btn-wrap">
+       <a class="icon-btn" href="/arbol.html" target="_blank" rel="noopener" title="Árbol genealógico" aria-label="Árbol genealógico">🌳</a>
+       <span class="icon-badge" id="treeBadge"></span>
+     </div>
      <a class="icon-btn" href="/capitulos.html" target="_blank" rel="noopener" title="Libro de la historia" aria-label="Libro de la historia">📖</a>
    </div>
    <div class="main-layout">
@@ -281,44 +306,6 @@
     </div>
 
     <div class="panels-col">
-    <div class="familia">
-      <h2>Preguntale a la bitácora</h2>
-      <p class="sub">Escribí una pregunta sobre lo que tu papá ya contó (nombres, lugares, historias…).</p>
-      <div class="familia-chat" id="familiaChat"></div>
-      <div class="familia-input-row">
-        <input type="text" id="familiaInput" placeholder="Ej: ¿cómo se llamaban sus papás?">
-        <button id="familiaAsk" type="button">Preguntar</button>
-      </div>
-    </div>
-
-    <div class="aportes">
-      <h2>Aportar a la bitácora</h2>
-      <p class="sub">Historias, fotos o videos para ayudar a profundizar la charla.</p>
-
-      <label for="aporteNombre">Tu nombre</label>
-      <input type="text" id="aporteNombre" placeholder="Ej: Marcela">
-
-      <label for="aporteTexto">Cuenta una historia o recuerdo</label>
-      <textarea id="aporteTexto" placeholder="Ej: papá conoció a mamá en una fiesta de la universidad…"></textarea>
-      <button id="aporteTextoBtn" type="button">Agregar historia</button>
-
-      <p class="msg" id="aporteMsg"></p>
-
-      <!-- Foto/video: escondido por ahora, no es relevante para esta parte.
-           El código sigue funcionando, ver #aportePhotoBlock. -->
-      <div id="aportePhotoBlock" style="display:none;">
-        <hr>
-        <label for="aporteArchivo">Foto o video (hasta 4MB)</label>
-        <input type="file" id="aporteArchivo" accept="image/*,video/*">
-        <input type="text" id="aporteCaption" placeholder="¿Quién aparece? ¿Qué momento es?">
-        <button id="aporteArchivoBtn" type="button">Subir foto/video</button>
-      </div>
-
-      <hr>
-
-      <div class="lista" id="aportesLista"></div>
-    </div>
-
     <div class="aportes">
       <h2>Historias detectadas en la charla</h2>
       <p class="sub">Cuando lo que cuenta parece una historia completa (no un dato corto), queda anotado acá junto con su audio.</p>
@@ -977,58 +964,6 @@
     writeToggle.textContent = 'escribir respuesta';
   }
 
-  // --- Preguntale a la bitácora ---
-  const familiaChat = document.getElementById('familiaChat');
-  const familiaInput = document.getElementById('familiaInput');
-  const familiaAsk = document.getElementById('familiaAsk');
-
-  function addFamiliaBubble(kind, text) {
-    const div = document.createElement('div');
-    div.className = 'familia-bubble ' + kind;
-    div.textContent = text;
-    familiaChat.appendChild(div);
-    familiaChat.scrollTop = familiaChat.scrollHeight;
-    return div;
-  }
-
-  async function askFamilia() {
-    if (familiaAsk.disabled) return; // ya hay una pregunta en curso
-    const q = familiaInput.value.trim();
-    if (!q) return;
-    addFamiliaBubble('q', q);
-    familiaInput.value = '';
-    familiaAsk.disabled = true;
-    const thinking = addFamiliaBubble('thinking', 'Buscando en la bitácora…');
-    try {
-      const resp = await fetch('/api/ask-familia', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: q }),
-      });
-      const data = await resp.json();
-      thinking.remove();
-      addFamiliaBubble('a', data.answer || 'No se pudo responder.');
-    } catch (e) {
-      thinking.remove();
-      addFamiliaBubble('a', 'Hubo un problema para conectar.');
-    }
-    familiaAsk.disabled = false;
-    familiaInput.focus();
-  }
-
-  familiaAsk.addEventListener('click', askFamilia);
-  familiaInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') askFamilia(); });
-
-  // --- Aportar a la bitácora (historias, fotos, videos) ---
-  const aporteNombre = document.getElementById('aporteNombre');
-  const aporteTexto = document.getElementById('aporteTexto');
-  const aporteTextoBtn = document.getElementById('aporteTextoBtn');
-  const aporteArchivo = document.getElementById('aporteArchivo');
-  const aporteCaption = document.getElementById('aporteCaption');
-  const aporteArchivoBtn = document.getElementById('aporteArchivoBtn');
-  const aporteMsg = document.getElementById('aporteMsg');
-  const aportesLista = document.getElementById('aportesLista');
-
   const storyLogLista = document.getElementById('storyLogLista');
 
   // El árbol genealógico y la línea de tiempo ahora viven en /arbol.html
@@ -1051,86 +986,6 @@
     } catch (e) {}
   }
 
-  async function cargarAportes() {
-    try {
-      const resp = await fetch('/api/contributions');
-      if (!resp.ok) return;
-      const data = await resp.json();
-      aportesLista.innerHTML = '';
-      // Fotos/video escondidas por ahora (ver aportePhotoBlock) — solo se
-      // listan las historias de texto.
-      const items = (data.notes || []).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-      items.forEach((it) => {
-        const div = document.createElement('div');
-        div.className = 'item';
-        div.innerHTML = `<strong>${it.contributor || 'Familia'}:</strong> ${it.texto}`;
-        aportesLista.appendChild(div);
-      });
-    } catch (e) {}
-  }
-
-  async function agregarHistoria() {
-    const contributor = aporteNombre.value.trim();
-    const text = aporteTexto.value.trim();
-    if (!text) return;
-    aporteTextoBtn.disabled = true;
-    aporteMsg.textContent = '';
-    try {
-      const resp = await fetch('/api/contribute-story', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contributor, text }),
-      });
-      const data = await resp.json();
-      if (resp.ok) {
-        aporteTexto.value = '';
-        aporteMsg.textContent = 'Historia agregada. Gracias.';
-        cargarAportes();
-      } else {
-        aporteMsg.textContent = data.error || 'No se pudo agregar.';
-      }
-    } catch (e) {
-      aporteMsg.textContent = 'Hubo un problema para conectar.';
-    }
-    aporteTextoBtn.disabled = false;
-  }
-
-  async function subirArchivo() {
-    const file = aporteArchivo.files[0];
-    if (!file) return;
-    if (file.size > 4 * 1024 * 1024) {
-      aporteMsg.textContent = 'El archivo pesa más de 4MB — prueba con uno más chico por ahora.';
-      return;
-    }
-    const contributor = encodeURIComponent(aporteNombre.value.trim());
-    const caption = encodeURIComponent(aporteCaption.value.trim());
-    aporteArchivoBtn.disabled = true;
-    aporteMsg.textContent = 'Subiendo…';
-    try {
-      const resp = await fetch(`/api/contribute-media?contributor=${contributor}&caption=${caption}`, {
-        method: 'POST',
-        headers: { 'Content-Type': file.type || 'application/octet-stream' },
-        body: file,
-      });
-      const data = await resp.json();
-      if (resp.ok) {
-        aporteArchivo.value = '';
-        aporteCaption.value = '';
-        aporteMsg.textContent = 'Subido correctamente.';
-        cargarAportes();
-      } else {
-        aporteMsg.textContent = data.error || 'No se pudo subir.';
-      }
-    } catch (e) {
-      aporteMsg.textContent = 'Hubo un problema para conectar.';
-    }
-    aporteArchivoBtn.disabled = false;
-  }
-
-  aporteTextoBtn.addEventListener('click', agregarHistoria);
-  aporteArchivoBtn.addEventListener('click', subirArchivo);
-
   // Si se cierra la pestaña o se navega a otro lado a mitad de charla,
   // intentamos guardar lo que se alcanzó a hablar en vez de perderlo.
   window.addEventListener('pagehide', () => {
@@ -1144,7 +999,23 @@
     } catch (e) {}
   });
 
-  cargarAportes();
+  async function cargarBadgeArbol() {
+    const treeBadge = document.getElementById('treeBadge');
+    if (!treeBadge) return;
+    try {
+      const resp = await fetch('/api/tree/pending');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const nombres = data.names || [];
+      if (nombres.length) {
+        treeBadge.textContent = String(nombres.length);
+        treeBadge.title = 'Se agregó al árbol: ' + nombres.join(', ');
+        treeBadge.classList.add('visible');
+      }
+    } catch (e) {}
+  }
+  cargarBadgeArbol();
+
   cargarStoryLog();
 })();
 </script>
