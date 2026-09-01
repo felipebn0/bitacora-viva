@@ -106,7 +106,6 @@
   .aportes .lista .item audio { width: 100%; margin-top: 4px; }
 
   .intro-box { background: #F5EFE2; border-radius: 12px; padding: 12px 14px; font-size: 0.92rem; line-height: 1.4; display: flex; flex-direction: column; gap: 8px; }
-  .intro-box .write-toggle { align-self: flex-start; font-size: 0.85rem; }
 
   .orb-zone { display: grid; justify-items: center; gap: 10px; padding: 8px 0 4px; }
   .orb-zone .orb {
@@ -149,21 +148,10 @@
       <p class="sub">Comparte una historia o consulta lo que ya se contó.</p>
     </header>
 
-    <div class="familia">
-      <h2>Preguntale a la bitácora</h2>
-      <p class="sub">Escribí una pregunta sobre lo que ya se contó (nombres, lugares, historias…).</p>
-      <div class="familia-chat" id="familiaChat"></div>
-      <div class="familia-input-row">
-        <input type="text" id="familiaInput" placeholder="Ej: ¿cómo se llamaban sus papás?">
-        <button id="familiaAsk" type="button">Preguntar</button>
-      </div>
-    </div>
-
     <div class="aportes">
       <h2>Aportar una historia</h2>
       <div class="intro-box">
         <span id="introTexto">Cuenta algo que recuerdes — una anécdota, un dato, un momento.</span>
-        <button class="write-toggle" id="introEscuchar" type="button" style="display:none;">🔊 escuchar</button>
       </div>
 
       <label for="aporteNombre">Tu nombre</label>
@@ -179,6 +167,16 @@
       <hr>
 
       <div class="lista" id="aportesLista"></div>
+    </div>
+
+    <div class="familia">
+      <h2>Preguntale a la bitácora</h2>
+      <p class="sub">Escribí una pregunta sobre lo que ya se contó (nombres, lugares, historias…).</p>
+      <div class="familia-chat" id="familiaChat"></div>
+      <div class="familia-input-row">
+        <input type="text" id="familiaInput" placeholder="Ej: ¿cómo se llamaban sus papás?">
+        <button id="familiaAsk" type="button">Preguntar</button>
+      </div>
     </div>
 
     <div class="logout-row">
@@ -303,7 +301,6 @@
   const aporteMsg = document.getElementById('aporteMsg');
   const aportesLista = document.getElementById('aportesLista');
   const introTexto = document.getElementById('introTexto');
-  const introEscuchar = document.getElementById('introEscuchar');
   const orb = document.getElementById('orb');
   const recStatus = document.getElementById('recStatus');
 
@@ -314,26 +311,9 @@
       const data = await resp.json();
       if (data.intro) {
         introTexto.textContent = data.intro;
-        introEscuchar.style.display = '';
       }
     } catch (e) {}
   }
-
-  introEscuchar.addEventListener('click', async () => {
-    introEscuchar.disabled = true;
-    try {
-      const resp = await fetch('/api/speak', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: introTexto.textContent }),
-      });
-      if (resp.ok) {
-        const blob = await resp.blob();
-        new Audio(URL.createObjectURL(blob)).play();
-      }
-    } catch (e) {}
-    introEscuchar.disabled = false;
-  });
 
   // --- Grabar la historia con la voz ---
   let mediaStream = null;
