@@ -128,7 +128,24 @@ function ensureSchema() {
       // eso), igual que "discussed" en la tabla media de acá abajo.
       await sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS discussed BOOLEAN NOT NULL DEFAULT false`;
       await sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS audio_url TEXT`;
+      await sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS parentesco TEXT`;
       await sql`CREATE INDEX IF NOT EXISTS idx_family_notes_user ON family_notes(user_id)`;
+
+      // Un usuario dueño de su propia bitácora también puede sumarse como
+      // colaborador de OTRAS bitácoras usando el código de esa familia
+      // (botón "colaborar con otra historia" en app.html) — a diferencia de
+      // una cuenta 100% colaboradora (users.owner_user_id), acá es
+      // muchos-a-muchos: la misma persona puede colaborar en varias
+      // historias distintas sin dejar de tener la suya propia.
+      await sql`CREATE TABLE IF NOT EXISTS collaborations (
+        id SERIAL PRIMARY KEY,
+        collaborator_user_id INT NOT NULL REFERENCES users(id),
+        owner_user_id INT NOT NULL REFERENCES users(id),
+        parentesco TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE(collaborator_user_id, owner_user_id)
+      )`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_collaborations_collaborator ON collaborations(collaborator_user_id)`;
 
       await sql`CREATE TABLE IF NOT EXISTS media (
         id SERIAL PRIMARY KEY,
@@ -294,6 +311,28 @@ function bloquearColaborador(req, res, next) {
   next();
 }
 
+// Resuelve para qué bitácora debería trabajar esta request. Si viene un
+// parámetro explícito "owner" (query o body — colaborar.html lo manda en
+// cada pedido cuando el usuario entró con un código a la historia de otra
+// persona), se valida contra collaborations o el owner_user_id fijo; si no
+// viene, se usa el req.profileUserId de siempre (cuenta 100% colaboradora,
+// o el propio usuario). Devuelve null si no está autorizado.
+async function resolveProfileUserId(req) {
+  const raw = (req.query && req.query.owner) || (req.body && req.body.owner);
+  const requestedOwner = parseInt(raw, 10);
+  if (!requestedOwner) return req.profileUserId;
+  if (requestedOwner === req.userId) return req.userId;
+
+  await ensureSchema();
+  const rows = await sql`SELECT owner_user_id FROM users WHERE id = ${req.userId}`;
+  if (rows[0] && rows[0].owner_user_id === requestedOwner) return requestedOwner;
+
+  const collab = await sql`SELECT 1 FROM collaborations WHERE collaborator_user_id = ${req.userId} AND owner_user_id = ${requestedOwner}`;
+  if (collab.length) return requestedOwner;
+
+  return null;
+}
+
 app.get('/api/me', async (req, res) => {
   const cookies = parseCookies(req.headers.cookie);
   const session = verifySession(cookies[SESSION_COOKIE]);
@@ -403,6 +442,51 @@ app.get('/api/invite-code', requireAuth, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo generar el código.' });
+  }
+});
+
+// Botón "colaborar con otra historia" en app.html: sin salir de tu cuenta,
+// te sumas como colaborador de OTRA bitácora usando su código. Distinto de
+// /api/signup con inviteCode — ahí una cuenta nueva nace 100% colaboradora;
+// acá una cuenta que ya tiene su propia historia se suma también a otra.
+app.post('/api/join-collaboration', requireAuth, rateLimit, async (req, res) => {
+  try {
+    const cleanCode = String((req.body && req.body.code) || '').trim().toUpperCase();
+    if (!cleanCode) return res.status(400).json({ error: 'Falta el código.' });
+
+    await ensureSchema();
+    const ownerRows = await sql`SELECT id, name, username FROM users WHERE invite_code = ${cleanCode}`;
+    if (!ownerRows.length) return res.status(404).json({ error: 'Ese código no existe.' });
+    const owner = ownerRows[0];
+    if (owner.id === req.userId) {
+      return res.status(400).json({ error: 'Ese es tu propio código.' });
+    }
+
+    await sql`
+      INSERT INTO collaborations (collaborator_user_id, owner_user_id)
+      VALUES (${req.userId}, ${owner.id})
+      ON CONFLICT (collaborator_user_id, owner_user_id) DO NOTHING
+    `;
+    res.json({ ok: true, ownerId: owner.id, ownerName: capitalizarNombre(owner.name || owner.username) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo unir a esa historia.' });
+  }
+});
+
+// colaborar.html llama esto cuando entra con ?owner=<id> — confirma que
+// esta cuenta puede colaborar ahí y devuelve el nombre del dueño, sin
+// necesidad de volver a pedir el código cada vez que vuelve a entrar.
+app.get('/api/collaboration-info', requireAuth, async (req, res) => {
+  try {
+    const ownerId = await resolveProfileUserId(req);
+    if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
+    const rows = await sql`SELECT name, username FROM users WHERE id = ${ownerId}`;
+    if (!rows.length) return res.status(404).json({ error: 'No se encontró esa bitácora.' });
+    res.json({ ownerId, ownerName: capitalizarNombre(rows[0].name || rows[0].username) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo cargar esa historia.' });
   }
 });
 
@@ -545,13 +629,13 @@ async function loadMemorySummary(userId) {
 // entrevistadora los use y pregunte por las personas o momentos que aparecen.
 async function loadFamilyContext(userId) {
   await ensureSchema();
-  const notes = await sql`SELECT contributor, texto FROM family_notes WHERE user_id = ${userId} ORDER BY created_at DESC LIMIT 20`;
+  const notes = await sql`SELECT contributor, parentesco, texto FROM family_notes WHERE user_id = ${userId} ORDER BY created_at DESC LIMIT 20`;
   const pending = await sql`SELECT id, type, caption, contributor FROM media WHERE user_id = ${userId} AND discussed = false ORDER BY created_at ASC LIMIT 1`;
 
   let text = '';
   if (notes.length) {
     text += `\n\nHistorias que OTROS familiares aportaron sobre ella (importante: esto NO es algo que ella te haya contado a ti — son reportes de otras personas. Puedes usarlas para profundizar o confirmar detalles, pero si las mencionas en la charla, siempre deja claro quién te la contó, por ejemplo "esto me lo contó tu hermana Marcela" — nunca se las atribuyas a la persona con la que estás hablando, ni des a entender que ella ya te lo había contado antes):\n${notes
-      .map((n) => `- [${n.contributor || 'un familiar'}]: ${n.texto}`)
+      .map((n) => `- [${n.contributor || 'un familiar'}${n.parentesco ? ', ' + n.parentesco : ''}]: ${n.texto}`)
       .join('\n')}`;
   }
   if (pending.length) {
@@ -568,7 +652,7 @@ async function loadFamilyContext(userId) {
 // repetirla en la próxima sesión.
 async function loadPendingFamilyNote(userId) {
   await ensureSchema();
-  const rows = await sql`SELECT id, contributor, texto FROM family_notes WHERE user_id = ${userId} AND discussed = false ORDER BY created_at ASC LIMIT 1`;
+  const rows = await sql`SELECT id, contributor, parentesco, texto FROM family_notes WHERE user_id = ${userId} AND discussed = false ORDER BY created_at ASC LIMIT 1`;
   return rows[0] || null;
 }
 
@@ -848,7 +932,7 @@ app.post('/api/next', requireAuth, bloquearColaborador, rateLimit, async (req, r
       : esPrimeraVez
       ? '(La persona acaba de presionar el botón por PRIMERA VEZ — todavía no hay ningún resumen guardado de ella, así que este es su primer mensaje en la aplicación. Antes de preguntar nada, dale una bienvenida cálida y explícale brevemente de qué se trata esto: que vas a ir charlando con ella de a poco para guardar su historia de vida con su propia voz, para que su familia la pueda escuchar y leer después. Cuéntale que no hay respuestas correctas ni incorrectas, que puede contar lo que quiera y como quiera, con sus propias palabras, sin apurarse ni preocuparse por el orden. Dale un tip breve para sentirse cómoda hablando sola, por ejemplo imaginarse que le está contando esto a un nieto o a alguien muy querido. Después de esa bienvenida breve (unas 3-4 frases, no más), pregúntale su nombre, y aprovecha para pedirle también su edad y su fecha de nacimiento, para tener esos datos básicos guardados desde el principio. Todo esto en un solo mensaje de bienvenida, cálido y no muy largo — no lo separes en varios turnos.)'
       : notaPendiente
-      ? `(La persona acaba de presionar el botón para empezar a charlar. Salúdala por su nombre si lo sabes. Antes de preguntar cualquier otra cosa, cuéntale que ${notaPendiente.contributor || 'un familiar'} aportó una historia sobre ella — algo en la línea de: "Quiero contarte que estuve hablando con ${notaPendiente.contributor || 'tu familia'} y me contó una historia sobre ti que trata de..." (adapta el género y la frase para que suene natural, no la copies literal). Lo que contó fue esto: "${String(notaPendiente.texto).slice(0, 400)}". Después de contarle eso con calidez, pregúntale qué recuerda de esa historia o si quiere contarte su propia versión, y deja que la charla se desarrolle desde ahí con naturalidad, como el resto de las charlas.)`
+      ? `(La persona acaba de presionar el botón para empezar a charlar. Salúdala por su nombre si lo sabes. Antes de preguntar cualquier otra cosa, cuéntale que ${notaPendiente.contributor || 'un familiar'}${notaPendiente.parentesco ? ` (${notaPendiente.parentesco})` : ''} aportó una historia sobre ella — algo en la línea de: "Quiero contarte que estuve hablando con ${notaPendiente.contributor || 'tu familia'} y me contó una historia sobre ti que trata de..." (adapta el género y la frase para que suene natural, no la copies literal). Lo que contó fue esto: "${String(notaPendiente.texto).slice(0, 400)}". Después de contarle eso con calidez, pregúntale qué recuerda de esa historia o si quiere contarte su propia versión, y deja que la charla se desarrolle desde ahí con naturalidad, como el resto de las charlas.)`
       : '(La persona acaba de presionar el botón para empezar a charlar. Si el resumen tiene su nombre, salúdala por su nombre. Si no, salúdala cálidamente y pregúntale cómo se llama.)';
     const messages = history.length ? history : [{ role: 'user', content: startPrompt }];
     if (notaPendiente) {
@@ -1034,15 +1118,19 @@ app.post('/api/save-audio', requireAuth, bloquearColaborador, express.raw({ type
 
 app.post('/api/contribute-story', requireAuth, rateLimit, async (req, res) => {
   try {
-    let { contributor, text, audioUrl } = req.body || {};
+    const ownerId = await resolveProfileUserId(req);
+    if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
+
+    let { contributor, parentesco, text, audioUrl } = req.body || {};
     text = capitalizarInicio((text || '').trim());
     if (!text) return res.status(400).json({ error: 'Falta el texto de la historia.' });
     if (text.length > 4000) text = text.slice(0, 4000);
     const cleanContributor = capitalizarNombre((contributor || '').trim().slice(0, 60)) || null;
+    const cleanParentesco = capitalizarNombre((parentesco || '').trim().slice(0, 60)) || null;
     const cleanAudioUrl = typeof audioUrl === 'string' ? audioUrl.slice(0, 1000) : null;
 
     await ensureSchema();
-    await sql`INSERT INTO family_notes (user_id, contributor, texto, audio_url) VALUES (${req.profileUserId}, ${cleanContributor}, ${text}, ${cleanAudioUrl})`;
+    await sql`INSERT INTO family_notes (user_id, contributor, parentesco, texto, audio_url) VALUES (${ownerId}, ${cleanContributor}, ${cleanParentesco}, ${text}, ${cleanAudioUrl})`;
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -1055,9 +1143,11 @@ app.post('/api/contribute-story', requireAuth, rateLimit, async (req, res) => {
 // las charlas normales (sessionId/index/role) y este no tiene esa forma.
 app.post('/api/contribute-audio', requireAuth, express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
   try {
+    const ownerId = await resolveProfileUserId(req);
+    if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
     if (!req.body || !req.body.length) return res.status(400).json({ error: 'Falta el audio.' });
     const contentType = req.get('Content-Type') || 'audio/webm';
-    const filename = `audio/aportes/${req.profileUserId}/${Date.now()}.${extensionForAudio(contentType)}`;
+    const filename = `audio/aportes/${ownerId}/${Date.now()}.${extensionForAudio(contentType)}`;
     const blob = await put(filename, req.body, { access: 'public', contentType, addRandomSuffix: true });
     res.json({ ok: true, url: blob.url });
   } catch (err) {
@@ -1071,10 +1161,12 @@ app.post('/api/contribute-audio', requireAuth, express.raw({ type: '*/*', limit:
 // y del resumen para ayudar a ubicar mejor lo que cuente.
 app.get('/api/contribute-intro', requireAuth, rateLimit, async (req, res) => {
   try {
+    const ownerId = await resolveProfileUserId(req);
+    if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
     await ensureSchema();
-    const conocidos = await loadKnownFamilyMembers(req.profileUserId);
-    const memoria = await loadMemorySummary(req.profileUserId);
-    const ownerRow = await sql`SELECT name FROM users WHERE id = ${req.profileUserId}`;
+    const conocidos = await loadKnownFamilyMembers(ownerId);
+    const memoria = await loadMemorySummary(ownerId);
+    const ownerRow = await sql`SELECT name FROM users WHERE id = ${ownerId}`;
     const ownerNombre = (ownerRow[0] && ownerRow[0].name) || null;
 
     if (!conocidos && !memoria) {
@@ -1113,6 +1205,8 @@ ${memoria ? `\nResumen de lo que ya se ha contado:\n${memoria.slice(0, 1500)}` :
 // videos largos hace falta otro mecanismo de subida que todavía no armamos.
 app.post('/api/contribute-media', requireAuth, express.raw({ type: '*/*', limit: '4mb' }), async (req, res) => {
   try {
+    const ownerId = await resolveProfileUserId(req);
+    if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
     if (!req.body || !req.body.length) return res.status(400).json({ error: 'Falta el archivo.' });
     const { contributor, caption } = req.query;
     const contentType = req.get('Content-Type') || 'application/octet-stream';
@@ -1121,14 +1215,14 @@ app.post('/api/contribute-media', requireAuth, express.raw({ type: '*/*', limit:
     const cleanCaption = String(caption || '').trim().slice(0, 500) || null;
     const ext = (contentType.split('/')[1] || 'bin').replace(/[^a-z0-9]/gi, '').slice(0, 10) || 'bin';
 
-    const blob = await put(`media/${req.profileUserId}/${type}-${Date.now()}.${ext}`, req.body, {
+    const blob = await put(`media/${ownerId}/${type}-${Date.now()}.${ext}`, req.body, {
       access: 'public',
       contentType,
       addRandomSuffix: true,
     });
 
     await ensureSchema();
-    await sql`INSERT INTO media (user_id, type, url, caption, contributor) VALUES (${req.profileUserId}, ${type}, ${blob.url}, ${cleanCaption}, ${cleanContributor})`;
+    await sql`INSERT INTO media (user_id, type, url, caption, contributor) VALUES (${ownerId}, ${type}, ${blob.url}, ${cleanCaption}, ${cleanContributor})`;
     res.json({ ok: true, url: blob.url, type });
   } catch (err) {
     console.error(err);
@@ -1141,9 +1235,11 @@ app.post('/api/contribute-media', requireAuth, express.raw({ type: '*/*', limit:
 
 app.get('/api/contributions', requireAuth, async (req, res) => {
   try {
+    const ownerId = await resolveProfileUserId(req);
+    if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
     await ensureSchema();
-    const notesRaw = await sql`SELECT contributor, texto, audio_url, created_at FROM family_notes WHERE user_id = ${req.profileUserId} ORDER BY created_at DESC LIMIT 30`;
-    const mediaRaw = await sql`SELECT type, url, caption, contributor, created_at FROM media WHERE user_id = ${req.profileUserId} ORDER BY created_at DESC LIMIT 30`;
+    const notesRaw = await sql`SELECT contributor, parentesco, texto, audio_url, created_at FROM family_notes WHERE user_id = ${ownerId} ORDER BY created_at DESC LIMIT 30`;
+    const mediaRaw = await sql`SELECT type, url, caption, contributor, created_at FROM media WHERE user_id = ${ownerId} ORDER BY created_at DESC LIMIT 30`;
     const notes = notesRaw.map((n) => ({ ...n, contributor: capitalizarNombre(n.contributor), texto: capitalizarInicio(n.texto) }));
     const media = mediaRaw.map((m) => ({ ...m, contributor: capitalizarNombre(m.contributor) }));
     res.json({ notes, media });
@@ -1358,6 +1454,33 @@ app.post('/api/tree/mark-seen', requireAuth, bloquearColaborador, async (req, re
   }
 });
 
+// Para la sección aparte en arbol.html: quiénes han colaborado en esta
+// bitácora y cómo se relacionan (lo que ellos mismos dijeron al aportar),
+// agrupado por persona — no es parte del árbol genealógico en sí, es la
+// "red de quienes ayudaron a construir la historia".
+app.get('/api/tree/colaboradores', requireAuth, bloquearColaborador, async (req, res) => {
+  try {
+    await ensureSchema();
+    const rows = await sql`
+      SELECT contributor, parentesco, COUNT(*) AS historias
+      FROM family_notes
+      WHERE user_id = ${req.userId} AND contributor IS NOT NULL
+      GROUP BY contributor, parentesco
+      ORDER BY MIN(created_at) ASC
+    `;
+    res.json({
+      colaboradores: rows.map((r) => ({
+        nombre: capitalizarNombre(r.contributor),
+        parentesco: r.parentesco ? capitalizarNombre(r.parentesco) : null,
+        historias: Number(r.historias),
+      })),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo cargar quiénes colaboraron.' });
+  }
+});
+
 // Repasa TODAS las charlas ya guardadas (de antes de que existiera el árbol,
 // o si se quiere reconstruir desde cero) y actualiza personas/eventos.
 app.post('/api/rebuild-tree', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
@@ -1446,14 +1569,17 @@ const FAMILY_TOOLS = [{
 
 app.post('/api/ask-familia', requireAuth, rateLimit, async (req, res) => {
   try {
+    const ownerId = await resolveProfileUserId(req);
+    if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
+
     let question = (req.body.question || '').trim();
     if (!question) return res.status(400).json({ error: 'Falta la pregunta.' });
     if (question.length > 1000) question = question.slice(0, 1000);
 
     await ensureSchema();
-    const memoria = await loadMemorySummary(req.profileUserId);
+    const memoria = await loadMemorySummary(ownerId);
     if (!memoria) {
-      const rows = await sql`SELECT id FROM sessions WHERE user_id = ${req.profileUserId} LIMIT 1`;
+      const rows = await sql`SELECT id FROM sessions WHERE user_id = ${ownerId} LIMIT 1`;
       if (!rows.length) {
         return res.json({
           answer: 'Todavía no hay charlas guardadas. Cuando presione el botón y cuente algo, vas a poder preguntar sobre eso acá.',
@@ -1480,7 +1606,7 @@ app.post('/api/ask-familia', requireAuth, rateLimit, async (req, res) => {
 
       const toolUse = response.content.find((b) => b.type === 'tool_use');
       if (!toolUse) break;
-      const toolResultText = await buildFullTranscripts(req.profileUserId, toolUse.input && toolUse.input.palabra_clave);
+      const toolResultText = await buildFullTranscripts(ownerId, toolUse.input && toolUse.input.palabra_clave);
 
       messages = [
         ...messages,

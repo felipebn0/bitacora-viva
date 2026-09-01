@@ -63,6 +63,19 @@
   .tree-node.principal .avatar { background: var(--gold-deep); border-color: var(--gold-deep); color: #FBF6EA; }
   .tree-node strong { display: block; color: var(--ink); font-size: 0.9rem; line-height: 1.2; }
   .tree-node span { display: block; color: var(--ink-soft); font-size: 0.75rem; }
+
+  .colab-section { max-width: 1000px; margin: 56px auto 0; position: relative; z-index: 1; }
+  .colab-section h2 { font-family: var(--font-display); font-size: 1.3rem; text-align: center; margin: 0 0 4px; }
+  .colab-section .sub { color: var(--ink-soft); font-size: 0.9rem; text-align: center; margin: 0 0 20px; }
+  .colab-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
+  .colab-card {
+    background: #FBF6EA; border: 1px solid #E7DFCC; border-radius: 16px;
+    padding: 16px 18px; text-align: center;
+  }
+  .colab-card .avatar { margin: 0 auto 8px; }
+  .colab-card strong { display: block; color: var(--ink); font-size: 0.95rem; }
+  .colab-card .parentesco { display: block; color: var(--gold-deep); font-size: 0.82rem; font-weight: 700; margin-top: 2px; }
+  .colab-card .historias { display: block; color: var(--ink-soft); font-size: 0.78rem; margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -78,6 +91,12 @@
   <div class="wrap" id="wrap">
     <p class="msg">Cargando…</p>
   </div>
+
+  <section class="colab-section" id="colabSection" style="display:none;">
+    <h2>Quiénes han colaborado</h2>
+    <p class="sub">Familiares que aportaron historias con su código de invitación.</p>
+    <div class="colab-grid" id="colabGrid"></div>
+  </section>
 
 <script>
 (function () {
@@ -538,7 +557,34 @@
     }
   }
 
+  async function cargarColaboradores() {
+    const colabSection = document.getElementById('colabSection');
+    const colabGrid = document.getElementById('colabGrid');
+    try {
+      const resp = await fetch('/api/tree/colaboradores');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const colaboradores = data.colaboradores || [];
+      if (!colaboradores.length) return;
+      colabGrid.innerHTML = '';
+      colaboradores.forEach((c) => {
+        const card = document.createElement('div');
+        card.className = 'colab-card';
+        const historiaTxt = c.historias === 1 ? '1 historia aportada' : `${c.historias} historias aportadas`;
+        card.innerHTML = `
+          <div class="avatar">${initials(c.nombre)}</div>
+          <strong>${c.nombre}</strong>
+          ${c.parentesco ? `<span class="parentesco">${c.parentesco}</span>` : ''}
+          <span class="historias">${historiaTxt}</span>
+        `;
+        colabGrid.appendChild(card);
+      });
+      colabSection.style.display = 'block';
+    } catch (e) {}
+  }
+
   cargar();
+  cargarColaboradores();
   window.addEventListener('resize', cargar);
 })();
 </script>

@@ -157,9 +157,13 @@
       <div class="intro-box">
         <span id="introTexto">Cuenta algo que recuerdes — una anécdota, un dato, un momento.</span>
       </div>
+      <p class="sub">Antes de grabar, empieza diciendo tu nombre y tu parentesco — y después cuenta tu historia.</p>
 
       <label for="aporteNombre">Tu nombre</label>
       <input type="text" id="aporteNombre" placeholder="Ej: Marcela">
+
+      <label for="aporteParentesco">Tu parentesco</label>
+      <input type="text" id="aporteParentesco" placeholder="Ej: Hija, sobrino, amiga de la familia…">
 
       <div class="orb-zone">
         <button class="orb" id="orb" data-state="idle" type="button" aria-label="Presiona para grabar tu historia">Presiona<br>para hablar</button>
@@ -201,6 +205,15 @@
   const logoutBtn = document.getElementById('logoutBtn');
   const whoami = document.getElementById('whoami');
   const ownerName = document.getElementById('ownerName');
+
+  // Si venimos de "colaborar con otra historia" (botón en app.html), la URL
+  // trae ?owner=<id> — todas las llamadas a la API de acá en adelante deben
+  // avisar para cuál historia son, además de quién está logueado.
+  const activeOwnerId = new URLSearchParams(window.location.search).get('owner');
+  function conOwner(path) {
+    if (!activeOwnerId) return path;
+    return path + (path.includes('?') ? '&' : '?') + 'owner=' + encodeURIComponent(activeOwnerId);
+  }
 
   function showApp(data) {
     loginScreen.style.display = 'none';
@@ -252,7 +265,22 @@
 
   fetch('/api/me')
     .then((resp) => (resp.ok ? resp.json() : Promise.reject()))
-    .then((data) => {
+    .then(async (data) => {
+      if (activeOwnerId) {
+        // Se llegó acá con un código de otra historia (botón "colaborar con
+        // otra historia" en app.html) — puede ser una cuenta dueña normal
+        // sumándose a otra bitácora, o una cuenta colaboradora entrando a
+        // la suya de siempre. Confirmamos acceso contra el servidor.
+        try {
+          const resp = await fetch('/api/collaboration-info?owner=' + encodeURIComponent(activeOwnerId));
+          if (!resp.ok) { window.location.href = '/app.html'; return; }
+          const info = await resp.json();
+          showApp({ username: data.username, ownerName: info.ownerName });
+        } catch (e) {
+          window.location.href = '/app.html';
+        }
+        return;
+      }
       // Esta página es solo para cuentas colaboradoras — si es una cuenta
       // dueña normal, la mandamos a la app completa.
       if (!data.isCollaborator) { window.location.href = '/app.html'; return; }
@@ -286,7 +314,7 @@
       const resp = await fetch('/api/ask-familia', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: q }),
+        body: JSON.stringify({ question: q, owner: activeOwnerId }),
       });
       const data = await resp.json();
       thinking.remove();
@@ -304,6 +332,7 @@
 
   // --- Aportar una historia ---
   const aporteNombre = document.getElementById('aporteNombre');
+  const aporteParentesco = document.getElementById('aporteParentesco');
   const aporteMsg = document.getElementById('aporteMsg');
   const aportesLista = document.getElementById('aportesLista');
   const introTexto = document.getElementById('introTexto');
@@ -312,7 +341,7 @@
 
   async function cargarIntro() {
     try {
-      const resp = await fetch('/api/contribute-intro');
+      const resp = await fetch(conOwner('/api/contribute-intro'));
       if (!resp.ok) return;
       const data = await resp.json();
       if (data.intro) {
@@ -362,7 +391,7 @@
   async function procesarAudio(blob, contentType) {
     let audioUrl = null;
     try {
-      const upResp = await fetch('/api/contribute-audio', {
+      const upResp = await fetch(conOwner('/api/contribute-audio'), {
         method: 'POST',
         headers: { 'Content-Type': contentType },
         body: blob,
@@ -457,7 +486,7 @@
 
   async function cargarAportes() {
     try {
-      const resp = await fetch('/api/contributions');
+      const resp = await fetch(conOwner('/api/contributions'));
       if (!resp.ok) return;
       const data = await resp.json();
       aportesLista.innerHTML = '';
@@ -466,7 +495,8 @@
         const div = document.createElement('div');
         div.className = 'item';
         const audioTag = it.audio_url ? `<audio controls src="${it.audio_url}"></audio>` : '';
-        div.innerHTML = `<strong>${it.contributor || 'Familia'}:</strong> ${it.texto}${audioTag}`;
+        const quien = it.contributor ? it.contributor + (it.parentesco ? ` (${it.parentesco})` : '') : 'Familia';
+        div.innerHTML = `<strong>${quien}:</strong> ${it.texto}${audioTag}`;
         aportesLista.appendChild(div);
       });
     } catch (e) {}
@@ -474,12 +504,13 @@
 
   async function guardarAporte(text, audioUrl) {
     const contributor = aporteNombre.value.trim();
+    const parentesco = aporteParentesco.value.trim();
     aporteMsg.textContent = '';
     try {
       const resp = await fetch('/api/contribute-story', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contributor, text, audioUrl }),
+        body: JSON.stringify({ contributor, parentesco, text, audioUrl, owner: activeOwnerId }),
       });
       const data = await resp.json();
       if (resp.ok) {

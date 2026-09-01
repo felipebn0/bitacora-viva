@@ -230,6 +230,22 @@
     border: 2px solid var(--bg);
   }
   .icon-badge.visible { display: flex; }
+
+  .join-collab-panel {
+    width: 100%; max-width: 420px; margin: -8px auto 18px; background: #FBF6EA;
+    border: 1px solid #E7DFCC; border-radius: 16px; padding: 16px 20px; text-align: center;
+  }
+  .join-collab-row { display: flex; gap: 8px; margin-top: 8px; }
+  .join-collab-row input {
+    flex: 1; border: 1px solid #E7DFCC; border-radius: 10px; padding: 10px 12px;
+    font-family: var(--font-body); background: #fff; color: var(--ink); text-transform: uppercase;
+  }
+  .join-collab-row button {
+    border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px;
+    padding: 0 18px; font-weight: 700; cursor: pointer; font-family: var(--font-body);
+  }
+  .join-collab-row button:disabled { opacity: 0.6; cursor: default; }
+  .join-collab-panel .msg { font-size: 0.85rem; min-height: 1.2em; color: var(--moss); margin: 8px 0 0; }
   .login {
     width: min(340px, 100%);
     background: #FBF6EA;
@@ -269,11 +285,20 @@
 
   <div id="appContent">
    <div class="topbar">
+     <button class="icon-btn" id="joinCollabBtn" type="button" title="Colaborar con otra historia" aria-label="Colaborar con otra historia">🤝</button>
      <div class="icon-btn-wrap">
        <a class="icon-btn" href="/arbol.html" target="_blank" rel="noopener" title="Árbol genealógico" aria-label="Árbol genealógico">🌳</a>
        <span class="icon-badge" id="treeBadge"></span>
      </div>
      <a class="icon-btn" href="/capitulos.html" target="_blank" rel="noopener" title="Libro de la historia" aria-label="Libro de la historia">📖</a>
+   </div>
+   <div class="join-collab-panel" id="joinCollabPanel" style="display:none;">
+     <p class="sub">Quiero colaborar con otra historia — ingresa el código que te compartieron.</p>
+     <div class="join-collab-row">
+       <input type="text" id="joinCollabCode" placeholder="Ej: AB12CD" maxlength="6">
+       <button id="joinCollabSubmit" type="button">Entrar</button>
+     </div>
+     <p class="msg" id="joinCollabMsg"></p>
    </div>
    <div class="main-layout">
     <div class="device-col">
@@ -409,6 +434,44 @@
       setTimeout(() => { inviteCopyBtn.textContent = 'copiar código'; }, 1800);
     } catch (e) {}
   });
+
+  const joinCollabBtn = document.getElementById('joinCollabBtn');
+  const joinCollabPanel = document.getElementById('joinCollabPanel');
+  const joinCollabCode = document.getElementById('joinCollabCode');
+  const joinCollabSubmit = document.getElementById('joinCollabSubmit');
+  const joinCollabMsg = document.getElementById('joinCollabMsg');
+
+  joinCollabBtn.addEventListener('click', () => {
+    const visible = joinCollabPanel.style.display !== 'none';
+    joinCollabPanel.style.display = visible ? 'none' : 'block';
+    if (!visible) joinCollabCode.focus();
+  });
+
+  async function unirseAColaboracion() {
+    const code = joinCollabCode.value.trim();
+    if (!code) return;
+    joinCollabSubmit.disabled = true;
+    joinCollabMsg.textContent = '';
+    try {
+      const resp = await fetch('/api/join-collaboration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        window.location.href = '/colaborar.html?owner=' + data.ownerId;
+      } else {
+        joinCollabMsg.textContent = data.error || 'No se pudo entrar con ese código.';
+        joinCollabSubmit.disabled = false;
+      }
+    } catch (e) {
+      joinCollabMsg.textContent = 'Hubo un problema para conectar.';
+      joinCollabSubmit.disabled = false;
+    }
+  }
+  joinCollabSubmit.addEventListener('click', unirseAColaboracion);
+  joinCollabCode.addEventListener('keydown', (e) => { if (e.key === 'Enter') unirseAColaboracion(); });
 
   fetch('/api/me')
     .then((resp) => (resp.ok ? resp.json() : Promise.reject()))
