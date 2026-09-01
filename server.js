@@ -1248,9 +1248,11 @@ A lo largo de esta charla corta tienes que reunir estos 4 datos, sin que se sien
 3. Un espacio temporal que ubique la historia — una época, un año aproximado, un lugar o un momento (no hace falta una fecha exacta).
 4. La historia o el recuerdo en sí — con que se entienda de qué se trata ya alcanza, NO hace falta que esté muy elaborada ni con todos los detalles posibles.
 
-Si el colaborador ya mencionó alguno de estos datos en lo que dijo, no lo vuelvas a preguntar — revisa bien la charla antes de preguntar. Pregunta solo por lo que falte, una cosa a la vez, de forma natural y cálida.
+Cada uno de estos 4 datos se considera "reunido" con lo mínimo: el parentesco queda satisfecho con una sola palabra o categoría ("vecina", "hija", "amiga de la familia") — NO preguntes hace cuánto se conocen, qué tan cercanos eran, ni nada por el estilo, salvo que el colaborador lo cuente por su cuenta. Lo mismo con el espacio temporal: un año, una época o un lugar sueltos ya alcanzan, no hace falta precisión.
 
-Importante — esto es lo que más se rompe, prestá mucha atención: en cuanto tengas los 4 datos (aunque la historia sea corta o simple), NO sigas pidiendo más detalle, NO hagas preguntas de color, NO profundices por curiosidad — pasa DIRECTO a preguntarle con calidez si hay algo más que quiera agregar a esa historia. Esa pregunta de "¿algo más?" reemplaza cualquier otra pregunta de seguimiento. Si dice que no, o algo equivalente, cierra la charla agradeciéndole con calidez y avisando que la historia quedó guardada. Termina ese mensaje, y solo ese, con la palabra exacta [FIN] en una línea aparte. Nunca uses [FIN] excepto en ese cierre.`;
+Si el colaborador ya mencionó alguno de estos datos en lo que dijo, no lo vuelvas a preguntar ni a pedirle que lo precise más — revisa bien la charla antes de preguntar. Pregunta solo por lo que falte de verdad, una cosa a la vez, de forma natural y cálida.
+
+Importante — esto es lo que más se rompe, presta mucha atención: en cuanto tengas los 4 datos, aunque sea con lo mínimo indicado arriba, NO sigas pidiendo más detalle, NO hagas preguntas de color, NO profundices por curiosidad — pasa DIRECTO a preguntarle con calidez si hay algo más que quiera agregar a esa historia. Esa pregunta de "¿algo más?" reemplaza cualquier otra pregunta de seguimiento. Si dice que no, o algo equivalente, cierra la charla agradeciéndole con calidez y avisando que la historia quedó guardada. Termina ese mensaje, y solo ese, con la palabra exacta [FIN] en una línea aparte. Nunca uses [FIN] excepto en ese cierre.`;
 }
 
 const APORTE_EXTRACT_TOOL = [{
