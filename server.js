@@ -647,12 +647,15 @@ app.post('/api/next', requireAuth, rateLimit, async (req, res) => {
       if (m.content.length > 4000) m.content = m.content.slice(0, 4000);
     }
     const mode = req.body.mode === 'arbol' ? 'arbol' : 'historia';
+    const memoria = await loadMemorySummary(req.userId);
+    const esPrimeraVez = mode === 'historia' && !memoria && !history.length;
     const startPrompt = mode === 'arbol'
       ? '(La persona acaba de presionar el botón para armar el árbol genealógico. Saludala cálidamente por su nombre si lo sabés, contale brevemente que hoy vas a preguntarle por su familia para armar el árbol, y arrancá preguntando por la primera persona que falte — revisá la lista de "personas que ya se conocen" más abajo antes de preguntar, y si ya están sus papás, saltá directo a hermanos, abuelos, tíos, pareja o hijos, lo que falte.)'
+      : esPrimeraVez
+      ? '(La persona acaba de presionar el botón por PRIMERA VEZ — todavía no hay ningún resumen guardado de ella, así que este es su primer mensaje en la aplicación. Antes de preguntar nada, dale una bienvenida cálida y explicale brevemente de qué se trata esto: que vas a ir charlando con ella de a poco para guardar su historia de vida con su propia voz, para que su familia la pueda escuchar y leer después. Contale que no hay respuestas correctas ni incorrectas, que puede contar lo que quiera y como quiera, con sus propias palabras, sin apurarse ni preocuparse por el orden. Dale un tip breve para sentirse cómoda hablando sola, por ejemplo imaginarse que le está contando esto a un nieto o a alguien muy querido. Después de esa bienvenida breve (unas 3-4 frases, no más), preguntale su nombre, y aprovechá para pedirle también su edad y su fecha de nacimiento, para tener esos datos básicos guardados desde el principio. Todo esto en un solo mensaje de bienvenida, cálido y no muy largo — no lo separes en varios turnos.)'
       : '(La persona acaba de presionar el botón para empezar a charlar. Si el resumen tiene su nombre, saludala por su nombre. Si no, saludala cálidamente y preguntale cómo se llama.)';
     const messages = history.length ? history : [{ role: 'user', content: startPrompt }];
 
-    const memoria = await loadMemorySummary(req.userId);
     let system;
     if (mode === 'arbol') {
       const conocidos = await loadKnownFamilyMembers(req.userId);
@@ -1037,6 +1040,20 @@ app.get('/api/chapters', requireAuth, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudieron cargar los capítulos.' });
+  }
+});
+
+app.delete('/api/chapters/:id', requireAuth, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'Id inválido.' });
+    const rows = await sql`DELETE FROM chapters WHERE id = ${id} AND user_id = ${req.userId} RETURNING id`;
+    if (!rows.length) return res.status(404).json({ error: 'No se encontró ese capítulo.' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo borrar el capítulo.' });
   }
 });
 

@@ -50,10 +50,16 @@
     padding: 22px 26px;
     margin-bottom: 20px;
   }
+  .chapter .top-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
   .chapter .theme { color: var(--gold-deep); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; margin: 0 0 4px; }
   .chapter h2 { font-family: var(--font-display); font-size: 1.3rem; margin: 0 0 12px; }
   .chapter .text { white-space: pre-wrap; line-height: 1.6; font-size: 0.98rem; }
   .chapter .meta { color: var(--ink-soft); font-size: 0.78rem; margin-top: 14px; }
+  .chapter .borrar {
+    border: none; background: none; color: var(--ink-soft); cursor: pointer;
+    font-size: 0.78rem; text-decoration: underline; font-family: var(--font-body); padding: 0; flex-shrink: 0;
+  }
+  .chapter .borrar:hover { color: #a33; }
 </style>
 </head>
 <body>
@@ -91,13 +97,29 @@
       div.className = 'chapter';
       const fecha = c.created_at ? new Date(c.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
       div.innerHTML = `
-        <p class="theme">${c.theme || ''}</p>
+        <div class="top-row">
+          <p class="theme">${c.theme || ''}</p>
+          <button class="borrar" type="button">Borrar</button>
+        </div>
         <h2>${c.title}</h2>
         <div class="text">${c.generated_text}</div>
         <p class="meta">Armado a partir de ${(c.story_ids || []).length} historia(s)${fecha ? ' · ' + fecha : ''}</p>
       `;
+      div.querySelector('.borrar').addEventListener('click', () => borrarCapitulo(c.id, div));
       lista.appendChild(div);
     });
+  }
+
+  async function borrarCapitulo(id, div) {
+    if (!confirm('¿Borrar este capítulo? No se puede deshacer.')) return;
+    try {
+      const resp = await fetch('/api/chapters/' + id, { method: 'DELETE' });
+      if (!resp.ok) { status.textContent = 'No se pudo borrar el capítulo.'; return; }
+      div.remove();
+      if (!lista.children.length) renderChapters([]);
+    } catch (e) {
+      status.textContent = 'Hubo un problema para conectar.';
+    }
   }
 
   async function cargar() {
