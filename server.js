@@ -171,6 +171,21 @@ function ensureSchema() {
       )`;
       await sql`CREATE INDEX IF NOT EXISTS idx_story_log_user ON story_log(user_id)`;
 
+      // Historial de versiones: cuando se edita una historia (aportada o
+      // detectada en la charla), el texto ANTERIOR queda acá antes de
+      // pisarlo — nunca se borra, solo se guarda una versión más vieja.
+      // Editar SÍ está permitido; borrar una historia no tiene ruta propia
+      // a propósito — eso sigue siendo solo por pedido directo al dueño.
+      await sql`CREATE TABLE IF NOT EXISTS historia_versiones (
+        id SERIAL PRIMARY KEY,
+        tabla TEXT NOT NULL,
+        registro_id INT NOT NULL,
+        texto_anterior TEXT NOT NULL,
+        editado_por INT REFERENCES users(id),
+        editado_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_historia_versiones_registro ON historia_versiones(tabla, registro_id)`;
+
       // Capítulos de biografía generados con IA a partir de las historias
       // detectadas (story_log). Se reemplazan enteros cada vez que se piden
       // de nuevo, igual que el árbol genealógico.
@@ -1290,7 +1305,7 @@ app.get('/api/contributions', requireAuth, async (req, res) => {
     const ownerId = await resolveProfileUserId(req);
     if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
     await ensureSchema();
-    const notesRaw = await sql`SELECT contributor, parentesco, texto, audio_url, created_at FROM family_notes WHERE user_id = ${ownerId} ORDER BY created_at DESC LIMIT 30`;
+    const notesRaw = await sql`SELECT id, contributor, parentesco, texto, audio_url, created_at FROM family_notes WHERE user_id = ${ownerId} ORDER BY created_at DESC LIMIT 30`;
     const mediaRaw = await sql`SELECT type, url, caption, contributor, created_at FROM media WHERE user_id = ${ownerId} ORDER BY created_at DESC LIMIT 30`;
     const notes = notesRaw.map((n) => ({ ...n, contributor: capitalizarNombre(n.contributor), texto: capitalizarInicio(n.texto) }));
     const media = mediaRaw.map((m) => ({ ...m, contributor: capitalizarNombre(m.contributor) }));
@@ -1301,14 +1316,93 @@ app.get('/api/contributions', requireAuth, async (req, res) => {
   }
 });
 
+// Editar una historia (aportada por un familiar) — nunca se pisa sin dejar
+// rastro: el texto de antes queda guardado en historia_versiones. Solo el
+// dueño puede editar (bloquearColaborador), para que corregir algo no
+// dependa de confiar en cualquier colaborador con el link.
+app.put('/api/contributions/:id', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ error: 'Falta el id.' });
+
+    const rows = await sql`SELECT texto FROM family_notes WHERE id = ${id} AND user_id = ${req.userId}`;
+    if (!rows.length) return res.status(404).json({ error: 'No se encontró esa historia.' });
+
+    let { text, contributor, parentesco } = req.body || {};
+    text = capitalizarInicio((text || '').trim());
+    if (!text) return res.status(400).json({ error: 'Falta el texto.' });
+    if (text.length > 4000) text = text.slice(0, 4000);
+    const cleanContributor = capitalizarNombre((contributor || '').trim().slice(0, 60)) || null;
+    const cleanParentesco = capitalizarNombre((parentesco || '').trim().slice(0, 60)) || null;
+
+    await sql`INSERT INTO historia_versiones (tabla, registro_id, texto_anterior, editado_por) VALUES ('family_notes', ${id}, ${rows[0].texto}, ${req.userId})`;
+    await sql`UPDATE family_notes SET texto = ${text}, contributor = ${cleanContributor}, parentesco = ${cleanParentesco} WHERE id = ${id}`;
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo editar la historia.' });
+  }
+});
+
 app.get('/api/story-log', requireAuth, bloquearColaborador, async (req, res) => {
   try {
     await ensureSchema();
-    const rows = await sql`SELECT texto, audio_url, created_at FROM story_log WHERE user_id = ${req.userId} ORDER BY created_at DESC LIMIT 50`;
+    const rows = await sql`SELECT id, texto, audio_url, created_at FROM story_log WHERE user_id = ${req.userId} ORDER BY created_at DESC LIMIT 50`;
     res.json({ stories: rows.map((r) => ({ ...r, texto: capitalizarInicio(r.texto) })) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo cargar el log de historias.' });
+  }
+});
+
+// Igual que /api/contributions/:id pero para las historias que la propia
+// persona contó en la charla (story_log) — misma idea: se guarda la
+// versión anterior, nunca se borra nada.
+app.put('/api/story-log/:id', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ error: 'Falta el id.' });
+
+    const rows = await sql`SELECT texto FROM story_log WHERE id = ${id} AND user_id = ${req.userId}`;
+    if (!rows.length) return res.status(404).json({ error: 'No se encontró esa historia.' });
+
+    let { text } = req.body || {};
+    text = capitalizarInicio((text || '').trim());
+    if (!text) return res.status(400).json({ error: 'Falta el texto.' });
+    if (text.length > 6000) text = text.slice(0, 6000);
+
+    await sql`INSERT INTO historia_versiones (tabla, registro_id, texto_anterior, editado_por) VALUES ('story_log', ${id}, ${rows[0].texto}, ${req.userId})`;
+    await sql`UPDATE story_log SET texto = ${text} WHERE id = ${id}`;
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo editar la historia.' });
+  }
+});
+
+// Ver las versiones anteriores de una historia editada — para poder
+// consultar qué decía antes de corregirla.
+app.get('/api/historia-versiones', requireAuth, bloquearColaborador, async (req, res) => {
+  try {
+    await ensureSchema();
+    const tabla = req.query.tabla === 'story_log' ? 'story_log' : 'family_notes';
+    const registroId = parseInt(req.query.id, 10);
+    if (!registroId) return res.status(400).json({ error: 'Falta el id.' });
+
+    // Confirmamos que esa historia es del usuario logueado antes de mostrar
+    // sus versiones anteriores.
+    const dueño = tabla === 'story_log'
+      ? await sql`SELECT id FROM story_log WHERE id = ${registroId} AND user_id = ${req.userId}`
+      : await sql`SELECT id FROM family_notes WHERE id = ${registroId} AND user_id = ${req.userId}`;
+    if (!dueño.length) return res.status(404).json({ error: 'No se encontró esa historia.' });
+
+    const rows = await sql`SELECT texto_anterior, editado_at FROM historia_versiones WHERE tabla = ${tabla} AND registro_id = ${registroId} ORDER BY editado_at DESC`;
+    res.json({ versiones: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo cargar el historial.' });
   }
 });
 

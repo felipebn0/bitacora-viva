@@ -63,6 +63,31 @@
     font-size: 0.78rem; text-decoration: underline; font-family: var(--font-body); padding: 0; flex-shrink: 0;
   }
   .chapter .borrar:hover { color: #a33; }
+
+  .aportes-section { margin-bottom: 40px; }
+  .aportes-section h2 { font-family: var(--font-display); font-size: 1.2rem; margin: 0 0 4px; }
+  .aportes-section .sub { color: var(--ink-soft); font-size: 0.9rem; margin: 0 0 16px; }
+  .aporte-item {
+    background: #FBF6EA; border: 1px solid #E7DFCC; border-radius: 14px;
+    padding: 14px 18px; margin-bottom: 12px; font-size: 0.92rem;
+  }
+  .aporte-item .quien { color: var(--gold-deep); font-weight: 700; font-size: 0.82rem; margin: 0 0 4px; }
+  .aporte-item .texto { line-height: 1.5; }
+  .aporte-item audio { width: 100%; margin-top: 8px; }
+  .aporte-item .editar-btn {
+    background: none; border: none; color: var(--ink-soft); text-decoration: underline;
+    cursor: pointer; font-family: var(--font-body); font-size: 0.78rem; padding: 0; margin-top: 8px;
+  }
+  .aporte-item textarea {
+    width: 100%; border: 1px solid #E7DFCC; border-radius: 10px; padding: 8px 10px;
+    font-family: var(--font-body); font-size: 0.9rem; margin-top: 6px; resize: vertical; min-height: 70px;
+  }
+  .aporte-item .editar-row { display: flex; gap: 8px; margin-top: 6px; }
+  .aporte-item .editar-row button {
+    border: none; border-radius: 8px; padding: 5px 12px; font-size: 0.8rem; cursor: pointer; font-family: var(--font-body);
+  }
+  .aporte-item .editar-guardar { background: var(--gold-deep); color: #FBF6EA; }
+  .aporte-item .editar-cancelar { background: none; color: var(--ink-soft); }
 </style>
 </head>
 <body>
@@ -74,6 +99,12 @@
     <a class="volver" href="/app.html">← volver a la bitácora</a>
   </header>
   <div class="wrap">
+    <div class="aportes-section" id="aportesSection" style="display:none;">
+      <h2>Aportes de la familia</h2>
+      <p class="sub">Historias que colaboradores agregaron — puedes corregirlas si hace falta.</p>
+      <div id="aportesLista"></div>
+    </div>
+
     <div class="toolbar">
       <button class="generar" id="generarBtn" type="button">Generar capítulos</button>
       <span class="status" id="status"></span>
@@ -88,6 +119,87 @@
   const lista = document.getElementById('lista');
   const status = document.getElementById('status');
   const generarBtn = document.getElementById('generarBtn');
+  const aportesSection = document.getElementById('aportesSection');
+  const aportesLista = document.getElementById('aportesLista');
+
+  function crearEditor(item, texto, guardar) {
+    const textoEl = item.querySelector('.texto');
+    const editarBtn = item.querySelector('.editar-btn');
+    const textarea = document.createElement('textarea');
+    textarea.value = texto;
+    const row = document.createElement('div');
+    row.className = 'editar-row';
+    const guardarBtn = document.createElement('button');
+    guardarBtn.className = 'editar-guardar';
+    guardarBtn.type = 'button';
+    guardarBtn.textContent = 'Guardar';
+    const cancelarBtn = document.createElement('button');
+    cancelarBtn.className = 'editar-cancelar';
+    cancelarBtn.type = 'button';
+    cancelarBtn.textContent = 'Cancelar';
+    row.appendChild(guardarBtn);
+    row.appendChild(cancelarBtn);
+    textoEl.style.display = 'none';
+    editarBtn.style.display = 'none';
+    item.insertBefore(textarea, editarBtn);
+    item.insertBefore(row, editarBtn);
+    cancelarBtn.addEventListener('click', () => {
+      textarea.remove();
+      row.remove();
+      textoEl.style.display = '';
+      editarBtn.style.display = '';
+    });
+    guardarBtn.addEventListener('click', async () => {
+      const nuevoTexto = textarea.value.trim();
+      if (!nuevoTexto) return;
+      guardarBtn.disabled = true;
+      const ok = await guardar(nuevoTexto);
+      if (!ok) { guardarBtn.disabled = false; return; }
+      textoEl.textContent = nuevoTexto;
+      textarea.remove();
+      row.remove();
+      textoEl.style.display = '';
+      editarBtn.style.display = '';
+    });
+  }
+
+  async function cargarAportes() {
+    try {
+      const resp = await fetch('/api/contributions');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const notes = data.notes || [];
+      if (!notes.length) return;
+      aportesLista.innerHTML = '';
+      notes.forEach((n) => {
+        const item = document.createElement('div');
+        item.className = 'aporte-item';
+        const quien = n.contributor ? n.contributor + (n.parentesco ? ` (${n.parentesco})` : '') : 'Familia';
+        const audioTag = n.audio_url ? `<audio controls src="${n.audio_url}"></audio>` : '';
+        item.innerHTML = `
+          <p class="quien">${quien}</p>
+          <div class="texto">${n.texto}</div>
+          ${audioTag}
+          <button class="editar-btn" type="button">editar</button>
+        `;
+        item.querySelector('.editar-btn').addEventListener('click', () => {
+          crearEditor(item, n.texto, async (nuevoTexto) => {
+            try {
+              const putResp = await fetch('/api/contributions/' + n.id, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: nuevoTexto, contributor: n.contributor, parentesco: n.parentesco }),
+              });
+              if (putResp.ok) { n.texto = nuevoTexto; return true; }
+              return false;
+            } catch (e) { return false; }
+          });
+        });
+        aportesLista.appendChild(item);
+      });
+      aportesSection.style.display = 'block';
+    } catch (e) {}
+  }
 
   function renderChapters(chapters) {
     lista.innerHTML = '';
@@ -163,6 +275,7 @@
   });
 
   cargar();
+  cargarAportes();
 })();
 </script>
 </body>
