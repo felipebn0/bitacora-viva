@@ -142,12 +142,20 @@
   // claro quién es pareja de quién, y de esa pareja sale la línea hacia sus
   // hijos, en vez de una sola persona suelta.
   function detectarParejas(people) {
+    // Solo cuentan como "pareja" dos NOMBRES que de verdad tienen su propia
+    // persona en el árbol — si uno de los dos padres nunca se guardó como
+    // persona propia (ej. "hijo de Jorge Vargas y Claudia" pero "Claudia"
+    // nunca se registró), no hay con quién pintar la línea ni con quién
+    // calcular una generación en común, así que se ignora esa pareja.
+    const nombresConocidos = new Set(people.map((p) => p.nombre));
     const partnerOf = new Map();
     people.forEach((p) => {
       const padres = Array.isArray(p.padres) ? p.padres : [];
       if (padres.length === 2) {
         const [a, b] = padres;
-        if (a !== b) { partnerOf.set(a, b); partnerOf.set(b, a); }
+        if (a !== b && nombresConocidos.has(a) && nombresConocidos.has(b)) {
+          partnerOf.set(a, b); partnerOf.set(b, a);
+        }
       }
     });
     return partnerOf;
@@ -224,37 +232,49 @@
   // como sí pasaba antes). Las parejas siempre quedan en la misma
   // generación que su pareja, aunque a uno de los dos no se le conozcan
   // los padres.
+  // "depth" se guarda por ID de persona, no por nombre — dos personas
+  // distintas pueden llamarse igual (ej. un abuelo y un nieto con el mismo
+  // nombre), y cada una necesita su PROPIA profundidad calculada a partir
+  // de sus propios padres, no una compartida por casualidad de texto.
+  // Para resolver "padres" (que sí se guarda por nombre) usamos "byName",
+  // que en caso de nombres repetidos apunta a una sola persona — una
+  // ambigüedad real de cómo se guardan los datos, no algo que se pueda
+  // arreglar solo con el dibujo del árbol.
   function calcularProfundidades(people, partnerOf) {
     const byName = new Map(people.map((p) => [p.nombre, p]));
-    const depth = new Map();
+    const depth = new Map(); // clave: id
 
-    function profundidadDe(nombre, visitando) {
-      if (depth.has(nombre)) return depth.get(nombre);
-      if (visitando.has(nombre)) return 0; // corta ciclos raros en los datos
-      visitando.add(nombre);
-      const persona = byName.get(nombre);
-      const padres = (persona && Array.isArray(persona.padres) ? persona.padres : [])
-        .filter((n) => byName.has(n) && n !== nombre);
-      const d = padres.length ? Math.max(...padres.map((n) => profundidadDe(n, visitando))) + 1 : 0;
-      depth.set(nombre, d);
-      visitando.delete(nombre);
+    function profundidadDe(persona, visitando) {
+      if (depth.has(persona.id)) return depth.get(persona.id);
+      if (visitando.has(persona.id)) return 0; // corta ciclos raros en los datos
+      visitando.add(persona.id);
+      const padres = (Array.isArray(persona.padres) ? persona.padres : [])
+        .map((n) => byName.get(n))
+        .filter((pp) => pp && pp.id !== persona.id);
+      const d = padres.length ? Math.max(...padres.map((pp) => profundidadDe(pp, visitando))) + 1 : 0;
+      depth.set(persona.id, d);
+      visitando.delete(persona.id);
       return d;
     }
-    people.forEach((p) => profundidadDe(p.nombre, new Set()));
+    people.forEach((p) => profundidadDe(p, new Set()));
 
     for (let i = 0; i < 5; i++) {
       let cambio = false;
       partnerOf.forEach((partnerName, nombre) => {
-        if (!byName.has(partnerName)) return;
-        const m = Math.max(depth.get(nombre), depth.get(partnerName));
-        if (depth.get(nombre) !== m) { depth.set(nombre, m); cambio = true; }
-        if (depth.get(partnerName) !== m) { depth.set(partnerName, m); cambio = true; }
+        const personaA = byName.get(nombre);
+        const personaB = byName.get(partnerName);
+        if (!personaA || !personaB) return;
+        const m = Math.max(depth.get(personaA.id), depth.get(personaB.id));
+        if (depth.get(personaA.id) !== m) { depth.set(personaA.id, m); cambio = true; }
+        if (depth.get(personaB.id) !== m) { depth.set(personaB.id, m); cambio = true; }
       });
       people.forEach((p) => {
-        const padres = (Array.isArray(p.padres) ? p.padres : []).filter((n) => byName.has(n) && n !== p.nombre);
+        const padres = (Array.isArray(p.padres) ? p.padres : [])
+          .map((n) => byName.get(n))
+          .filter((pp) => pp && pp.id !== p.id);
         if (!padres.length) return;
-        const objetivo = Math.max(...padres.map((n) => depth.get(n))) + 1;
-        if (depth.get(p.nombre) < objetivo) { depth.set(p.nombre, objetivo); cambio = true; }
+        const objetivo = Math.max(...padres.map((pp) => depth.get(pp.id))) + 1;
+        if (depth.get(p.id) < objetivo) { depth.set(p.id, objetivo); cambio = true; }
       });
       if (!cambio) break;
     }
@@ -341,7 +361,7 @@
     const maxProfundidad = Math.max(...Array.from(profundidad.values()));
     const filas = [];
     for (let d = 0; d <= maxProfundidad; d++) filas.push([]);
-    people.forEach((p) => filas[profundidad.get(p.nombre)].push(p));
+    people.forEach((p) => filas[profundidad.get(p.id)].push(p));
 
     // De abajo hacia arriba: la fila más profunda se ordena agrupando
     // hermanos de sangre (no tiene una fila de abajo de la cual guiarse);
@@ -363,9 +383,20 @@
     svg.setAttribute('class', 'tree-lines');
     graphic.appendChild(svg);
 
+    // Dos mapas para cada cosa: uno por ID (siempre apunta a UNA sola
+    // persona exacta — para "dónde está ESTA persona en particular") y
+    // otro por NOMBRE (para resolver a quién se refiere un "padres": ["X"]
+    // — ahí sí puede haber ambigüedad si dos personas se llaman igual, ej.
+    // un abuelo y un nieto con el mismo nombre). Para esa ambigüedad se
+    // prioriza a quien esté en la fila MÁS ANTIGUA (profundidad menor) —
+    // que es casi siempre la interpretación correcta cuando el nombre se
+    // usa como referencia de "padre de" alguien.
+    const nodeById = new Map();
+    const avatarById = new Map();
+    const rowElDeId = new Map();
     const nodeByName = new Map();
     const avatarByName = new Map();
-    const rowElDeNombre = new Map(); // nombre -> fila (div .tree-row) a la que pertenece
+    const rowElDeNombre = new Map();
     const rowElPorFila = []; // mismo índice que filasOrdenadas (filas vacías -> null)
     filasOrdenadas.forEach((grupo) => {
       if (!grupo.length) { rowElPorFila.push(null); return; }
@@ -380,9 +411,18 @@
           editarPersona(p.id, p.nombre, p.relacion, p.padres);
         });
         row.appendChild(node);
-        nodeByName.set(p.nombre, node);
-        avatarByName.set(p.nombre, node.querySelector('.avatar'));
-        rowElDeNombre.set(p.nombre, row);
+        nodeById.set(p.id, node);
+        avatarById.set(p.id, node.querySelector('.avatar'));
+        rowElDeId.set(p.id, row);
+        // filasOrdenadas ya viene de generación más antigua a más nueva, así
+        // que la PRIMERA vez que aparece un nombre es la de menor
+        // profundidad — los duplicados que vengan después (mismo nombre,
+        // generación más nueva) no pisan esa referencia.
+        if (!nodeByName.has(p.nombre)) {
+          nodeByName.set(p.nombre, node);
+          avatarByName.set(p.nombre, node.querySelector('.avatar'));
+          rowElDeNombre.set(p.nombre, row);
+        }
       });
       graphic.appendChild(row);
       rowElPorFila.push(row);
@@ -408,8 +448,11 @@
       const rowLeftEnGrafico = rowRectAntes.left - contRect.left;
       const rowAnchoAntes = rowRectAntes.width;
 
-      const xDe = (nombre) => {
-        const av = avatarByName.get(nombre);
+      // Posición de una persona EXACTA (por id, nunca por nombre) — si dos
+      // personas se llaman igual (ej. un abuelo y un nieto), cada una tiene
+      // que quedar ubicada según su PROPIO avatar, no el de su tocayo.
+      const xDe = (persona) => {
+        const av = avatarById.get(persona.id);
         if (!av) return null;
         const r = av.getBoundingClientRect();
         return r.left + r.width / 2 - contRect.left;
@@ -421,19 +464,26 @@
         const hijos = filaInferior.filter(
           (h) => Array.isArray(h.padres) && h.padres.some((pn) => nombresUnidad.includes(pn))
         );
-        const xs = hijos.map((h) => xDe(h.nombre)).filter((x) => x != null);
+        const xs = hijos.map((h) => xDe(h)).filter((x) => x != null);
         // Sin hijos ubicables todavía (ej. un tío sin hijos registrados en
         // la charla) no hay de dónde sacar un centro real — se usa la
         // posición NATURAL que ya tiene ahora mismo (antes de mover nada),
         // que gracias al orden armado más arriba ya está cerca de donde
         // debería quedar, en vez de un valor inventado que lo manda lejos.
-        const centro = xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : xDe(u[0].nombre);
+        const centro = xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : xDe(u[0]);
         return { u, centro, ordenOriginal: i };
       });
       // Último recurso, si ni siquiera la posición natural se pudo leer
-      // (no debería pasar): se va al final, en su orden original.
-      conCentro.forEach((c) => { if (c.centro == null) c.centro = 1e6 + c.ordenOriginal; });
-      conCentro.sort((a, b) => a.centro - b.centro);
+      // (no debería pasar): centro 0, no afecta el orden (ver más abajo).
+      conCentro.forEach((c) => { if (c.centro == null) c.centro = 0; });
+      // OJO: acá NO se reordena por centro — el orden ya viene bien armado
+      // desde "alinearConHijos" (agrupado por hermanos de sangre). Si acá
+      // se reordenara de nuevo mirando solo el centro de CADA unidad suelta
+      // (en vez del clan completo), alguien sin hijos ubicables en esta
+      // fila (ej. una tía sin hijos) podía terminar intercalado en la
+      // familia de al lado, aunque "alinearConHijos" ya lo había dejado
+      // bien pegado a sus hermanos. El centro solo se usa para saber DÓNDE
+      // en píxeles cae cada quien, no para decidir el orden entre ellos.
 
       const NODE_WIDTH = 108; // igual al width de .tree-node en el CSS
       const GAP_INTERNO = 14; // separación dentro de una pareja
@@ -460,7 +510,7 @@
       Array.from(rowEl.children).forEach((child) => { child.style.position = 'absolute'; child.style.top = '0'; });
       conCentro.forEach((c) => {
         c.u.forEach((p, i) => {
-          const node = nodeByName.get(p.nombre);
+          const node = nodeById.get(p.id);
           const leftEnGrafico = c.left + i * (NODE_WIDTH + GAP_INTERNO);
           node.style.left = (leftEnGrafico - rowLeftEnGrafico) + 'px';
         });
@@ -508,7 +558,7 @@
       // las líneas SVG no corten ni midan mal el contenido.
       {
         const contRectPre = graphic.getBoundingClientRect();
-        const nodos = Array.from(nodeByName.values());
+        const nodos = Array.from(nodeById.values());
         const lefts = nodos.map((n) => n.getBoundingClientRect().left - contRectPre.left);
         const rights = nodos.map((n) => n.getBoundingClientRect().right - contRectPre.left);
         const minLeft = Math.min(0, ...lefts);
@@ -571,7 +621,9 @@
       }
 
       people.forEach((p) => {
-        const childAvatar = avatarByName.get(p.nombre);
+        // La propia posición de "p" siempre por ID — si hubiera otra
+        // persona con el mismo nombre, no queremos robarle su avatar.
+        const childAvatar = avatarById.get(p.id);
         if (!childAvatar) return;
         const padresNombres = (Array.isArray(p.padres) ? p.padres : [])
           .filter((n) => n !== p.nombre && avatarByName.has(n));
