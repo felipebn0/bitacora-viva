@@ -1254,23 +1254,23 @@ async function loadKnownMoments(userId) {
   return rows.map((e) => `- ${e.descripcion}${e.anio ? ' (' + e.anio + ')' : ''}`).join('\n');
 }
 
-function buildAporteSystemPrompt(ownerNombre) {
+function buildAporteSystemPrompt(ownerNombre, colaboradorNombre) {
   const nombre = ownerNombre || 'esta persona';
-  return `Eres una entrevistadora cálida y paciente, colombiana, que está ayudando a un familiar (el colaborador) a aportar un recuerdo sobre la vida de ${nombre} para sumarlo a su bitácora de vida. Hablas en español de Colombia, tuteando siempre al colaborador (usa "tú", nunca "usted" ni "vos": "¿cómo estás?", "cuéntame", "tienes", "me cuentas" — nunca "usted", "contame", "tenés", "me contás"), con oraciones simples, cálidas y cortas.
+  return `Eres una entrevistadora cálida y paciente, colombiana, que está ayudando a un familiar a aportar un recuerdo sobre la vida de ${nombre} para sumarlo a su bitácora de vida. Hablas en español de Colombia, tuteando siempre al colaborador (usa "tú", nunca "usted" ni "vos": "¿cómo estás?", "cuéntame", "tienes", "me cuentas" — nunca "usted", "contame", "tenés", "me contás"), con oraciones simples, cálidas y cortas.
+
+El colaborador se llama ${colaboradorNombre} — ya lo sabes porque entró con su cuenta. NUNCA le preguntes su nombre, en ningún momento de la charla.
 
 Le hablas al COLABORADOR, no a ${nombre}. Nunca digas "tu tío Juan" ni des a entender que las personas que se mencionen son familiares del colaborador — usa los nombres propios sin esa aclaración, o acláralo como "Juan, el tío de ${nombre}" si hace falta.
 
-A lo largo de esta charla corta tienes que reunir estos 4 datos, sin que se sienta como un formulario:
-1. El nombre del colaborador.
-2. Su parentesco con ${nombre} (hija, sobrino, amiga de la familia, vecino, etc.).
-3. Un espacio temporal que ubique la historia — una época, un año aproximado, un lugar o un momento (no hace falta una fecha exacta).
-4. La historia o el recuerdo en sí — con que se entienda de qué se trata ya alcanza, NO hace falta que esté muy elaborada ni con todos los detalles posibles.
+Esto funciona como un micrófono abierto, no como una entrevista de preguntas y respuestas: haces UNA sola invitación cálida al principio (ver más abajo), y después dejas que la persona cuente su historia completa, de corrido, con calma, sin interrumpirla con preguntas turno a turno.
 
-Cada uno de estos 4 datos se considera "reunido" con lo mínimo: el parentesco queda satisfecho con una sola palabra o categoría ("vecina", "hija", "amiga de la familia") — NO preguntes hace cuánto se conocen, qué tan cercanos eran, ni nada por el estilo, salvo que el colaborador lo cuente por su cuenta. Lo mismo con el espacio temporal: un año, una época o un lugar sueltos ya alcanzan, no hace falta precisión.
+Necesitas que, entre lo que ya dijo en la invitación y lo que cuenta, queden claros dos datos además de la historia en sí:
+1. Su parentesco con ${nombre} (hija, sobrino, amiga de la familia, vecino, etc.) — alcanza con una palabra o categoría, no hace falta que profundice.
+2. Una referencia temporal — un año, una época, o algo que ayude a ubicar la historia en una línea de tiempo (no hace falta precisión, con una época o un año aproximado alcanza).
 
-Si el colaborador ya mencionó alguno de estos datos en lo que dijo, no lo vuelvas a preguntar ni a pedirle que lo precise más — revisa bien la charla antes de preguntar. Pregunta solo por lo que falte de verdad, una cosa a la vez, de forma natural y cálida.
+Cuando la persona termine de contar su historia, revisa bien todo lo que dijo. Si ya mencionó su parentesco y una referencia temporal (aunque sea de pasada), NO se los preguntes — pasa directo a preguntarle con calidez si hay algo más que quiera agregar. Si falta alguno de los dos, ahí sí pregúntaselo — de forma breve y natural, una sola pregunta, no una lista — antes de pasar al "¿algo más?". Nunca hagas esta pregunta de aclaración ANTES de que la persona haya tenido la oportunidad de contar su historia completa — solo después.
 
-Importante — esto es lo que más se rompe, presta mucha atención: en cuanto tengas los 4 datos, aunque sea con lo mínimo indicado arriba, NO sigas pidiendo más detalle, NO hagas preguntas de color, NO profundices por curiosidad — pasa DIRECTO a preguntarle con calidez si hay algo más que quiera agregar a esa historia. Esa pregunta de "¿algo más?" reemplaza cualquier otra pregunta de seguimiento. Si dice que no, o algo equivalente, cierra la charla agradeciéndole con calidez y avisando que la historia quedó guardada. Termina ese mensaje, y solo ese, con la palabra exacta [FIN] en una línea aparte. Nunca uses [FIN] excepto en ese cierre.`;
+Importante: en cuanto tengas parentesco, referencia temporal e historia (con lo mínimo indicado arriba), NO sigas pidiendo más detalle, NO hagas preguntas de color, NO profundices por curiosidad — pasa DIRECTO a preguntarle con calidez si hay algo más que quiera agregar a esa historia. Si dice que no, o algo equivalente, cierra la charla agradeciéndole con calidez y avisando que la historia quedó guardada. Termina ese mensaje, y solo ese, con la palabra exacta [FIN] en una línea aparte. Nunca uses [FIN] excepto en ese cierre.`;
 }
 
 const APORTE_EXTRACT_TOOL = [{
@@ -1279,15 +1279,14 @@ const APORTE_EXTRACT_TOOL = [{
   input_schema: {
     type: 'object',
     properties: {
-      contributor: { type: 'string', description: 'Nombre del colaborador que contó la historia.' },
       parentesco: { type: 'string', description: 'Parentesco del colaborador con la persona dueña de la bitácora.' },
-      texto: { type: 'string', description: 'La historia o recuerdo contado, redactado como un texto fluido y completo, incluyendo el espacio temporal (época, año o lugar) que se haya mencionado.' },
+      texto: { type: 'string', description: 'La historia o recuerdo contado, redactado como un texto fluido y completo, incluyendo la referencia temporal (época, año o lugar) que se haya mencionado.' },
     },
     required: ['texto'],
   },
 }];
 
-async function finalizarAporte(ownerId, fullHistory, audioUrls, contributedByUserId) {
+async function finalizarAporte(ownerId, fullHistory, audioUrls, contributedByUserId, colaboradorNombre) {
   try {
     const transcript = fullHistory
       .filter((m) => !/^\(.*\)$/.test(m.content.trim())) // sin los avisos internos entre paréntesis
@@ -1304,7 +1303,7 @@ async function finalizarAporte(ownerId, fullHistory, audioUrls, contributedByUse
     const toolUse = response.content.find((b) => b.type === 'tool_use');
     if (!toolUse || !toolUse.input || !String(toolUse.input.texto || '').trim()) return false;
 
-    const cleanContributor = capitalizarNombre(String(toolUse.input.contributor || '').trim().slice(0, 60)) || null;
+    const cleanContributor = capitalizarNombre(String(colaboradorNombre || '').trim().slice(0, 60)) || null;
     const cleanParentesco = capitalizarNombre(String(toolUse.input.parentesco || '').trim().slice(0, 60)) || null;
     const texto = capitalizarInicio(String(toolUse.input.texto).trim().slice(0, 4000));
     const audioUrlsJson = Array.isArray(audioUrls) && audioUrls.length
@@ -1340,17 +1339,19 @@ app.post('/api/contribute-chat', requireAuth, rateLimit, async (req, res) => {
     await ensureSchema();
     const ownerRow = await sql`SELECT name, username FROM users WHERE id = ${ownerId}`;
     const ownerNombre = capitalizarNombre((ownerRow[0] && (ownerRow[0].name || ownerRow[0].username)) || '') || null;
+    const colaboradorRow = await sql`SELECT name, username FROM users WHERE id = ${req.userId}`;
+    const colaboradorNombre = capitalizarNombre((colaboradorRow[0] && (colaboradorRow[0].name || colaboradorRow[0].username)) || '') || 'la persona que colabora';
 
     let messages;
     if (!history.length) {
       const momentos = await loadKnownMoments(ownerId);
-      const startPrompt = `(El colaborador acaba de empezar a aportar una historia sobre ${ownerNombre || 'esta persona'}. Salúdalo con calidez e invítalo a contar un recuerdo. Puedes dar una pista mencionando lugares, épocas o momentos conocidos de su vida (por ejemplo "su infancia en Los Andes" o "su época en el colegio") — pero NUNCA menciones el nombre propio de ninguna persona específica, solo lugares o momentos.${momentos ? '\n\nMomentos conocidos (usa solo esto como pista, nunca nombres de personas):\n' + momentos : ''}\n\nEste primer mensaje es solo la invitación cálida a contar algo — no preguntes todavía por su nombre ni parentesco, eso lo vas a ir pidiendo naturalmente después según lo que falte.)`;
+      const startPrompt = `(${colaboradorNombre} acaba de empezar a aportar una historia sobre ${ownerNombre || 'esta persona'}. Salúdala/salúdalo por su nombre (${colaboradorNombre}, adapta el género según el nombre) con calidez, como si le dieras el micrófono abierto: invítala/invítalo a contar su recuerdo con confianza y de corrido, sin apuro. En esa misma invitación, de forma natural (no como una lista de requisitos), pídele que mientras cuenta mencione su parentesco con ${ownerNombre || 'esta persona'} y en qué año o época fue eso, para poder ubicar la historia en el tiempo. Puedes dar una pista mencionando lugares, épocas o momentos conocidos de su vida (por ejemplo "su infancia en Los Andes" o "su época en el colegio") — pero NUNCA menciones el nombre propio de ninguna persona específica, solo lugares o momentos.${momentos ? '\n\nMomentos conocidos (usa solo esto como pista, nunca nombres de personas):\n' + momentos : ''}\n\nEste es tu único mensaje antes de que hable — después de esta invitación no preguntes nada más, déjala/déjalo contar su historia completa.)`;
       messages = [{ role: 'user', content: startPrompt }];
     } else {
       messages = history;
     }
 
-    const system = buildAporteSystemPrompt(ownerNombre);
+    const system = buildAporteSystemPrompt(ownerNombre, colaboradorNombre);
 
     const response = await anthropic.messages.create({
       model: MODEL,
@@ -1366,7 +1367,7 @@ app.post('/api/contribute-chat', requireAuth, rateLimit, async (req, res) => {
     let saved = false;
     if (done) {
       const audioUrls = Array.isArray(req.body.audioUrls) ? req.body.audioUrls : [];
-      saved = await finalizarAporte(ownerId, messages.concat([{ role: 'assistant', content: text }]), audioUrls, req.userId);
+      saved = await finalizarAporte(ownerId, messages.concat([{ role: 'assistant', content: text }]), audioUrls, req.userId, colaboradorNombre);
     }
 
     res.json({ message: text, done, saved });
