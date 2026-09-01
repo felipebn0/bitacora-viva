@@ -116,15 +116,6 @@
 (function () {
   const wrap = document.getElementById('wrap');
 
-  function tierForRelacion(relacion) {
-    const r = (relacion || '').toLowerCase();
-    if (/abuel/.test(r)) return 0;
-    if (/(pap[aá]|padre|mam[aá]|madre|t[ií]o|t[ií]a)/.test(r)) return 1;
-    if (/(nieto|nieta)/.test(r)) return 4;
-    if (/(hijo|hija|sobrin)/.test(r)) return 3;
-    return 2; // hermanos, esposo/a, primos, sujeto principal
-  }
-
   function esNovio(relacion) {
     return /\bnovi[oa]\b/i.test(relacion || '');
   }
@@ -225,6 +216,86 @@
     return result;
   }
 
+  // A qué generación pertenece cada persona — a partir de la cadena REAL
+  // de "padres" (no de palabras clave en "relacion", que se rompía apenas
+  // la IA fraseaba distinto a lo esperado, ej. "yo (persona principal)" en
+  // vez de "sujeto principal"). Sin padres conocidos = generación 0 (una
+  // raíz propia, aunque sea alguien suelto — así nunca desaparece nadie,
+  // como sí pasaba antes). Las parejas siempre quedan en la misma
+  // generación que su pareja, aunque a uno de los dos no se le conozcan
+  // los padres.
+  function calcularProfundidades(people, partnerOf) {
+    const byName = new Map(people.map((p) => [p.nombre, p]));
+    const depth = new Map();
+
+    function profundidadDe(nombre, visitando) {
+      if (depth.has(nombre)) return depth.get(nombre);
+      if (visitando.has(nombre)) return 0; // corta ciclos raros en los datos
+      visitando.add(nombre);
+      const persona = byName.get(nombre);
+      const padres = (persona && Array.isArray(persona.padres) ? persona.padres : [])
+        .filter((n) => byName.has(n) && n !== nombre);
+      const d = padres.length ? Math.max(...padres.map((n) => profundidadDe(n, visitando))) + 1 : 0;
+      depth.set(nombre, d);
+      visitando.delete(nombre);
+      return d;
+    }
+    people.forEach((p) => profundidadDe(p.nombre, new Set()));
+
+    for (let i = 0; i < 5; i++) {
+      let cambio = false;
+      partnerOf.forEach((partnerName, nombre) => {
+        if (!byName.has(partnerName)) return;
+        const m = Math.max(depth.get(nombre), depth.get(partnerName));
+        if (depth.get(nombre) !== m) { depth.set(nombre, m); cambio = true; }
+        if (depth.get(partnerName) !== m) { depth.set(partnerName, m); cambio = true; }
+      });
+      people.forEach((p) => {
+        const padres = (Array.isArray(p.padres) ? p.padres : []).filter((n) => byName.has(n) && n !== p.nombre);
+        if (!padres.length) return;
+        const objetivo = Math.max(...padres.map((n) => depth.get(n))) + 1;
+        if (depth.get(p.nombre) < objetivo) { depth.set(p.nombre, objetivo); cambio = true; }
+      });
+      if (!cambio) break;
+    }
+    return depth;
+  }
+
+  // Agrupa una fila en "unidades": una pareja cuenta como una sola unidad
+  // (se mueven y se ordenan siempre juntos), alguien sin pareja es su
+  // propia unidad de uno.
+  function agruparEnUnidades(fila, partnerOf) {
+    const usados = new Set();
+    const unidades = [];
+    fila.forEach((p) => {
+      if (usados.has(p.nombre)) return;
+      const partnerName = partnerOf.get(p.nombre);
+      const partner = partnerName ? fila.find((x) => x.nombre === partnerName) : null;
+      if (partner) { unidades.push([p, partner]); usados.add(p.nombre); usados.add(partner.nombre); }
+      else { unidades.push([p]); usados.add(p.nombre); }
+    });
+    return unidades;
+  }
+
+  // Ordena una fila mirando dónde quedaron sus propios hijos en la fila de
+  // ABAJO (ya ordenada) — de abajo hacia arriba, cada fila se acomoda sola
+  // en base a datos reales (quién es hijo de quién), en vez de intentar
+  // adivinar el orden de arriba hacia abajo por generación genérica.
+  function alinearConHijos(fila, filaInferior, partnerOf) {
+    const indexInferior = new Map(filaInferior.map((p, i) => [p.nombre, i]));
+    const unidades = agruparEnUnidades(fila, partnerOf);
+    const conPos = unidades.map((u, i) => {
+      const nombresUnidad = u.map((p) => p.nombre);
+      const hijos = filaInferior.filter((h) => Array.isArray(h.padres) && h.padres.some((pn) => nombresUnidad.includes(pn)));
+      const pos = hijos.length
+        ? hijos.reduce((s, h) => s + indexInferior.get(h.nombre), 0) / hijos.length
+        : i + 0.5; // sin hijos ubicables acá: se queda cerca de su posición original
+      return { u, pos };
+    });
+    conPos.sort((a, b) => a.pos - b.pos);
+    return conPos.flatMap((x) => x.u);
+  }
+
   function renderTree(people) {
     wrap.innerHTML = '';
     if (!people.length) {
@@ -234,40 +305,28 @@
 
     const partnerOf = detectarParejas(people);
 
-    const tiers = [[], [], [], [], []];
-    people.forEach((p) => { tiers[tierForRelacion(p.relacion)].push(p); });
+    // La generación de cada quien sale de la cadena real de "padres", no de
+    // una lista fija de palabras clave — así el árbol tiene tantas filas
+    // como haga falta (bisabuelos, tataranietos, lo que sea) y nadie queda
+    // mal clasificado por cómo la IA haya redactado el parentesco.
+    const profundidad = calcularProfundidades(people, partnerOf);
+    const maxProfundidad = Math.max(...Array.from(profundidad.values()));
+    const filas = [];
+    for (let d = 0; d <= maxProfundidad; d++) filas.push([]);
+    people.forEach((p) => filas[profundidad.get(p.nombre)].push(p));
 
-    // Orden base de cada fila: hermanos de sangre agrupados, con la pareja
-    // puente pegada entre dos grupos vecinos.
-    const filasOrdenadas = tiers.map((grupo) => (grupo.length ? ordenarConParejasJuntas(grupo, partnerOf) : []));
-
-    // Las filas más arriba (ej. abuelos) no tienen padres propios en el
-    // árbol, así que ordenarConParejasJuntas no tiene de qué agarrarse y
-    // las deja en su orden original — eso hace que, por ejemplo, la familia
-    // de la mamá quede dibujada arriba de la familia del papá. Para
-    // evitarlo, esas filas "raíz" se reordenan según dónde terminaron sus
-    // propios hijos en la fila de abajo (ya bien ordenada), para que cada
-    // familia (ej. Bernal por un lado, Nisperuza por el otro) quede
-    // alineada con su propia rama y solo se toquen donde corresponde.
-    function esFilaRaiz(fila) {
-      return fila.every((p) => !(Array.isArray(p.padres) && p.padres.length));
-    }
-    function alinearConHijos(filaSuperior, filaInferior) {
-      const indexInferior = new Map(filaInferior.map((p, i) => [p.nombre, i]));
-      const conPos = filaSuperior.map((p, i) => {
-        const hijos = filaInferior.filter((h) => Array.isArray(h.padres) && h.padres.includes(p.nombre));
-        const pos = hijos.length
-          ? hijos.reduce((s, h) => s + indexInferior.get(h.nombre), 0) / hijos.length
-          : i + 0.5; // sin hijos ubicables acá: se queda cerca de su posición original
-        return { p, pos };
-      });
-      conPos.sort((a, b) => a.pos - b.pos);
-      return conPos.map((x) => x.p);
-    }
-    for (let i = 0; i < filasOrdenadas.length - 1; i++) {
-      if (!filasOrdenadas[i].length || !esFilaRaiz(filasOrdenadas[i])) continue;
-      const siguienteConGente = filasOrdenadas.slice(i + 1).find((f) => f.length);
-      if (siguienteConGente) filasOrdenadas[i] = alinearConHijos(filasOrdenadas[i], siguienteConGente);
+    // De abajo hacia arriba: la fila más profunda se ordena agrupando
+    // hermanos de sangre (no tiene una fila de abajo de la cual guiarse);
+    // cada fila de arriba se acomoda sola mirando dónde quedaron sus
+    // propios hijos en la fila de abajo, ya ordenada. Esto reemplaza tener
+    // que "adivinar" el orden de arriba hacia abajo.
+    const filasOrdenadas = filas.slice();
+    if (filasOrdenadas.length) {
+      const ultima = filasOrdenadas.length - 1;
+      filasOrdenadas[ultima] = ordenarConParejasJuntas(filasOrdenadas[ultima], partnerOf);
+      for (let d = ultima - 1; d >= 0; d--) {
+        filasOrdenadas[d] = alinearConHijos(filasOrdenadas[d], filasOrdenadas[d + 1], partnerOf);
+      }
     }
 
     const graphic = document.createElement('div');
@@ -303,28 +362,16 @@
 
     wrap.appendChild(graphic);
 
-    function agruparEnUnidades(fila) {
-      const usados = new Set();
-      const unidades = [];
-      fila.forEach((p) => {
-        if (usados.has(p.nombre)) return;
-        const partnerName = partnerOf.get(p.nombre);
-        const partner = partnerName ? fila.find((x) => x.nombre === partnerName) : null;
-        if (partner) { unidades.push([p, partner]); usados.add(p.nombre); usados.add(partner.nombre); }
-        else { unidades.push([p]); usados.add(p.nombre); }
-      });
-      return unidades;
-    }
-
     // Reubica una fila a mano (en vez de dejar que cada una se centre sola
-    // con flexbox) para que quede alineada en píxeles con una fila vecina
-    // YA finalizada: "abajo" la alinea con sus propios hijos (para la fila
-    // más alta del árbol, que no tiene padres propios acá); "arriba" la
-    // alinea con sus propios padres (para el resto). Sin esto, filas con
-    // cantidades de gente muy distintas (4 arriba, 9 en el medio, 6 abajo)
-    // no quedan alineadas aunque el orden sea correcto, y las líneas
-    // terminan cruzándose por en medio de gente que no tiene nada que ver.
-    function posicionarFila(fila, filaReferencia, direccion, rowEl) {
+    // con flexbox) para que quede alineada en píxeles con la fila de ABAJO
+    // (ya posicionada de verdad) — cada unidad (persona o pareja) se centra
+    // sobre sus propios hijos reales, nunca sobre "los hijos que le tocaron
+    // por generación". Se procesa siempre de abajo hacia arriba, así la
+    // fila de referencia ya tiene coordenadas reales cuando le toca a la de
+    // arriba. Sin esto, filas con cantidades de gente muy distintas (4
+    // arriba, 9 en el medio, 6 abajo) no quedan alineadas aunque el orden
+    // sea correcto, y las líneas terminan cruzándose.
+    function posicionarFila(fila, filaInferior, rowEl) {
       const contRect = graphic.getBoundingClientRect();
       // Ojo con el sistema de coordenadas: node.style.left posiciona
       // relativo a rowEl (el padre position:relative), no al gráfico
@@ -340,20 +387,13 @@
         return r.left + r.width / 2 - contRect.left;
       };
 
-      const unidades = agruparEnUnidades(fila);
+      const unidades = agruparEnUnidades(fila, partnerOf);
       const conCentro = unidades.map((u, i) => {
         const nombresUnidad = u.map((p) => p.nombre);
-        let xs;
-        if (direccion === 'abajo') {
-          const hijos = filaReferencia.filter(
-            (h) => Array.isArray(h.padres) && h.padres.some((pn) => nombresUnidad.includes(pn))
-          );
-          xs = hijos.map((h) => xDe(h.nombre)).filter((x) => x != null);
-        } else {
-          const nombresPadres = new Set();
-          u.forEach((p) => (Array.isArray(p.padres) ? p.padres : []).forEach((pn) => nombresPadres.add(pn)));
-          xs = Array.from(nombresPadres).map((n) => xDe(n)).filter((x) => x != null);
-        }
+        const hijos = filaInferior.filter(
+          (h) => Array.isArray(h.padres) && h.padres.some((pn) => nombresUnidad.includes(pn))
+        );
+        const xs = hijos.map((h) => xDe(h.nombre)).filter((x) => x != null);
         const centro = xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
         return { u, centro, ordenOriginal: i };
       });
@@ -396,40 +436,35 @@
     }
 
     requestAnimationFrame(() => {
-      // Fila "ancla": la más numerosa se deja tal cual (centrada sola con
-      // flexbox, ya bien ordenada) y todas las demás se alinean respecto a
-      // ella en cascada — hacia arriba mirando a sus hijos, hacia abajo
-      // mirando a sus padres — para que cada fila quede alineada en
-      // píxeles con la de al lado, no solo en el orden de la lista.
+      // Siempre de abajo hacia arriba: la fila más profunda (con gente) se
+      // deja tal cual quedó centrada sola con flexbox, ya bien ordenada —
+      // y cada fila arriba de esa se posiciona mirando a la de abajo, que
+      // para entonces ya tiene coordenadas reales. Como el orden de las
+      // filas ya viene armado de abajo hacia arriba (ver más arriba), acá
+      // solo hace falta seguir la misma dirección para los píxeles.
       const filasConIndice = filasOrdenadas
         .map((fila, i) => ({ fila, i }))
         .filter((x) => x.fila.length);
 
       if (filasConIndice.length > 1) {
-        let anclaIdx = 0;
-        filasConIndice.forEach((x, idx) => {
-          if (x.fila.length > filasConIndice[anclaIdx].fila.length) anclaIdx = idx;
-        });
+        const ultimaIdx = filasConIndice.length - 1;
 
-        // La fila ancla también se fija con margen explícito, ANTES de
-        // tocar cualquier otra — si no, sigue centrada con "margin: 0 auto"
-        // y se corre sola más tarde cuando el gráfico crece (al recalcular
-        // el ancho al final), desalineando todo lo que ya se había puesto
-        // en relación a su posición original.
+        // La fila más profunda también se fija con margen explícito, ANTES
+        // de tocar cualquier otra — si no, sigue centrada con
+        // "margin: 0 auto" y se corre sola más tarde cuando el gráfico
+        // crece (al recalcular el ancho al final), desalineando todo lo
+        // que ya se había puesto en relación a su posición original.
         {
-          const anclaRowEl = rowElPorFila[filasConIndice[anclaIdx].i];
+          const rowEl = rowElPorFila[filasConIndice[ultimaIdx].i];
           const contRect0 = graphic.getBoundingClientRect();
-          const anclaRect = anclaRowEl.getBoundingClientRect();
-          anclaRowEl.style.width = anclaRect.width + 'px';
-          anclaRowEl.style.marginLeft = (anclaRect.left - contRect0.left) + 'px';
-          anclaRowEl.style.marginRight = '0';
+          const rect = rowEl.getBoundingClientRect();
+          rowEl.style.width = rect.width + 'px';
+          rowEl.style.marginLeft = (rect.left - contRect0.left) + 'px';
+          rowEl.style.marginRight = '0';
         }
 
-        for (let idx = anclaIdx - 1; idx >= 0; idx--) {
-          posicionarFila(filasConIndice[idx].fila, filasConIndice[idx + 1].fila, 'abajo', rowElPorFila[filasConIndice[idx].i]);
-        }
-        for (let idx = anclaIdx + 1; idx < filasConIndice.length; idx++) {
-          posicionarFila(filasConIndice[idx].fila, filasConIndice[idx - 1].fila, 'arriba', rowElPorFila[filasConIndice[idx].i]);
+        for (let idx = ultimaIdx - 1; idx >= 0; idx--) {
+          posicionarFila(filasConIndice[idx].fila, filasConIndice[idx + 1].fila, rowElPorFila[filasConIndice[idx].i]);
         }
       }
 
