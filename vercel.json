@@ -5,6 +5,16 @@
     { "src": "public/**", "use": "@vercel/static" }
   ],
   "routes": [
+    {
+      "src": "^/(?!api/).*",
+      "headers": {
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "microphone=(self)"
+      },
+      "continue": true
+    },
     { "src": "/api/(.*)", "dest": "/api/index.js" },
     { "src": "/", "dest": "/public/index.html" },
     { "src": "/(.*)", "dest": "/public/$1" }
