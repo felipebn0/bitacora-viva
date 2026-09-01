@@ -9,6 +9,18 @@ const { put } = require('@vercel/blob');
 
 const app = express();
 app.set('trust proxy', 1); // detrás del proxy de Vercel: para que req.ip y req.secure sean correctos
+
+// Cabeceras de seguridad estándar en cada respuesta — no cambian nada
+// visible, solo cierran puertas que un navegador podría dejar abiertas.
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'microphone=(self)'); // el mic solo lo pide este sitio, nada externo
+  res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains');
+  next();
+});
+
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -1167,7 +1179,7 @@ app.post('/api/speak', requireAuth, rateLimit, async (req, res) => {
   }
 });
 
-app.post('/api/save-audio', requireAuth, bloquearColaborador, express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
+app.post('/api/save-audio', requireAuth, bloquearColaborador, rateLimit, express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
   try {
     const { sessionId, index, role } = req.query;
     if (!sessionId || index === undefined || !role) {
@@ -1218,7 +1230,7 @@ app.post('/api/contribute-story', requireAuth, rateLimit, async (req, res) => {
 // Sube el audio de un aporte (colaborador contando una historia con su voz)
 // a Blob storage — separado de /api/save-audio porque ese está pensado para
 // las charlas normales (sessionId/index/role) y este no tiene esa forma.
-app.post('/api/contribute-audio', requireAuth, express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
+app.post('/api/contribute-audio', requireAuth, rateLimit, express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
   try {
     const ownerId = await resolveProfileUserId(req);
     if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
@@ -1367,7 +1379,7 @@ app.post('/api/contribute-chat', requireAuth, rateLimit, async (req, res) => {
 // Límite bajo a propósito: las funciones serverless de Vercel no aceptan
 // cuerpos de pedido grandes (tope real ~4.5MB). Para fotos alcanza; para
 // videos largos hace falta otro mecanismo de subida que todavía no armamos.
-app.post('/api/contribute-media', requireAuth, express.raw({ type: '*/*', limit: '4mb' }), async (req, res) => {
+app.post('/api/contribute-media', requireAuth, rateLimit, express.raw({ type: '*/*', limit: '4mb' }), async (req, res) => {
   try {
     const ownerId = await resolveProfileUserId(req);
     if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });

@@ -73,6 +73,7 @@
     h1{font-size:clamp(3.2rem,7vw,6.5rem);margin:0 0 24px;max-width:10ch}
     h1 em{font-style:italic;color:var(--moss);font-weight:500}
     .hero-copy p{font-size:1.14rem;color:var(--ink-soft);max-width:57ch;margin:0 0 30px}
+    .hero-emotional{font-family:var(--serif);font-style:italic;font-size:1.05rem;color:var(--moss);max-width:52ch;margin:-14px 0 30px!important}
     .hero-actions{display:flex;gap:12px;flex-wrap:wrap}
     .trust-row{display:flex;gap:18px;flex-wrap:wrap;margin-top:28px;color:var(--ink-soft);font-size:.9rem}
     .trust-row span{display:flex;align-items:center;gap:7px}
@@ -160,7 +161,7 @@
     .voice-copy p{color:var(--ink-soft);font-size:1.05rem}
 
     /* FAMILY */
-    .family-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+    .family-cards{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
     .family-card{background:#FFFDF7;border:1px solid var(--line);border-radius:22px;padding:24px;min-height:210px}
     .soon-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:18px}
     .soon-card{background:#FFFDF7;border:1px dashed var(--line);border-radius:22px;padding:24px;position:relative}
@@ -261,6 +262,7 @@
           <div class="eyebrow">Un legado contado con tu propia voz</div>
           <h1>Las historias de tu familia merecen <em>seguir vivas.</em></h1>
           <p>Conversaciones guiadas que convierten recuerdos, anécdotas y voces en una historia familiar que puedes volver a escuchar, consultar y compartir.</p>
+          <p class="hero-emotional">Algún día vas a querer volver a escuchar su voz contando esa historia otra vez. Guárdala mientras todavía se puede.</p>
           <div class="hero-actions">
             <a class="btn btn-primary" href="#registro">Crear mi cuenta</a>
             <a class="btn btn-secondary" href="#como-funciona">Ver cómo funciona ↓</a>
@@ -304,7 +306,7 @@
             <div class="question-card">“¿Cuál fue uno de los días más importantes de tu vida?”</div>
             <div class="question-card">“¿Qué historia quieres que nunca olvidemos?”</div>
           </div>
-          <p class="problem-note">Los recuerdos de mis viejos ayuda a tener esas conversaciones hoy para que la familia pueda volver a ellas mañana.</p>
+          <p class="problem-note">Esas preguntas casi nunca se hacen a tiempo. Después queda el silencio, y el "ojalá le hubiera preguntado". Los recuerdos de mis viejos ayuda a tener esas conversaciones hoy, para que la familia pueda volver a ellas siempre.</p>
         </div>
       </div>
     </section>
@@ -382,14 +384,19 @@
             <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Cada bitácora tiene un código único para compartir con quien quieras.</p>
           </div>
           <div class="family-card">
-            <div style="font-size:1.8rem;margin-bottom:10px">🙋</div>
-            <b style="display:block;margin-bottom:4px">Cada uno con su cuenta</b>
-            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Se registran con su propio correo y clave — nadie comparte contraseñas.</p>
+            <div style="font-size:1.8rem;margin-bottom:10px">🎙️</div>
+            <b style="display:block;margin-bottom:4px">Cuentan con su propia voz</b>
+            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Una entrevistadora los va guiando en una charla corta — sin formularios, sin llenar campos.</p>
           </div>
           <div class="family-card">
-            <div style="font-size:1.8rem;margin-bottom:10px">✍️</div>
-            <b style="display:block;margin-bottom:4px">Suman, no editan</b>
-            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Aportan historias y le preguntan a la bitácora, sin tocar las charlas principales.</p>
+            <div style="font-size:1.8rem;margin-bottom:10px">🔒</div>
+            <b style="display:block;margin-bottom:4px">Cada quien ve lo suyo</b>
+            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Un colaborador nunca ve lo que aportó otro, ni las charlas principales — solo suma.</p>
+          </div>
+          <div class="family-card">
+            <div style="font-size:1.8rem;margin-bottom:10px">🤝</div>
+            <b style="display:block;margin-bottom:4px">Puedes tener la tuya y ayudar en otras</b>
+            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Tu propia bitácora y, con un código, colaborar en la historia de alguien más — sin cerrar sesión ni crear otra cuenta.</p>
           </div>
         </div>
       </div>
@@ -440,12 +447,13 @@
     <section class="privacy" id="privacidad">
       <div class="wrap">
         <div class="privacy-box reveal">
-          <div><div class="eyebrow" style="color:#D9B479">Recuerdos personales</div><h2>Tu historia tiene que sentirse tuya.</h2><p>La privacidad no debería ser un detalle secundario cuando lo que se guarda son voces, recuerdos y relaciones familiares.</p></div>
+          <div><div class="eyebrow" style="color:#D9B479">Recuerdos personales</div><h2>Tu historia tiene que sentirse tuya.</h2><p>Lo que se guarda acá son voces, recuerdos y relaciones familiares — no un dato cualquiera. Por eso la privacidad no es un detalle secundario, es la base de todo lo demás.</p></div>
           <div class="privacy-list">
-            <div class="privacy-item"><b>🔐 Cuenta protegida con clave</b><span>Tu usuario y contraseña protegen el acceso: nadie entra sin ellos.</span></div>
-            <div class="privacy-item"><b>🔒 Guardado de forma segura</b><span>Tus audios y recuerdos se guardan con conexión cifrada, no se comparten con nadie más.</span></div>
-            <div class="privacy-item"><b>👨‍👩‍👧 Acceso familiar</b><span>Cada familia puede decidir quién participa y quién consulta.</span></div>
-            <div class="privacy-item"><b>🗑️ Tú tienes el control</b><span>Puedes borrar todos tus recuerdos guardados cuando quieras.</span></div>
+            <div class="privacy-item"><b>🔐 Nadie entra sin tu clave</b><span>Tu bitácora está protegida con usuario y contraseña — las claves nunca se guardan en texto plano, se cifran antes de guardarse.</span></div>
+            <div class="privacy-item"><b>🔒 Todo viaja cifrado</b><span>Cada conexión con el sitio va por HTTPS (la misma tecnología que usa tu banco) — nadie que intercepte la conexión puede leer lo que hablas o escribes.</span></div>
+            <div class="privacy-item"><b>👨‍👩‍👧 Solo entra quien tú invitas</b><span>Nadie ve tu bitácora sin tu código de familia. Y cuando alguien colabora, ve únicamente lo que él mismo aportó — no las charlas del dueño, ni los aportes de otros colaboradores.</span></div>
+            <div class="privacy-item"><b>🚫 Nada de historial editado a escondidas</b><span>Si algo se corrige, la versión anterior queda guardada — nunca se reescribe la historia sin dejar rastro.</span></div>
+            <div class="privacy-item"><b>🗑️ Tú tienes el control</b><span>Puedes borrar todos tus recuerdos guardados cuando quieras. Nada se borra por accidente ni por un mensaje de chat: solo con una acción tuya, deliberada.</span></div>
           </div>
         </div>
       </div>
@@ -495,7 +503,7 @@
                 <label for="suCode">Código de familia</label>
                 <input id="suCode" name="inviteCode" type="text" placeholder="Ej: AB12CD" maxlength="6" style="text-transform:uppercase;">
               </div>
-              <p class="field-note" id="familyCodeNote" style="display:none;">Vas a poder aportar historias y preguntarle a esa bitácora — no vas a tener una propia.</p>
+              <p class="field-note" id="familyCodeNote" style="display:none;">Vas a poder aportar historias a esa bitácora, contando con tu propia voz — no vas a tener una bitácora propia.</p>
 
               <button class="btn btn-primary submit" id="signupSubmit" type="submit">Crear cuenta y entrar</button>
               <p class="form-status" id="signupStatus" role="status" aria-live="polite"></p>
@@ -511,7 +519,7 @@
       <div class="wrap inner reveal">
         <div class="eyebrow" style="justify-content:center">Una historia empieza con una pregunta</div>
         <h2>Algún día vas a querer escuchar esa historia una vez más.</h2>
-        <p>Guárdala mientras todavía puede ser contada.</p>
+        <p>Su voz, sus palabras, su forma de contar las cosas — eso no se puede recuperar después. Guárdala mientras todavía puede ser contada.</p>
         <a class="btn btn-primary" href="#registro">Crear mi cuenta</a>
       </div>
     </section>

@@ -201,6 +201,7 @@
     .main-layout { flex-direction: row; align-items: flex-start; justify-content: center; gap: 28px; }
     .device-col { width: min(440px, 100%); flex-shrink: 0; order: 2; position: sticky; top: 24px; }
     .panels-col { width: min(420px, 100%); flex-shrink: 0; order: 1; }
+    .panels-col .aportes:first-child { margin-top: 0; }
   }
 
   .topbar {
@@ -350,19 +351,21 @@
       <p class="sub">Cuando lo que cuenta parece una historia completa (no un dato corto), queda anotado acá junto con su audio.</p>
       <div class="lista" id="storyLogLista"></div>
     </div>
+
+    <div class="aportes" id="colaboracionesPanel" style="display:none;">
+      <h2>Colaboraciones</h2>
+      <p class="sub">Familiares que se unieron con tu código y ya aportaron a tu historia.</p>
+      <div class="lista" id="colaboracionesLista"></div>
+    </div>
     </div>
    </div>
 
     <div class="logout-row">
       <button class="write-toggle" id="inviteToggle" type="button">invitar familiares</button>
       <div id="inviteRow" style="display:none; margin-top: 10px;">
-        <p class="sub" style="max-width: 340px; margin: 0 auto 8px;">Compartí este código con familiares — se crean su propia cuenta y pueden aportar historias y preguntarle a la bitácora, sin ver ni tocar tus charlas.</p>
+        <p class="sub" style="max-width: 340px; margin: 0 auto 8px;">Comparte este código con familiares — crean su propia cuenta y pueden aportar historias, sin ver ni tocar tus charlas.</p>
         <p style="font-family: var(--font-display); font-size: 1.4rem; font-weight: 700; letter-spacing: 0.1em; margin: 0 0 4px;" id="inviteCode">…</p>
         <button class="write-toggle" id="inviteCopyBtn" type="button">copiar código</button>
-        <div style="margin-top: 10px;">
-          <button class="write-toggle" id="collaboratorsToggle" type="button">ver quiénes colaboran contigo</button>
-          <div id="collaboratorsList" style="display:none; margin-top: 8px;"></div>
-        </div>
       </div>
       <button class="write-toggle" id="logoutBtn" type="button">cerrar sesión (<span id="whoami"></span>)</button>
     </div>
@@ -451,27 +454,6 @@
       inviteCopyBtn.textContent = 'copiado ✓';
       setTimeout(() => { inviteCopyBtn.textContent = 'copiar código'; }, 1800);
     } catch (e) {}
-  });
-
-  const collaboratorsToggle = document.getElementById('collaboratorsToggle');
-  const collaboratorsList = document.getElementById('collaboratorsList');
-  let collaboratorsLoaded = false;
-  collaboratorsToggle.addEventListener('click', async () => {
-    const visible = collaboratorsList.style.display !== 'none';
-    if (visible) { collaboratorsList.style.display = 'none'; return; }
-    collaboratorsList.style.display = 'block';
-    if (collaboratorsLoaded) return;
-    try {
-      const resp = await fetch('/api/my-collaborators');
-      const data = await resp.json();
-      const colaboradores = (resp.ok && data.colaboradores) || [];
-      collaboratorsList.innerHTML = colaboradores.length
-        ? colaboradores.map((c) => `<div class="sub">${c.nombre}</div>`).join('')
-        : '<p class="sub">Todavía nadie se ha unido con tu código.</p>';
-      collaboratorsLoaded = true;
-    } catch (e) {
-      collaboratorsList.innerHTML = '<p class="sub">No se pudo cargar.</p>';
-    }
   });
 
   const joinCollabBtn = document.getElementById('joinCollabBtn');
@@ -1164,6 +1146,29 @@
     } catch (e) {}
   }
   cargarBadgeArbol();
+
+  async function cargarColaboraciones() {
+    const panel = document.getElementById('colaboracionesPanel');
+    const lista = document.getElementById('colaboracionesLista');
+    if (!panel || !lista) return;
+    try {
+      const resp = await fetch('/api/my-collaborators');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const colaboradores = data.colaboradores || [];
+      if (!colaboradores.length) return;
+      lista.innerHTML = '';
+      colaboradores.forEach((c) => {
+        const div = document.createElement('div');
+        div.className = 'item';
+        const fecha = c.desde ? new Date(c.desde).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+        div.innerHTML = `<strong>${c.nombre}</strong>${fecha ? ' · colabora desde el ' + fecha : ''}`;
+        lista.appendChild(div);
+      });
+      panel.style.display = 'flex';
+    } catch (e) {}
+  }
+  cargarColaboraciones();
 
   cargarStoryLog();
 })();
