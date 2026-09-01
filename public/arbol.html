@@ -51,7 +51,14 @@
   .tree-lines { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 0; overflow: visible; }
   .tree-lines line { stroke: #B7A87E; stroke-width: 2; }
 
-  .tree-node { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 108px; }
+  .tree-node { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 108px; position: relative; }
+  .tree-node .edit-btn {
+    position: absolute; top: -4px; right: 14px; width: 20px; height: 20px;
+    border-radius: 50%; background: #FBF6EA; border: 1px solid #E7DFCC;
+    font-size: 0.68rem; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity .15s; padding: 0;
+  }
+  .tree-node:hover .edit-btn, .tree-node:focus-within .edit-btn { opacity: 1; }
   .avatar {
     width: 68px; height: 68px; border-radius: 50%;
     background: var(--bubble-user);
@@ -272,8 +279,12 @@
       row.className = 'tree-row';
       grupo.forEach((p) => {
         const node = document.createElement('div');
-        node.className = 'tree-node' + (/sujeto principal/i.test(p.relacion) ? ' principal' : '');
-        node.innerHTML = `<div class="avatar">${initials(p.nombre)}</div><strong>${p.nombre}</strong><span>${p.relacion}</span>`;
+        node.className = 'tree-node' + (/principal/i.test(p.relacion || '') ? ' principal' : '');
+        node.innerHTML = `<div class="avatar">${initials(p.nombre)}</div><strong>${p.nombre}</strong><span>${p.relacion}</span><button class="edit-btn" type="button" title="Corregir nombre o parentesco">✏️</button>`;
+        node.querySelector('.edit-btn').addEventListener('click', (e) => {
+          e.stopPropagation();
+          editarPersona(p.id, p.nombre, p.relacion, p.padres);
+        });
         row.appendChild(node);
         nodeByName.set(p.nombre, node);
         avatarByName.set(p.nombre, node.querySelector('.avatar'));
@@ -535,6 +546,46 @@
     });
   }
 
+  // Se actualiza cada vez que se carga el árbol — sirve de ayuda al editar
+  // "padres" (para saber los nombres exactos disponibles para conectar).
+  let nombresConocidos = [];
+
+  // Corregir a mano el nombre, el parentesco, o de quién es hijo/a alguien
+  // — para cuando la IA lo entendió mal (un nombre mal escrito, un
+  // parentesco equivocado, o alguien que quedó conectado a la persona
+  // equivocada, o sin conectar).
+  async function editarPersona(id, nombreActual, relacionActual, padresActuales) {
+    const nuevoNombre = prompt('Nombre:', nombreActual);
+    if (nuevoNombre === null) return;
+    const nuevaRelacion = prompt('Parentesco (con la persona principal):', relacionActual);
+    if (nuevaRelacion === null) return;
+    const otros = nombresConocidos.filter((n) => n !== nombreActual);
+    const nuevosPadresRaw = prompt(
+      `¿Hijo/a de quién? Escribe el nombre EXACTO del papá y/o la mamá, separados por coma (o déjalo vacío si no aplica).\n\nNombres disponibles: ${otros.join(', ')}`,
+      (padresActuales || []).join(', ')
+    );
+    if (nuevosPadresRaw === null) return;
+    const nombre = nuevoNombre.trim();
+    const relacion = nuevaRelacion.trim();
+    if (!nombre || !relacion) return;
+    const padres = nuevosPadresRaw.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 2);
+    try {
+      const resp = await fetch('/api/tree/person/' + id, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre, relacion, padres }),
+      });
+      if (resp.ok) {
+        cargar();
+      } else {
+        const data = await resp.json().catch(() => ({}));
+        alert(data.error || 'No se pudo guardar el cambio.');
+      }
+    } catch (e) {
+      alert('Hubo un problema para conectar.');
+    }
+  }
+
   let arbolVisto = false;
 
   async function cargar() {
@@ -547,6 +598,7 @@
       if (!resp.ok) throw new Error('fallo');
       const data = await resp.json();
       const people = (data.people || []).filter((p) => !esNovio(p.relacion));
+      nombresConocidos = people.map((p) => p.nombre);
       renderTree(people);
       if (!arbolVisto) {
         arbolVisto = true;

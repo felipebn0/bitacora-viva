@@ -856,7 +856,11 @@ function inferirPadresFaltantes(personas) {
   personas.forEach((p) => {
     if (Array.isArray(p.padres) && p.padres.length) return; // ya lo trajo la IA, no tocar
     const rel = (p.relacion || '').trim().toLowerCase();
-    if (rel === 'sujeto principal' && papaNode && mamaNode) {
+    // La IA no siempre usa el mismo texto exacto para el sujeto principal
+    // ("sujeto principal", "yo (persona principal)", etc.) — se detecta por
+    // la palabra "principal" en vez de una frase fija, para no depender de
+    // que salga siempre igual.
+    if (/principal/.test(rel) && papaNode && mamaNode) {
       p.padres = [papaNode.nombre, mamaNode.nombre];
     } else if (/^pap[aá]$/.test(rel) && abuelosPaternos.length) {
       p.padres = abuelosPaternos.slice(0, 2);
@@ -1054,8 +1058,11 @@ app.post('/api/next', requireAuth, bloquearColaborador, rateLimit, async (req, r
     // Los mensajes "sintéticos" que le mandamos a Claude por dentro (avisos
     // de que se presionó un botón, no algo que la persona realmente dijo)
     // van siempre entre paréntesis — se excluyen del log de historias.
+    // El modo "armar árbol" no cuenta acá: esas respuestas sirven para
+    // construir el árbol y quedan en la sesión (histórico completo), pero
+    // no son "historias destacadas" — son datos cortos de parentesco.
     const ultimaRespuesta = [...history].reverse().find((m) => m.role === 'user' && !/^\(.*\)$/.test(m.content.trim()));
-    if (ultimaRespuesta && ultimaRespuesta.content.length >= HISTORIA_MIN_CHARS) {
+    if (mode === 'historia' && ultimaRespuesta && ultimaRespuesta.content.length >= HISTORIA_MIN_CHARS) {
       const audioUrl = typeof req.body.lastAudioUrl === 'string' ? req.body.lastAudioUrl.slice(0, 1000) : null;
       try {
         await sql`INSERT INTO story_log (user_id, texto, audio_url) VALUES (${req.userId}, ${capitalizarInicio(ultimaRespuesta.content)}, ${audioUrl})`;
@@ -1440,34 +1447,6 @@ app.get('/api/contributions', requireAuth, async (req, res) => {
 });
 
 // Editar una historia (aportada por un familiar) — nunca se pisa sin dejar
-// rastro: el texto de antes queda guardado en historia_versiones. Solo el
-// dueño puede editar (bloquearColaborador), para que corregir algo no
-// dependa de confiar en cualquier colaborador con el link.
-app.put('/api/contributions/:id', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
-  try {
-    await ensureSchema();
-    const id = parseInt(req.params.id, 10);
-    if (!id) return res.status(400).json({ error: 'Falta el id.' });
-
-    const rows = await sql`SELECT texto FROM family_notes WHERE id = ${id} AND user_id = ${req.userId}`;
-    if (!rows.length) return res.status(404).json({ error: 'No se encontró esa historia.' });
-
-    let { text, contributor, parentesco } = req.body || {};
-    text = capitalizarInicio((text || '').trim());
-    if (!text) return res.status(400).json({ error: 'Falta el texto.' });
-    if (text.length > 4000) text = text.slice(0, 4000);
-    const cleanContributor = capitalizarNombre((contributor || '').trim().slice(0, 60)) || null;
-    const cleanParentesco = capitalizarNombre((parentesco || '').trim().slice(0, 60)) || null;
-
-    await sql`INSERT INTO historia_versiones (tabla, registro_id, texto_anterior, editado_por) VALUES ('family_notes', ${id}, ${rows[0].texto}, ${req.userId})`;
-    await sql`UPDATE family_notes SET texto = ${text}, contributor = ${cleanContributor}, parentesco = ${cleanParentesco} WHERE id = ${id}`;
-    res.json({ ok: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'No se pudo editar la historia.' });
-  }
-});
-
 app.get('/api/story-log', requireAuth, bloquearColaborador, async (req, res) => {
   try {
     await ensureSchema();
@@ -1476,56 +1455,6 @@ app.get('/api/story-log', requireAuth, bloquearColaborador, async (req, res) => 
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo cargar el log de historias.' });
-  }
-});
-
-// Igual que /api/contributions/:id pero para las historias que la propia
-// persona contó en la charla (story_log) — misma idea: se guarda la
-// versión anterior, nunca se borra nada.
-app.put('/api/story-log/:id', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
-  try {
-    await ensureSchema();
-    const id = parseInt(req.params.id, 10);
-    if (!id) return res.status(400).json({ error: 'Falta el id.' });
-
-    const rows = await sql`SELECT texto FROM story_log WHERE id = ${id} AND user_id = ${req.userId}`;
-    if (!rows.length) return res.status(404).json({ error: 'No se encontró esa historia.' });
-
-    let { text } = req.body || {};
-    text = capitalizarInicio((text || '').trim());
-    if (!text) return res.status(400).json({ error: 'Falta el texto.' });
-    if (text.length > 6000) text = text.slice(0, 6000);
-
-    await sql`INSERT INTO historia_versiones (tabla, registro_id, texto_anterior, editado_por) VALUES ('story_log', ${id}, ${rows[0].texto}, ${req.userId})`;
-    await sql`UPDATE story_log SET texto = ${text} WHERE id = ${id}`;
-    res.json({ ok: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'No se pudo editar la historia.' });
-  }
-});
-
-// Ver las versiones anteriores de una historia editada — para poder
-// consultar qué decía antes de corregirla.
-app.get('/api/historia-versiones', requireAuth, bloquearColaborador, async (req, res) => {
-  try {
-    await ensureSchema();
-    const tabla = req.query.tabla === 'story_log' ? 'story_log' : 'family_notes';
-    const registroId = parseInt(req.query.id, 10);
-    if (!registroId) return res.status(400).json({ error: 'Falta el id.' });
-
-    // Confirmamos que esa historia es del usuario logueado antes de mostrar
-    // sus versiones anteriores.
-    const dueño = tabla === 'story_log'
-      ? await sql`SELECT id FROM story_log WHERE id = ${registroId} AND user_id = ${req.userId}`
-      : await sql`SELECT id FROM family_notes WHERE id = ${registroId} AND user_id = ${req.userId}`;
-    if (!dueño.length) return res.status(404).json({ error: 'No se encontró esa historia.' });
-
-    const rows = await sql`SELECT texto_anterior, editado_at FROM historia_versiones WHERE tabla = ${tabla} AND registro_id = ${registroId} ORDER BY editado_at DESC`;
-    res.json({ versiones: rows });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'No se pudo cargar el historial.' });
   }
 });
 
@@ -1685,7 +1614,7 @@ app.delete('/api/chapters/:id', requireAuth, bloquearColaborador, rateLimit, asy
 app.get('/api/tree', requireAuth, bloquearColaborador, async (req, res) => {
   try {
     await ensureSchema();
-    const peopleRaw = await sql`SELECT nombre, relacion, detalles, padres FROM family_members WHERE user_id = ${req.userId} ORDER BY id`;
+    const peopleRaw = await sql`SELECT id, nombre, relacion, detalles, padres FROM family_members WHERE user_id = ${req.userId} ORDER BY id`;
     const people = peopleRaw.map((p) => ({
       ...p,
       nombre: capitalizarNombre(p.nombre),
@@ -1696,6 +1625,60 @@ app.get('/api/tree', requireAuth, bloquearColaborador, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo cargar el árbol genealógico.' });
+  }
+});
+
+// Corregir a mano el nombre o el parentesco de alguien en el árbol (por
+// ejemplo si quedó mal escrito). Si el nombre cambia, hay que actualizar
+// también la lista "padres" de todos los demás — ahí se guarda por nombre,
+// no por id, para no romper los enlaces del árbol.
+app.put('/api/tree/person/:id', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ error: 'Falta el id.' });
+
+    const rows = await sql`SELECT nombre FROM family_members WHERE id = ${id} AND user_id = ${req.userId}`;
+    if (!rows.length) return res.status(404).json({ error: 'No se encontró esa persona.' });
+    const nombreAnterior = rows[0].nombre;
+
+    let { nombre, relacion, padres } = req.body || {};
+    const cleanNombre = capitalizarNombre(String(nombre || '').trim().slice(0, 120));
+    const cleanRelacion = capitalizarNombre(String(relacion || '').trim().slice(0, 80));
+    if (!cleanNombre || !cleanRelacion) return res.status(400).json({ error: 'Falta el nombre o el parentesco.' });
+
+    // padres es opcional: si no viene en el pedido, se deja como estaba (no
+    // se borra sin querer). Si viene, reemplaza la lista entera — de ahí
+    // sale a quién se conecta esta persona en el árbol.
+    let padresUpdate = undefined;
+    if (padres !== undefined) {
+      const lista = Array.isArray(padres) ? padres : [];
+      padresUpdate = lista
+        .map((n) => capitalizarNombre(String(n || '').trim()))
+        .filter(Boolean)
+        .slice(0, 2);
+    }
+
+    if (padresUpdate !== undefined) {
+      await sql`UPDATE family_members SET nombre = ${cleanNombre}, relacion = ${cleanRelacion}, padres = ${padresUpdate.length ? JSON.stringify(padresUpdate) : null} WHERE id = ${id}`;
+    } else {
+      await sql`UPDATE family_members SET nombre = ${cleanNombre}, relacion = ${cleanRelacion} WHERE id = ${id}`;
+    }
+
+    if (cleanNombre !== nombreAnterior) {
+      const otros = await sql`SELECT id, padres FROM family_members WHERE user_id = ${req.userId} AND padres IS NOT NULL AND id != ${id}`;
+      for (const o of otros) {
+        const lista = parseJsonArray(o.padres);
+        if (!lista.includes(nombreAnterior)) continue;
+        const actualizada = lista.map((n) => (n === nombreAnterior ? cleanNombre : n));
+        await sql`UPDATE family_members SET padres = ${JSON.stringify(actualizada)} WHERE id = ${o.id}`;
+      }
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo guardar el cambio.' });
   }
 });
 

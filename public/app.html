@@ -172,20 +172,6 @@
   .aportes .lista video { max-width: 100%; border-radius: 10px; display: block; }
   .aportes .lista .item { font-size: 0.85rem; color: var(--ink-soft); }
   .aportes .lista .item strong { color: var(--ink); }
-  .aportes .lista .item .editar-btn {
-    background: none; border: none; color: var(--moss); text-decoration: underline;
-    cursor: pointer; font-family: var(--font-body); font-size: 0.78rem; padding: 0; margin-top: 2px;
-  }
-  .aportes .lista .item textarea {
-    width: 100%; border: 1px solid #E7DFCC; border-radius: 10px; padding: 8px 10px;
-    font-family: var(--font-body); font-size: 0.85rem; margin-top: 4px; resize: vertical; min-height: 60px;
-  }
-  .aportes .lista .item .editar-row { display: flex; gap: 8px; margin-top: 4px; }
-  .aportes .lista .item .editar-row button {
-    border: none; border-radius: 8px; padding: 4px 10px; font-size: 0.78rem; cursor: pointer; font-family: var(--font-body);
-  }
-  .aportes .lista .item .editar-guardar { background: var(--moss); color: #FBF6EA; }
-  .aportes .lista .item .editar-cancelar { background: none; color: var(--ink-soft); }
 
   @media (min-width: 700px) {
     .familia { display: flex; }
@@ -1064,54 +1050,7 @@
         div.className = 'item';
         const fecha = new Date(s.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
         const audioTag = s.audio_url ? `<audio controls src="${s.audio_url}"></audio>` : '<em>(sin audio guardado)</em>';
-        const textoEl = document.createElement('div');
-        textoEl.innerHTML = `<strong>${fecha}:</strong> ${s.texto}`;
-        const editarBtn = document.createElement('button');
-        editarBtn.className = 'editar-btn';
-        editarBtn.type = 'button';
-        editarBtn.textContent = 'editar';
-        editarBtn.addEventListener('click', () => {
-          const textarea = document.createElement('textarea');
-          textarea.value = s.texto;
-          const row = document.createElement('div');
-          row.className = 'editar-row';
-          const guardarBtn = document.createElement('button');
-          guardarBtn.className = 'editar-guardar';
-          guardarBtn.type = 'button';
-          guardarBtn.textContent = 'Guardar';
-          const cancelarBtn = document.createElement('button');
-          cancelarBtn.className = 'editar-cancelar';
-          cancelarBtn.type = 'button';
-          cancelarBtn.textContent = 'Cancelar';
-          row.appendChild(guardarBtn);
-          row.appendChild(cancelarBtn);
-          textoEl.style.display = 'none';
-          editarBtn.style.display = 'none';
-          div.insertBefore(textarea, editarBtn);
-          div.insertBefore(row, editarBtn);
-          cancelarBtn.addEventListener('click', () => {
-            textarea.remove();
-            row.remove();
-            textoEl.style.display = '';
-            editarBtn.style.display = '';
-          });
-          guardarBtn.addEventListener('click', async () => {
-            const nuevoTexto = textarea.value.trim();
-            if (!nuevoTexto) return;
-            guardarBtn.disabled = true;
-            try {
-              const putResp = await fetch('/api/story-log/' + s.id, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text: nuevoTexto }),
-              });
-              if (putResp.ok) { cargarStoryLog(); } else { guardarBtn.disabled = false; }
-            } catch (e) { guardarBtn.disabled = false; }
-          });
-        });
-        div.innerHTML = `<div>${audioTag}</div>`;
-        div.appendChild(textoEl);
-        div.appendChild(editarBtn);
+        div.innerHTML = `<div>${audioTag}</div><div><strong>${fecha}:</strong> ${s.texto}</div>`;
         storyLogLista.appendChild(div);
       });
     } catch (e) {}
