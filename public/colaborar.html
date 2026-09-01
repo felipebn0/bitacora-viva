@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aportar — Los recuerdos de mis viejos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,500&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F5EFE2;
+    --ink: #2B241C;
+    --ink-soft: #8A7C63;
+    --gold-deep: #A86A26;
+    --moss: #5B6B45;
+    --bubble-user: #EFE6D1;
+    --font-display: "Source Serif 4", Georgia, serif;
+    --font-body: "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 28px 20px 60px;
+  }
+  h1 { font-family: var(--font-display); font-size: 1.5rem; margin: 0 0 4px; text-align: center; }
+  p.sub { color: var(--ink-soft); font-size: 0.92rem; margin: 0; text-align: center; }
+
+  .login {
+    width: min(340px, 100%);
+    background: #FBF6EA;
+    border-radius: 28px;
+    box-shadow: 0 30px 60px -25px rgba(0,0,0,0.35);
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 60px;
+  }
+  .login input {
+    border: 1px solid #E7DFCC; border-radius: 10px; padding: 12px 14px;
+    font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink);
+  }
+  .login button {
+    border: none; background: var(--gold-deep); color: #FBF6EA; border-radius: 10px;
+    padding: 12px; font-weight: 700; font-size: 1rem; cursor: pointer; font-family: var(--font-body);
+  }
+  .login button:disabled { opacity: 0.6; cursor: default; }
+  .error { color: #a33; font-size: 0.85rem; min-height: 1.2em; text-align: center; }
+
+  #appContent { display: none; flex-direction: column; align-items: center; width: 100%; }
+  header { max-width: 440px; width: 100%; text-align: center; margin-bottom: 20px; }
+
+  .familia, .aportes {
+    width: min(440px, 100%);
+    margin: 0 auto 20px;
+    background: #FBF6EA;
+    border: 1px solid #E7DFCC;
+    border-radius: 20px;
+    padding: 22px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .familia h2, .aportes h2 { font-family: var(--font-display); font-size: 1.1rem; margin: 0; font-weight: 600; }
+  .familia .sub, .aportes .sub { color: var(--ink-soft); font-size: 0.9rem; margin: 0; text-align: left; }
+  .familia-chat { display: flex; flex-direction: column; gap: 10px; max-height: 260px; overflow-y: auto; }
+  .familia-bubble { max-width: 92%; font-size: 0.92rem; line-height: 1.4; }
+  .familia-bubble.q { align-self: flex-end; background: var(--bubble-user); padding: 8px 12px; border-radius: 12px; border-bottom-right-radius: 3px; }
+  .familia-bubble.a { align-self: flex-start; color: var(--ink); }
+  .familia-bubble.thinking { align-self: flex-start; color: var(--ink-soft); font-style: italic; }
+  .familia-input-row { display: flex; gap: 8px; }
+  .familia-input-row input { flex: 1; border: 1px solid #E7DFCC; border-radius: 10px; padding: 10px 12px; font-family: var(--font-body); background: #fff; color: var(--ink); }
+  .familia-input-row button { border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px; padding: 0 16px; font-weight: 700; cursor: pointer; }
+  .familia-input-row button:disabled { opacity: 0.6; cursor: default; }
+
+  .aportes label { font-size: 0.85rem; color: var(--ink-soft); margin-bottom: -6px; }
+  .aportes input[type="text"], .aportes textarea {
+    border: 1px solid #E7DFCC; border-radius: 10px; padding: 10px 12px;
+    font-family: var(--font-body); background: #fff; color: var(--ink); font-size: 0.95rem;
+  }
+  .aportes textarea { resize: vertical; min-height: 70px; }
+  .aportes button {
+    border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px;
+    padding: 10px 16px; font-weight: 700; cursor: pointer; font-family: var(--font-body); align-self: flex-start;
+  }
+  .aportes button:disabled { opacity: 0.6; cursor: default; }
+  .aportes hr { border: none; border-top: 1px solid #E7DFCC; margin: 4px 0; }
+  .aportes .msg { font-size: 0.85rem; min-height: 1.2em; color: var(--moss); }
+  .aportes .lista { display: flex; flex-direction: column; gap: 10px; max-height: 220px; overflow-y: auto; }
+  .aportes .lista .item { font-size: 0.85rem; color: var(--ink-soft); }
+  .aportes .lista .item strong { color: var(--ink); }
+
+  .logout-row { text-align: center; margin-top: 8px; }
+  .write-toggle { background: none; border: none; color: var(--moss); text-decoration: underline; cursor: pointer; font-family: var(--font-body); font-size: 0.9rem; }
+</style>
+</head>
+<body>
+  <div class="login" id="loginScreen">
+    <h1>Los recuerdos de mis viejos</h1>
+    <p class="sub" style="margin-bottom: 6px;">Iniciá sesión para aportar historias.</p>
+    <input type="text" id="loginUser" placeholder="Correo" autocomplete="username">
+    <input type="password" id="loginPass" placeholder="Clave" autocomplete="current-password">
+    <button id="loginBtn" type="button">Entrar</button>
+    <p class="error" id="loginError"></p>
+  </div>
+
+  <div id="appContent">
+    <header>
+      <h1>Aportar a la bitácora</h1>
+      <p class="sub" id="ownerLine">&nbsp;</p>
+    </header>
+
+    <div class="familia">
+      <h2>Preguntale a la bitácora</h2>
+      <p class="sub">Escribí una pregunta sobre lo que ya se contó (nombres, lugares, historias…).</p>
+      <div class="familia-chat" id="familiaChat"></div>
+      <div class="familia-input-row">
+        <input type="text" id="familiaInput" placeholder="Ej: ¿cómo se llamaban sus papás?">
+        <button id="familiaAsk" type="button">Preguntar</button>
+      </div>
+    </div>
+
+    <div class="aportes">
+      <h2>Aportar una historia</h2>
+      <p class="sub">Contá algo que recuerdes — una anécdota, un dato, un momento.</p>
+
+      <label for="aporteNombre">Tu nombre</label>
+      <input type="text" id="aporteNombre" placeholder="Ej: Marcela">
+
+      <label for="aporteTexto">Contá una historia o recuerdo</label>
+      <textarea id="aporteTexto" placeholder="Ej: papá conoció a mamá en una fiesta de la universidad…"></textarea>
+      <button id="aporteTextoBtn" type="button">Agregar historia</button>
+
+      <p class="msg" id="aporteMsg"></p>
+
+      <hr>
+
+      <div class="lista" id="aportesLista"></div>
+    </div>
+
+    <div class="logout-row">
+      <button class="write-toggle" id="logoutBtn" type="button">cerrar sesión (<span id="whoami"></span>)</button>
+    </div>
+  </div>
+
+<script>
+(function () {
+  const loginScreen = document.getElementById('loginScreen');
+  const appContent = document.getElementById('appContent');
+  const loginUser = document.getElementById('loginUser');
+  const loginPass = document.getElementById('loginPass');
+  const loginBtn = document.getElementById('loginBtn');
+  const loginError = document.getElementById('loginError');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const whoami = document.getElementById('whoami');
+  const ownerLine = document.getElementById('ownerLine');
+
+  function showApp(data) {
+    loginScreen.style.display = 'none';
+    appContent.style.display = 'flex';
+    whoami.textContent = data.username || '';
+    ownerLine.textContent = data.ownerName
+      ? `Estás aportando a la bitácora de ${data.ownerName}.`
+      : '';
+  }
+
+  function showLogin() {
+    appContent.style.display = 'none';
+    loginScreen.style.display = 'flex';
+    loginPass.value = '';
+    loginUser.focus();
+  }
+
+  async function doLogin() {
+    const username = loginUser.value.trim();
+    const password = loginPass.value;
+    if (!username || !password) return;
+    loginBtn.disabled = true;
+    loginError.textContent = '';
+    try {
+      const resp = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        loginError.textContent = data.error || 'No se pudo iniciar sesión.';
+        loginBtn.disabled = false;
+        return;
+      }
+      window.location.reload();
+    } catch (e) {
+      loginError.textContent = 'Hubo un problema para conectar.';
+      loginBtn.disabled = false;
+    }
+  }
+
+  loginBtn.addEventListener('click', doLogin);
+  loginPass.addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+  loginUser.addEventListener('keydown', (e) => { if (e.key === 'Enter') loginPass.focus(); });
+
+  logoutBtn.addEventListener('click', async () => {
+    try { await fetch('/api/logout', { method: 'POST' }); } catch (e) {}
+    window.location.reload();
+  });
+
+  fetch('/api/me')
+    .then((resp) => (resp.ok ? resp.json() : Promise.reject()))
+    .then((data) => {
+      // Esta página es solo para cuentas colaboradoras — si es una cuenta
+      // dueña normal, la mandamos a la app completa.
+      if (!data.isCollaborator) { window.location.href = '/app.html'; return; }
+      showApp(data);
+    })
+    .catch(() => showLogin());
+
+  // --- Preguntale a la bitácora ---
+  const familiaChat = document.getElementById('familiaChat');
+  const familiaInput = document.getElementById('familiaInput');
+  const familiaAsk = document.getElementById('familiaAsk');
+
+  function addFamiliaBubble(kind, text) {
+    const div = document.createElement('div');
+    div.className = 'familia-bubble ' + kind;
+    div.textContent = text;
+    familiaChat.appendChild(div);
+    familiaChat.scrollTop = familiaChat.scrollHeight;
+    return div;
+  }
+
+  async function askFamilia() {
+    if (familiaAsk.disabled) return;
+    const q = familiaInput.value.trim();
+    if (!q) return;
+    addFamiliaBubble('q', q);
+    familiaInput.value = '';
+    familiaAsk.disabled = true;
+    const thinking = addFamiliaBubble('thinking', 'Buscando en la bitácora…');
+    try {
+      const resp = await fetch('/api/ask-familia', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q }),
+      });
+      const data = await resp.json();
+      thinking.remove();
+      addFamiliaBubble('a', data.answer || 'No se pudo responder.');
+    } catch (e) {
+      thinking.remove();
+      addFamiliaBubble('a', 'Hubo un problema para conectar.');
+    }
+    familiaAsk.disabled = false;
+    familiaInput.focus();
+  }
+
+  familiaAsk.addEventListener('click', askFamilia);
+  familiaInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') askFamilia(); });
+
+  // --- Aportar una historia ---
+  const aporteNombre = document.getElementById('aporteNombre');
+  const aporteTexto = document.getElementById('aporteTexto');
+  const aporteTextoBtn = document.getElementById('aporteTextoBtn');
+  const aporteMsg = document.getElementById('aporteMsg');
+  const aportesLista = document.getElementById('aportesLista');
+
+  async function cargarAportes() {
+    try {
+      const resp = await fetch('/api/contributions');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      aportesLista.innerHTML = '';
+      const items = (data.notes || []).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      items.forEach((it) => {
+        const div = document.createElement('div');
+        div.className = 'item';
+        div.innerHTML = `<strong>${it.contributor || 'Familia'}:</strong> ${it.texto}`;
+        aportesLista.appendChild(div);
+      });
+    } catch (e) {}
+  }
+
+  async function agregarHistoria() {
+    const contributor = aporteNombre.value.trim();
+    const text = aporteTexto.value.trim();
+    if (!text) return;
+    aporteTextoBtn.disabled = true;
+    aporteMsg.textContent = '';
+    try {
+      const resp = await fetch('/api/contribute-story', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contributor, text }),
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        aporteTexto.value = '';
+        aporteMsg.textContent = 'Historia agregada. Gracias.';
+        cargarAportes();
+      } else {
+        aporteMsg.textContent = data.error || 'No se pudo agregar.';
+      }
+    } catch (e) {
+      aporteMsg.textContent = 'Hubo un problema para conectar.';
+    }
+    aporteTextoBtn.disabled = false;
+  }
+
+  aporteTextoBtn.addEventListener('click', agregarHistoria);
+
+  cargarAportes();
+})();
+</script>
+</body>
+</html>

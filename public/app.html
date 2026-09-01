@@ -328,6 +328,12 @@
    </div>
 
     <div class="logout-row">
+      <button class="write-toggle" id="inviteToggle" type="button">invitar familiares</button>
+      <div id="inviteRow" style="display:none; margin-top: 10px;">
+        <p class="sub" style="max-width: 340px; margin: 0 auto 8px;">Compartí este código con familiares — se crean su propia cuenta y pueden aportar historias y preguntarle a la bitácora, sin ver ni tocar tus charlas.</p>
+        <p style="font-family: var(--font-display); font-size: 1.4rem; font-weight: 700; letter-spacing: 0.1em; margin: 0 0 4px;" id="inviteCode">…</p>
+        <button class="write-toggle" id="inviteCopyBtn" type="button">copiar código</button>
+      </div>
       <button class="write-toggle" id="logoutBtn" type="button">cerrar sesión (<span id="whoami"></span>)</button>
     </div>
   </div>
@@ -390,9 +396,42 @@
     window.location.reload();
   });
 
+  const inviteToggle = document.getElementById('inviteToggle');
+  const inviteRow = document.getElementById('inviteRow');
+  const inviteCode = document.getElementById('inviteCode');
+  const inviteCopyBtn = document.getElementById('inviteCopyBtn');
+  let inviteLoaded = false;
+  inviteToggle.addEventListener('click', async () => {
+    const visible = inviteRow.style.display !== 'none';
+    if (visible) { inviteRow.style.display = 'none'; return; }
+    inviteRow.style.display = 'block';
+    if (inviteLoaded) return;
+    try {
+      const resp = await fetch('/api/invite-code');
+      const data = await resp.json();
+      inviteCode.textContent = resp.ok ? data.code : 'No se pudo obtener el código.';
+      inviteLoaded = resp.ok;
+    } catch (e) {
+      inviteCode.textContent = 'No se pudo obtener el código.';
+    }
+  });
+  inviteCopyBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(inviteCode.textContent.trim());
+      inviteCopyBtn.textContent = 'copiado ✓';
+      setTimeout(() => { inviteCopyBtn.textContent = 'copiar código'; }, 1800);
+    } catch (e) {}
+  });
+
   fetch('/api/me')
     .then((resp) => (resp.ok ? resp.json() : Promise.reject()))
-    .then((data) => showApp(data.username))
+    .then((data) => {
+      // Las cuentas colaboradoras (se unieron con un código de familia) no
+      // tienen esta app — solo aportan historias y le preguntan a la
+      // bitácora de quien las invitó.
+      if (data.isCollaborator) { window.location.href = '/colaborar.html'; return; }
+      showApp(data.username);
+    })
     .catch(() => showLogin());
 })();
 </script>

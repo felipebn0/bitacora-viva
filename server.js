@@ -78,6 +78,14 @@ function ensureSchema() {
       await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT`;
       await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL`;
 
+      // Familiares colaboradores: se unen con un código en vez de crear su
+      // propia bitácora. "invite_code" es el código que cada cuenta "dueña"
+      // puede compartir; "owner_user_id" marca que ESTA cuenta es
+      // colaboradora de la cuenta dueña (NULL = cuenta normal/dueña).
+      await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_code TEXT`;
+      await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS owner_user_id INT REFERENCES users(id)`;
+      await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_invite_code ON users(invite_code) WHERE invite_code IS NOT NULL`;
+
       // sessions/resumen ya existían de una versión sin cuentas — se agrega
       // user_id de forma aditiva (nunca se borra nada existente).
       await sql`CREATE TABLE IF NOT EXISTS sessions (
@@ -237,7 +245,7 @@ function clearSessionCookie(req, res) {
   res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax${secure}`);
 }
 
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
   const cookies = parseCookies(req.headers.cookie);
   const session = verifySession(cookies[SESSION_COOKIE]);
   if (!session || !session.userId) {
@@ -245,14 +253,87 @@ function requireAuth(req, res, next) {
   }
   req.userId = session.userId;
   req.username = session.username;
+  // Una cuenta "colaboradora" (se unió con el código de otra familia, ver
+  // /api/signup) no tiene bitácora propia — sus aportes van al perfil de
+  // la cuenta dueña. req.profileUserId es a quién pertenecen los datos que
+  // esta request debería leer/escribir; req.userId sigue siendo quién está
+  // logueado en realidad.
+  req.isCollaborator = false;
+  req.profileUserId = session.userId;
+  try {
+    await ensureSchema();
+    const rows = await sql`SELECT owner_user_id FROM users WHERE id = ${session.userId}`;
+    if (rows[0] && rows[0].owner_user_id) {
+      req.isCollaborator = true;
+      req.profileUserId = rows[0].owner_user_id;
+    }
+  } catch (err) {
+    console.error('No se pudo resolver si la cuenta es colaboradora:', err);
+  }
   next();
 }
 
-app.get('/api/me', (req, res) => {
+// Para las rutas que son solo del dueño de la bitácora (charlar, ver el
+// árbol, generar capítulos, etc.) — una cuenta colaboradora no tiene nada
+// de eso, solo aporta historias y le pregunta a la bitácora.
+function bloquearColaborador(req, res, next) {
+  if (req.isCollaborator) {
+    return res.status(403).json({ error: 'Esta función no está disponible para cuentas colaboradoras.' });
+  }
+  next();
+}
+
+app.get('/api/me', async (req, res) => {
   const cookies = parseCookies(req.headers.cookie);
   const session = verifySession(cookies[SESSION_COOKIE]);
   if (!session) return res.status(401).json({ error: 'No autenticado.' });
-  res.json({ username: session.username });
+  try {
+    await ensureSchema();
+    const rows = await sql`SELECT owner_user_id FROM users WHERE id = ${session.userId}`;
+    const ownerUserId = rows[0] && rows[0].owner_user_id;
+    let ownerName = null;
+    if (ownerUserId) {
+      const ownerRows = await sql`SELECT name, username FROM users WHERE id = ${ownerUserId}`;
+      ownerName = (ownerRows[0] && (ownerRows[0].name || ownerRows[0].username)) || null;
+    }
+    res.json({ username: session.username, isCollaborator: !!ownerUserId, ownerName });
+  } catch (err) {
+    console.error(err);
+    res.json({ username: session.username, isCollaborator: false, ownerName: null });
+  }
+});
+
+function randomInviteCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sin 0/O ni 1/I/L, se confunden al leer
+  let code = '';
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
+}
+
+app.get('/api/invite-code', requireAuth, async (req, res) => {
+  try {
+    if (req.isCollaborator) {
+      return res.status(403).json({ error: 'Las cuentas colaboradoras no tienen código propio.' });
+    }
+    await ensureSchema();
+    const rows = await sql`SELECT invite_code FROM users WHERE id = ${req.userId}`;
+    if (rows[0] && rows[0].invite_code) return res.json({ code: rows[0].invite_code });
+    let code;
+    for (let intento = 0; intento < 5; intento++) {
+      code = randomInviteCode();
+      try {
+        await sql`UPDATE users SET invite_code = ${code} WHERE id = ${req.userId}`;
+        break;
+      } catch (err) {
+        if (err && err.code === '23505' && intento < 4) continue; // colisión rarísima: reintentar
+        throw err;
+      }
+    }
+    res.json({ code });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo generar el código.' });
+  }
 });
 
 app.post('/api/register', rateLimit, async (req, res) => {
@@ -287,7 +368,7 @@ app.post('/api/register', rateLimit, async (req, res) => {
 // funcionando sin tocarlo.
 app.post('/api/signup', rateLimit, async (req, res) => {
   try {
-    const { name, email, password } = req.body || {};
+    const { name, email, password, inviteCode } = req.body || {};
     const cleanName = String(name || '').trim().slice(0, 100);
     const cleanEmail = String(email || '').trim().toLowerCase().slice(0, 200);
     if (!cleanName) return res.status(400).json({ error: 'Falta el nombre.' });
@@ -300,14 +381,26 @@ app.post('/api/signup', rateLimit, async (req, res) => {
     await ensureSchema();
     const existing = await sql`SELECT id FROM users WHERE email = ${cleanEmail} OR username = ${cleanEmail}`;
     if (existing.length) return res.status(409).json({ error: 'Ya existe una cuenta con ese correo.' });
+
+    // Si viene un código de familia, esta cuenta es colaboradora de la
+    // cuenta dueña de ese código — no arma su propia bitácora, solo aporta
+    // historias y le pregunta a la de esa familia (ver bloquearColaborador).
+    let ownerUserId = null;
+    const cleanCode = String(inviteCode || '').trim().toUpperCase();
+    if (cleanCode) {
+      const ownerRows = await sql`SELECT id FROM users WHERE invite_code = ${cleanCode}`;
+      if (!ownerRows.length) return res.status(400).json({ error: 'Ese código de familia no existe.' });
+      ownerUserId = ownerRows[0].id;
+    }
+
     const hash = await bcrypt.hash(password, 10);
     const rows = await sql`
-      INSERT INTO users (username, name, email, password_hash)
-      VALUES (${cleanEmail}, ${cleanName}, ${cleanEmail}, ${hash})
+      INSERT INTO users (username, name, email, password_hash, owner_user_id)
+      VALUES (${cleanEmail}, ${cleanName}, ${cleanEmail}, ${hash}, ${ownerUserId})
       RETURNING id, username
     `;
     setSessionCookie(req, res, { userId: rows[0].id, username: rows[0].username });
-    res.json({ ok: true, username: rows[0].username });
+    res.json({ ok: true, username: rows[0].username, isCollaborator: !!ownerUserId });
   } catch (err) {
     console.error(err);
     if (err && err.code === '23505') {
@@ -342,7 +435,7 @@ app.post('/api/logout', (req, res) => {
 
 // Borra las charlas, el resumen y los aportes de la cuenta logueada, para
 // empezar de cero. No borra la cuenta en sí (usuario/clave siguen sirviendo).
-app.post('/api/reset-bitacora', requireAuth, rateLimit, async (req, res) => {
+app.post('/api/reset-bitacora', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
   try {
     await ensureSchema();
     const s = await sql`DELETE FROM sessions WHERE user_id = ${req.userId} RETURNING id`;
@@ -637,7 +730,7 @@ async function loadKnownFamilyMembers(userId) {
     .join('\n')}`;
 }
 
-app.post('/api/next', requireAuth, rateLimit, async (req, res) => {
+app.post('/api/next', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
   try {
     const history = Array.isArray(req.body.history) ? req.body.history.slice(0, 60) : [];
     for (const m of history) {
@@ -752,7 +845,7 @@ async function speakWithAzure(text) {
   return Buffer.from(await resp.arrayBuffer());
 }
 
-app.post('/api/transcribe', requireAuth, rateLimit, express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
+app.post('/api/transcribe', requireAuth, bloquearColaborador, rateLimit, express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
   try {
     if (!req.body || !req.body.length) return res.status(400).json({ error: 'Falta audio.' });
     if (!ELEVEN_KEY) {
@@ -784,7 +877,7 @@ app.post('/api/transcribe', requireAuth, rateLimit, express.raw({ type: '*/*', l
   }
 });
 
-app.post('/api/speak', requireAuth, rateLimit, async (req, res) => {
+app.post('/api/speak', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
   try {
     let text = (req.body.text || '').trim();
     if (!text) return res.status(400).json({ error: 'Falta texto.' });
@@ -807,7 +900,7 @@ app.post('/api/speak', requireAuth, rateLimit, async (req, res) => {
   }
 });
 
-app.post('/api/save-audio', requireAuth, express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
+app.post('/api/save-audio', requireAuth, bloquearColaborador, express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
   try {
     const { sessionId, index, role } = req.query;
     if (!sessionId || index === undefined || !role) {
@@ -842,7 +935,7 @@ app.post('/api/contribute-story', requireAuth, rateLimit, async (req, res) => {
     const cleanContributor = (contributor || '').trim().slice(0, 60) || null;
 
     await ensureSchema();
-    await sql`INSERT INTO family_notes (user_id, contributor, texto) VALUES (${req.userId}, ${cleanContributor}, ${text})`;
+    await sql`INSERT INTO family_notes (user_id, contributor, texto) VALUES (${req.profileUserId}, ${cleanContributor}, ${text})`;
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -863,14 +956,14 @@ app.post('/api/contribute-media', requireAuth, express.raw({ type: '*/*', limit:
     const cleanCaption = String(caption || '').trim().slice(0, 500) || null;
     const ext = (contentType.split('/')[1] || 'bin').replace(/[^a-z0-9]/gi, '').slice(0, 10) || 'bin';
 
-    const blob = await put(`media/${req.userId}/${type}-${Date.now()}.${ext}`, req.body, {
+    const blob = await put(`media/${req.profileUserId}/${type}-${Date.now()}.${ext}`, req.body, {
       access: 'public',
       contentType,
       addRandomSuffix: true,
     });
 
     await ensureSchema();
-    await sql`INSERT INTO media (user_id, type, url, caption, contributor) VALUES (${req.userId}, ${type}, ${blob.url}, ${cleanCaption}, ${cleanContributor})`;
+    await sql`INSERT INTO media (user_id, type, url, caption, contributor) VALUES (${req.profileUserId}, ${type}, ${blob.url}, ${cleanCaption}, ${cleanContributor})`;
     res.json({ ok: true, url: blob.url, type });
   } catch (err) {
     console.error(err);
@@ -884,8 +977,8 @@ app.post('/api/contribute-media', requireAuth, express.raw({ type: '*/*', limit:
 app.get('/api/contributions', requireAuth, async (req, res) => {
   try {
     await ensureSchema();
-    const notes = await sql`SELECT contributor, texto, created_at FROM family_notes WHERE user_id = ${req.userId} ORDER BY created_at DESC LIMIT 30`;
-    const media = await sql`SELECT type, url, caption, contributor, created_at FROM media WHERE user_id = ${req.userId} ORDER BY created_at DESC LIMIT 30`;
+    const notes = await sql`SELECT contributor, texto, created_at FROM family_notes WHERE user_id = ${req.profileUserId} ORDER BY created_at DESC LIMIT 30`;
+    const media = await sql`SELECT type, url, caption, contributor, created_at FROM media WHERE user_id = ${req.profileUserId} ORDER BY created_at DESC LIMIT 30`;
     res.json({ notes, media });
   } catch (err) {
     console.error(err);
@@ -893,7 +986,7 @@ app.get('/api/contributions', requireAuth, async (req, res) => {
   }
 });
 
-app.get('/api/story-log', requireAuth, async (req, res) => {
+app.get('/api/story-log', requireAuth, bloquearColaborador, async (req, res) => {
   try {
     await ensureSchema();
     const rows = await sql`SELECT texto, audio_url, created_at FROM story_log WHERE user_id = ${req.userId} ORDER BY created_at DESC LIMIT 50`;
@@ -987,7 +1080,7 @@ async function writeChapterFromStories(theme, stories) {
 
 // Dispara el flujo de dos pasos y GUARDA el resultado, reemplazando los
 // capítulos anteriores (igual que el árbol: más simple que ir haciendo diff).
-app.post('/api/chapters/generate', requireAuth, rateLimit, async (req, res) => {
+app.post('/api/chapters/generate', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
   try {
     await ensureSchema();
     const stories = await sql`SELECT id, texto, created_at FROM story_log WHERE user_id = ${req.userId} ORDER BY created_at ASC`;
@@ -1031,7 +1124,7 @@ app.post('/api/chapters/generate', requireAuth, rateLimit, async (req, res) => {
   }
 });
 
-app.get('/api/chapters', requireAuth, async (req, res) => {
+app.get('/api/chapters', requireAuth, bloquearColaborador, async (req, res) => {
   try {
     await ensureSchema();
     const rows = await sql`SELECT id, title, theme, generated_text, story_ids, created_at FROM chapters WHERE user_id = ${req.userId} ORDER BY id`;
@@ -1043,7 +1136,7 @@ app.get('/api/chapters', requireAuth, async (req, res) => {
   }
 });
 
-app.delete('/api/chapters/:id', requireAuth, rateLimit, async (req, res) => {
+app.delete('/api/chapters/:id', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
   try {
     await ensureSchema();
     const id = parseInt(req.params.id, 10);
@@ -1057,7 +1150,7 @@ app.delete('/api/chapters/:id', requireAuth, rateLimit, async (req, res) => {
   }
 });
 
-app.get('/api/tree', requireAuth, async (req, res) => {
+app.get('/api/tree', requireAuth, bloquearColaborador, async (req, res) => {
   try {
     await ensureSchema();
     const peopleRaw = await sql`SELECT nombre, relacion, detalles, padres FROM family_members WHERE user_id = ${req.userId} ORDER BY id`;
@@ -1072,7 +1165,7 @@ app.get('/api/tree', requireAuth, async (req, res) => {
 
 // Repasa TODAS las charlas ya guardadas (de antes de que existiera el árbol,
 // o si se quiere reconstruir desde cero) y actualiza personas/eventos.
-app.post('/api/rebuild-tree', requireAuth, rateLimit, async (req, res) => {
+app.post('/api/rebuild-tree', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
   try {
     await ensureSchema();
     const sessions = await sql`SELECT intercambios FROM sessions WHERE user_id = ${req.userId} ORDER BY fecha ASC`;
@@ -1091,7 +1184,7 @@ app.post('/api/rebuild-tree', requireAuth, rateLimit, async (req, res) => {
   }
 });
 
-app.post('/api/save', requireAuth, async (req, res) => {
+app.post('/api/save', requireAuth, bloquearColaborador, async (req, res) => {
   try {
     const history = Array.isArray(req.body.history) ? req.body.history.slice(0, 100) : [];
     if (!history.length) return res.status(400).json({ error: 'Nada que guardar.' });
@@ -1159,9 +1252,9 @@ app.post('/api/ask-familia', requireAuth, rateLimit, async (req, res) => {
     if (question.length > 1000) question = question.slice(0, 1000);
 
     await ensureSchema();
-    const memoria = await loadMemorySummary(req.userId);
+    const memoria = await loadMemorySummary(req.profileUserId);
     if (!memoria) {
-      const rows = await sql`SELECT id FROM sessions WHERE user_id = ${req.userId} LIMIT 1`;
+      const rows = await sql`SELECT id FROM sessions WHERE user_id = ${req.profileUserId} LIMIT 1`;
       if (!rows.length) {
         return res.json({
           answer: 'Todavía no hay charlas guardadas. Cuando presione el botón y cuente algo, vas a poder preguntar sobre eso acá.',
@@ -1188,7 +1281,7 @@ app.post('/api/ask-familia', requireAuth, rateLimit, async (req, res) => {
 
       const toolUse = response.content.find((b) => b.type === 'tool_use');
       if (!toolUse) break;
-      const toolResultText = await buildFullTranscripts(req.userId, toolUse.input && toolUse.input.palabra_clave);
+      const toolResultText = await buildFullTranscripts(req.profileUserId, toolUse.input && toolUse.input.palabra_clave);
 
       messages = [
         ...messages,

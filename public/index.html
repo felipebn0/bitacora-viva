@@ -192,6 +192,8 @@
     .form-note{grid-column:1/-1;color:var(--ink-soft);font-size:.76rem;margin:-4px 0 0}
     .signup-alt{grid-column:1/-1;text-align:center;font-size:.86rem;color:var(--ink-soft);margin:0}
     .signup-alt a{color:var(--gold-deep);font-weight:700;text-decoration:none}
+    .family-code-toggle{grid-column:1/-1;background:none;border:none;color:var(--gold-deep);font-weight:700;font-size:.84rem;text-decoration:underline;cursor:pointer;padding:0;text-align:left;font-family:inherit}
+    .field-note{grid-column:1/-1;color:var(--ink-soft);font-size:.76rem;margin:-6px 0 0}
 
     /* CTA */
     .final-cta{text-align:center;padding:120px 0}.final-cta .inner{max-width:840px;margin:auto}.final-cta h2{font-size:clamp(3rem,6.5vw,6rem)}.final-cta p{font-family:var(--serif);font-style:italic;color:var(--ink-soft);font-size:1.3rem;margin:0 0 30px}
@@ -407,6 +409,13 @@
               </div>
               <p class="field-hint">Mínimo 6 caracteres.</p>
 
+              <button class="family-code-toggle" id="familyCodeToggle" type="button">¿Tenés un código de familia? Unite en vez de crear una bitácora nueva</button>
+              <div class="field" id="familyCodeField" style="display:none;">
+                <label for="suCode">Código de familia</label>
+                <input id="suCode" name="inviteCode" type="text" placeholder="Ej: AB12CD" maxlength="6" style="text-transform:uppercase;">
+              </div>
+              <p class="field-note" id="familyCodeNote" style="display:none;">Vas a poder aportar historias y preguntarle a esa bitácora — no vas a tener una propia.</p>
+
               <button class="btn btn-primary submit" id="signupSubmit" type="submit">Crear cuenta y entrar</button>
               <p class="form-status" id="signupStatus" role="status" aria-live="polite"></p>
               <p class="form-note">Tus datos se usan solo para tu cuenta en Los recuerdos de mis viejos.</p>
@@ -482,6 +491,23 @@
     const signupStatus = document.getElementById('signupStatus');
     const signupSubmit = document.getElementById('signupSubmit');
 
+    // Alternativa a crear una bitácora nueva: unirse como colaborador con
+    // el código que comparte quien ya tiene una (ver botón "invitar
+    // familiares" dentro de la app).
+    const familyCodeToggle = document.getElementById('familyCodeToggle');
+    const familyCodeField = document.getElementById('familyCodeField');
+    const familyCodeNote = document.getElementById('familyCodeNote');
+    const suCode = document.getElementById('suCode');
+    familyCodeToggle.addEventListener('click', () => {
+      const showing = familyCodeField.style.display !== 'none';
+      familyCodeField.style.display = showing ? 'none' : 'block';
+      familyCodeNote.style.display = showing ? 'none' : 'block';
+      familyCodeToggle.textContent = showing
+        ? '¿Tenés un código de familia? Unite en vez de crear una bitácora nueva'
+        : 'Prefiero crear una bitácora nueva';
+      if (showing) suCode.value = '';
+    });
+
     signupForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       signupStatus.classList.remove('error');
@@ -491,6 +517,7 @@
       const email = document.getElementById('suEmail').value.trim();
       const password = document.getElementById('suPass').value;
       const password2 = document.getElementById('suPass2').value;
+      const inviteCode = suCode.value.trim();
 
       if (!signupForm.checkValidity()) {
         signupForm.reportValidity();
@@ -518,7 +545,7 @@
         const response = await fetch('/api/signup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, email, password })
+          body: JSON.stringify({ name, email, password, inviteCode })
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
@@ -528,7 +555,7 @@
           return;
         }
         signupStatus.textContent = '¡Listo! Entrando…';
-        window.location.href = '/app.html';
+        window.location.href = data.isCollaborator ? '/colaborar.html' : '/app.html';
       } catch (error) {
         signupStatus.classList.add('error');
         signupStatus.textContent = 'Hubo un problema para conectar.';
