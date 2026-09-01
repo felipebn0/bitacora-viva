@@ -288,10 +288,10 @@
    <div class="topbar">
      <button class="icon-btn" id="joinCollabBtn" type="button" title="Colaborar con otra historia" aria-label="Colaborar con otra historia">🤝</button>
      <div class="icon-btn-wrap">
-       <a class="icon-btn" href="/arbol.html" target="_blank" rel="noopener" title="Árbol genealógico" aria-label="Árbol genealógico">🌳</a>
+       <a class="icon-btn" href="/arbol.html" title="Árbol genealógico" aria-label="Árbol genealógico">🌳</a>
        <span class="icon-badge" id="treeBadge"></span>
      </div>
-     <a class="icon-btn" href="/capitulos.html" target="_blank" rel="noopener" title="Libro de la historia" aria-label="Libro de la historia">📖</a>
+     <a class="icon-btn" href="/capitulos.html" title="Libro de la historia" aria-label="Libro de la historia">📖</a>
    </div>
    <div class="join-collab-panel" id="joinCollabPanel" style="display:none;">
      <p class="sub">Quiero colaborar con otra historia — ingresa el código que te compartieron.</p>
@@ -412,7 +412,7 @@
 
   logoutBtn.addEventListener('click', async () => {
     try { await fetch('/api/logout', { method: 'POST' }); } catch (e) {}
-    window.location.reload();
+    window.location.href = '/';
   });
 
   const inviteToggle = document.getElementById('inviteToggle');
