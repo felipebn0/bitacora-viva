@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Los recuerdos de mis viejos — Historias que siguen vivas</title>
-  <meta name="description" content="Conserva las historias, la voz y los recuerdos de tu familia en un lugar al que podés volver a escuchar, consultar y compartir. Creá tu cuenta gratis." />
+  <meta name="description" content="Conserva las historias, la voz y los recuerdos de tu familia en un lugar al que puedes volver a escuchar, consultar y compartir. Crea tu cuenta gratis." />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,500&display=swap" rel="stylesheet">
@@ -395,7 +395,7 @@
             <div class="privacy-item"><b>🔐 Cuenta protegida con clave</b><span>Tu usuario y contraseña protegen el acceso: nadie entra sin ellos.</span></div>
             <div class="privacy-item"><b>🔒 Guardado de forma segura</b><span>Tus audios y recuerdos se guardan con conexión cifrada, no se comparten con nadie más.</span></div>
             <div class="privacy-item"><b>👨‍👩‍👧 Acceso familiar</b><span>Cada familia puede decidir quién participa y quién consulta.</span></div>
-            <div class="privacy-item"><b>🗑️ Vos tenés el control</b><span>Podés borrar todos tus recuerdos guardados cuando quieras.</span></div>
+            <div class="privacy-item"><b>🗑️ Tú tienes el control</b><span>Puedes borrar todos tus recuerdos guardados cuando quieras.</span></div>
           </div>
         </div>
       </div>
@@ -405,18 +405,18 @@
       <div class="wrap">
         <div class="registro-box reveal">
           <div class="registro-copy">
-            <div class="eyebrow" style="color:#D9B479">Empezá hoy</div>
-            <h2>Creá tu cuenta en menos de un minuto.</h2>
-            <p>Con nombre, correo y clave alcanza. En cuanto te registres entrás directo a la herramienta y podés empezar la primera charla.</p>
+            <div class="eyebrow" style="color:#D9B479">Empieza hoy</div>
+            <h2>Crea tu cuenta en menos de un minuto.</h2>
+            <p>Con nombre, correo y clave alcanza. En cuanto te registres entras directo a la herramienta y puedes empezar la primera charla.</p>
             <div class="registro-points">
               <span><i></i> Tus recuerdos quedan listos para volver a ellos cuando quieras.</span>
-              <span><i></i> Compartí tu código y armá esta historia entre todos.</span>
+              <span><i></i> Comparte tu código y arma esta historia entre todos.</span>
               <span><i></i> Sin lista de espera: tu cuenta se crea al instante.</span>
             </div>
           </div>
 
           <div class="signup-card">
-            <h3>Creá tu cuenta</h3>
+            <h3>Crea tu cuenta</h3>
             <p>Nombre, correo y clave. Así de simple.</p>
             <form class="signup-form" id="signupForm" novalidate>
               <div class="field">
@@ -437,7 +437,7 @@
               </div>
               <p class="field-hint">Mínimo 6 caracteres.</p>
 
-              <button class="family-code-toggle" id="familyCodeToggle" type="button">¿Tenés un código de familia? Unite en vez de crear una bitácora nueva</button>
+              <button class="family-code-toggle" id="familyCodeToggle" type="button">¿Tienes un código de familia? Únete en vez de crear una bitácora nueva</button>
               <div class="field" id="familyCodeField" style="display:none;">
                 <label for="suCode">Código de familia</label>
                 <input id="suCode" name="inviteCode" type="text" placeholder="Ej: AB12CD" maxlength="6" style="text-transform:uppercase;">
@@ -447,7 +447,7 @@
               <button class="btn btn-primary submit" id="signupSubmit" type="submit">Crear cuenta y entrar</button>
               <p class="form-status" id="signupStatus" role="status" aria-live="polite"></p>
               <p class="form-note">Tus datos se usan solo para tu cuenta en Los recuerdos de mis viejos.</p>
-              <p class="signup-alt">¿Ya tenés cuenta? <a href="/app.html">Iniciá sesión</a>.</p>
+              <p class="signup-alt">¿Ya tienes cuenta? <a href="/app.html">Inicia sesión</a>.</p>
             </form>
           </div>
         </div>
@@ -531,7 +531,7 @@
       familyCodeField.style.display = showing ? 'none' : 'block';
       familyCodeNote.style.display = showing ? 'none' : 'block';
       familyCodeToggle.textContent = showing
-        ? '¿Tenés un código de familia? Unite en vez de crear una bitácora nueva'
+        ? '¿Tienes un código de familia? Únete en vez de crear una bitácora nueva'
         : 'Prefiero crear una bitácora nueva';
       if (showing) suCode.value = '';
     });

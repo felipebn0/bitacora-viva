@@ -517,7 +517,7 @@
     try {
       const resp = await fetch('/api/tree');
       if (resp.status === 401) {
-        wrap.innerHTML = '<p class="msg">Iniciá sesión en la bitácora primero. <a class="volver" href="/app.html">Ir a la bitácora</a></p>';
+        wrap.innerHTML = '<p class="msg">Inicia sesión en la bitácora primero. <a class="volver" href="/app.html">Ir a la bitácora</a></p>';
         return;
       }
       if (!resp.ok) throw new Error('fallo');
@@ -525,7 +525,7 @@
       const people = (data.people || []).filter((p) => !esNovio(p.relacion));
       renderTree(people);
     } catch (e) {
-      wrap.innerHTML = '<p class="msg">No se pudo cargar el árbol. Intentá de nuevo más tarde.</p>';
+      wrap.innerHTML = '<p class="msg">No se pudo cargar el árbol. Intenta de nuevo más tarde.</p>';
     }
   }
 

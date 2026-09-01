@@ -57,6 +57,7 @@
 
   #appContent { display: none; flex-direction: column; align-items: center; width: 100%; }
   header { max-width: 440px; width: 100%; text-align: center; margin-bottom: 20px; }
+  .owner-name { font-family: var(--font-display); font-size: 1.7rem; font-weight: 700; color: var(--gold-deep); margin: 6px 0 2px; }
 
   .familia, .aportes {
     width: min(440px, 100%);
@@ -105,7 +106,7 @@
 <body>
   <div class="login" id="loginScreen">
     <h1>Los recuerdos de mis viejos</h1>
-    <p class="sub" style="margin-bottom: 6px;">Iniciá sesión para aportar historias.</p>
+    <p class="sub" style="margin-bottom: 6px;">Inicia sesión para aportar historias.</p>
     <input type="text" id="loginUser" placeholder="Correo" autocomplete="username">
     <input type="password" id="loginPass" placeholder="Clave" autocomplete="current-password">
     <button id="loginBtn" type="button">Entrar</button>
@@ -115,7 +116,8 @@
   <div id="appContent">
     <header>
       <h1>Aportar a la bitácora</h1>
-      <p class="sub" id="ownerLine">&nbsp;</p>
+      <p class="owner-name" id="ownerName">&nbsp;</p>
+      <p class="sub">Comparte una historia o consulta lo que ya se contó.</p>
     </header>
 
     <div class="familia">
@@ -130,12 +132,12 @@
 
     <div class="aportes">
       <h2>Aportar una historia</h2>
-      <p class="sub">Contá algo que recuerdes — una anécdota, un dato, un momento.</p>
+      <p class="sub">Cuenta algo que recuerdes — una anécdota, un dato, un momento.</p>
 
       <label for="aporteNombre">Tu nombre</label>
       <input type="text" id="aporteNombre" placeholder="Ej: Marcela">
 
-      <label for="aporteTexto">Contá una historia o recuerdo</label>
+      <label for="aporteTexto">Cuenta una historia o recuerdo</label>
       <textarea id="aporteTexto" placeholder="Ej: papá conoció a mamá en una fiesta de la universidad…"></textarea>
       <button id="aporteTextoBtn" type="button">Agregar historia</button>
 
@@ -161,15 +163,13 @@
   const loginError = document.getElementById('loginError');
   const logoutBtn = document.getElementById('logoutBtn');
   const whoami = document.getElementById('whoami');
-  const ownerLine = document.getElementById('ownerLine');
+  const ownerName = document.getElementById('ownerName');
 
   function showApp(data) {
     loginScreen.style.display = 'none';
     appContent.style.display = 'flex';
     whoami.textContent = data.username || '';
-    ownerLine.textContent = data.ownerName
-      ? `Estás aportando a la bitácora de ${data.ownerName}.`
-      : '';
+    ownerName.textContent = data.ownerName || '';
   }
 
   function showLogin() {

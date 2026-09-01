@@ -89,7 +89,7 @@
   function renderChapters(chapters) {
     lista.innerHTML = '';
     if (!chapters.length) {
-      lista.innerHTML = '<p class="empty">Todavía no hay capítulos generados. Cuando haya historias detectadas en la charla, presioná "Generar capítulos".</p>';
+      lista.innerHTML = '<p class="empty">Todavía no hay capítulos generados. Cuando haya historias detectadas en la charla, presiona "Generar capítulos".</p>';
       return;
     }
     chapters.forEach((c) => {
@@ -126,7 +126,7 @@
     try {
       const resp = await fetch('/api/chapters');
       if (resp.status === 401) {
-        lista.innerHTML = '<p class="empty">Iniciá sesión en la bitácora primero. <a class="volver" href="/app.html">Ir a la bitácora</a></p>';
+        lista.innerHTML = '<p class="empty">Inicia sesión en la bitácora primero. <a class="volver" href="/app.html">Ir a la bitácora</a></p>';
         generarBtn.disabled = true;
         return;
       }
@@ -134,7 +134,7 @@
       const data = await resp.json();
       renderChapters(data.chapters || []);
     } catch (e) {
-      lista.innerHTML = '<p class="empty">No se pudieron cargar los capítulos. Intentá de nuevo más tarde.</p>';
+      lista.innerHTML = '<p class="empty">No se pudieron cargar los capítulos. Intenta de nuevo más tarde.</p>';
     }
   }
 

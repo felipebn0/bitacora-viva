@@ -24,7 +24,7 @@ function rateLimit(req, res, next) {
   const now = Date.now();
   const hits = (rateLimitHits.get(ip) || []).filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
   if (hits.length >= RATE_LIMIT_MAX) {
-    return res.status(429).json({ error: 'Demasiados pedidos, esperá un momento.' });
+    return res.status(429).json({ error: 'Demasiados pedidos, espera un momento.' });
   }
   hits.push(now);
   rateLimitHits.set(ip, hits);
@@ -484,14 +484,14 @@ async function loadFamilyContext(userId) {
 
   let text = '';
   if (notes.length) {
-    text += `\n\nHistorias que la familia contó (podés usarlas para profundizar o confirmar detalles, con naturalidad):\n${notes
+    text += `\n\nHistorias que OTROS familiares aportaron sobre ella (importante: esto NO es algo que ella te haya contado a ti — son reportes de otras personas. Puedes usarlas para profundizar o confirmar detalles, pero si las mencionas en la charla, siempre deja claro quién te la contó, por ejemplo "esto me lo contó tu hermana Marcela" — nunca se las atribuyas a la persona con la que estás hablando, ni des a entender que ella ya te lo había contado antes):\n${notes
       .map((n) => `- [${n.contributor || 'un familiar'}]: ${n.texto}`)
       .join('\n')}`;
   }
   if (pending.length) {
     const m = pending[0];
     const tipo = m.type === 'video' ? 'un video' : 'una foto';
-    text += `\n\nLa familia subió ${tipo} (de ${m.contributor || 'un familiar'}) con esta descripción: "${m.caption || 'sin descripción'}". En algún momento de esta charla, preguntale con naturalidad sobre eso (quién aparece, qué recuerda de ese momento) — no hace falta que sea lo primero que preguntes.`;
+    text += `\n\nLa familia subió ${tipo} (de ${m.contributor || 'un familiar'}) con esta descripción: "${m.caption || 'sin descripción'}". En algún momento de esta charla, pregúntale con naturalidad sobre eso (quién aparece, qué recuerda de ese momento) — no hace falta que sea lo primero que preguntes.`;
     sql`UPDATE media SET discussed = true WHERE id = ${m.id}`.catch(() => {});
   }
   return text;
@@ -540,7 +540,7 @@ async function updateMemorySummary(userId, newExchanges) {
 
     if (!nuevaCharla.trim()) return;
 
-    const prompt = `Resumen actual de la vida de esta persona (puede estar vacío si es la primera charla):\n${anterior || '(ninguno todavía)'}\n\nCharla nueva para integrar:\n${nuevaCharla}\n\nGenerá un resumen actualizado, compacto (máximo 400 palabras), en español, en tercera persona, organizado en viñetas cortas por tema (identidad y familia, infancia, trabajo, momentos importantes, valores o consejos). Integrá lo nuevo con lo anterior sin perder datos importantes ya guardados.`;
+    const prompt = `Resumen actual de la vida de esta persona (puede estar vacío si es la primera charla):\n${anterior || '(ninguno todavía)'}\n\nCharla nueva para integrar:\n${nuevaCharla}\n\nGenera un resumen actualizado, compacto (máximo 400 palabras), en español, en tercera persona, organizado en viñetas cortas por tema (identidad y familia, infancia, trabajo, momentos importantes, valores o consejos). Integra lo nuevo con lo anterior sin perder datos importantes ya guardados.`;
 
     const response = await anthropic.messages.create({
       model: MODEL,
@@ -657,7 +657,7 @@ async function updateFamilyTree(userId, newExchanges) {
     const personasPrevias = personasPreviasRaw.map((p) => ({ ...p, padres: parseJsonArray(p.padres) }));
     const eventosPrevios = await sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${userId} ORDER BY anio NULLS LAST, id`;
 
-    const prompt = `Personas ya conocidas:\n${JSON.stringify(personasPrevias)}\n\nEventos ya conocidos:\n${JSON.stringify(eventosPrevios)}\n\nCharla nueva para integrar:\n${nuevaCharla}\n\nUsá la herramienta para devolver la lista COMPLETA actualizada de personas y eventos (lo anterior + lo nuevo, sin perder nada, corrigiendo si hay datos más precisos). Recordá las reglas: personas SOLO de la familia directa (nada de novio/novia, solo esposo/a si está casado/a); para cada persona completá "padres" con los nombres exactos de su papá y/o mamá tal como aparecen en esta misma lista, siempre que se pueda inferir (por ejemplo, por los "detalles" ya guardados tipo "hija de Oscar"); eventos SOLO hitos importantes (nacimiento, cumpleaños, viaje, graduación, matrimonio, muerte), nada de charla cotidiana ni planes sin confirmar. Si alguna persona o evento ya guardado no cumple estas reglas, quitalo de la lista.`;
+    const prompt = `Personas ya conocidas:\n${JSON.stringify(personasPrevias)}\n\nEventos ya conocidos:\n${JSON.stringify(eventosPrevios)}\n\nCharla nueva para integrar:\n${nuevaCharla}\n\nUsa la herramienta para devolver la lista COMPLETA actualizada de personas y eventos (lo anterior + lo nuevo, sin perder nada, corrigiendo si hay datos más precisos). Recuerda las reglas: personas SOLO de la familia directa (nada de novio/novia, solo esposo/a si está casado/a); para cada persona completa "padres" con los nombres exactos de su papá y/o mamá tal como aparecen en esta misma lista, siempre que se pueda inferir (por ejemplo, por los "detalles" ya guardados tipo "hija de Oscar"); eventos SOLO hitos importantes (nacimiento, cumpleaños, viaje, graduación, matrimonio, muerte), nada de charla cotidiana ni planes sin confirmar. Si alguna persona o evento ya guardado no cumple estas reglas, quítalo de la lista.`;
 
     const response = await anthropic.messages.create({
       model: MODEL,
@@ -706,16 +706,16 @@ Esta charla es distinta a las charlas normales: no se trata de contar anécdotas
 
 Reglas:
 - Una sola pregunta por turno.
-- Andá cubriendo, en este orden aproximado (sin ser rígida si la persona ya adelantó algo): sus papás (nombres), sus hermanos (nombres, si es mayor o menor), sus abuelos por los dos lados (nombres, si los llegó a conocer), sus tíos más cercanos, si tiene pareja (nombre), y si tiene hijos (nombres).
-- Para cada persona, si hay lugar, pedí un dato breve que la identifique (a qué se dedicaba, cómo era) — pero sin extenderte, esto es para saber quién es quién, no para contar toda su historia.
+- Anda cubriendo, en este orden aproximado (sin ser rígida si la persona ya adelantó algo): sus papás (nombres), sus hermanos (nombres, si es mayor o menor), sus abuelos por los dos lados (nombres, si los llegó a conocer), sus tíos más cercanos, si tiene pareja (nombre), y si tiene hijos (nombres).
+- Para cada persona, si hay lugar, pide un dato breve que la identifique (a qué se dedicaba, cómo era) — pero sin extenderte, esto es para saber quién es quién, no para contar toda su historia.
 - Modismos colombianos suaves y variados (qué más, listo, de una, qué chévere, ¿cierto?, pues sí, qué belleza) sin exagerar, nunca jerga juvenil ni groserías.
-- Cuando sientas que ya cubriste una buena parte del árbol familiar (generalmente entre 10 y 18 intercambios, o antes si la persona no tiene mucho más para agregar), cerrá con un mensaje cálido agradeciendo, avisando que el árbol quedó guardado, e invitando a retomar las charlas normales o seguir el árbol otro día. Termina ese mensaje, y solo ese, con la palabra exacta [FIN] en una línea aparte.
+- Cuando sientas que ya cubriste una buena parte del árbol familiar (generalmente entre 10 y 18 intercambios, o antes si la persona no tiene mucho más para agregar), cierra con un mensaje cálido agradeciendo, avisando que el árbol quedó guardado, e invitando a retomar las charlas normales o seguir el árbol otro día. Termina ese mensaje, y solo ese, con la palabra exacta [FIN] en una línea aparte.
 - Nunca uses [FIN] excepto en ese cierre.
 - Si más abajo hay personas ya conocidas, no vuelvas a preguntar por ellas.`;
 
 const SYSTEM_PROMPT = `Eres una entrevistadora cálida y paciente, colombiana, que ayuda a una persona mayor a contar la historia de su vida. Hablas en español de Colombia, tuteando siempre a la persona (usa "tú", nunca "usted" ni "vos": "¿cómo estás?", "cuéntame", "tienes"), con oraciones simples y cortas, fáciles de escuchar en voz alta.
 
-Usa modismos colombianos suaves y variados, propios de un trato respetuoso con una persona mayor (por ejemplo: "qué más", "listo", "de una", "qué chévere", "¿cierto?", "pues sí", "qué belleza", "qué interesante", "cuéntame más", "ay, no", "qué pena", "imagínate", "eso sí", "uy") — variá cuál usás en cada turno, no repitas siempre las mismas dos o tres. Nunca jerga juvenil o vulgar como "bacano", "berraquera" o groserías. El tono es animado y cercano, pero con la calidez respetuosa con la que se habla con un mayor, no como con un amigo de la misma edad.
+Usa modismos colombianos suaves y variados, propios de un trato respetuoso con una persona mayor (por ejemplo: "qué más", "listo", "de una", "qué chévere", "¿cierto?", "pues sí", "qué belleza", "qué interesante", "cuéntame más", "ay, no", "qué pena", "imagínate", "eso sí", "uy") — varía cuál usas en cada turno, no repitas siempre las mismas dos o tres. Nunca jerga juvenil o vulgar como "bacano", "berraquera" o groserías. El tono es animado y cercano, pero con la calidez respetuosa con la que se habla con un mayor, no como con un amigo de la misma edad.
 
 Esto es una charla de sobremesa, no un cuestionario. Antes de pasar a otra cosa, reacciona de verdad a lo que te acaban de contar: comenta algo, ríete si hay algo gracioso, sorpréndete, o pide un detalle más ("¿y qué pasó después?", "¿en serio? cuéntame más de eso") antes de avanzar a otro tema. Alterna entre preguntas cortas y comentarios — no todos los turnos tienen que terminar en pregunta.
 
@@ -738,7 +738,7 @@ async function loadKnownFamilyMembers(userId) {
   await ensureSchema();
   const rows = await sql`SELECT nombre, relacion, detalles FROM family_members WHERE user_id = ${userId}`;
   if (!rows.length) return '';
-  return `\n\nPersonas que ya se conocen (no vuelvas a preguntar por estas, priorizá las que faltan):\n${rows
+  return `\n\nPersonas que ya se conocen (no vuelvas a preguntar por estas, prioriza las que faltan):\n${rows
     .map((p) => `- ${p.nombre} (${p.relacion})${p.detalles ? ': ' + p.detalles : ''}`)
     .join('\n')}`;
 }
@@ -763,12 +763,12 @@ app.post('/api/next', requireAuth, bloquearColaborador, rateLimit, async (req, r
       ? await loadPendingFamilyNote(req.userId)
       : null;
     const startPrompt = mode === 'arbol'
-      ? '(La persona acaba de presionar el botón para armar el árbol genealógico. Saludala cálidamente por su nombre si lo sabés, contale brevemente que hoy vas a preguntarle por su familia para armar el árbol, y arrancá preguntando por la primera persona que falte — revisá la lista de "personas que ya se conocen" más abajo antes de preguntar, y si ya están sus papás, saltá directo a hermanos, abuelos, tíos, pareja o hijos, lo que falte.)'
+      ? '(La persona acaba de presionar el botón para armar el árbol genealógico. Salúdala cálidamente por su nombre si lo sabes, cuéntale brevemente que hoy vas a preguntarle por su familia para armar el árbol, y arranca preguntando por la primera persona que falte — revisa la lista de "personas que ya se conocen" más abajo antes de preguntar, y si ya están sus papás, salta directo a hermanos, abuelos, tíos, pareja o hijos, lo que falte.)'
       : esPrimeraVez
-      ? '(La persona acaba de presionar el botón por PRIMERA VEZ — todavía no hay ningún resumen guardado de ella, así que este es su primer mensaje en la aplicación. Antes de preguntar nada, dale una bienvenida cálida y explicale brevemente de qué se trata esto: que vas a ir charlando con ella de a poco para guardar su historia de vida con su propia voz, para que su familia la pueda escuchar y leer después. Contale que no hay respuestas correctas ni incorrectas, que puede contar lo que quiera y como quiera, con sus propias palabras, sin apurarse ni preocuparse por el orden. Dale un tip breve para sentirse cómoda hablando sola, por ejemplo imaginarse que le está contando esto a un nieto o a alguien muy querido. Después de esa bienvenida breve (unas 3-4 frases, no más), preguntale su nombre, y aprovechá para pedirle también su edad y su fecha de nacimiento, para tener esos datos básicos guardados desde el principio. Todo esto en un solo mensaje de bienvenida, cálido y no muy largo — no lo separes en varios turnos.)'
+      ? '(La persona acaba de presionar el botón por PRIMERA VEZ — todavía no hay ningún resumen guardado de ella, así que este es su primer mensaje en la aplicación. Antes de preguntar nada, dale una bienvenida cálida y explícale brevemente de qué se trata esto: que vas a ir charlando con ella de a poco para guardar su historia de vida con su propia voz, para que su familia la pueda escuchar y leer después. Cuéntale que no hay respuestas correctas ni incorrectas, que puede contar lo que quiera y como quiera, con sus propias palabras, sin apurarse ni preocuparse por el orden. Dale un tip breve para sentirse cómoda hablando sola, por ejemplo imaginarse que le está contando esto a un nieto o a alguien muy querido. Después de esa bienvenida breve (unas 3-4 frases, no más), pregúntale su nombre, y aprovecha para pedirle también su edad y su fecha de nacimiento, para tener esos datos básicos guardados desde el principio. Todo esto en un solo mensaje de bienvenida, cálido y no muy largo — no lo separes en varios turnos.)'
       : notaPendiente
-      ? `(La persona acaba de presionar el botón para empezar a charlar. Saludala por su nombre si lo sabés. Antes de preguntar cualquier otra cosa, contale que ${notaPendiente.contributor || 'un familiar'} aportó una historia sobre ella — algo en la línea de: "Quiero contarte que estuve hablando con ${notaPendiente.contributor || 'tu familia'} y me contó una historia sobre vos que trata de..." (adaptá el género y la frase para que suene natural, no la copies literal). Lo que contó fue esto: "${String(notaPendiente.texto).slice(0, 400)}". Después de contarle eso con calidez, preguntale qué recuerda de esa historia o si quiere contarte su propia versión, y dejá que la charla se desarrolle desde ahí con naturalidad, como el resto de las charlas.)`
-      : '(La persona acaba de presionar el botón para empezar a charlar. Si el resumen tiene su nombre, saludala por su nombre. Si no, saludala cálidamente y preguntale cómo se llama.)';
+      ? `(La persona acaba de presionar el botón para empezar a charlar. Salúdala por su nombre si lo sabes. Antes de preguntar cualquier otra cosa, cuéntale que ${notaPendiente.contributor || 'un familiar'} aportó una historia sobre ella — algo en la línea de: "Quiero contarte que estuve hablando con ${notaPendiente.contributor || 'tu familia'} y me contó una historia sobre ti que trata de..." (adapta el género y la frase para que suene natural, no la copies literal). Lo que contó fue esto: "${String(notaPendiente.texto).slice(0, 400)}". Después de contarle eso con calidez, pregúntale qué recuerda de esa historia o si quiere contarte su propia versión, y deja que la charla se desarrolle desde ahí con naturalidad, como el resto de las charlas.)`
+      : '(La persona acaba de presionar el botón para empezar a charlar. Si el resumen tiene su nombre, salúdala por su nombre. Si no, salúdala cálidamente y pregúntale cómo se llama.)';
     const messages = history.length ? history : [{ role: 'user', content: startPrompt }];
     if (notaPendiente) {
       await sql`UPDATE family_notes SET discussed = true WHERE id = ${notaPendiente.id}`;
@@ -1068,7 +1068,7 @@ async function classifyStoriesByTheme(stories) {
   const listado = stories
     .map((s) => `#${s.id} (${new Date(s.created_at).toLocaleDateString('es-CO')}): ${s.texto}`)
     .join('\n\n');
-  const prompt = `Estas son las historias detectadas en las charlas de esta persona (id, fecha, transcripción):\n\n${listado}\n\nProponé una lista de temas o épocas de vida que REALMENTE aparecen en este material (que emerja de lo contado, no uses una lista fija predefinida), y para cada tema indicá qué ids de historias corresponden (cada historia va en un solo tema, el que mejor le quede). Usá la herramienta para responder.`;
+  const prompt = `Estas son las historias detectadas en las charlas de esta persona (id, fecha, transcripción):\n\n${listado}\n\nProponé una lista de temas o épocas de vida que REALMENTE aparecen en este material (que emerja de lo contado, no uses una lista fija predefinida), y para cada tema indica qué ids de historias corresponden (cada historia va en un solo tema, el que mejor le quede). Usa la herramienta para responder.`;
 
   const response = await anthropic.messages.create({
     model: MODEL,
@@ -1085,7 +1085,7 @@ async function classifyStoriesByTheme(stories) {
 
 async function writeChapterFromStories(theme, stories) {
   const fuente = stories.map((s) => `- ${s.texto}`).join('\n\n');
-  const prompt = `Estas son transcripciones textuales de historias que esta persona contó sobre el tema "${theme}":\n\n${fuente}\n\nArmá un capítulo narrativo corto (2 a 4 párrafos), narrado en tercera persona, con un tono cálido de libro de memorias familiares, que hilvane estas historias. USA SOLO lo que está en las transcripciones de arriba — nunca inventes ni completes fechas, nombres, lugares o eventos que no estén ahí. Si falta contexto para que un párrafo fluya elegante, preferí una frase más simple pero fiel a lo dicho, antes que una elegante pero inventada. Ponele también un título corto al capítulo. Usá la herramienta para responder.`;
+  const prompt = `Estas son transcripciones textuales de historias que esta persona contó sobre el tema "${theme}":\n\n${fuente}\n\nArma un capítulo narrativo corto (2 a 4 párrafos), narrado en tercera persona, con un tono cálido de libro de memorias familiares, que hilvane estas historias. USA SOLO lo que está en las transcripciones de arriba — nunca inventes ni completes fechas, nombres, lugares o eventos que no estén ahí. Si falta contexto para que un párrafo fluya elegante, prefiere una frase más simple pero fiel a lo dicho, antes que una elegante pero inventada. Ponle también un título corto al capítulo. Usa la herramienta para responder.`;
 
   const response = await anthropic.messages.create({
     model: MODEL,
@@ -1115,7 +1115,7 @@ app.post('/api/chapters/generate', requireAuth, bloquearColaborador, rateLimit, 
 
     const grupos = await classifyStoriesByTheme(stories);
     if (!grupos.length) {
-      return res.json({ ok: true, message: 'No se pudo agrupar el material todavía. Probá de nuevo más tarde.', chapters: [] });
+      return res.json({ ok: true, message: 'No se pudo agrupar el material todavía. Prueba de nuevo más tarde.', chapters: [] });
     }
 
     const byId = new Map(stories.map((s) => [s.id, s]));
@@ -1248,13 +1248,13 @@ app.post('/api/save', requireAuth, bloquearColaborador, async (req, res) => {
   }
 });
 
-const FAMILY_SYSTEM_PROMPT_BASE = `Tenés acceso al resumen de charlas donde una persona mayor fue contando la historia de su vida. Tu trabajo es responder preguntas de su familia sobre lo que él contó, basándote únicamente en esa información.
+const FAMILY_SYSTEM_PROMPT_BASE = `Tienes acceso al resumen de charlas donde una persona mayor fue contando la historia de su vida. Tu trabajo es responder preguntas de su familia sobre lo que él contó, basándote únicamente en esa información.
 
 Reglas:
 - Respondé en español, cálido pero directo, en 2-4 oraciones.
 - Si la información no está disponible, decilo con claridad: no inventes ni completes con suposiciones.
-- Hablá de él en tercera persona ("contó que...", "dijo que...").
-- Si el resumen no tiene el detalle necesario para responder con precisión (una cita exacta, una fecha, algo muy específico), usá la herramienta "buscar_en_transcripciones" para leer las charlas completas antes de responder.`;
+- Habla de él en tercera persona ("contó que...", "dijo que...").
+- Si el resumen no tiene el detalle necesario para responder con precisión (una cita exacta, una fecha, algo muy específico), usa la herramienta "buscar_en_transcripciones" para leer las charlas completas antes de responder.`;
 
 const FAMILY_TOOLS = [{
   name: 'buscar_en_transcripciones',
@@ -1287,7 +1287,7 @@ app.post('/api/ask-familia', requireAuth, rateLimit, async (req, res) => {
       }
     }
 
-    const system = `${FAMILY_SYSTEM_PROMPT_BASE}\n\nResumen disponible:\n${memoria || '(todavía no hay resumen armado, usá la herramienta para leer las charlas directamente)'}`;
+    const system = `${FAMILY_SYSTEM_PROMPT_BASE}\n\nResumen disponible:\n${memoria || '(todavía no hay resumen armado, usa la herramienta para leer las charlas directamente)'}`;
 
     let messages = [{ role: 'user', content: question }];
     let response;

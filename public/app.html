@@ -237,12 +237,12 @@
 <body>
   <div class="login" id="loginScreen">
     <h1>Los recuerdos de mis viejos</h1>
-    <p class="sub">Iniciá sesión para entrar a tu bitácora.</p>
+    <p class="sub">Inicia sesión para entrar a tu bitácora.</p>
     <input type="text" id="loginUser" placeholder="Correo o usuario" autocomplete="username">
     <input type="password" id="loginPass" placeholder="Clave" autocomplete="current-password">
     <button id="loginBtn" type="button">Entrar</button>
     <p class="error" id="loginError"></p>
-    <p class="sub" style="margin-top:2px;">¿No tenés cuenta? <a href="/" style="color:var(--gold-deep);">Creá una</a>.</p>
+    <p class="sub" style="margin-top:2px;">¿No tienes cuenta? <a href="/" style="color:var(--gold-deep);">Crea una</a>.</p>
   </div>
 
   <div id="appContent">
@@ -256,12 +256,12 @@
       <h1>Los recuerdos de mis viejos</h1>
       <div class="body-area">
         <div class="greeting" id="greeting">
-          <div class="sub">Presioná el botón para empezar a charlar.</div>
+          <div class="sub">Presiona el botón para empezar a charlar.</div>
         </div>
         <div class="transcript" id="transcript" aria-live="polite"></div>
         <div class="orb-zone">
           <button class="orb" id="orb" data-state="idle" aria-label="Presionar para comenzar la charla">
-            <span id="orbLabel">Presioná<br>para hablar</span>
+            <span id="orbLabel">Presiona<br>para hablar</span>
           </button>
           <div class="state-label" id="stateLabel"></div>
           <button class="write-toggle end-toggle" id="endBtn" type="button" style="display:none;">terminar la charla</button>
@@ -298,7 +298,7 @@
       <label for="aporteNombre">Tu nombre</label>
       <input type="text" id="aporteNombre" placeholder="Ej: Marcela">
 
-      <label for="aporteTexto">Contá una historia o recuerdo</label>
+      <label for="aporteTexto">Cuenta una historia o recuerdo</label>
       <textarea id="aporteTexto" placeholder="Ej: papá conoció a mamá en una fiesta de la universidad…"></textarea>
       <button id="aporteTextoBtn" type="button">Agregar historia</button>
 
@@ -743,7 +743,7 @@
     if (!audioBlob || audioBlob.size < 800) {
       writeRow.classList.add('visible');
       writeInput.focus();
-      stateLabel.textContent = 'No te escuché bien — escribí tu respuesta o presioná de nuevo.';
+      stateLabel.textContent = 'No te escuché bien — escribe tu respuesta o presiona de nuevo.';
       return;
     }
     setState('thinking', 'Transcribiendo…');
@@ -756,7 +756,7 @@
     } else {
       writeRow.classList.add('visible');
       writeInput.focus();
-      stateLabel.textContent = 'No te escuché bien — escribí tu respuesta o presioná de nuevo.';
+      stateLabel.textContent = 'No te escuché bien — escribe tu respuesta o presiona de nuevo.';
     }
   }
 
@@ -794,9 +794,9 @@
       }, logEntry, myTurn);
     } catch (err) {
       if (mySession !== sessionId) return;
-      stateLabel.textContent = 'Hubo un problema para conectar. Probá de nuevo.';
+      stateLabel.textContent = 'Hubo un problema para conectar. Prueba de nuevo.';
       setState('idle', stateLabel.textContent);
-      orbLabel.innerHTML = 'Presioná<br>para hablar';
+      orbLabel.innerHTML = 'Presiona<br>para hablar';
       releaseMic();
       await saveSessionLog(); // no perder lo ya hablado por un problema de red
     }
@@ -829,8 +829,8 @@
     sessionId += 1; // invalida cualquier respuesta pendiente de este turno
     await stopRecordingAudio();
     writeRow.classList.remove('visible');
-    setState('paused', 'En pausa — presioná para seguir');
-    orbLabel.innerHTML = 'Presioná<br>para seguir';
+    setState('paused', 'En pausa — presiona para seguir');
+    orbLabel.innerHTML = 'Presiona<br>para seguir';
     saveSessionLog(); // por si no vuelve: que no se pierda lo hablado hasta acá
   }
 
@@ -912,7 +912,7 @@
 
   async function finishSession() {
     setState('ended', '');
-    orbLabel.innerHTML = 'Presioná<br>para otra charla';
+    orbLabel.innerHTML = 'Presiona<br>para otra charla';
     writeToggle.style.display = 'none';
     releaseMic();
     await saveSessionLog();
@@ -955,7 +955,7 @@
   orb.addEventListener('click', handleOrbPress);
 
   // Botón físico: el encoder USB de arcade manda una tecla al presionarlo.
-  // Cambiá BUTTON_KEY por la tecla que detectes en el paso de prueba (ver README).
+  // Cambia BUTTON_KEY por la tecla que detectes en el paso de prueba (ver README).
   const BUTTON_KEY = 'Enter';
   document.addEventListener('keydown', (e) => {
     const tag = (e.target && e.target.tagName) || '';
@@ -1100,7 +1100,7 @@
     const file = aporteArchivo.files[0];
     if (!file) return;
     if (file.size > 4 * 1024 * 1024) {
-      aporteMsg.textContent = 'El archivo pesa más de 4MB — probá con uno más chico por ahora.';
+      aporteMsg.textContent = 'El archivo pesa más de 4MB — prueba con uno más chico por ahora.';
       return;
     }
     const contributor = encodeURIComponent(aporteNombre.value.trim());
