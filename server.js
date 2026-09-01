@@ -1002,7 +1002,7 @@ app.post('/api/speak', requireAuth, rateLimit, async (req, res) => {
     res.send(buffer);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'No se pudo generar la voz.', debug: err.message });
+    res.status(500).json({ error: 'No se pudo generar la voz.' });
   }
 });
 
