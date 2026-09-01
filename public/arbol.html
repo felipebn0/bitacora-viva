@@ -284,16 +284,44 @@
   function alinearConHijos(fila, filaInferior, partnerOf) {
     const indexInferior = new Map(filaInferior.map((p, i) => [p.nombre, i]));
     const unidades = agruparEnUnidades(fila, partnerOf);
-    const conPos = unidades.map((u, i) => {
+
+    const posDeUnidad = (u) => {
       const nombresUnidad = u.map((p) => p.nombre);
       const hijos = filaInferior.filter((h) => Array.isArray(h.padres) && h.padres.some((pn) => nombresUnidad.includes(pn)));
-      const pos = hijos.length
-        ? hijos.reduce((s, h) => s + indexInferior.get(h.nombre), 0) / hijos.length
-        : i + 0.5; // sin hijos ubicables acá: se queda cerca de su posición original
-      return { u, pos };
+      if (!hijos.length) return null;
+      return hijos.reduce((s, h) => s + indexInferior.get(h.nombre), 0) / hijos.length;
+    };
+
+    // Primero agrupamos por HERMANOS DE SANGRE (mismos padres) — así
+    // alguien sin hijos propios ubicables todavía (ej. un tío soltero)
+    // queda pegado a sus hermanos, en vez de que su posición "adivinada"
+    // lo termine mezclando con otra familia sin relación.
+    const keyDeUnidad = (u, i) => {
+      const padres = (Array.isArray(u[0].padres) ? u[0].padres : []).filter(Boolean);
+      return padres.length ? padres.slice().sort().join('|') : ('__sin_padres_' + i);
+    };
+    const clanes = new Map();
+    const ordenClanes = [];
+    unidades.forEach((u, i) => {
+      const k = keyDeUnidad(u, i);
+      if (!clanes.has(k)) { clanes.set(k, []); ordenClanes.push(k); }
+      clanes.get(k).push(u);
+    });
+
+    const conPos = ordenClanes.map((k, i) => {
+      const usConPos = clanes.get(k).map((u) => ({ u, pos: posDeUnidad(u) }));
+      // Dentro de un mismo clan: primero quienes sí tienen hijos ubicables
+      // (ordenados por dónde quedaron), y al final los que no — así el
+      // clan entero se mueve como bloque y nunca se separa.
+      const resueltas = usConPos.filter((x) => x.pos != null).sort((a, b) => a.pos - b.pos);
+      const sinResolver = usConPos.filter((x) => x.pos == null);
+      const posClan = resueltas.length
+        ? resueltas.reduce((s, x) => s + x.pos, 0) / resueltas.length
+        : i + 0.5; // clan sin ningún hijo ubicable: se queda cerca de su posición original
+      return { us: resueltas.concat(sinResolver).map((x) => x.u), pos: posClan };
     });
     conPos.sort((a, b) => a.pos - b.pos);
-    return conPos.flatMap((x) => x.u);
+    return conPos.flatMap((c) => c.us.flatMap((u) => u));
   }
 
   function renderTree(people) {
@@ -394,12 +422,16 @@
           (h) => Array.isArray(h.padres) && h.padres.some((pn) => nombresUnidad.includes(pn))
         );
         const xs = hijos.map((h) => xDe(h.nombre)).filter((x) => x != null);
-        const centro = xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+        // Sin hijos ubicables todavía (ej. un tío sin hijos registrados en
+        // la charla) no hay de dónde sacar un centro real — se usa la
+        // posición NATURAL que ya tiene ahora mismo (antes de mover nada),
+        // que gracias al orden armado más arriba ya está cerca de donde
+        // debería quedar, en vez de un valor inventado que lo manda lejos.
+        const centro = xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : xDe(u[0].nombre);
         return { u, centro, ordenOriginal: i };
       });
-      // Sin referencia ubicable (ej. un cuñado sin padres propios y encima
-      // sin pareja en esta fila — no debería pasar, pero por las dudas):
-      // se va al final, en su orden original.
+      // Último recurso, si ni siquiera la posición natural se pudo leer
+      // (no debería pasar): se va al final, en su orden original.
       conCentro.forEach((c) => { if (c.centro == null) c.centro = 1e6 + c.ordenOriginal; });
       conCentro.sort((a, b) => a.centro - b.centro);
 
