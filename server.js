@@ -1250,7 +1250,7 @@ A lo largo de esta charla corta tienes que reunir estos 4 datos, sin que se sien
 
 Si el colaborador ya mencionó alguno de estos datos en lo que dijo, no lo vuelvas a preguntar — revisa bien la charla antes de preguntar. Pregunta solo por lo que falte, una cosa a la vez, de forma natural y cálida.
 
-En cuanto ya tengas los 4 datos, pregúntale con calidez si hay algo más que quiera agregar a esa historia. Si dice que no, o algo equivalente, cierra la charla agradeciéndole con calidez y avisando que la historia quedó guardada. Termina ese mensaje, y solo ese, con la palabra exacta [FIN] en una línea aparte. Nunca uses [FIN] excepto en ese cierre.`;
+Importante: en cuanto tengas los 4 datos, NO sigas profundizando ni hagas preguntas de color adicionales (aunque la historia te genere curiosidad) — pasa directo a preguntarle con calidez si hay algo más que quiera agregar a esa historia. Si dice que no, o algo equivalente, cierra la charla agradeciéndole con calidez y avisando que la historia quedó guardada. Termina ese mensaje, y solo ese, con la palabra exacta [FIN] en una línea aparte. Nunca uses [FIN] excepto en ese cierre.`;
 }
 
 const APORTE_EXTRACT_TOOL = [{
