@@ -117,6 +117,10 @@ function ensureSchema() {
         texto TEXT NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`;
+      // discussed: si ya se le contó al dueño de la bitácora que un
+      // familiar aportó esta historia (para abrir la próxima charla con
+      // eso), igual que "discussed" en la tabla media de acá abajo.
+      await sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS discussed BOOLEAN NOT NULL DEFAULT false`;
       await sql`CREATE INDEX IF NOT EXISTS idx_family_notes_user ON family_notes(user_id)`;
 
       await sql`CREATE TABLE IF NOT EXISTS media (
@@ -493,6 +497,15 @@ async function loadFamilyContext(userId) {
   return text;
 }
 
+// La historia más vieja que un colaborador aportó y todavía no se usó para
+// abrir ninguna charla — se marca "discussed" apenas se usa, para no
+// repetirla en la próxima sesión.
+async function loadPendingFamilyNote(userId) {
+  await ensureSchema();
+  const rows = await sql`SELECT id, contributor, texto FROM family_notes WHERE user_id = ${userId} AND discussed = false ORDER BY created_at ASC LIMIT 1`;
+  return rows[0] || null;
+}
+
 async function buildFullTranscripts(userId, keyword) {
   await ensureSchema();
   const rows = await sql`SELECT fecha, intercambios FROM sessions WHERE user_id = ${userId} ORDER BY fecha ASC`;
@@ -742,12 +755,24 @@ app.post('/api/next', requireAuth, bloquearColaborador, rateLimit, async (req, r
     const mode = req.body.mode === 'arbol' ? 'arbol' : 'historia';
     const memoria = await loadMemorySummary(req.userId);
     const esPrimeraVez = mode === 'historia' && !memoria && !history.length;
+    // Si un colaborador aportó una historia y todavía no se la contamos al
+    // dueño de la bitácora, esta es la próxima charla nueva que arranca —
+    // el momento justo para abrir con eso, no la primera vez (esa ya tiene
+    // su propia bienvenida) ni en medio de una charla ya empezada.
+    const notaPendiente = mode === 'historia' && !esPrimeraVez && !history.length
+      ? await loadPendingFamilyNote(req.userId)
+      : null;
     const startPrompt = mode === 'arbol'
       ? '(La persona acaba de presionar el botón para armar el árbol genealógico. Saludala cálidamente por su nombre si lo sabés, contale brevemente que hoy vas a preguntarle por su familia para armar el árbol, y arrancá preguntando por la primera persona que falte — revisá la lista de "personas que ya se conocen" más abajo antes de preguntar, y si ya están sus papás, saltá directo a hermanos, abuelos, tíos, pareja o hijos, lo que falte.)'
       : esPrimeraVez
       ? '(La persona acaba de presionar el botón por PRIMERA VEZ — todavía no hay ningún resumen guardado de ella, así que este es su primer mensaje en la aplicación. Antes de preguntar nada, dale una bienvenida cálida y explicale brevemente de qué se trata esto: que vas a ir charlando con ella de a poco para guardar su historia de vida con su propia voz, para que su familia la pueda escuchar y leer después. Contale que no hay respuestas correctas ni incorrectas, que puede contar lo que quiera y como quiera, con sus propias palabras, sin apurarse ni preocuparse por el orden. Dale un tip breve para sentirse cómoda hablando sola, por ejemplo imaginarse que le está contando esto a un nieto o a alguien muy querido. Después de esa bienvenida breve (unas 3-4 frases, no más), preguntale su nombre, y aprovechá para pedirle también su edad y su fecha de nacimiento, para tener esos datos básicos guardados desde el principio. Todo esto en un solo mensaje de bienvenida, cálido y no muy largo — no lo separes en varios turnos.)'
+      : notaPendiente
+      ? `(La persona acaba de presionar el botón para empezar a charlar. Saludala por su nombre si lo sabés. Antes de preguntar cualquier otra cosa, contale que ${notaPendiente.contributor || 'un familiar'} aportó una historia sobre ella — algo en la línea de: "Quiero contarte que estuve hablando con ${notaPendiente.contributor || 'tu familia'} y me contó una historia sobre vos que trata de..." (adaptá el género y la frase para que suene natural, no la copies literal). Lo que contó fue esto: "${String(notaPendiente.texto).slice(0, 400)}". Después de contarle eso con calidez, preguntale qué recuerda de esa historia o si quiere contarte su propia versión, y dejá que la charla se desarrolle desde ahí con naturalidad, como el resto de las charlas.)`
       : '(La persona acaba de presionar el botón para empezar a charlar. Si el resumen tiene su nombre, saludala por su nombre. Si no, saludala cálidamente y preguntale cómo se llama.)';
     const messages = history.length ? history : [{ role: 'user', content: startPrompt }];
+    if (notaPendiente) {
+      await sql`UPDATE family_notes SET discussed = true WHERE id = ${notaPendiente.id}`;
+    }
 
     let system;
     if (mode === 'arbol') {
