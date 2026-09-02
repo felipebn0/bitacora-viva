@@ -308,6 +308,21 @@ function ensureSchema() {
         window_start BIGINT NOT NULL,
         count INT NOT NULL DEFAULT 0
       )`;
+
+      // Si borrar un archivo de Vercel Blob falla (borrado de cuenta o
+      // reset), antes solo quedaba un console.error — no había forma de
+      // saber después qué quedó sin borrar de verdad. Acá queda un
+      // registro por cada intento fallido, para poder reintentar y para
+      // poder confirmar que no quedó nada de una cuenta borrada dando
+      // vueltas en el storage.
+      await sql`CREATE TABLE IF NOT EXISTS pending_blob_deletes (
+        id SERIAL PRIMARY KEY,
+        url TEXT NOT NULL UNIQUE,
+        motivo TEXT,
+        intentos INT NOT NULL DEFAULT 1,
+        creado_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        ultimo_intento_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`;
     })();
   }
   return schemaReady;
@@ -531,9 +546,48 @@ async function borrarArchivosBlob(urls) {
     try {
       await del(url);
     } catch (err) {
-      console.error('No se pudo borrar el archivo de Blob:', url, err.message);
+      console.error('No se pudo borrar el archivo de Blob, queda registrado para reintentar:', url, err.message);
+      try {
+        await ensureSchema();
+        await sql`
+          INSERT INTO pending_blob_deletes (url, motivo)
+          VALUES (${url}, ${String(err.message || err).slice(0, 500)})
+          ON CONFLICT (url) DO UPDATE SET
+            intentos = pending_blob_deletes.intentos + 1,
+            motivo = EXCLUDED.motivo,
+            ultimo_intento_at = now()
+        `;
+      } catch (dbErr) {
+        // Si ni siquiera se pudo registrar el pendiente, ya quedó el
+        // console.error de arriba como último recurso.
+        console.error('No se pudo registrar el borrado pendiente:', url, dbErr.message);
+      }
     }
   }));
+
+  // Barrido oportunista de la cola de pendientes (mismo patrón que la
+  // limpieza de rate_limits): no hay ningún cronjob en esta app, así que
+  // cada vez que se borra algo nuevo es también una chance de reintentar
+  // lo que había quedado pendiente de una vez anterior. No se espera
+  // (sin await) para no atrasar la respuesta de este pedido.
+  if (Math.random() < 0.2) {
+    reintentarBorradosPendientes().catch((err) => {
+      console.error('No se pudo reintentar los borrados pendientes:', err);
+    });
+  }
+}
+
+async function reintentarBorradosPendientes() {
+  await ensureSchema();
+  const pendientes = await sql`SELECT id, url FROM pending_blob_deletes ORDER BY creado_at ASC LIMIT 20`;
+  for (const p of pendientes) {
+    try {
+      await del(p.url);
+      await sql`DELETE FROM pending_blob_deletes WHERE id = ${p.id}`;
+    } catch (err) {
+      await sql`UPDATE pending_blob_deletes SET intentos = intentos + 1, motivo = ${String(err.message || err).slice(0, 500)}, ultimo_intento_at = now() WHERE id = ${p.id}`.catch(() => {});
+    }
+  }
 }
 
 // Deriva una extensión de archivo razonable a partir del Content-Type de un
