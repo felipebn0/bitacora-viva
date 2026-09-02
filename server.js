@@ -1204,6 +1204,20 @@ Reglas:
 - Nunca uses la palabra [FIN] excepto en ese cierre.
 - Si más abajo hay un resumen de charlas anteriores, no vuelvas a preguntar nada que ya está ahí (nombre, familia, etc.). Saluda siempre por su nombre si el resumen lo tiene (ej: "¡Hola, Felipe!"), y arranca yendo directo a un tema nuevo, o profundizando en algo que quedó pendiente.`;
 
+// Se agrega al system prompt SOLO en el turno donde ya pasaron varios
+// minutos de charla (lo controla el frontend, que sabe el tiempo real
+// transcurrido) — para ofrecerle un descanso a la persona sin que la
+// sesión se corte sola. Distinto de [FIN]: acá no se cierra la charla con
+// resumen final, solo se pausa (se puede retomar después sin perder el
+// hilo, igual que si hubiera presionado pausa a mano).
+const OFRECER_PAUSA_PROMPT = `
+
+Ya pasaron varios minutos charlando en esta sesión. Después de reaccionar con naturalidad a lo último que te contó (nunca la cortes a mitad de algo importante — espera a que termine esa idea), en ese mismo turno pregúntale con calidez si quiere seguir charlando un rato más o si prefiere hacer una pausa por ahora y retomar en otro momento. Esto es aparte de la regla normal de cierre con [FIN] — acá no estás cerrando la charla del todo, solo ofreciendo un descanso.
+
+Si en su respuesta a esa pregunta te dice que prefiere pausar (o algo equivalente, como que está cansada o que sigue después), despídete muy brevemente y con calidez, avisando que puede volver cuando quiera y que lo hablado ya quedó guardado. Termina ese mensaje, y solo ese, con la palabra exacta [PAUSA] en una línea aparte — es una señal interna para el sistema, nunca se la menciones a la persona. Nunca uses [PAUSA] junto con [FIN] en el mismo mensaje.
+
+Si en cambio te dice que quiere seguir charlando, no uses ningún marcador — seguí la charla con toda normalidad, como si nada.`;
+
 const HISTORIA_MIN_CHARS = 180; // umbral simple: una respuesta larga y elaborada = historia; un dato corto no.
 
 async function loadKnownFamilyMembers(userId) {
@@ -1255,7 +1269,8 @@ app.post('/api/next', requireAuth, bloquearColaborador, rateLimit, async (req, r
       system =
         SYSTEM_PROMPT +
         (memoria ? `\n\nResumen de charlas anteriores (no repitas lo que ya está acá):\n${memoria}` : '') +
-        familia;
+        familia +
+        (req.body.ofrecerPausa ? OFRECER_PAUSA_PROMPT : '');
     }
 
     const response = await anthropic.messages.create({
@@ -1267,7 +1282,8 @@ app.post('/api/next', requireAuth, bloquearColaborador, rateLimit, async (req, r
 
     let text = response.content[0].text.trim();
     const done = text.includes('[FIN]');
-    text = text.replace('[FIN]', '').trim();
+    const pausado = text.includes('[PAUSA]');
+    text = text.replace('[FIN]', '').replace('[PAUSA]', '').trim();
 
     // Los mensajes "sintéticos" que le mandamos a Claude por dentro (avisos
     // de que se presionó un botón, no algo que la persona realmente dijo)
@@ -1285,7 +1301,7 @@ app.post('/api/next', requireAuth, bloquearColaborador, rateLimit, async (req, r
       }
     }
 
-    res.json({ message: text, done });
+    res.json({ message: text, done, pausado });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo generar la siguiente pregunta.' });

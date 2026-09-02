@@ -677,6 +677,9 @@
   let state = 'idle';
   let pausedFromState = null;
   let sessionId = 0;
+  let sessionStartTime = null; // para ofrecer una pausa después de un rato charlando
+  let ofrecioPausa = false; // una sola vez por sesión, no en cada turno
+  const OFRECER_PAUSA_MS = 5 * 60 * 1000;
   let mediaStream = null;
   let mediaRecorder = null;
   let audioChunks = [];
@@ -1023,10 +1026,18 @@
     try {
       const lastEntry = sessionLog.length ? sessionLog[sessionLog.length - 1] : null;
       const lastAudioUrl = lastEntry && lastEntry.role === 'user' ? lastEntry.audioFile || null : null;
+      // Después de un rato charlando, se le ofrece a la persona la opción
+      // de pausar en vez de dejar que la sesión siga sin límite — una sola
+      // vez por sesión, no en cada turno.
+      let ofrecerPausa = false;
+      if (sessionMode === 'historia' && !ofrecioPausa && sessionStartTime && (Date.now() - sessionStartTime) >= OFRECER_PAUSA_MS) {
+        ofrecerPausa = true;
+        ofrecioPausa = true;
+      }
       const resp = await fetch('/api/next', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ history, lastAudioUrl, mode: sessionMode }),
+        body: JSON.stringify({ history, lastAudioUrl, mode: sessionMode, ofrecerPausa }),
       });
       if (mySession !== sessionId) return;
       if (!resp.ok) throw new Error('server error');
@@ -1044,6 +1055,8 @@
         if (mySession !== sessionId) return;
         if (data.done) {
           finishSession();
+        } else if (data.pausado) {
+          entrarEnPausaOfrecida();
         } else {
           listenForAnswer();
         }
@@ -1089,6 +1102,21 @@
     setState('paused', 'En pausa — presiona para seguir');
     orbLabel.innerHTML = 'Presiona<br>para seguir';
     saveSessionLog(); // por si no vuelve: que no se pierda lo hablado hasta acá
+  }
+
+  // Cuando la IA misma ofrece un descanso (después de un rato charlando) y
+  // la persona prefiere pausar — a diferencia de pauseConversation() (que
+  // corta A MITAD de turno, con grabación/reconocimiento en curso que hay
+  // que detener), acá la IA ya terminó de hablar su despedida breve, así
+  // que no hay nada de eso activo: solo queda dejar el estado en pausa.
+  // "pausedFromState = 'thinking'" hace que, al volver, se pida una
+  // pregunta nueva en vez de repetir ese mismo mensaje de despedida.
+  function entrarEnPausaOfrecida() {
+    pausedFromState = 'thinking';
+    releaseWakeLock();
+    setState('paused', 'En pausa — presiona para seguir');
+    orbLabel.innerHTML = 'Presiona<br>para seguir';
+    saveSessionLog();
   }
 
   function resumeConversation() {
@@ -1182,6 +1210,8 @@
     requestWakeLock();
     sessionMode = mode === 'arbol' ? 'arbol' : 'historia';
     sessionId += 1;
+    sessionStartTime = Date.now();
+    ofrecioPausa = false;
     pausedFromState = null;
     currentSessionDbId = null;
     greeting.style.display = 'none';
