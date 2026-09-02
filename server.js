@@ -137,6 +137,14 @@ function ensureSchema() {
       // nombres; se vacía cuando la persona entra a ver el árbol.
       await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS tree_pending_names TEXT`;
 
+      // token_version: para poder revocar sesiones sin esperar a que
+      // expiren solas. Cada cookie de sesión firmada lleva adentro el
+      // token_version que tenía la cuenta en el momento de loguearse; si no
+      // coincide con el valor actual en esta columna, la sesión se rechaza
+      // (ver requireAuth). Se incrementa al cambiar la clave, para cerrar
+      // la sesión en cualquier otro dispositivo que tenga la clave vieja.
+      await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INT NOT NULL DEFAULT 0`;
+
       // sessions/resumen ya existían de una versión sin cuentas — se agrega
       // user_id de forma aditiva (nunca se borra nada existente).
       await sql`CREATE TABLE IF NOT EXISTS sessions (
@@ -318,7 +326,14 @@ const SESSION_COOKIE = 'bv_session';
 const SESSION_MAX_AGE = 60 * 60 * 24 * 365; // 1 año, para no tener que loguearse siempre en el dispositivo físico
 
 function signSession(payload) {
-  const b64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  // iat (issued-at, en ms) queda adentro del propio token firmado — así la
+  // expiración se puede verificar acá en el servidor mirando el contenido
+  // firmado, no solo confiando en que el navegador respete el Max-Age de la
+  // cookie (alguien que reproduce el valor de la cookie a mano, por fuera
+  // del navegador — con curl, por ejemplo — no tiene ningún Max-Age que
+  // respetar).
+  const full = { ...payload, iat: payload.iat || Date.now() };
+  const b64 = Buffer.from(JSON.stringify(full)).toString('base64url');
   const sig = crypto.createHmac('sha256', SESSION_SECRET).update(b64).digest('base64url');
   return `${b64}.${sig}`;
 }
@@ -332,11 +347,16 @@ function verifySession(token) {
   const expected = crypto.createHmac('sha256', SESSION_SECRET).update(b64).digest('base64url');
   if (sig.length !== expected.length) return null;
   if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+  let payload;
   try {
-    return JSON.parse(Buffer.from(b64, 'base64url').toString());
+    payload = JSON.parse(Buffer.from(b64, 'base64url').toString());
   } catch (e) {
     return null;
   }
+  if (!payload || typeof payload.iat !== 'number' || Date.now() - payload.iat > SESSION_MAX_AGE * 1000) {
+    return null;
+  }
+  return payload;
 }
 
 function parseCookies(header) {
@@ -379,13 +399,25 @@ async function requireAuth(req, res, next) {
   req.profileUserId = session.userId;
   try {
     await ensureSchema();
-    const rows = await sql`SELECT owner_user_id FROM users WHERE id = ${session.userId}`;
-    if (rows[0] && rows[0].owner_user_id) {
+    const rows = await sql`SELECT owner_user_id, token_version FROM users WHERE id = ${session.userId}`;
+    // Si la cuenta ya no existe (se borró), o si esta cookie quedó vieja
+    // porque la cuenta cambió de clave desde otro dispositivo, se rechaza
+    // acá — no alcanza con que la firma sea válida, la cuenta detrás tiene
+    // que seguir siendo la misma que inició esta sesión.
+    if (!rows.length || rows[0].token_version !== (session.tokenVersion || 0)) {
+      return res.status(401).json({ error: 'No autenticado.' });
+    }
+    if (rows[0].owner_user_id) {
       req.isCollaborator = true;
       req.profileUserId = rows[0].owner_user_id;
     }
   } catch (err) {
-    console.error('No se pudo resolver si la cuenta es colaboradora:', err);
+    // Fallar cerrado: si no se pudo confirmar que la sesión sigue siendo
+    // válida, no se deja pasar el pedido. Antes esto solo se logueaba y
+    // seguía de largo con next() — un error transitorio de la base dejaba
+    // pasar cualquier cookie con firma válida, sin chequear nada más.
+    console.error('No se pudo validar la sesión:', err);
+    return res.status(401).json({ error: 'No se pudo validar la sesión, intenta de nuevo.' });
   }
   next();
 }
@@ -422,24 +454,26 @@ async function resolveProfileUserId(req) {
   return null;
 }
 
-app.get('/api/me', async (req, res) => {
-  const cookies = parseCookies(req.headers.cookie);
-  const session = verifySession(cookies[SESSION_COOKIE]);
-  if (!session) return res.status(401).json({ error: 'No autenticado.' });
+// Antes esta ruta verificaba la sesión a mano (en vez de usar requireAuth),
+// así que no chequeaba token_version ni si la cuenta seguía existiendo —
+// y encima, si fallaba la consulta a la base, respondía 200 con los datos
+// de la cookie de todos modos (fallaba abierto). Como el frontend usa esta
+// ruta para decidir si mostrar la app o la pantalla de login, eso dejaba
+// pasar cualquier cookie con firma válida sin las protecciones nuevas de
+// requireAuth. Ahora usa el mismo middleware que el resto de las rutas.
+app.get('/api/me', requireAuth, async (req, res) => {
   try {
-    await ensureSchema();
-    const rows = await sql`SELECT name, owner_user_id FROM users WHERE id = ${session.userId}`;
+    const rows = await sql`SELECT name FROM users WHERE id = ${req.userId}`;
     const name = capitalizarNombre((rows[0] && rows[0].name) || '') || null;
-    const ownerUserId = rows[0] && rows[0].owner_user_id;
     let ownerName = null;
-    if (ownerUserId) {
-      const ownerRows = await sql`SELECT name, username FROM users WHERE id = ${ownerUserId}`;
+    if (req.isCollaborator) {
+      const ownerRows = await sql`SELECT name, username FROM users WHERE id = ${req.profileUserId}`;
       ownerName = capitalizarNombre((ownerRows[0] && (ownerRows[0].name || ownerRows[0].username)) || '') || null;
     }
-    res.json({ username: session.username, name, isCollaborator: !!ownerUserId, ownerName });
+    res.json({ username: req.username, name, isCollaborator: req.isCollaborator, ownerName });
   } catch (err) {
     console.error(err);
-    res.json({ username: session.username, name: null, isCollaborator: false, ownerName: null });
+    res.status(500).json({ error: 'No se pudo cargar la cuenta.' });
   }
 });
 
@@ -779,9 +813,9 @@ app.post('/api/signup', rateLimit, async (req, res) => {
     const rows = await sql`
       INSERT INTO users (username, name, email, password_hash, owner_user_id)
       VALUES (${cleanEmail}, ${cleanName}, ${cleanEmail}, ${hash}, ${ownerUserId})
-      RETURNING id, username
+      RETURNING id, username, token_version
     `;
-    setSessionCookie(req, res, { userId: rows[0].id, username: rows[0].username });
+    setSessionCookie(req, res, { userId: rows[0].id, username: rows[0].username, tokenVersion: rows[0].token_version });
     res.json({ ok: true, username: rows[0].username, isCollaborator: !!ownerUserId });
   } catch (err) {
     console.error(err);
@@ -798,11 +832,11 @@ app.post('/api/login', rateLimit, async (req, res) => {
     if (!username || !password) return res.status(400).json({ error: 'Faltan usuario o clave.' });
     await ensureSchema();
     const cleanUsername = String(username).trim().toLowerCase();
-    const rows = await sql`SELECT id, username, password_hash FROM users WHERE username = ${cleanUsername}`;
+    const rows = await sql`SELECT id, username, password_hash, token_version FROM users WHERE username = ${cleanUsername}`;
     if (!rows.length) return res.status(401).json({ error: 'Usuario o clave incorrectos.' });
     const ok = await bcrypt.compare(password, rows[0].password_hash);
     if (!ok) return res.status(401).json({ error: 'Usuario o clave incorrectos.' });
-    setSessionCookie(req, res, { userId: rows[0].id, username: rows[0].username });
+    setSessionCookie(req, res, { userId: rows[0].id, username: rows[0].username, tokenVersion: rows[0].token_version });
     res.json({ ok: true, username: rows[0].username });
   } catch (err) {
     console.error(err);
@@ -938,7 +972,12 @@ app.post('/api/change-password', requireAuth, rateLimit, async (req, res) => {
     if (!ok) return res.status(401).json({ error: 'La clave actual no es correcta.' });
 
     const hash = await bcrypt.hash(String(newPassword), 10);
-    await sql`UPDATE users SET password_hash = ${hash} WHERE id = ${req.userId}`;
+    // token_version + 1 invalida cualquier otra sesión abierta con la clave
+    // vieja (por ejemplo, si alguien más tenía acceso al dispositivo o a la
+    // cookie). Este mismo dispositivo se queda logueado porque le
+    // reemitimos la cookie ya con el token_version nuevo.
+    const updated = await sql`UPDATE users SET password_hash = ${hash}, token_version = token_version + 1 WHERE id = ${req.userId} RETURNING username, token_version`;
+    setSessionCookie(req, res, { userId: req.userId, username: updated[0].username, tokenVersion: updated[0].token_version });
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
