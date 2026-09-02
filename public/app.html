@@ -15,7 +15,7 @@
     --bg: #F5EFE2;
     --ink: #2B241C;
     --ink-soft: #706551;
-    --gold: #C98A3C;
+    --gold: #93622A;
     --gold-deep: #8F5A20;
     --moss: #5B6B45;
     --bubble-user: #EFE6D1;
@@ -98,10 +98,10 @@
     border: 2px solid var(--ring); animation: breathe 3.2s ease-in-out infinite;
   }
   @keyframes breathe { 0%,100% { transform: scale(1); opacity: .6; } 50% { transform: scale(1.08); opacity: .15; } }
-  .orb[data-state="listening"] { background: radial-gradient(circle at 35% 30%, #D9A15C, var(--gold-deep)); }
+  .orb[data-state="listening"] { background: radial-gradient(circle at 35% 30%, #9A6524, var(--gold-deep)); }
   .orb[data-state="listening"]::before { animation-duration: 1.4s; }
-  .orb[data-state="speaking"], .orb[data-state="thinking"] { background: radial-gradient(circle at 35% 30%, #6E7F53, var(--moss)); }
-  .orb[data-state="paused"] { background: radial-gradient(circle at 35% 30%, #B5A98C, #8A7C63); }
+  .orb[data-state="speaking"], .orb[data-state="thinking"] { background: radial-gradient(circle at 35% 30%, #67774D, var(--moss)); }
+  .orb[data-state="paused"] { background: radial-gradient(circle at 35% 30%, #7D7050, #706551); }
   .orb[data-state="paused"]::before { animation: none; opacity: 0.3; }
   .state-label { font-size: 0.9rem; color: var(--ink-soft); min-height: 1.3em; }
   .write-toggle { background: none; border: none; color: var(--moss); text-decoration: underline; cursor: pointer; font-family: var(--font-body); }
