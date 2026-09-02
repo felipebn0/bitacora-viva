@@ -965,6 +965,15 @@ app.post('/api/reset-bitacora', requireAuth, bloquearColaborador, rateLimit, asy
     const sl = await sql`DELETE FROM story_log WHERE user_id = ${req.userId} RETURNING id, audio_url`;
     const ch = await sql`DELETE FROM chapters WHERE user_id = ${req.userId} RETURNING id`;
 
+    // Se borró family_members recién arriba, pero eso dejaba huérfanas las
+    // versiones anteriores de esas personas en historia_versiones (nombre,
+    // relación o padres previos a la última edición) — nunca se limpiaban,
+    // así que "reiniciar la bitácora" no borraba todo lo que decía borrar.
+    if (fm.length) {
+      const idsFm = fm.map((row) => row.id);
+      await sql`DELETE FROM historia_versiones WHERE tabla = 'family_members' AND registro_id = ANY(${idsFm})`;
+    }
+
     // Los audios/fotos quedaban huérfanos en Vercel Blob después de un
     // reset (solo se borraba la fila de la base de datos) — acá se borran
     // también los archivos reales, para cumplir lo que promete la landing.
@@ -1028,7 +1037,7 @@ app.post('/api/delete-account', requireAuth, rateLimit, async (req, res) => {
     await sql`DELETE FROM resumen WHERE user_id = ${req.userId}`;
     const n = await sql`DELETE FROM family_notes WHERE user_id = ${req.userId} RETURNING audio_url, audio_urls`;
     const m = await sql`DELETE FROM media WHERE user_id = ${req.userId} RETURNING url`;
-    await sql`DELETE FROM family_members WHERE user_id = ${req.userId}`;
+    const fm = await sql`DELETE FROM family_members WHERE user_id = ${req.userId} RETURNING id`;
     await sql`DELETE FROM timeline_events WHERE user_id = ${req.userId}`;
     const sl = await sql`DELETE FROM story_log WHERE user_id = ${req.userId} RETURNING audio_url`;
     await sql`DELETE FROM chapters WHERE user_id = ${req.userId}`;
@@ -1041,6 +1050,15 @@ app.post('/api/delete-account', requireAuth, rateLimit, async (req, res) => {
     sl.forEach((row) => { if (row.audio_url) audioUrls.push(row.audio_url); });
     m.forEach((row) => { if (row.url) audioUrls.push(row.url); });
     await borrarArchivosBlob(audioUrls);
+
+    // 1b) Igual que en /api/reset-bitacora: las versiones anteriores de las
+    // personas del árbol que se acaban de borrar (family_members) quedaban
+    // huérfanas en historia_versiones para siempre — se borran acá también,
+    // porque esto se promete como irreversible y total.
+    if (fm.length) {
+      const idsFm = fm.map((row) => row.id);
+      await sql`DELETE FROM historia_versiones WHERE tabla = 'family_members' AND registro_id = ANY(${idsFm})`;
+    }
 
     // 2) Soltar cualquier referencia a esta cuenta desde datos de OTRAS
     // personas, para poder borrar la fila de "users" sin romper nada ajeno.
