@@ -14,8 +14,8 @@
   :root {
     --bg: #F5EFE2;
     --ink: #2B241C;
-    --ink-soft: #8A7C63;
-    --gold-deep: #A86A26;
+    --ink-soft: #706551;
+    --gold-deep: #8F5A20;
     --moss: #5B6B45;
     --bubble-user: #EFE6D1;
     --font-display: "Source Serif 4", Georgia, serif;
@@ -48,6 +48,14 @@
     text-decoration: underline; cursor: pointer; font-family: var(--font-body); padding: 0;
   }
   .rebuild-btn:disabled { opacity: 0.6; cursor: default; }
+  /* En pantallas angostas el subtítulo puede pasar a dos líneas — con
+     "volver" y "reconstruir" siempre en la esquina (position:absolute,
+     apenas 26px de separación) terminaban superpuestos o muy pegados. Acá
+     vuelven al flujo normal, como una fila propia debajo del subtítulo. */
+  @media (max-width: 560px) {
+    a.volver, .rebuild-btn { position: static; }
+    header { justify-content: center; gap: 6px 22px; }
+  }
 
   .wrap { max-width: 1400px; margin: 0 auto; overflow-x: auto; padding-bottom: 12px; position: relative; z-index: 1; }
   .empty, .msg { color: var(--ink-soft); font-style: italic; text-align: center; margin-top: 60px; }
@@ -425,6 +433,7 @@
         editBtn.className = 'edit-btn';
         editBtn.type = 'button';
         editBtn.title = 'Corregir nombre o parentesco';
+        editBtn.setAttribute('aria-label', 'Corregir nombre o parentesco de ' + p.nombre);
         editBtn.textContent = '✏️';
         node.appendChild(editBtn);
         editBtn.addEventListener('click', (e) => {

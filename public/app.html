@@ -14,9 +14,9 @@
   :root {
     --bg: #F5EFE2;
     --ink: #2B241C;
-    --ink-soft: #8A7C63;
+    --ink-soft: #706551;
     --gold: #C98A3C;
-    --gold-deep: #A86A26;
+    --gold-deep: #8F5A20;
     --moss: #5B6B45;
     --bubble-user: #EFE6D1;
     --ring: rgba(201, 138, 60, 0.35);
@@ -37,7 +37,12 @@
     padding: 24px;
   }
   @media (prefers-reduced-motion: reduce) {
-    * { animation-duration: 0.001ms !important; }
+    /* El selector "*" solo no alcanza a la animación del ::before del
+       orbe (los pseudo-elementos no quedan incluidos en "*" a secas) —
+       encontrado al probar el mismo arreglo en colaborar.html: la
+       animación de "respirar" seguía a toda velocidad con "reducir
+       movimiento" activado a pesar de esta regla. */
+    *, *::before, *::after { animation-duration: 0.001ms !important; }
   }
   .device {
     width: min(440px, 100%);

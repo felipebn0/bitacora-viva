@@ -14,9 +14,9 @@
   :root {
     --bg: #F5EFE2;
     --ink: #2B241C;
-    --ink-soft: #8A7C63;
+    --ink-soft: #706551;
     --gold: #C98A3C;
-    --gold-deep: #A86A26;
+    --gold-deep: #8F5A20;
     --ring: rgba(201, 138, 60, 0.35);
     --moss: #5B6B45;
     --bubble-user: #EFE6D1;
@@ -34,6 +34,11 @@
     flex-direction: column;
     align-items: center;
     padding: 28px 20px 60px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    /* El selector "*" solo no alcanza a la animación del ::before del
+       orbe (los pseudo-elementos no quedan incluidos en "*" a secas). */
+    *, *::before, *::after { animation-duration: 0.001ms !important; }
   }
   h1 { font-family: var(--font-display); font-size: 1.5rem; margin: 0 0 4px; text-align: center; }
   p.sub { color: var(--ink-soft); font-size: 0.92rem; margin: 0; text-align: center; }
@@ -67,7 +72,7 @@
   .topbar { width: 100%; max-width: 440px; display: flex; justify-content: flex-end; gap: 10px; margin-bottom: 10px; }
   .icon-btn {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 40px; height: 40px; border-radius: 50%;
+    width: 44px; height: 44px; border-radius: 50%;
     background: #FBF6EA; border: 1px solid #E7DFCC; font-size: 1.15rem;
     text-decoration: none; cursor: pointer; box-shadow: 0 2px 6px -3px rgba(0,0,0,0.2);
   }
@@ -616,6 +621,7 @@
     grabando = true;
     orb.dataset.state = 'listening';
     orb.innerHTML = 'Te<br>escucho…';
+    orb.setAttribute('aria-label', 'Grabando tu historia — presiona para cortar');
     recStatus.textContent = '⏺️ Grabando… se corta sola cuando hagas una pausa.';
     subirAudioBtn.disabled = true;
     startVAD();
@@ -681,6 +687,7 @@
     grabando = false;
     orb.dataset.state = 'thinking';
     orb.innerHTML = 'Un<br>momento…';
+    orb.setAttribute('aria-label', 'Procesando tu historia');
     orb.disabled = true;
     recStatus.textContent = 'Procesando el audio…';
 
@@ -690,6 +697,7 @@
     const reset = () => {
       orb.dataset.state = 'idle';
       orb.innerHTML = 'Presiona<br>para hablar';
+      orb.setAttribute('aria-label', 'Presiona para grabar tu historia');
       orb.disabled = false;
       subirAudioBtn.disabled = false;
     };
