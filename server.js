@@ -1365,8 +1365,9 @@ app.post('/api/transcribe', requireAuth, rateLimit, express.raw({ type: '*/*', l
     });
 
     if (!resp.ok) {
-      console.error('ElevenLabs STT error:', resp.status, await resp.text());
-      return res.status(502).json({ error: 'No se pudo transcribir el audio.' });
+      const detalle = await resp.text();
+      console.error('ElevenLabs STT error:', resp.status, detalle);
+      return res.status(502).json({ error: 'No se pudo transcribir el audio.', debug: { status: resp.status, detalle } });
     }
 
     const data = await resp.json();
@@ -1499,6 +1500,8 @@ Necesitas que, entre lo que ya dijo en la invitación y lo que cuenta, queden cl
 Cuando la persona termine de contar su historia (su primer turno largo ya cuenta como "terminar de contar" — no es tu criterio el que decide que "faltó más"), revisa bien todo lo que dijo. Si ya mencionó su parentesco y una referencia temporal (aunque sea de pasada), NO se los preguntes — pasa directo a preguntarle con calidez si hay algo más que quiera agregar. Si falta alguno de los dos, ahí sí pregúntaselo — de forma breve y natural, una sola pregunta, no una lista — antes de pasar al "¿algo más?". Nunca hagas esta pregunta de aclaración ANTES de que la persona haya tenido la oportunidad de contar su historia completa — solo después.
 
 Cuando hagas esa pregunta de aclaración (porque faltó el parentesco y/o la referencia temporal), termina ese mensaje, y solo ese, con la palabra exacta [FALTA_DATO] en una línea aparte — es una señal interna para el sistema, no se la menciones a la persona. NUNCA uses [FALTA_DATO] junto con [FIN] en el mismo mensaje, y nunca la uses para la invitación inicial ni para la pregunta de "¿algo más?".
+
+Esto es lo que más se rompe en la práctica, presta especial atención: en cuanto la persona te responda esa pregunta de aclaración (el dato que faltaba), ese dato queda completo — NO importa qué tan corta sea su respuesta ("su nieta", "en el 2020"). El turno siguiente, sin excepción, tiene que ir DIRECTO a la pregunta de "¿algo más?" — nunca a otra pregunta de seguimiento sobre la historia ("y qué más pasó ese día", "cuéntame más de eso"), aunque la respuesta a la aclaración te haya dejado con ganas de saber más. Tratar esa respuesta breve como si fuera una nueva entrada de historia que hay que profundizar es exactamente el error a evitar acá.
 
 Importante — esto es lo que más se rompe, presta mucha atención: en cuanto tengas parentesco, referencia temporal e historia (con lo mínimo indicado arriba, sin importar qué tan corta o simple sea la historia), NO sigas pidiendo más detalle bajo NINGÚN pretexto ("cuéntame más", "¿cómo fue todo?", "¿qué pasó después?" quedan PROHIBIDAS en este punto), NO hagas preguntas de color, NO profundices por curiosidad — pasa DIRECTO a preguntarle con calidez si hay algo más que quiera agregar a esa historia. Esa pregunta de "¿algo más?" reemplaza cualquier otra pregunta de seguimiento, sin excepción. Si dice que no, o algo equivalente, cierra la charla agradeciéndole con calidez y avisando que la historia quedó guardada. Termina ese mensaje, y solo ese, con la palabra exacta [FIN] en una línea aparte. Nunca uses [FIN] excepto en ese cierre.`;
 }
