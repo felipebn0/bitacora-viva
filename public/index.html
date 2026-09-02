@@ -625,6 +625,13 @@
     tabNueva.addEventListener('click', () => setSignupMode(false));
     tabColaborar.addEventListener('click', () => setSignupMode(true));
 
+    // Si se llega con ?modo=colaborar (ej. desde el link "Crea una" en la
+    // pantalla de login de colaborar.html), arrancamos directo en la
+    // pestaña de "unirme con un código" en vez de la de crear bitácora.
+    if (new URLSearchParams(window.location.search).get('modo') === 'colaborar') {
+      setSignupMode(true);
+    }
+
     signupForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       signupStatus.classList.remove('error');

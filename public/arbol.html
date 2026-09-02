@@ -65,6 +65,12 @@
     opacity: 0; transition: opacity .15s; padding: 0;
   }
   .tree-node:hover .edit-btn, .tree-node:focus-within .edit-btn { opacity: 1; }
+  /* En pantallas táctiles no existe ":hover" — sin esto, el botón de editar
+     quedaba invisible siempre, sin ninguna pista de que se puede corregir
+     un nombre o parentesco mal escrito. */
+  @media (hover: none), (pointer: coarse) {
+    .tree-node .edit-btn { opacity: 1; }
+  }
   .avatar {
     width: 68px; height: 68px; border-radius: 50%;
     background: var(--bubble-user);
@@ -674,7 +680,13 @@
       // demasiado (letra ilegible), preferimos dejar el scroll.
       const disponibleAncho = wrap.clientWidth;
       const naturalAncho = graphic.scrollWidth;
-      const MIN_ESCALA = 0.45;
+      // 0.45 dejaba el nombre (14.4px) y el parentesco (12px) en ~6.5px/~5.4px
+      // para familias grandes en el celular — bien por debajo de cualquier
+      // piso legible. Con 0.75 el achicado sigue ayudando a que entre más
+      // árbol sin scroll, pero el texto nunca baja de ~10.8px/9px — y si
+      // igual no entra completo, ".wrap" ya tiene overflow-x:auto para que
+      // se pueda desplazar en vez de forzar una letra ilegible.
+      const MIN_ESCALA = 0.75;
       if (naturalAncho > disponibleAncho) {
         const escala = Math.max(MIN_ESCALA, disponibleAncho / naturalAncho);
         graphic.style.transform = `scale(${escala})`;
