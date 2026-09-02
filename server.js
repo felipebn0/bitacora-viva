@@ -563,14 +563,28 @@ function capitalizarInicio(str) {
   return m[1] + m[2].toUpperCase() + m[3];
 }
 
-// Valida que un string sea una URL http(s) real antes de guardarla — así no
-// se puede meter "javascript:" ni cualquier otro esquema en un campo que
-// después se usa como src de un <audio> en el front.
+// Dominio real donde Vercel Blob sirve los archivos que subimos nosotros
+// mismos (confirmado en node_modules/@vercel/blob). Cualquier audioUrl que
+// no viva ahí no puede venir de un upload legítimo de esta app.
+const BLOB_HOST_SUFFIX = '.blob.vercel-storage.com';
+
+function esHostDeNuestroBlob(hostname) {
+  return hostname === BLOB_HOST_SUFFIX.slice(1) || hostname.endsWith(BLOB_HOST_SUFFIX);
+}
+
+// Valida que un string sea una URL http(s) real, alojada en nuestro propio
+// storage de Vercel Blob, antes de guardarla — así no se puede meter
+// "javascript:", ni cualquier otro esquema, ni una URL externa arbitraria en
+// un campo que después se usa como src de un <audio> en el front (evita que
+// alguien registre audio_url apuntando a un sitio de terceros, por ejemplo
+// para exfiltrar datos vía el Referer o para spoofear contenido).
 function urlHttpValida(str) {
   if (typeof str !== 'string' || !str.trim()) return null;
   try {
     const u = new URL(str.trim());
-    return /^https?:$/.test(u.protocol) ? u.toString() : null;
+    if (!/^https?:$/.test(u.protocol)) return null;
+    if (!esHostDeNuestroBlob(u.hostname)) return null;
+    return u.toString();
   } catch (e) {
     return null;
   }
