@@ -503,6 +503,7 @@
       esperandoAclaracion = !!data.needsBasicInfo;
       if (data.done) {
         charlaTerminada = true;
+        releaseWakeLock();
         orb.style.display = 'none';
         document.getElementById('subirAudioBtn').style.display = 'none';
         writeToggleColab.style.display = 'none';
@@ -519,7 +520,24 @@
     }
   }
 
+  // Evita que la pantalla se bloquee sola por inactividad mientras se
+  // cuenta la historia — el navegador libera este "wake lock" apenas la
+  // pestaña pasa a segundo plano, así que hay que volver a pedirlo cuando
+  // vuelve a quedar visible si la charla sigue en curso.
+  let wakeLock = null;
+  async function requestWakeLock() {
+    if (!('wakeLock' in navigator)) return;
+    try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) { wakeLock = null; }
+  }
+  function releaseWakeLock() {
+    if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && !charlaTerminada && historyLocal.length) requestWakeLock();
+  });
+
   function iniciarAporte() {
+    requestWakeLock();
     resetChat();
     enviarTurno();
   }

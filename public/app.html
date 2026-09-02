@@ -866,6 +866,30 @@
     if (audioContext.state === 'suspended') audioContext.resume();
   }
 
+  // Evita que la pantalla se bloquee sola por inactividad mientras dura la
+  // charla — tiene sentido acá porque a veces se pasan varios segundos sin
+  // tocar nada (escuchando, pensando, hablando). El navegador libera este
+  // "wake lock" solo cuando la pestaña pasa a segundo plano, así que hay
+  // que volver a pedirlo cuando vuelve a quedar visible (ej. la persona
+  // cambió de app un momento y volvió) — si no, queda perdido para el
+  // resto de la charla sin ningún aviso.
+  let wakeLock = null;
+  async function requestWakeLock() {
+    if (!('wakeLock' in navigator)) return; // Safari viejo, algunos navegadores Android: sin soporte, no rompe nada
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+    } catch (e) {
+      wakeLock = null; // ej. la pestaña no está visible en este momento — no es un error real
+    }
+  }
+  function releaseWakeLock() {
+    if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+  }
+  document.addEventListener('visibilitychange', () => {
+    const enCharla = state !== 'idle' && state !== 'ended' && state !== 'paused';
+    if (document.visibilityState === 'visible' && enCharla) requestWakeLock();
+  });
+
   async function speak(text, onEnd, logEntry, index) {
     try {
       const resp = await fetch('/api/speak', {
@@ -1054,6 +1078,7 @@
 
   async function pauseConversation() {
     pausedFromState = state;
+    releaseWakeLock();
     stopVoiceActivityDetection();
     if (fallbackRecognition) { try { fallbackRecognition.abort(); } catch (e) {} }
     if ('speechSynthesis' in window) speechSynthesis.cancel();
@@ -1067,6 +1092,7 @@
   }
 
   function resumeConversation() {
+    requestWakeLock();
     const mySession = ++sessionId;
     if (pausedFromState === 'thinking') {
       fetchNext(); // se había pausado antes de recibir la pregunta nueva
@@ -1147,11 +1173,13 @@
     orbLabel.innerHTML = 'Presiona<br>para otra charla';
     writeToggle.style.display = 'none';
     releaseMic();
+    releaseWakeLock();
     await saveSessionLog();
   }
 
   function startSession(mode) {
     if (state !== 'idle' && state !== 'ended') return;
+    requestWakeLock();
     sessionMode = mode === 'arbol' ? 'arbol' : 'historia';
     sessionId += 1;
     pausedFromState = null;
