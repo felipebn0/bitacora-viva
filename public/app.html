@@ -112,40 +112,6 @@
   .write-row button { border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px; padding: 0 14px; font-weight: 700; cursor: pointer; }
   .error { color: #a33; font-size: 0.85rem; }
 
-  .familia {
-    display: none; /* oculto en mobile por ahora; vuelve a aparecer en pantallas grandes */
-    width: min(440px, 100%);
-    margin: 28px auto 0;
-    background: #FBF6EA;
-    border: 1px solid #E7DFCC;
-    border-radius: 20px;
-    padding: 22px 24px;
-    flex-direction: column;
-    gap: 12px;
-  }
-  .familia h2 {
-    font-family: var(--font-display);
-    font-size: 1.1rem;
-    margin: 0;
-    font-weight: 600;
-  }
-  .familia .sub { color: var(--ink-soft); font-size: 0.9rem; margin: 0; }
-  .familia-chat {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    max-height: 260px;
-    overflow-y: auto;
-  }
-  .familia-bubble { max-width: 92%; font-size: 0.92rem; line-height: 1.4; }
-  .familia-bubble.q { align-self: flex-end; background: var(--bubble-user); padding: 8px 12px; border-radius: 12px; border-bottom-right-radius: 3px; }
-  .familia-bubble.a { align-self: flex-start; color: var(--ink); }
-  .familia-bubble.thinking { align-self: flex-start; color: var(--ink-soft); font-style: italic; }
-  .familia-input-row { display: flex; gap: 8px; }
-  .familia-input-row input { flex: 1; border: 1px solid #E7DFCC; border-radius: 10px; padding: 10px 12px; font-family: var(--font-body); background: #fff; color: var(--ink); }
-  .familia-input-row button { border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px; padding: 0 16px; font-weight: 700; cursor: pointer; }
-  .familia-input-row button:disabled { opacity: 0.6; cursor: default; }
-
   .aportes {
     width: min(440px, 100%);
     margin: 28px auto 0;
@@ -177,10 +143,6 @@
   .aportes .lista video { max-width: 100%; border-radius: 10px; display: block; }
   .aportes .lista .item { font-size: 0.85rem; color: var(--ink-soft); }
   .aportes .lista .item strong { color: var(--ink); }
-
-  @media (min-width: 700px) {
-    .familia { display: flex; }
-  }
 
   #appContent { display: none; flex-direction: column; align-items: center; }
 

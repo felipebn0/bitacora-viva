@@ -960,30 +960,6 @@ async function loadPendingFamilyNote(userId) {
   return rows[0] || null;
 }
 
-async function buildFullTranscripts(userId, keyword) {
-  await ensureSchema();
-  const rows = await sql`SELECT fecha, intercambios FROM sessions WHERE user_id = ${userId} ORDER BY fecha ASC`;
-  if (!rows.length) return 'No hay charlas guardadas todavía.';
-
-  let blocks = rows.map((s) => {
-    const fecha = new Date(s.fecha).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
-    const lines = (s.intercambios || [])
-      .filter((m) => m.role === 'user' || m.role === 'assistant')
-      .map((m) => (m.role === 'assistant' ? 'Entrevistadora: ' : 'Él contó: ') + m.content);
-    return { fecha, lines };
-  });
-
-  if (keyword && keyword.trim()) {
-    const k = keyword.trim().toLowerCase();
-    const filtered = blocks
-      .map((b) => ({ fecha: b.fecha, lines: b.lines.filter((l) => l.toLowerCase().includes(k)) }))
-      .filter((b) => b.lines.length);
-    if (filtered.length) blocks = filtered; // si no matchea nada, mejor devolver todo que quedarse corto
-  }
-
-  return blocks.map((b) => `--- Charla del ${b.fecha} ---\n${b.lines.join('\n')}`).join('\n\n');
-}
-
 async function updateMemorySummary(userId, newExchanges) {
   try {
     const anterior = await loadMemorySummary(userId);
@@ -2049,89 +2025,6 @@ app.post('/api/save', requireAuth, bloquearColaborador, rateLimit, async (req, r
   } catch (err) {
     console.error(err);
     if (!res.headersSent) res.status(500).json({ error: 'No se pudo guardar la charla.' });
-  }
-});
-
-const FAMILY_SYSTEM_PROMPT_BASE = `Tienes acceso al resumen de charlas donde una persona mayor fue contando la historia de su vida. Tu trabajo es responder preguntas de su familia sobre lo que él contó, basándote únicamente en esa información.
-
-Reglas:
-- Responde en español, cálido pero directo, en 2-4 oraciones.
-- Si la información no está disponible, dilo con claridad: no inventes ni completes con suposiciones.
-- Habla de él en tercera persona ("contó que...", "dijo que...").
-- Si el resumen no tiene el detalle necesario para responder con precisión (una cita exacta, una fecha, algo muy específico), usa la herramienta "buscar_en_transcripciones" para leer las charlas completas antes de responder.`;
-
-const FAMILY_TOOLS = [{
-  name: 'buscar_en_transcripciones',
-  description: 'Devuelve el texto completo y textual de las charlas guardadas, para cuando el resumen no alcanza para responder con precisión.',
-  input_schema: {
-    type: 'object',
-    properties: {
-      palabra_clave: {
-        type: 'string',
-        description: 'Palabra o tema para filtrar las charlas relevantes. Si no estás seguro, dejalo vacío para traer todo.',
-      },
-    },
-  },
-}];
-
-app.post('/api/ask-familia', requireAuth, rateLimit, async (req, res) => {
-  try {
-    const ownerId = await resolveProfileUserId(req);
-    if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
-    // Por ahora los colaboradores solo aportan información, no preguntan
-    // sobre la bitácora — eso queda para más adelante, con accesos especiales.
-    if (ownerId !== req.userId) {
-      return res.status(403).json({ error: 'Por ahora los colaboradores solo pueden aportar información, no consultar la bitácora.' });
-    }
-
-    let question = (req.body.question || '').trim();
-    if (!question) return res.status(400).json({ error: 'Falta la pregunta.' });
-    if (question.length > 1000) question = question.slice(0, 1000);
-
-    await ensureSchema();
-    const memoria = await loadMemorySummary(ownerId);
-    if (!memoria) {
-      const rows = await sql`SELECT id FROM sessions WHERE user_id = ${ownerId} LIMIT 1`;
-      if (!rows.length) {
-        return res.json({
-          answer: 'Todavía no hay charlas guardadas. Cuando presione el botón y cuente algo, vas a poder preguntar sobre eso acá.',
-        });
-      }
-    }
-
-    const system = `${FAMILY_SYSTEM_PROMPT_BASE}\n\nResumen disponible:\n${memoria || '(todavía no hay resumen armado, usa la herramienta para leer las charlas directamente)'}`;
-
-    let messages = [{ role: 'user', content: question }];
-    let response;
-    const MAX_TOOL_ROUNDS = 3;
-
-    for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
-      response = await anthropic.messages.create({
-        model: MODEL,
-        max_tokens: 500,
-        system,
-        tools: FAMILY_TOOLS,
-        messages,
-      });
-
-      if (response.stop_reason !== 'tool_use' || round === MAX_TOOL_ROUNDS) break;
-
-      const toolUse = response.content.find((b) => b.type === 'tool_use');
-      if (!toolUse) break;
-      const toolResultText = await buildFullTranscripts(ownerId, toolUse.input && toolUse.input.palabra_clave);
-
-      messages = [
-        ...messages,
-        { role: 'assistant', content: response.content },
-        { role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: toolResultText }] },
-      ];
-    }
-
-    const textBlock = response.content.find((b) => b.type === 'text');
-    res.json({ answer: textBlock ? textBlock.text.trim() : 'No se pudo responder.' });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'No se pudo responder la pregunta.' });
   }
 });
 
