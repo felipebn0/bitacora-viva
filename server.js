@@ -1872,9 +1872,11 @@ app.put('/api/tree/person/:id', requireAuth, bloquearColaborador, rateLimit, asy
     const id = parseInt(req.params.id, 10);
     if (!id) return res.status(400).json({ error: 'Falta el id.' });
 
-    const rows = await sql`SELECT nombre FROM family_members WHERE id = ${id} AND user_id = ${req.userId}`;
+    const rows = await sql`SELECT nombre, relacion, padres FROM family_members WHERE id = ${id} AND user_id = ${req.userId}`;
     if (!rows.length) return res.status(404).json({ error: 'No se encontró esa persona.' });
     const nombreAnterior = rows[0].nombre;
+    const relacionAnterior = rows[0].relacion;
+    const padresAnterior = parseJsonArray(rows[0].padres);
 
     let { nombre, relacion, padres } = req.body || {};
     const cleanNombre = capitalizarNombre(String(nombre || '').trim().slice(0, 120));
@@ -1891,6 +1893,19 @@ app.put('/api/tree/person/:id', requireAuth, bloquearColaborador, rateLimit, asy
         .map((n) => capitalizarNombre(String(n || '').trim()))
         .filter(Boolean)
         .slice(0, 2);
+    }
+
+    // "Nada de historial editado a escondidas": antes de pisar el nombre,
+    // el parentesco o los padres, guardamos cómo estaba — igual que ya se
+    // hace con las historias editadas. Solo si de verdad cambió algo (no
+    // tiene sentido guardar una "versión anterior" idéntica a la nueva).
+    const huboCambioDePadres = padresUpdate !== undefined
+      && JSON.stringify(padresUpdate) !== JSON.stringify(padresAnterior);
+    const huboCambio = cleanNombre !== nombreAnterior || cleanRelacion !== relacionAnterior || huboCambioDePadres;
+    if (huboCambio) {
+      const estadoAnterior = JSON.stringify({ nombre: nombreAnterior, relacion: relacionAnterior, padres: padresAnterior });
+      await sql`INSERT INTO historia_versiones (tabla, registro_id, texto_anterior, editado_por)
+                VALUES ('family_members', ${id}, ${estadoAnterior}, ${req.userId})`;
     }
 
     if (padresUpdate !== undefined) {
