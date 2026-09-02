@@ -34,6 +34,33 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
+// Defensa contra CSRF: en un pedido que cambia estado (POST/PUT/PATCH/
+// DELETE), un navegador real siempre manda el header Origin (o, si no,
+// Referer) con el origen de la página que hizo el pedido — y una página de
+// otro sitio no puede falsificarlo. Si ese origen no coincide con el host
+// que recibió el pedido, no vino de nuestro propio frontend: es justo el
+// patrón de un sitio de terceros aprovechando la cookie de sesión de la
+// víctima para hacer pedidos en su nombre sin que se dé cuenta.
+const METODOS_MUTANTES = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+function origenPermitido(req) {
+  const header = req.headers.origin || req.headers.referer;
+  if (!header) return false;
+  try {
+    return new URL(header).host === req.headers.host;
+  } catch (e) {
+    return false;
+  }
+}
+
+app.use('/api', (req, res, next) => {
+  if (!METODOS_MUTANTES.has(req.method)) return next();
+  if (!origenPermitido(req)) {
+    return res.status(403).json({ error: 'Solicitud rechazada: no se pudo verificar el origen.' });
+  }
+  next();
+});
+
 // Limitador simple por IP: evita que alguien con el link gaste crédito de
 // Claude/ElevenLabs a lo loco (además del login, esto frena intentos de
 // adivinar contraseñas).
