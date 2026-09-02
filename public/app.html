@@ -408,6 +408,7 @@
         <p class="sub" style="max-width: 340px; margin: 0 auto 8px;">Comparte este código con familiares — crean su propia cuenta y pueden aportar historias, sin ver ni tocar tus charlas.</p>
         <p style="font-family: var(--font-display); font-size: 1.4rem; font-weight: 700; letter-spacing: 0.1em; margin: 0 0 4px;" id="inviteCode">…</p>
         <button class="write-toggle" id="inviteCopyBtn" type="button">copiar código</button>
+        <button class="write-toggle" id="inviteRegenBtn" type="button">generar código nuevo</button>
       </div>
     </div>
   </div>
@@ -598,6 +599,21 @@
       inviteCopyBtn.textContent = 'copiado ✓';
       setTimeout(() => { inviteCopyBtn.textContent = 'copiar código'; }, 1800);
     } catch (e) {}
+  });
+
+  const inviteRegenBtn = document.getElementById('inviteRegenBtn');
+  inviteRegenBtn.addEventListener('click', async () => {
+    if (!confirm('¿Generar un código nuevo? El código actual deja de funcionar — los familiares que ya se unieron no se ven afectados, pero si compartiste este código con alguien que todavía no entró, va a necesitar el nuevo.')) return;
+    inviteRegenBtn.disabled = true;
+    try {
+      const resp = await fetch('/api/invite-code/regenerate', { method: 'POST' });
+      const data = await resp.json();
+      inviteCode.textContent = resp.ok ? data.code : 'No se pudo generar el código.';
+    } catch (e) {
+      inviteCode.textContent = 'No se pudo generar el código.';
+    } finally {
+      inviteRegenBtn.disabled = false;
+    }
   });
 
   const joinCollabBtn = document.getElementById('joinCollabBtn');

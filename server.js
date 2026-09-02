@@ -666,10 +666,31 @@ async function verificarArchivoReal(buffer, mimesPermitidos) {
   }
 }
 
+// Antes usaba Math.random() (no pensado para nada de seguridad, es
+// predecible) y 6 caracteres (31^6 ≈ 887 millones de combinaciones). Ahora
+// usa crypto.randomInt() (aleatoriedad criptográfica) y 8 caracteres
+// (31^8 ≈ 852 mil millones), para que adivinar un código ajeno por fuerza
+// bruta deje de ser viable — este código es la única puerta de entrada a
+// la bitácora privada de una familia.
 function randomInviteCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sin 0/O ni 1/I/L, se confunden al leer
   let code = '';
-  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < 8; i++) code += chars[crypto.randomInt(chars.length)];
+  return code;
+}
+
+async function asignarNuevoInviteCode(userId) {
+  let code;
+  for (let intento = 0; intento < 5; intento++) {
+    code = randomInviteCode();
+    try {
+      await sql`UPDATE users SET invite_code = ${code} WHERE id = ${userId}`;
+      return code;
+    } catch (err) {
+      if (err && err.code === '23505' && intento < 4) continue; // colisión rarísima: reintentar
+      throw err;
+    }
+  }
   return code;
 }
 
@@ -681,17 +702,26 @@ app.get('/api/invite-code', requireAuth, async (req, res) => {
     await ensureSchema();
     const rows = await sql`SELECT invite_code FROM users WHERE id = ${req.userId}`;
     if (rows[0] && rows[0].invite_code) return res.json({ code: rows[0].invite_code });
-    let code;
-    for (let intento = 0; intento < 5; intento++) {
-      code = randomInviteCode();
-      try {
-        await sql`UPDATE users SET invite_code = ${code} WHERE id = ${req.userId}`;
-        break;
-      } catch (err) {
-        if (err && err.code === '23505' && intento < 4) continue; // colisión rarísima: reintentar
-        throw err;
-      }
+    const code = await asignarNuevoInviteCode(req.userId);
+    res.json({ code });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo generar el código.' });
+  }
+});
+
+// Genera un código nuevo y descarta el anterior — para cuando alguien
+// comparte el código de más (una captura de pantalla, un chat grupal) y
+// quiere cerrar esa puerta sin afectar a los familiares que ya se unieron
+// (las colaboraciones ya aceptadas quedan en la tabla collaborations, no
+// dependen del código en sí).
+app.post('/api/invite-code/regenerate', requireAuth, rateLimit, async (req, res) => {
+  try {
+    if (req.isCollaborator) {
+      return res.status(403).json({ error: 'Las cuentas colaboradoras no tienen código propio.' });
     }
+    await ensureSchema();
+    const code = await asignarNuevoInviteCode(req.userId);
     res.json({ code });
   } catch (err) {
     console.error(err);
