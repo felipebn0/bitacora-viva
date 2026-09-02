@@ -24,6 +24,16 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Las respuestas de /api/ pueden traer datos privados (historias, datos de
+// sesión, árbol familiar) — se marcan como no cacheables para que no queden
+// guardadas en el navegador ni en un proxy/CDN intermedio (por ejemplo, si
+// alguien comparte una computadora, o si un proxy corporativo cachea GETs
+// "por las dudas").
+app.use('/api', (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+});
+
 // Limitador simple por IP: evita que alguien con el link gaste crédito de
 // Claude/ElevenLabs a lo loco (además del login, esto frena intentos de
 // adivinar contraseñas).
@@ -380,7 +390,22 @@ if (!SESSION_SECRET) {
   throw new Error('SESSION_SECRET no está definida — configurala en las variables de entorno antes de arrancar la app.');
 }
 const SESSION_COOKIE = 'bv_session';
-const SESSION_MAX_AGE = 60 * 60 * 24 * 365; // 1 año, para no tener que loguearse siempre en el dispositivo físico
+// Antes eran 365 días — una cookie robada (o un dispositivo compartido/
+// perdido) quedaba utilizable durante un año entero. 30 días sigue siendo
+// cómodo para no tener que loguearse todo el tiempo, pero acota la ventana
+// de exposición si una sesión se compromete.
+const SESSION_MAX_AGE = 60 * 60 * 24 * 30; // 30 días
+
+// En Vercel (producción y preview) el tráfico siempre llega por HTTPS, pero
+// la cookie Secure dependía de req.secure — que a su vez depende de que el
+// proxy mande bien el header X-Forwarded-Proto. Si ese header faltara o
+// viniera mal por algún motivo, la cookie se emitía sin Secure y quedaría
+// viajando también por HTTP. process.env.VERCEL lo pone la propia
+// plataforma (no lo controla el request), así que sirve como señal
+// independiente de que estamos en un entorno que siempre es HTTPS.
+function cookieEsSegura(req) {
+  return !!(req.secure || process.env.VERCEL);
+}
 
 function signSession(payload) {
   // iat (issued-at, en ms) queda adentro del propio token firmado — así la
@@ -430,12 +455,12 @@ function parseCookies(header) {
 
 function setSessionCookie(req, res, payload) {
   const token = signSession(payload);
-  const secure = req.secure ? '; Secure' : '';
+  const secure = cookieEsSegura(req) ? '; Secure' : '';
   res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${token}; Max-Age=${SESSION_MAX_AGE}; Path=/; HttpOnly; SameSite=Lax${secure}`);
 }
 
 function clearSessionCookie(req, res) {
-  const secure = req.secure ? '; Secure' : '';
+  const secure = cookieEsSegura(req) ? '; Secure' : '';
   res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax${secure}`);
 }
 
