@@ -428,17 +428,18 @@ app.get('/api/me', async (req, res) => {
   if (!session) return res.status(401).json({ error: 'No autenticado.' });
   try {
     await ensureSchema();
-    const rows = await sql`SELECT owner_user_id FROM users WHERE id = ${session.userId}`;
+    const rows = await sql`SELECT name, owner_user_id FROM users WHERE id = ${session.userId}`;
+    const name = capitalizarNombre((rows[0] && rows[0].name) || '') || null;
     const ownerUserId = rows[0] && rows[0].owner_user_id;
     let ownerName = null;
     if (ownerUserId) {
       const ownerRows = await sql`SELECT name, username FROM users WHERE id = ${ownerUserId}`;
       ownerName = capitalizarNombre((ownerRows[0] && (ownerRows[0].name || ownerRows[0].username)) || '') || null;
     }
-    res.json({ username: session.username, isCollaborator: !!ownerUserId, ownerName });
+    res.json({ username: session.username, name, isCollaborator: !!ownerUserId, ownerName });
   } catch (err) {
     console.error(err);
-    res.json({ username: session.username, isCollaborator: false, ownerName: null });
+    res.json({ username: session.username, name: null, isCollaborator: false, ownerName: null });
   }
 });
 
@@ -920,6 +921,28 @@ app.post('/api/delete-account', requireAuth, rateLimit, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo borrar la cuenta.' });
+  }
+});
+
+// Cambiar la clave sin borrar nada — pide la clave actual como confirmación.
+app.post('/api/change-password', requireAuth, rateLimit, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Faltan la clave actual y la nueva.' });
+    if (String(newPassword).length < 4) return res.status(400).json({ error: 'La clave nueva debe tener al menos 4 caracteres.' });
+
+    await ensureSchema();
+    const rows = await sql`SELECT password_hash FROM users WHERE id = ${req.userId}`;
+    if (!rows.length) return res.status(404).json({ error: 'No se encontró la cuenta.' });
+    const ok = await bcrypt.compare(currentPassword, rows[0].password_hash);
+    if (!ok) return res.status(401).json({ error: 'La clave actual no es correcta.' });
+
+    const hash = await bcrypt.hash(String(newPassword), 10);
+    await sql`UPDATE users SET password_hash = ${hash} WHERE id = ${req.userId}`;
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo cambiar la clave.' });
   }
 });
 
