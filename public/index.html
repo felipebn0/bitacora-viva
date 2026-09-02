@@ -17,9 +17,9 @@
       --paper:#FBF6EA;
       --paper-2:#FFFDF7;
       --ink:#2B241C;
-      --ink-soft:#7D705C;
-      --gold:#C98A3C;
-      --gold-deep:#A86A26;
+      --ink-soft:#706551;
+      --gold:#93622A;
+      --gold-deep:#8F5A20;
       --moss:#5B6B45;
       --moss-deep:#3F4D31;
       --line:#E5DBC6;
@@ -624,6 +624,13 @@
 
     tabNueva.addEventListener('click', () => setSignupMode(false));
     tabColaborar.addEventListener('click', () => setSignupMode(true));
+
+    // Si se llega con ?modo=colaborar (ej. desde el link "Crea una" en la
+    // pantalla de login de colaborar.html), arrancamos directo en la
+    // pestaña de "unirme con un código" en vez de la de crear bitácora.
+    if (new URLSearchParams(window.location.search).get('modo') === 'colaborar') {
+      setSignupMode(true);
+    }
 
     signupForm.addEventListener('submit', async (event) => {
       event.preventDefault();

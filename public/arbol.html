@@ -14,8 +14,8 @@
   :root {
     --bg: #F5EFE2;
     --ink: #2B241C;
-    --ink-soft: #8A7C63;
-    --gold-deep: #A86A26;
+    --ink-soft: #706551;
+    --gold-deep: #8F5A20;
     --moss: #5B6B45;
     --bubble-user: #EFE6D1;
     --font-display: "Source Serif 4", Georgia, serif;
@@ -44,10 +44,18 @@
   a.volver { color: var(--gold-deep); font-size: 0.9rem; text-decoration: none; border-bottom: 1px solid var(--gold-deep); position: absolute; right: 0; top: 0; }
   .rebuild-btn {
     position: absolute; right: 0; top: 26px;
-    background: none; border: none; color: var(--ink-soft); font-size: 0.82rem;
+    background: none; border: none; color: var(--ink-soft); font-size: 0.875rem;
     text-decoration: underline; cursor: pointer; font-family: var(--font-body); padding: 0;
   }
   .rebuild-btn:disabled { opacity: 0.6; cursor: default; }
+  /* En pantallas angostas el subtítulo puede pasar a dos líneas — con
+     "volver" y "reconstruir" siempre en la esquina (position:absolute,
+     apenas 26px de separación) terminaban superpuestos o muy pegados. Acá
+     vuelven al flujo normal, como una fila propia debajo del subtítulo. */
+  @media (max-width: 560px) {
+    a.volver, .rebuild-btn { position: static; }
+    header { justify-content: center; gap: 6px 22px; }
+  }
 
   .wrap { max-width: 1400px; margin: 0 auto; overflow-x: auto; padding-bottom: 12px; position: relative; z-index: 1; }
   .empty, .msg { color: var(--ink-soft); font-style: italic; text-align: center; margin-top: 60px; }
@@ -65,6 +73,12 @@
     opacity: 0; transition: opacity .15s; padding: 0;
   }
   .tree-node:hover .edit-btn, .tree-node:focus-within .edit-btn { opacity: 1; }
+  /* En pantallas táctiles no existe ":hover" — sin esto, el botón de editar
+     quedaba invisible siempre, sin ninguna pista de que se puede corregir
+     un nombre o parentesco mal escrito. */
+  @media (hover: none), (pointer: coarse) {
+    .tree-node .edit-btn { opacity: 1; }
+  }
   .avatar {
     width: 68px; height: 68px; border-radius: 50%;
     background: var(--bubble-user);
@@ -75,7 +89,7 @@
   }
   .tree-node.principal .avatar { background: var(--gold-deep); border-color: var(--gold-deep); color: #FBF6EA; }
   .tree-node strong { display: block; color: var(--ink); font-size: 0.9rem; line-height: 1.2; }
-  .tree-node span { display: block; color: var(--ink-soft); font-size: 0.75rem; }
+  .tree-node span { display: block; color: var(--ink-soft); font-size: 0.875rem; }
 
   .colab-section { max-width: 1000px; margin: 56px auto 0; position: relative; z-index: 1; }
   .colab-section h2 { font-family: var(--font-display); font-size: 1.3rem; text-align: center; margin: 0 0 4px; }
@@ -419,6 +433,7 @@
         editBtn.className = 'edit-btn';
         editBtn.type = 'button';
         editBtn.title = 'Corregir nombre o parentesco';
+        editBtn.setAttribute('aria-label', 'Corregir nombre o parentesco de ' + p.nombre);
         editBtn.textContent = '✏️';
         node.appendChild(editBtn);
         editBtn.addEventListener('click', (e) => {
@@ -674,7 +689,13 @@
       // demasiado (letra ilegible), preferimos dejar el scroll.
       const disponibleAncho = wrap.clientWidth;
       const naturalAncho = graphic.scrollWidth;
-      const MIN_ESCALA = 0.45;
+      // 0.45 dejaba el nombre (14.4px) y el parentesco (12px) en ~6.5px/~5.4px
+      // para familias grandes en el celular — bien por debajo de cualquier
+      // piso legible. Con 0.75 el achicado sigue ayudando a que entre más
+      // árbol sin scroll, pero el texto nunca baja de ~10.8px/9px — y si
+      // igual no entra completo, ".wrap" ya tiene overflow-x:auto para que
+      // se pueda desplazar en vez de forzar una letra ilegible.
+      const MIN_ESCALA = 0.75;
       if (naturalAncho > disponibleAncho) {
         const escala = Math.max(MIN_ESCALA, disponibleAncho / naturalAncho);
         graphic.style.transform = `scale(${escala})`;

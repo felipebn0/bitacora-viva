@@ -14,9 +14,9 @@
   :root {
     --bg: #F5EFE2;
     --ink: #2B241C;
-    --ink-soft: #8A7C63;
-    --gold: #C98A3C;
-    --gold-deep: #A86A26;
+    --ink-soft: #706551;
+    --gold: #93622A;
+    --gold-deep: #8F5A20;
     --moss: #5B6B45;
     --bubble-user: #EFE6D1;
     --ring: rgba(201, 138, 60, 0.35);
@@ -37,7 +37,12 @@
     padding: 24px;
   }
   @media (prefers-reduced-motion: reduce) {
-    * { animation-duration: 0.001ms !important; }
+    /* El selector "*" solo no alcanza a la animación del ::before del
+       orbe (los pseudo-elementos no quedan incluidos en "*" a secas) —
+       encontrado al probar el mismo arreglo en colaborar.html: la
+       animación de "respirar" seguía a toda velocidad con "reducir
+       movimiento" activado a pesar de esta regla. */
+    *, *::before, *::after { animation-duration: 0.001ms !important; }
   }
   .device {
     width: min(440px, 100%);
@@ -93,10 +98,10 @@
     border: 2px solid var(--ring); animation: breathe 3.2s ease-in-out infinite;
   }
   @keyframes breathe { 0%,100% { transform: scale(1); opacity: .6; } 50% { transform: scale(1.08); opacity: .15; } }
-  .orb[data-state="listening"] { background: radial-gradient(circle at 35% 30%, #D9A15C, var(--gold-deep)); }
+  .orb[data-state="listening"] { background: radial-gradient(circle at 35% 30%, #9A6524, var(--gold-deep)); }
   .orb[data-state="listening"]::before { animation-duration: 1.4s; }
-  .orb[data-state="speaking"], .orb[data-state="thinking"] { background: radial-gradient(circle at 35% 30%, #6E7F53, var(--moss)); }
-  .orb[data-state="paused"] { background: radial-gradient(circle at 35% 30%, #B5A98C, #8A7C63); }
+  .orb[data-state="speaking"], .orb[data-state="thinking"] { background: radial-gradient(circle at 35% 30%, #67774D, var(--moss)); }
+  .orb[data-state="paused"] { background: radial-gradient(circle at 35% 30%, #7D7050, #706551); }
   .orb[data-state="paused"]::before { animation: none; opacity: 0.3; }
   .state-label { font-size: 0.9rem; color: var(--ink-soft); min-height: 1.3em; }
   .write-toggle { background: none; border: none; color: var(--moss); text-decoration: underline; cursor: pointer; font-family: var(--font-body); }
@@ -106,40 +111,6 @@
   .write-row input, .write-row select { flex: 1; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 12px; font-family: var(--font-body); background: #fff; color: var(--ink); }
   .write-row button { border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px; padding: 0 14px; font-weight: 700; cursor: pointer; }
   .error { color: #a33; font-size: 0.85rem; }
-
-  .familia {
-    display: none; /* oculto en mobile por ahora; vuelve a aparecer en pantallas grandes */
-    width: min(440px, 100%);
-    margin: 28px auto 0;
-    background: #FBF6EA;
-    border: 1px solid #E7DFCC;
-    border-radius: 20px;
-    padding: 22px 24px;
-    flex-direction: column;
-    gap: 12px;
-  }
-  .familia h2 {
-    font-family: var(--font-display);
-    font-size: 1.1rem;
-    margin: 0;
-    font-weight: 600;
-  }
-  .familia .sub { color: var(--ink-soft); font-size: 0.9rem; margin: 0; }
-  .familia-chat {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    max-height: 260px;
-    overflow-y: auto;
-  }
-  .familia-bubble { max-width: 92%; font-size: 0.92rem; line-height: 1.4; }
-  .familia-bubble.q { align-self: flex-end; background: var(--bubble-user); padding: 8px 12px; border-radius: 12px; border-bottom-right-radius: 3px; }
-  .familia-bubble.a { align-self: flex-start; color: var(--ink); }
-  .familia-bubble.thinking { align-self: flex-start; color: var(--ink-soft); font-style: italic; }
-  .familia-input-row { display: flex; gap: 8px; }
-  .familia-input-row input { flex: 1; border: 1px solid #E7DFCC; border-radius: 10px; padding: 10px 12px; font-family: var(--font-body); background: #fff; color: var(--ink); }
-  .familia-input-row button { border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px; padding: 0 16px; font-weight: 700; cursor: pointer; }
-  .familia-input-row button:disabled { opacity: 0.6; cursor: default; }
 
   .aportes {
     width: min(440px, 100%);
@@ -172,10 +143,6 @@
   .aportes .lista video { max-width: 100%; border-radius: 10px; display: block; }
   .aportes .lista .item { font-size: 0.85rem; color: var(--ink-soft); }
   .aportes .lista .item strong { color: var(--ink); }
-
-  @media (min-width: 700px) {
-    .familia { display: flex; }
-  }
 
   #appContent { display: none; flex-direction: column; align-items: center; }
 
@@ -247,6 +214,7 @@
   .user-menu-panel .um-btn:disabled { opacity: 0.6; cursor: default; }
   .user-menu-panel .um-btn.um-danger { background: #a33; }
   .user-menu-panel .um-btn.um-plain { background: none; color: var(--ink-soft); text-decoration: underline; padding: 6px 0; }
+  .user-menu-panel .um-btn.um-warn { color: #a33; font-weight: 700; }
   .user-menu-panel .um-msg { font-size: 0.8rem; min-height: 1.1em; margin: 6px 0 0; color: var(--moss); }
   .user-menu-panel .um-msg.um-error { color: #a33; }
 
@@ -331,14 +299,18 @@
   .login .error { min-height: 1.2em; text-align: center; }
 
   .logout-row { text-align: center; margin-top: 20px; }
+  /* "Borrar mi cuenta" es la única acción irreversible acá — antes se veía
+     como un link subrayado más, del mismo tamaño que "invitar familiares"
+     o "cerrar sesión", con el rojo como única pista de que es distinta. */
+  .danger-zone { margin-top: 18px; padding-top: 14px; border-top: 1px solid #E7DFCC; }
 </style>
 </head>
 <body>
   <div class="login" id="loginScreen">
     <h1>Los recuerdos de mis viejos</h1>
     <p class="sub">Inicia sesión para entrar a tu bitácora.</p>
-    <input type="text" id="loginUser" placeholder="Correo o usuario" autocomplete="username">
-    <input type="password" id="loginPass" placeholder="Clave" autocomplete="current-password">
+    <input type="text" id="loginUser" placeholder="Correo o usuario" autocomplete="username" aria-label="Correo o usuario">
+    <input type="password" id="loginPass" placeholder="Clave" autocomplete="current-password" aria-label="Clave">
     <button id="loginBtn" type="button">Entrar</button>
     <p class="error" id="loginError"></p>
     <p class="sub" style="margin-top:2px;">¿No tienes cuenta? <a href="/" style="color:var(--gold-deep);">Crea una</a>.</p>
@@ -354,15 +326,15 @@
          <p class="um-name" id="umName"></p>
          <p class="um-username" id="umUsername"></p>
          <p class="um-section-title">Cambiar clave</p>
-         <input type="password" id="umCurrentPassword" placeholder="Clave actual" autocomplete="current-password">
-         <input type="password" id="umNewPassword" placeholder="Clave nueva" autocomplete="new-password">
+         <input type="password" id="umCurrentPassword" placeholder="Clave actual" autocomplete="current-password" aria-label="Clave actual">
+         <input type="password" id="umNewPassword" placeholder="Clave nueva" autocomplete="new-password" aria-label="Clave nueva">
          <button class="um-btn" id="umChangePasswordBtn" type="button">Cambiar clave</button>
          <p class="um-msg" id="umPasswordMsg"></p>
          <hr>
          <button class="um-btn um-plain" id="umLogoutBtn" type="button">Cerrar sesión</button>
-         <button class="um-btn um-plain" id="umDeleteToggle" type="button">Borrar mi cuenta permanentemente</button>
+         <button class="um-btn um-plain um-warn" id="umDeleteToggle" type="button">⚠️ Borrar mi cuenta permanentemente</button>
          <div id="umDeleteRow" style="display:none; margin-top:8px;">
-           <input type="password" id="umDeletePassword" placeholder="Confirma tu clave" autocomplete="current-password">
+           <input type="password" id="umDeletePassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para borrar la cuenta">
            <button class="um-btn um-danger" id="umDeleteConfirm" type="button">Borrar cuenta</button>
            <p class="um-msg um-error" id="umDeleteError"></p>
          </div>
@@ -380,7 +352,7 @@
    <div class="join-collab-panel" id="joinCollabPanel" style="display:none;">
      <p class="sub">Quiero colaborar con otra historia — ingresa el código que te compartieron.</p>
      <div class="join-collab-row">
-       <input type="text" id="joinCollabCode" placeholder="Ej: AB12CD" maxlength="6">
+       <input type="text" id="joinCollabCode" placeholder="Ej: AB12CD" maxlength="6" aria-label="Código de invitación">
        <button id="joinCollabSubmit" type="button">Entrar</button>
      </div>
      <p class="msg" id="joinCollabMsg"></p>
@@ -1222,7 +1194,7 @@
   const BUTTON_KEY = 'Enter';
   document.addEventListener('keydown', (e) => {
     const tag = (e.target && e.target.tagName) || '';
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return; // no pisar el Enter de los cuadros de texto
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON') return; // no pisar el Enter de los cuadros de texto ni de un botón con foco
     if (e.key === BUTTON_KEY) {
       e.preventDefault();
       handleOrbPress();
