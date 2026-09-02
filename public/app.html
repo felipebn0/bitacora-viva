@@ -699,6 +699,12 @@
   let mediaStream = null;
   let mediaRecorder = null;
   let audioChunks = [];
+  // Se guarda el motivo real del fallo (ver startRecordingAudio) para poder
+  // avisar algo más útil que "no pude usar el micrófono" cuando el problema
+  // es que el permiso quedó bloqueado — que es el caso más común y el único
+  // que la persona puede arreglar por su cuenta, yendo a los Ajustes del
+  // teléfono (a diferencia de, por ejemplo, no tener micrófono).
+  let lastMicErrorName = null;
 
   // Respaldo gratis: si el servidor no puede transcribir (por ejemplo, sin
   // crédito de ElevenLabs), usamos el reconocimiento de voz del navegador
@@ -747,9 +753,30 @@
       }
       mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
       mediaRecorder.start();
+      lastMicErrorName = null;
     } catch (e) {
       mediaRecorder = null; // sin permiso de mic aparte: seguimos solo con el texto
+      lastMicErrorName = (e && e.name) || 'Error';
     }
+  }
+
+  // NotAllowedError es, por lejos, el motivo más común de que esto falle en
+  // iPhone: una vez que el permiso de micrófono queda bloqueado para el
+  // sitio (o para Safari/Chrome enteros, desde Ajustes de iOS), el navegador
+  // rechaza getUserMedia sin volver a preguntar — y sin este mensaje
+  // específico, la persona no tiene forma de saber que el arreglo está en
+  // los Ajustes del teléfono, no en la app.
+  function mensajeErrorMicrofono() {
+    if (lastMicErrorName === 'NotAllowedError' || lastMicErrorName === 'PermissionDeniedError' || lastMicErrorName === 'SecurityError') {
+      return 'El micrófono está bloqueado para esta página — revisa el permiso en los Ajustes del teléfono. Mientras tanto, escribe tu respuesta.';
+    }
+    if (lastMicErrorName === 'NotFoundError' || lastMicErrorName === 'DevicesNotFoundError') {
+      return 'No se encontró un micrófono en este dispositivo — escribe tu respuesta.';
+    }
+    if (lastMicErrorName === 'NotReadableError' || lastMicErrorName === 'TrackStartError') {
+      return 'Otra app está usando el micrófono ahora mismo — escribe tu respuesta.';
+    }
+    return 'No pude usar el micrófono — escribe tu respuesta.';
   }
 
   function stopRecordingAudio() {
@@ -1164,7 +1191,7 @@
     await startRecordingAudio();
     if (!mediaStream || !mediaRecorder) {
       // no dio permiso de micrófono o falló: no nos quedamos trabados "escuchando" para siempre
-      stateLabel.textContent = 'No pude usar el micrófono — escribí tu respuesta.';
+      stateLabel.textContent = mensajeErrorMicrofono();
       writeRow.classList.add('visible');
       writeInput.focus();
       return;
