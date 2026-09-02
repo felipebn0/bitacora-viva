@@ -531,6 +531,62 @@ function extensionForAudio(contentType) {
   return sub || 'webm';
 }
 
+// --- Verificación real del contenido de archivos subidos ---
+// Antes, los audios/fotos/videos que suben los colaboradores (o el dueño)
+// se guardaban en Vercel Blob (público) con el Content-Type que el propio
+// navegador de quien sube dice que es — sin mirar el archivo en sí. Eso
+// significa que alguien podría subir cualquier cosa (por ejemplo una
+// página HTML) diciendo "esto es un audio/webm", y Blob la terminaría
+// sirviendo tal cual, de forma pública, con ese tipo declarado. Acá se usa
+// "file-type" para mirar los primeros bytes del archivo de verdad y
+// confirmar que sea realmente del tipo que se espera antes de guardarlo.
+//
+// "file-type" es un paquete moderno solo-ESM — como este archivo es
+// CommonJS, se carga con import() dinámico (funciona igual desde código
+// CommonJS, Node lo permite) y se cachea la primera vez.
+let fileTypeModulePromise = null;
+function cargarFileType() {
+  if (!fileTypeModulePromise) fileTypeModulePromise = import('file-type');
+  return fileTypeModulePromise;
+}
+
+// Un audio grabado por el navegador (MediaRecorder) es un .webm válido,
+// pero como no tiene pista de video, la firma de bytes del contenedor es
+// indistinguible de un .webm de video — mismo caso con .3gp. Por eso acá
+// se aceptan ambos "lados" del contenedor para esos formatos; no es una
+// falla de la validación, es una ambigüedad real del formato.
+const AUDIO_MIME_PERMITIDOS = new Set([
+  'audio/webm', 'video/webm',
+  'audio/mpeg', 'audio/mp3',
+  'audio/wav', 'audio/x-wav', 'audio/wave',
+  'audio/ogg', 'audio/x-m4a', 'audio/mp4', 'audio/m4a',
+  'audio/aac', 'audio/flac', 'audio/amr',
+  'audio/3gpp', 'audio/3gpp2', 'video/3gpp', 'video/3gpp2',
+]);
+
+const MEDIA_MIME_PERMITIDOS = new Set([
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif', 'image/bmp', 'image/tiff',
+  'video/mp4', 'video/webm', 'video/quicktime', 'video/3gpp', 'video/3gpp2', 'video/x-msvideo', 'video/x-matroska',
+]);
+
+// Devuelve { mime, ext } reales (según los bytes) si el archivo es
+// realmente de alguno de los tipos permitidos, o null si no se reconoce o
+// no es de la categoría esperada — para usar SIEMPRE el mime/extensión de
+// verdad al guardarlo, nunca lo que haya dicho el navegador.
+async function verificarArchivoReal(buffer, mimesPermitidos) {
+  try {
+    const { fileTypeFromBuffer } = await cargarFileType();
+    const detectado = await fileTypeFromBuffer(buffer);
+    if (!detectado) return null;
+    const mimeBase = detectado.mime.split(';')[0].trim().toLowerCase();
+    if (!mimesPermitidos.has(mimeBase)) return null;
+    return { mime: mimeBase, ext: detectado.ext };
+  } catch (err) {
+    console.error('No se pudo verificar el contenido real del archivo:', err);
+    return null;
+  }
+}
+
 function randomInviteCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sin 0/O ni 1/I/L, se confunden al leer
   let code = '';
@@ -1359,11 +1415,11 @@ app.post('/api/save-audio', requireAuth, bloquearColaborador, rateLimit, express
     if (!safeSession || !safeRole || !safeIndex) {
       return res.status(400).json({ error: 'Datos inválidos.' });
     }
-    const contentType = req.get('Content-Type') || 'audio/webm';
-    const ext = contentType.includes('mpeg') ? 'mp3' : 'webm';
-    const filename = `audio/${req.userId}/${safeSession}/${safeRole}-${safeIndex}.${ext}`;
+    const real = await verificarArchivoReal(req.body, AUDIO_MIME_PERMITIDOS);
+    if (!real) return res.status(400).json({ error: 'El archivo no parece ser un audio válido.' });
+    const filename = `audio/${req.userId}/${safeSession}/${safeRole}-${safeIndex}.${real.ext}`;
 
-    const blob = await put(filename, req.body, { access: 'public', contentType, addRandomSuffix: true });
+    const blob = await put(filename, req.body, { access: 'public', contentType: real.mime, addRandomSuffix: true });
     res.json({ ok: true, file: blob.url });
   } catch (err) {
     console.error(err);
@@ -1401,9 +1457,10 @@ app.post('/api/contribute-audio', requireAuth, rateLimit, express.raw({ type: '*
     const ownerId = await resolveProfileUserId(req);
     if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
     if (!req.body || !req.body.length) return res.status(400).json({ error: 'Falta el audio.' });
-    const contentType = req.get('Content-Type') || 'audio/webm';
-    const filename = `audio/aportes/${ownerId}/${Date.now()}.${extensionForAudio(contentType)}`;
-    const blob = await put(filename, req.body, { access: 'public', contentType, addRandomSuffix: true });
+    const real = await verificarArchivoReal(req.body, AUDIO_MIME_PERMITIDOS);
+    if (!real) return res.status(400).json({ error: 'El archivo no parece ser un audio válido.' });
+    const filename = `audio/aportes/${ownerId}/${Date.now()}.${real.ext}`;
+    const blob = await put(filename, req.body, { access: 'public', contentType: real.mime, addRandomSuffix: true });
     res.json({ ok: true, url: blob.url });
   } catch (err) {
     console.error(err);
@@ -1571,15 +1628,15 @@ app.post('/api/contribute-media', requireAuth, rateLimit, express.raw({ type: '*
     if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
     if (!req.body || !req.body.length) return res.status(400).json({ error: 'Falta el archivo.' });
     const { contributor, caption } = req.query;
-    const contentType = req.get('Content-Type') || 'application/octet-stream';
-    const type = contentType.startsWith('video') ? 'video' : 'foto';
+    const real = await verificarArchivoReal(req.body, MEDIA_MIME_PERMITIDOS);
+    if (!real) return res.status(400).json({ error: 'El archivo no parece ser una foto o un video válido.' });
+    const type = real.mime.startsWith('video/') ? 'video' : 'foto';
     const cleanContributor = capitalizarNombre(String(contributor || '').trim().slice(0, 60)) || null;
     const cleanCaption = String(caption || '').trim().slice(0, 500) || null;
-    const ext = (contentType.split('/')[1] || 'bin').replace(/[^a-z0-9]/gi, '').slice(0, 10) || 'bin';
 
-    const blob = await put(`media/${ownerId}/${type}-${Date.now()}.${ext}`, req.body, {
+    const blob = await put(`media/${ownerId}/${type}-${Date.now()}.${real.ext}`, req.body, {
       access: 'public',
-      contentType,
+      contentType: real.mime,
       addRandomSuffix: true,
     });
 
