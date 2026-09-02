@@ -705,6 +705,7 @@
   // que la persona puede arreglar por su cuenta, yendo a los Ajustes del
   // teléfono (a diferencia de, por ejemplo, no tener micrófono).
   let lastMicErrorName = null;
+  let lastMicErrorDetail = null; // DEBUG TEMPORAL — sacar cuando se resuelva el caso de Diego en iOS
 
   // Respaldo gratis: si el servidor no puede transcribir (por ejemplo, sin
   // crédito de ElevenLabs), usamos el reconocimiento de voz del navegador
@@ -754,9 +755,11 @@
       mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
       mediaRecorder.start();
       lastMicErrorName = null;
+      lastMicErrorDetail = null;
     } catch (e) {
       mediaRecorder = null; // sin permiso de mic aparte: seguimos solo con el texto
       lastMicErrorName = (e && e.name) || 'Error';
+      lastMicErrorDetail = (e && e.message) || String(e);
     }
   }
 
@@ -767,16 +770,19 @@
   // específico, la persona no tiene forma de saber que el arreglo está en
   // los Ajustes del teléfono, no en la app.
   function mensajeErrorMicrofono() {
+    let base;
     if (lastMicErrorName === 'NotAllowedError' || lastMicErrorName === 'PermissionDeniedError' || lastMicErrorName === 'SecurityError') {
-      return 'El micrófono está bloqueado para esta página — revisa el permiso en los Ajustes del teléfono. Mientras tanto, escribe tu respuesta.';
+      base = 'El micrófono está bloqueado para esta página — revisa el permiso en los Ajustes del teléfono. Mientras tanto, escribe tu respuesta.';
+    } else if (lastMicErrorName === 'NotFoundError' || lastMicErrorName === 'DevicesNotFoundError') {
+      base = 'No se encontró un micrófono en este dispositivo — escribe tu respuesta.';
+    } else if (lastMicErrorName === 'NotReadableError' || lastMicErrorName === 'TrackStartError') {
+      base = 'Otra app está usando el micrófono ahora mismo — escribe tu respuesta.';
+    } else {
+      base = 'No pude usar el micrófono — escribe tu respuesta.';
     }
-    if (lastMicErrorName === 'NotFoundError' || lastMicErrorName === 'DevicesNotFoundError') {
-      return 'No se encontró un micrófono en este dispositivo — escribe tu respuesta.';
-    }
-    if (lastMicErrorName === 'NotReadableError' || lastMicErrorName === 'TrackStartError') {
-      return 'Otra app está usando el micrófono ahora mismo — escribe tu respuesta.';
-    }
-    return 'No pude usar el micrófono — escribe tu respuesta.';
+    // DEBUG TEMPORAL — sacar cuando se resuelva el caso de Diego en iOS.
+    if (lastMicErrorName) base += ` [debug: ${lastMicErrorName}: ${lastMicErrorDetail || ''}]`;
+    return base;
   }
 
   function stopRecordingAudio() {
@@ -1024,6 +1030,8 @@
     vadRafId = null;
   }
 
+  let lastTranscribeDebug = ''; // DEBUG TEMPORAL — sacar cuando se resuelva el caso de Diego en iOS
+
   async function transcribeAudio(blob) {
     try {
       const resp = await fetch('/api/transcribe', {
@@ -1031,10 +1039,17 @@
         headers: { 'Content-Type': blob.type || 'audio/webm' },
         body: blob,
       });
-      if (!resp.ok) return '';
+      if (!resp.ok) {
+        let cuerpo = '';
+        try { cuerpo = await resp.text(); } catch (e) {}
+        lastTranscribeDebug = `HTTP ${resp.status} ${cuerpo}`.slice(0, 200);
+        return '';
+      }
       const data = await resp.json();
+      lastTranscribeDebug = data.text ? '' : `HTTP 200 sin texto: ${JSON.stringify(data)}`.slice(0, 200);
       return (data.text || '').trim();
     } catch (e) {
+      lastTranscribeDebug = `Excepción de red: ${(e && e.message) || e}`;
       return '';
     }
   }
@@ -1045,7 +1060,8 @@
     if (!audioBlob || audioBlob.size < 800) {
       writeRow.classList.add('visible');
       writeInput.focus();
-      stateLabel.textContent = 'No te escuché bien — escribe tu respuesta o presiona de nuevo.';
+      // DEBUG TEMPORAL — sacar cuando se resuelva el caso de Diego en iOS.
+      stateLabel.textContent = `No te escuché bien — escribe tu respuesta o presiona de nuevo. [debug: audio de ${audioBlob ? audioBlob.size : 0} bytes, tipo ${audioBlob ? audioBlob.type : 'n/a'}]`;
       return;
     }
     setState('thinking', 'Transcribiendo…');
@@ -1058,7 +1074,8 @@
     } else {
       writeRow.classList.add('visible');
       writeInput.focus();
-      stateLabel.textContent = 'No te escuché bien — escribe tu respuesta o presiona de nuevo.';
+      // DEBUG TEMPORAL — sacar cuando se resuelva el caso de Diego en iOS.
+      stateLabel.textContent = `No te escuché bien — escribe tu respuesta o presiona de nuevo. [debug: audio de ${audioBlob.size} bytes, tipo ${audioBlob.type}; ${lastTranscribeDebug}]`;
     }
   }
 
