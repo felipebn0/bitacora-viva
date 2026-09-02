@@ -865,6 +865,23 @@
     ttsAudioEl.play().catch(() => {});
   }
 
+  // El AudioContext que usa la detección de pausas por volumen (VAD, más
+  // abajo) también necesita "desbloquearse" con un gesto real del usuario —
+  // igual que el audio de la voz. Si se crea recién cuando arranca a
+  // escuchar (varios segundos después del click, tras esperar la respuesta
+  // del servidor y que termine de hablar), en Android Chrome suele quedar
+  // "suspended" para siempre: el analizador de volumen entonces siempre lee
+  // silencio, así que a los pocos segundos (SILENCE_MS) corta la grabación
+  // pensando que la persona no dijo nada — aunque sí estuviera hablando. En
+  // escritorio y iOS esto casi nunca se nota porque son más permisivos con
+  // el resume() aunque no sea inmediato al click; Android es el estricto.
+  function unlockMicAudioContext() {
+    if (!audioContext) {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioContext.state === 'suspended') audioContext.resume();
+  }
+
   async function speak(text, onEnd, logEntry, index) {
     try {
       const resp = await fetch('/api/speak', {
@@ -1168,8 +1185,10 @@
   function handleOrbPress() {
     if (state === 'idle' || state === 'ended') {
       unlockAudioPlayback();
+      unlockMicAudioContext();
       startSession();
     } else if (state === 'paused') {
+      unlockMicAudioContext();
       resumeConversation();
     } else {
       pauseConversation();
@@ -1180,6 +1199,7 @@
 
   treeModeBtn.addEventListener('click', () => {
     unlockAudioPlayback();
+    unlockMicAudioContext();
     startSession('arbol');
   });
 
