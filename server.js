@@ -760,6 +760,70 @@ app.post('/api/reset-bitacora', requireAuth, bloquearColaborador, rateLimit, asy
   }
 });
 
+// Borra la cuenta de verdad (no solo el contenido, como /api/reset-bitacora):
+// la fila de "users" desaparece y el usuario/clave dejan de servir. Pide la
+// clave de nuevo como confirmación, porque es irreversible.
+//
+// Sirve tanto para una cuenta dueña de su propia bitácora como para una
+// cuenta 100% colaboradora — pero nunca borra ni toca el login de OTRA
+// persona:
+// - Si es dueña, se borra toda su bitácora (igual que el reset de arriba,
+//   audios/fotos de Blob incluidos) y a sus colaboradores conectados
+//   (users.owner_user_id) se les suelta el vínculo — sus cuentas siguen
+//   existiendo, solo dejan de apuntar a una bitácora que ya no está.
+// - Cualquier aporte que esta cuenta haya hecho en OTRAS bitácoras (como
+//   colaboradora) se queda ahí para esa familia — solo se le quita el
+//   vínculo a la cuenta que se borró (contributed_by / editado_por a NULL),
+//   nunca se borra el contenido de otra persona.
+app.post('/api/delete-account', requireAuth, rateLimit, async (req, res) => {
+  try {
+    const { password } = req.body || {};
+    if (!password) return res.status(400).json({ error: 'Falta la clave para confirmar.' });
+
+    await ensureSchema();
+    const rows = await sql`SELECT password_hash FROM users WHERE id = ${req.userId}`;
+    if (!rows.length) return res.status(404).json({ error: 'No se encontró la cuenta.' });
+    const ok = await bcrypt.compare(password, rows[0].password_hash);
+    if (!ok) return res.status(401).json({ error: 'La clave no es correcta.' });
+
+    // 1) Toda la bitácora propia de esta cuenta (si tiene una) — mismo
+    // criterio que /api/reset-bitacora, incluyendo Blob.
+    await sql`DELETE FROM sessions WHERE user_id = ${req.userId}`;
+    await sql`DELETE FROM resumen WHERE user_id = ${req.userId}`;
+    const n = await sql`DELETE FROM family_notes WHERE user_id = ${req.userId} RETURNING audio_url, audio_urls`;
+    const m = await sql`DELETE FROM media WHERE user_id = ${req.userId} RETURNING url`;
+    await sql`DELETE FROM family_members WHERE user_id = ${req.userId}`;
+    await sql`DELETE FROM timeline_events WHERE user_id = ${req.userId}`;
+    const sl = await sql`DELETE FROM story_log WHERE user_id = ${req.userId} RETURNING audio_url`;
+    await sql`DELETE FROM chapters WHERE user_id = ${req.userId}`;
+
+    const audioUrls = [];
+    n.forEach((row) => {
+      if (row.audio_url) audioUrls.push(row.audio_url);
+      parseJsonArray(row.audio_urls).forEach((u) => { if (typeof u === 'string') audioUrls.push(u); });
+    });
+    sl.forEach((row) => { if (row.audio_url) audioUrls.push(row.audio_url); });
+    m.forEach((row) => { if (row.url) audioUrls.push(row.url); });
+    await borrarArchivosBlob(audioUrls);
+
+    // 2) Soltar cualquier referencia a esta cuenta desde datos de OTRAS
+    // personas, para poder borrar la fila de "users" sin romper nada ajeno.
+    await sql`UPDATE users SET owner_user_id = NULL WHERE owner_user_id = ${req.userId}`;
+    await sql`DELETE FROM collaborations WHERE owner_user_id = ${req.userId} OR collaborator_user_id = ${req.userId}`;
+    await sql`UPDATE family_notes SET contributed_by = NULL WHERE contributed_by = ${req.userId}`;
+    await sql`UPDATE historia_versiones SET editado_por = NULL WHERE editado_por = ${req.userId}`;
+
+    // 3) La cuenta en sí.
+    await sql`DELETE FROM users WHERE id = ${req.userId}`;
+
+    clearSessionCookie(req, res);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo borrar la cuenta.' });
+  }
+});
+
 async function loadMemorySummary(userId) {
   await ensureSchema();
   const rows = await sql`SELECT texto FROM resumen WHERE user_id = ${userId}`;

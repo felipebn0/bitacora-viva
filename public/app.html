@@ -354,6 +354,14 @@
         <button class="write-toggle" id="inviteCopyBtn" type="button">copiar código</button>
       </div>
       <button class="write-toggle" id="logoutBtn" type="button">cerrar sesión (<span id="whoami"></span>)</button>
+      <div>
+        <button class="write-toggle end-toggle" id="deleteAccountToggle" type="button">borrar mi cuenta permanentemente</button>
+        <div class="write-row" id="deleteAccountRow" style="margin: 10px auto 0;">
+          <input type="password" id="deleteAccountPassword" placeholder="Confirma tu clave" autocomplete="current-password">
+          <button id="deleteAccountConfirm" type="button" style="background:#a33;">borrar</button>
+        </div>
+        <p class="error" id="deleteAccountError"></p>
+      </div>
     </div>
   </div>
 
@@ -414,6 +422,48 @@
     try { await fetch('/api/logout', { method: 'POST' }); } catch (e) {}
     window.location.href = '/';
   });
+
+  // Borrar la cuenta para siempre — distinto de "reiniciar bitácora": acá
+  // se va también el usuario/clave, no solo el contenido. Pide la clave de
+  // nuevo y una confirmación aparte porque no se puede deshacer.
+  const deleteAccountToggle = document.getElementById('deleteAccountToggle');
+  const deleteAccountRow = document.getElementById('deleteAccountRow');
+  const deleteAccountPassword = document.getElementById('deleteAccountPassword');
+  const deleteAccountConfirm = document.getElementById('deleteAccountConfirm');
+  const deleteAccountError = document.getElementById('deleteAccountError');
+
+  deleteAccountToggle.addEventListener('click', () => {
+    deleteAccountRow.classList.toggle('visible');
+    deleteAccountError.textContent = '';
+    if (deleteAccountRow.classList.contains('visible')) deleteAccountPassword.focus();
+  });
+
+  async function borrarCuenta() {
+    const password = deleteAccountPassword.value;
+    if (!password) return;
+    if (!confirm('¿Seguro que quieres borrar tu cuenta para siempre? Se borra toda tu bitácora (charlas, árbol, capítulos, audios) y no se puede deshacer.')) return;
+    deleteAccountConfirm.disabled = true;
+    deleteAccountError.textContent = '';
+    try {
+      const resp = await fetch('/api/delete-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        deleteAccountError.textContent = data.error || 'No se pudo borrar la cuenta.';
+        deleteAccountConfirm.disabled = false;
+        return;
+      }
+      window.location.href = '/';
+    } catch (e) {
+      deleteAccountError.textContent = 'Hubo un problema para conectar.';
+      deleteAccountConfirm.disabled = false;
+    }
+  }
+  deleteAccountConfirm.addEventListener('click', borrarCuenta);
+  deleteAccountPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') borrarCuenta(); });
 
   const inviteToggle = document.getElementById('inviteToggle');
   const inviteRow = document.getElementById('inviteRow');
