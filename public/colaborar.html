@@ -621,12 +621,31 @@
     vadRafId = null;
   }
 
+  // NotAllowedError es el motivo más común de que esto falle en iPhone: una
+  // vez que el permiso de micrófono queda bloqueado para el sitio (o para
+  // Safari/Chrome enteros, desde Ajustes de iOS), el navegador rechaza
+  // getUserMedia sin volver a preguntar — sin este mensaje específico, no
+  // hay forma de saber que el arreglo está en los Ajustes del teléfono.
+  function mensajeErrorMicrofono(err) {
+    const nombre = (err && err.name) || '';
+    if (nombre === 'NotAllowedError' || nombre === 'PermissionDeniedError' || nombre === 'SecurityError') {
+      return 'El micrófono está bloqueado para esta página — revisa el permiso en los Ajustes del teléfono. Mientras tanto, puedes escribir tu historia.';
+    }
+    if (nombre === 'NotFoundError' || nombre === 'DevicesNotFoundError') {
+      return 'No se encontró un micrófono en este dispositivo — puedes escribir tu historia.';
+    }
+    if (nombre === 'NotReadableError' || nombre === 'TrackStartError') {
+      return 'Otra app está usando el micrófono ahora mismo — puedes escribir tu historia.';
+    }
+    return 'No se pudo acceder al micrófono — puedes escribir tu historia en su lugar.';
+  }
+
   async function empezarGrabacion() {
     if (charlaTerminada || grabando) return;
     try {
       mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
-      recStatus.textContent = 'No se pudo acceder al micrófono — puedes escribir tu historia en su lugar.';
+      recStatus.textContent = mensajeErrorMicrofono(e);
       writeRowColab.classList.add('visible');
       writeInputColab.focus();
       return;
