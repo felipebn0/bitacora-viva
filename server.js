@@ -1616,7 +1616,12 @@ app.post('/api/save-audio', requireAuth, bloquearColaborador, rateLimit, express
       return res.status(400).json({ error: 'Datos inválidos.' });
     }
     const real = await verificarArchivoReal(req.body, AUDIO_MIME_PERMITIDOS);
-    if (!real) return res.status(400).json({ error: 'El archivo no parece ser un audio válido.' });
+    if (!real) {
+      return res.status(400).json({
+        error: 'El archivo no parece ser un audio válido.',
+        debug: { size: req.body.length, contentTypeDeclarado: req.get('Content-Type') || null, primerosBytesHex: req.body.slice(0, 16).toString('hex') },
+      });
+    }
     const filename = `audio/${req.userId}/${safeSession}/${safeRole}-${safeIndex}.${real.ext}`;
 
     const blob = await put(filename, req.body, { access: 'public', contentType: real.mime, addRandomSuffix: true });
