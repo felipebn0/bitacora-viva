@@ -85,6 +85,28 @@ async function rateLimit(req, res, next) {
   }
 }
 
+// Igual que rateLimit, pero por una clave elegida por quien llama (no la
+// IP) — reutiliza la misma tabla rate_limits con un prefijo en la clave
+// para no necesitar otra tabla ni otra limpieza. Hace falta además del
+// límite por IP en rutas donde alguien podría probar muchas contraseñas
+// contra UNA cuenta puntual repartiendo los intentos entre IPs distintas
+// (el límite por IP no frena eso, porque nunca ve muchos pedidos desde el
+// mismo lugar).
+async function limitePorClave(clave, windowMs, max) {
+  await ensureSchema();
+  const windowStart = Math.floor(Date.now() / windowMs);
+  const rows = await sql`
+    INSERT INTO rate_limits (ip_key, window_start, count)
+    VALUES (${clave}, ${windowStart}, 1)
+    ON CONFLICT (ip_key) DO UPDATE SET
+      count = CASE WHEN rate_limits.window_start = EXCLUDED.window_start THEN rate_limits.count + 1 ELSE 1 END,
+      window_start = EXCLUDED.window_start
+    RETURNING count
+  `;
+  const count = (rows[0] && rows[0].count) || 1;
+  return count <= max;
+}
+
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const MODEL = 'claude-haiku-4-5-20251001';
 
@@ -904,8 +926,14 @@ app.post('/api/login', rateLimit, async (req, res) => {
   try {
     const { username, password } = req.body || {};
     if (!username || !password) return res.status(400).json({ error: 'Faltan usuario o clave.' });
-    await ensureSchema();
     const cleanUsername = String(username).trim().toLowerCase();
+    // Además del límite por IP (rateLimit, arriba en la cadena de esta
+    // ruta), un límite por cuenta: si alguien reparte los intentos entre
+    // muchas IPs para no chocar con ese límite, esto igual los frena
+    // porque mira a qué cuenta apuntan, no desde dónde vienen.
+    const permitido = await limitePorClave(`login:${cleanUsername}`, 15 * 60 * 1000, 10);
+    if (!permitido) return res.status(429).json({ error: 'Demasiados intentos con esa cuenta, espera unos minutos.' });
+    await ensureSchema();
     const rows = await sql`SELECT id, username, password_hash, token_version FROM users WHERE username = ${cleanUsername}`;
     if (!rows.length) return res.status(401).json({ error: 'Usuario o clave incorrectos.' });
     const ok = await bcrypt.compare(password, rows[0].password_hash);
@@ -1037,7 +1065,16 @@ app.post('/api/change-password', requireAuth, rateLimit, async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body || {};
     if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Faltan la clave actual y la nueva.' });
-    if (String(newPassword).length < 4) return res.status(400).json({ error: 'La clave nueva debe tener al menos 4 caracteres.' });
+    // Antes pedía solo 4 caracteres acá contra 6 en /api/signup — se
+    // unifica al mismo mínimo, para que no haya una puerta más débil que
+    // la otra para la misma cuenta.
+    if (String(newPassword).length < 6) return res.status(400).json({ error: 'La clave nueva debe tener al menos 6 caracteres.' });
+
+    // Además del límite por IP, uno por cuenta: quien ya tiene una cookie
+    // de sesión robada pero no la clave todavía podría intentar adivinar
+    // currentPassword a fuerza bruta contra esta ruta.
+    const permitido = await limitePorClave(`pwchg:${req.userId}`, 15 * 60 * 1000, 10);
+    if (!permitido) return res.status(429).json({ error: 'Demasiados intentos, espera unos minutos.' });
 
     await ensureSchema();
     const rows = await sql`SELECT password_hash FROM users WHERE id = ${req.userId}`;
