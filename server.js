@@ -610,36 +610,6 @@ async function reintentarBorradosPendientes() {
   }
 }
 
-// Deriva una extensión de archivo razonable a partir del Content-Type de un
-// audio — se usa tanto para el nombre que se guarda en Blob storage como
-// para el nombre que se le manda a ElevenLabs (algunos formatos, como las
-// notas de voz de WhatsApp .opus/.ogg o las de iPhone .m4a, se detectan
-// mejor con la extensión correcta que con un .webm genérico).
-const AUDIO_EXT_MAP = {
-  'audio/webm': 'webm',
-  'audio/mpeg': 'mp3',
-  'audio/mp3': 'mp3',
-  'audio/ogg': 'ogg',
-  'audio/opus': 'ogg',
-  'audio/mp4': 'm4a',
-  'audio/x-m4a': 'm4a',
-  'audio/m4a': 'm4a',
-  'audio/aac': 'aac',
-  'audio/wav': 'wav',
-  'audio/x-wav': 'wav',
-  'audio/wave': 'wav',
-  'audio/3gpp': '3gp',
-  'audio/3gpp2': '3g2',
-  'audio/amr': 'amr',
-  'audio/flac': 'flac',
-};
-function extensionForAudio(contentType) {
-  const ct = String(contentType || '').split(';')[0].trim().toLowerCase();
-  if (AUDIO_EXT_MAP[ct]) return AUDIO_EXT_MAP[ct];
-  const sub = (ct.split('/')[1] || 'webm').replace(/^x-/, '').replace(/[^a-z0-9]/g, '').slice(0, 8);
-  return sub || 'webm';
-}
-
 // --- Verificación real del contenido de archivos subidos ---
 // Antes, los audios/fotos/videos que suben los colaboradores (o el dueño)
 // se guardaban en Vercel Blob (público) con el Content-Type que el propio
@@ -1461,18 +1431,29 @@ async function speakWithAzure(text) {
   return Buffer.from(await resp.arrayBuffer());
 }
 
-app.post('/api/transcribe', requireAuth, rateLimit, express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
+// El límite se ajustó de 20mb a 4mb: las funciones serverless de Vercel
+// rechazan igual cualquier body de más de ~4.5mb con un error genérico de la
+// plataforma, así que declarar acá un límite mayor no cambiaba nada en
+// producción salvo dar un error menos claro. 4mb queda cómodo por debajo de
+// ese tope real.
+app.post('/api/transcribe', requireAuth, rateLimit, express.raw({ type: '*/*', limit: '4mb' }), async (req, res) => {
   try {
     if (!req.body || !req.body.length) return res.status(400).json({ error: 'Falta audio.' });
     if (!ELEVEN_KEY) {
       return res.status(501).json({ error: 'ElevenLabs no está configurado, no se puede transcribir.' });
     }
 
-    const contentType = req.get('Content-Type') || 'audio/webm';
+    // Igual que /api/save-audio y /api/contribute-audio: no confiar en el
+    // Content-Type que manda el navegador, verificar los bytes de verdad.
+    // Antes esta ruta era la única de las tres que subían audio que se
+    // saltaba este chequeo.
+    const real = await verificarArchivoReal(req.body, AUDIO_MIME_PERMITIDOS);
+    if (!real) return res.status(400).json({ error: 'El archivo no parece ser un audio válido.' });
+
     const formData = new FormData();
     formData.append('model_id', 'scribe_v1');
     formData.append('language_code', 'spa');
-    formData.append('file', new Blob([req.body], { type: contentType }), `audio.${extensionForAudio(contentType)}`);
+    formData.append('file', new Blob([req.body], { type: real.mime }), `audio.${real.ext}`);
 
     const resp = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
       method: 'POST',
@@ -1516,7 +1497,10 @@ app.post('/api/speak', requireAuth, rateLimit, async (req, res) => {
   }
 });
 
-app.post('/api/save-audio', requireAuth, bloquearColaborador, rateLimit, express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
+// Mismo ajuste que en /api/transcribe: 4mb en vez de 20mb, para que sea
+// esta ruta la que rechace con un mensaje claro un audio muy largo, en vez
+// de que lo rechace la plataforma con un error genérico.
+app.post('/api/save-audio', requireAuth, bloquearColaborador, rateLimit, express.raw({ type: '*/*', limit: '4mb' }), async (req, res) => {
   try {
     const { sessionId, index, role } = req.query;
     if (!sessionId || index === undefined || !role) {
@@ -1567,7 +1551,8 @@ app.post('/api/contribute-story', requireAuth, rateLimit, async (req, res) => {
 // Sube el audio de un aporte (colaborador contando una historia con su voz)
 // a Blob storage — separado de /api/save-audio porque ese está pensado para
 // las charlas normales (sessionId/index/role) y este no tiene esa forma.
-app.post('/api/contribute-audio', requireAuth, rateLimit, express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
+// Mismo ajuste que en /api/transcribe y /api/save-audio: 4mb en vez de 20mb.
+app.post('/api/contribute-audio', requireAuth, rateLimit, express.raw({ type: '*/*', limit: '4mb' }), async (req, res) => {
   try {
     const ownerId = await resolveProfileUserId(req);
     if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
@@ -1761,9 +1746,9 @@ app.post('/api/contribute-media', requireAuth, rateLimit, express.raw({ type: '*
     res.json({ ok: true, url: blob.url, type });
   } catch (err) {
     console.error(err);
-    if (err && err.message && err.message.includes('request entity too large')) {
-      return res.status(413).json({ error: 'El archivo es muy grande (máximo 4MB por ahora).' });
-    }
+    // Nota: el caso de archivo demasiado grande no llega hasta acá — el
+    // error de body-parser se dispara antes de que esta ruta se ejecute, y
+    // lo atiende el manejador de errores global al final del archivo.
     res.status(500).json({ error: 'No se pudo subir el archivo.' });
   }
 });
@@ -2168,6 +2153,20 @@ app.post('/api/save', requireAuth, bloquearColaborador, rateLimit, async (req, r
     console.error(err);
     if (!res.headersSent) res.status(500).json({ error: 'No se pudo guardar la charla.' });
   }
+});
+
+// Manejador de errores de Express (4 argumentos): body-parser/express.raw
+// tiran el error de "entity too large" ANTES de que la ruta se ejecute, así
+// que un try/catch dentro de la ruta nunca lo ve — tiene que atajarse acá,
+// al final, para que quien suba un archivo muy grande reciba un JSON claro
+// en vez de la página de error genérica de Express.
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  if (err && (err.type === 'entity.too.large' || err.status === 413 || err.statusCode === 413)) {
+    return res.status(413).json({ error: 'El archivo es muy grande.' });
+  }
+  console.error('Error sin manejar:', err);
+  res.status(500).json({ error: 'Algo salió mal.' });
 });
 
 // Red de seguridad: si algo inesperado falla fuera de una ruta, lo dejamos
