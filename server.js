@@ -653,14 +653,19 @@ function cargarFileType() {
 
 // Un audio grabado por el navegador (MediaRecorder) es un .webm válido,
 // pero como no tiene pista de video, la firma de bytes del contenedor es
-// indistinguible de un .webm de video — mismo caso con .3gp. Por eso acá
-// se aceptan ambos "lados" del contenedor para esos formatos; no es una
-// falla de la validación, es una ambigüedad real del formato.
+// indistinguible de un .webm de video — mismo caso con .3gp y con .mp4
+// (Safari en Mac/iPhone graba el audio en MP4/AAC, no en webm). Por eso
+// acá se aceptan ambos "lados" del contenedor para esos formatos; no es
+// una falla de la validación, es una ambigüedad real del formato. Sin
+// 'video/mp4' en esta lista, todo audio grabado desde Safari se rechazaba
+// silenciosamente (la transcripción de texto igual funcionaba, porque esa
+// no pasa por esta validación — por eso se veía el texto pero nunca el
+// audio de esas charlas).
 const AUDIO_MIME_PERMITIDOS = new Set([
   'audio/webm', 'video/webm',
   'audio/mpeg', 'audio/mp3',
   'audio/wav', 'audio/x-wav', 'audio/wave',
-  'audio/ogg', 'audio/x-m4a', 'audio/mp4', 'audio/m4a',
+  'audio/ogg', 'audio/x-m4a', 'audio/mp4', 'audio/m4a', 'video/mp4',
   'audio/aac', 'audio/flac', 'audio/amr',
   'audio/3gpp', 'audio/3gpp2', 'video/3gpp', 'video/3gpp2',
 ]);
@@ -1616,12 +1621,7 @@ app.post('/api/save-audio', requireAuth, bloquearColaborador, rateLimit, express
       return res.status(400).json({ error: 'Datos inválidos.' });
     }
     const real = await verificarArchivoReal(req.body, AUDIO_MIME_PERMITIDOS);
-    if (!real) {
-      return res.status(400).json({
-        error: 'El archivo no parece ser un audio válido.',
-        debug: { size: req.body.length, contentTypeDeclarado: req.get('Content-Type') || null, primerosBytesHex: req.body.slice(0, 16).toString('hex') },
-      });
-    }
+    if (!real) return res.status(400).json({ error: 'El archivo no parece ser un audio válido.' });
     const filename = `audio/${req.userId}/${safeSession}/${safeRole}-${safeIndex}.${real.ext}`;
 
     const blob = await put(filename, req.body, { access: 'public', contentType: real.mime, addRandomSuffix: true });
