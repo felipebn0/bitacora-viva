@@ -405,8 +405,23 @@
       grupo.forEach((p) => {
         const node = document.createElement('div');
         node.className = 'tree-node' + (/principal/i.test(p.relacion || '') ? ' principal' : '');
-        node.innerHTML = `<div class="avatar">${initials(p.nombre)}</div><strong>${p.nombre}</strong><span>${p.relacion}</span><button class="edit-btn" type="button" title="Corregir nombre o parentesco">✏️</button>`;
-        node.querySelector('.edit-btn').addEventListener('click', (e) => {
+        const avatarDiv = document.createElement('div');
+        avatarDiv.className = 'avatar';
+        avatarDiv.textContent = initials(p.nombre);
+        node.appendChild(avatarDiv);
+        const nombreStrong = document.createElement('strong');
+        nombreStrong.textContent = p.nombre;
+        node.appendChild(nombreStrong);
+        const relacionSpan = document.createElement('span');
+        relacionSpan.textContent = p.relacion;
+        node.appendChild(relacionSpan);
+        const editBtn = document.createElement('button');
+        editBtn.className = 'edit-btn';
+        editBtn.type = 'button';
+        editBtn.title = 'Corregir nombre o parentesco';
+        editBtn.textContent = '✏️';
+        node.appendChild(editBtn);
+        editBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           editarPersona(p.id, p.nombre, p.relacion, p.padres);
         });
@@ -749,12 +764,23 @@
         const card = document.createElement('div');
         card.className = 'colab-card';
         const historiaTxt = c.historias === 1 ? '1 historia aportada' : `${c.historias} historias aportadas`;
-        card.innerHTML = `
-          <div class="avatar">${initials(c.nombre)}</div>
-          <strong>${c.nombre}</strong>
-          ${c.parentesco ? `<span class="parentesco">${c.parentesco}</span>` : ''}
-          <span class="historias">${historiaTxt}</span>
-        `;
+        const avatarDiv = document.createElement('div');
+        avatarDiv.className = 'avatar';
+        avatarDiv.textContent = initials(c.nombre);
+        card.appendChild(avatarDiv);
+        const nombreStrong = document.createElement('strong');
+        nombreStrong.textContent = c.nombre;
+        card.appendChild(nombreStrong);
+        if (c.parentesco) {
+          const parentescoSpan = document.createElement('span');
+          parentescoSpan.className = 'parentesco';
+          parentescoSpan.textContent = c.parentesco;
+          card.appendChild(parentescoSpan);
+        }
+        const historiasSpan = document.createElement('span');
+        historiasSpan.className = 'historias';
+        historiasSpan.textContent = historiaTxt;
+        card.appendChild(historiasSpan);
         colabGrid.appendChild(card);
       });
       colabSection.style.display = 'block';

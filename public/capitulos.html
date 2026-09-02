@@ -122,12 +122,22 @@
         const quien = n.contributor ? n.contributor + (n.parentesco ? ` (${n.parentesco})` : '') : 'Familia';
         const etiqueta = n.protagonista ? `Historia de ${n.protagonista} — compartida por ${quien}` : quien;
         const urls = (n.audio_urls && n.audio_urls.length) ? n.audio_urls : (n.audio_url ? [n.audio_url] : []);
-        const audioTag = urls.map((u) => `<audio controls src="${u}"></audio>`).join('');
-        item.innerHTML = `
-          <p class="quien">${etiqueta}</p>
-          <div class="texto">${n.texto}</div>
-          ${audioTag}
-        `;
+        const quienP = document.createElement('p');
+        quienP.className = 'quien';
+        quienP.textContent = etiqueta;
+        item.appendChild(quienP);
+        const textoDiv = document.createElement('div');
+        textoDiv.className = 'texto';
+        textoDiv.textContent = n.texto;
+        item.appendChild(textoDiv);
+        urls.forEach((u) => {
+          if (typeof u === 'string' && /^https?:\/\//.test(u)) {
+            const audio = document.createElement('audio');
+            audio.controls = true;
+            audio.src = u;
+            item.appendChild(audio);
+          }
+        });
         aportesLista.appendChild(item);
       });
       aportesSection.style.display = 'block';
@@ -144,16 +154,30 @@
       const div = document.createElement('div');
       div.className = 'chapter';
       const fecha = c.created_at ? new Date(c.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
-      div.innerHTML = `
-        <div class="top-row">
-          <p class="theme">${c.theme || ''}</p>
-          <button class="borrar" type="button">Borrar</button>
-        </div>
-        <h2>${c.title}</h2>
-        <div class="text">${c.generated_text}</div>
-        <p class="meta">Armado a partir de ${(c.story_ids || []).length} historia(s)${fecha ? ' · ' + fecha : ''}</p>
-      `;
-      div.querySelector('.borrar').addEventListener('click', () => borrarCapitulo(c.id, div));
+      const topRow = document.createElement('div');
+      topRow.className = 'top-row';
+      const themeP = document.createElement('p');
+      themeP.className = 'theme';
+      themeP.textContent = c.theme || '';
+      topRow.appendChild(themeP);
+      const borrarBtn = document.createElement('button');
+      borrarBtn.className = 'borrar';
+      borrarBtn.type = 'button';
+      borrarBtn.textContent = 'Borrar';
+      topRow.appendChild(borrarBtn);
+      div.appendChild(topRow);
+      const h2 = document.createElement('h2');
+      h2.textContent = c.title;
+      div.appendChild(h2);
+      const textDiv = document.createElement('div');
+      textDiv.className = 'text';
+      textDiv.textContent = c.generated_text;
+      div.appendChild(textDiv);
+      const metaP = document.createElement('p');
+      metaP.className = 'meta';
+      metaP.textContent = `Armado a partir de ${(c.story_ids || []).length} historia(s)${fecha ? ' · ' + fecha : ''}`;
+      div.appendChild(metaP);
+      borrarBtn.addEventListener('click', () => borrarCapitulo(c.id, div));
       lista.appendChild(div);
     });
   }

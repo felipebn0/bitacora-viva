@@ -650,11 +650,25 @@
       items.forEach((it) => {
         const div = document.createElement('div');
         div.className = 'item';
+        // contributor/parentesco/protagonista/texto son texto libre que
+        // cualquier colaborador puede mandar — se arma el DOM a mano
+        // (textContent) en vez de pegarlo como HTML, para que no se pueda
+        // inyectar código a través de un aporte.
         const urls = (it.audio_urls && it.audio_urls.length) ? it.audio_urls : (it.audio_url ? [it.audio_url] : []);
-        const audioTags = urls.map((u) => `<audio controls src="${u}"></audio>`).join('');
         const quien = it.contributor ? it.contributor + (it.parentesco ? ` (${it.parentesco})` : '') : 'Familia';
         const etiqueta = it.protagonista ? `Historia de ${it.protagonista} — compartida por ${quien}` : quien;
-        div.innerHTML = `<strong>${etiqueta}:</strong> ${it.texto}${audioTags}`;
+        const strong = document.createElement('strong');
+        strong.textContent = etiqueta + ':';
+        div.appendChild(strong);
+        div.appendChild(document.createTextNode(' ' + it.texto));
+        urls.forEach((u) => {
+          if (typeof u === 'string' && /^https?:\/\//.test(u)) {
+            const audio = document.createElement('audio');
+            audio.controls = true;
+            audio.src = u;
+            div.appendChild(audio);
+          }
+        });
         aportesLista.appendChild(div);
       });
     } catch (e) {}

@@ -263,16 +263,20 @@ function ensureSchema() {
 }
 
 // --- Sesión de login (cookie firmada, sin tabla de sesiones aparte) ---
+// SESSION_SECRET es obligatoria: sin ella no hay forma segura de firmar la
+// cookie de sesión, y como el repo es público, cualquier valor fijo en el
+// código quedaría expuesto. Mejor que la función no arranque a que arranque
+// insegura.
 const SESSION_SECRET = process.env.SESSION_SECRET;
 if (!SESSION_SECRET) {
-  console.error('SESSION_SECRET no está definida — configurala en las variables de entorno para que el login sea seguro.');
+  throw new Error('SESSION_SECRET no está definida — configurala en las variables de entorno antes de arrancar la app.');
 }
 const SESSION_COOKIE = 'bv_session';
 const SESSION_MAX_AGE = 60 * 60 * 24 * 365; // 1 año, para no tener que loguearse siempre en el dispositivo físico
 
 function signSession(payload) {
   const b64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  const sig = crypto.createHmac('sha256', SESSION_SECRET || 'clave-insegura-configurar-SESSION_SECRET').update(b64).digest('base64url');
+  const sig = crypto.createHmac('sha256', SESSION_SECRET).update(b64).digest('base64url');
   return `${b64}.${sig}`;
 }
 
@@ -282,7 +286,7 @@ function verifySession(token) {
   if (idx === -1) return null;
   const b64 = token.slice(0, idx);
   const sig = token.slice(idx + 1);
-  const expected = crypto.createHmac('sha256', SESSION_SECRET || 'clave-insegura-configurar-SESSION_SECRET').update(b64).digest('base64url');
+  const expected = crypto.createHmac('sha256', SESSION_SECRET).update(b64).digest('base64url');
   if (sig.length !== expected.length) return null;
   if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
   try {
@@ -422,6 +426,19 @@ function capitalizarInicio(str) {
   const m = s.match(/^(\s*)([\s\S])([\s\S]*)$/);
   if (!m) return s;
   return m[1] + m[2].toUpperCase() + m[3];
+}
+
+// Valida que un string sea una URL http(s) real antes de guardarla — así no
+// se puede meter "javascript:" ni cualquier otro esquema en un campo que
+// después se usa como src de un <audio> en el front.
+function urlHttpValida(str) {
+  if (typeof str !== 'string' || !str.trim()) return null;
+  try {
+    const u = new URL(str.trim());
+    return /^https?:$/.test(u.protocol) ? u.toString() : null;
+  } catch (e) {
+    return null;
+  }
 }
 
 // Deriva una extensión de archivo razonable a partir del Content-Type de un
@@ -1068,7 +1085,7 @@ app.post('/api/next', requireAuth, bloquearColaborador, rateLimit, async (req, r
     // no son "historias destacadas" — son datos cortos de parentesco.
     const ultimaRespuesta = [...history].reverse().find((m) => m.role === 'user' && !/^\(.*\)$/.test(m.content.trim()));
     if (mode === 'historia' && ultimaRespuesta && ultimaRespuesta.content.length >= HISTORIA_MIN_CHARS) {
-      const audioUrl = typeof req.body.lastAudioUrl === 'string' ? req.body.lastAudioUrl.slice(0, 1000) : null;
+      const audioUrl = urlHttpValida(typeof req.body.lastAudioUrl === 'string' ? req.body.lastAudioUrl.slice(0, 1000) : null);
       try {
         await sql`INSERT INTO story_log (user_id, texto, audio_url) VALUES (${req.userId}, ${capitalizarInicio(ultimaRespuesta.content)}, ${audioUrl})`;
       } catch (err) {
@@ -1228,7 +1245,7 @@ app.post('/api/contribute-story', requireAuth, rateLimit, async (req, res) => {
     if (text.length > 4000) text = text.slice(0, 4000);
     const cleanContributor = capitalizarNombre((contributor || '').trim().slice(0, 60)) || null;
     const cleanParentesco = capitalizarNombre((parentesco || '').trim().slice(0, 60)) || null;
-    const cleanAudioUrl = typeof audioUrl === 'string' ? audioUrl.slice(0, 1000) : null;
+    const cleanAudioUrl = urlHttpValida(typeof audioUrl === 'string' ? audioUrl.slice(0, 1000) : null);
 
     await ensureSchema();
     await sql`INSERT INTO family_notes (user_id, contributor, parentesco, texto, audio_url, contributed_by) VALUES (${ownerId}, ${cleanContributor}, ${cleanParentesco}, ${text}, ${cleanAudioUrl}, ${req.userId})`;
@@ -1326,9 +1343,10 @@ async function finalizarAporte(ownerId, fullHistory, audioUrls, contributedByUse
     const cleanContributor = capitalizarNombre(String(colaboradorNombre || '').trim().slice(0, 60)) || null;
     const cleanParentesco = capitalizarNombre(String(toolUse.input.parentesco || '').trim().slice(0, 60)) || null;
     const texto = capitalizarInicio(String(toolUse.input.texto).trim().slice(0, 4000));
-    const audioUrlsJson = Array.isArray(audioUrls) && audioUrls.length
-      ? JSON.stringify(audioUrls.filter((u) => typeof u === 'string').slice(0, 10))
-      : null;
+    const audioUrlsLimpias = Array.isArray(audioUrls)
+      ? audioUrls.map((u) => urlHttpValida(u)).filter(Boolean).slice(0, 10)
+      : [];
+    const audioUrlsJson = audioUrlsLimpias.length ? JSON.stringify(audioUrlsLimpias) : null;
     const cleanProtagonista = (protagonista && protagonista !== colaboradorNombre)
       ? capitalizarNombre(String(protagonista).trim().slice(0, 60)) || null
       : null;
