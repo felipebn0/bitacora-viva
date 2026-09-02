@@ -2,48 +2,54 @@
 
 Cosas que se pidieron pero se decidió posponer, con suficiente detalle para retomarlas sin tener que repensarlas de cero.
 
-## 1. Árbol genealógico + línea de tiempo (panel derecho, desktop)
+## 1. Fotos/video de la familia
 
-**Qué es:** mientras se charla, ir armando automáticamente:
-- Un árbol genealógico visual con la gente que se va mencionando (papás, hermanos, abuelos, tíos, pareja, hijos…).
-- Una línea de tiempo de la vida (eventos con año o edad aproximada, cuando se pueda inferir).
-
-Ambos en un panel a la derecha, visible solo en pantallas de escritorio (como ya pasa con "Preguntale a la bitácora").
-
-**Cómo implementarlo (ya pensado):**
-- El resumen actual (`resumen`) es texto libre — no sirve para dibujar un árbol. Hace falta que Claude devuelva **datos estructurados**, no prosa.
-- Usar **tool use forzado** de Claude (`tool_choice: { type: 'tool', name: '...' }`) con un schema tipo:
-  ```
-  personas: [{ nombre, relacion, detalles? }]
-  eventos: [{ descripcion, anio?, edad_aprox? }]
-  ```
-  Esto es mucho más confiable que pedirle un formato en texto (ya tuvimos problemas con marcadores tipo `[HISTORIA]` que Claude no respetaba siempre — con tool use forzado no falla).
-- Se dispara junto con `updateMemorySummary`, en paralelo (`Promise.all`), cada vez que se guarda una charla (`/api/save`). Recibe: la lista de personas/eventos ya conocidos + la charla nueva, y devuelve la lista completa actualizada (reemplazo total, más simple que hacer diff).
-- Tablas nuevas: `family_members` (user_id, nombre, relacion, detalles) y `timeline_events` (user_id, descripcion, anio, edad_aprox).
-- Rutas nuevas: `GET /api/family-tree`, `GET /api/timeline`.
-- Frontend: reestructurar el layout a dos columnas en desktop (breakpoint ancho, ~900px+); árbol como filas por generación (abuelos / padres y tíos / hermanos y pareja / hijos), agrupando por palabras clave en `relacion`; timeline como lista vertical con puntos conectados, ordenada por año.
-- Recordar sumar estas tablas a `/api/reset-bitacora` para que el reinicio las borre también.
-
-## 2. Fotos/video de la familia + que la IA pregunte por las personas que aparecen
-
-**Estado actual:** ya existe el backend completo (`/api/contribute-media`, tabla `media`, hasta 4MB por archivo) y ya se usa la **descripción escrita** de la foto como contexto para que Claude pregunte por ella — pero la parte de subir foto/video está **oculta en la interfaz** por ahora (solo queda visible el aporte de historias en texto).
+**Estado actual:** ya existe el backend completo (`POST /api/contribute-media`, hasta 4MB por archivo, guardado en Vercel Blob) — pero no hay ningún botón en la interfaz para usarlo. Quedó oculto desde el rediseño de la landing (31 de agosto).
 
 **Para retomarlo:**
-- Volver a mostrar el bloque `#aportePhotoBlock` en `public/index.html` (está comentado/oculto, no borrado).
-- Ya funciona el flujo básico: se sube la foto con una descripción de quién aparece, y `loadFamilyContext()` la usa para que Claude pregunte por esa persona en algún momento de la charla.
-- Mejora pendiente (no implementada): que Claude además **vea la foto de verdad** (los modelos de Claude soportan visión) en vez de depender solo de la descripción escrita — se decidió no hacerlo al principio por simplicidad, pero quedó como posible mejora si la descripción escrita no alcanza.
+- Agregar de nuevo un bloque en la interfaz (en `colaborar.html` o `app.html`, según a quién se le quiera dar la opción) para subir una foto/video con una descripción de quién aparece.
+- La descripción escrita ya se usa como contexto para que la IA pregunte por esa persona en la charla (`loadFamilyContext()`).
+- Mejora pendiente (no implementada): que Claude además **vea la foto de verdad** (los modelos de Claude soportan visión) en vez de depender solo de la descripción escrita.
+
+## 2. Línea de tiempo de vida (visual)
+
+**Estado actual:** los datos sí se guardan (`timeline_events`: descripción, año, edad aproximada) y se usan puertas adentro (para inferir años, para el modo árbol), pero nunca se llegó a mostrar en pantalla — se escondió el 31 de agosto y no se retomó.
+
+**Para retomarlo:**
+- Ya existe `GET /api/tree` devolviendo también `events` — solo falta la parte visual: una lista vertical con puntos conectados, ordenada por año, en `arbol.html` o una pantalla aparte.
 
 ## 3. Ilustrar las portadas de los capítulos del libro (estilo Ghibli)
 
-**Qué es:** que cada capítulo generado en `/capitulos.html` tenga una imagen de portada ilustrada, estilo Studio Ghibli o parecido, inspirada en el contenido de ese capítulo (no un retrato real de la persona — se decidió que sea una escena inspirada en la historia, no un intento de parecido facial, para evitar el riesgo de que la IA distorsione la cara de alguien real).
+**Qué es:** que cada capítulo generado en `/capitulos.html` tenga una imagen de portada ilustrada, estilo Studio Ghibli o parecido, inspirada en el contenido del capítulo (una escena, no un intento de parecido facial real).
 
 **Por qué no está hecho:** ninguno de los servicios ya conectados (Claude/Anthropic, ElevenLabs) genera imágenes. Hace falta contratar/conectar un servicio de generación de imágenes (ej. OpenAI `gpt-image-1`) — pendiente de que Felipe consiga una API key.
 
 **Cómo implementarlo (cuando haya API key):**
 - Nueva env var, ej. `OPENAI_API_KEY`, configurada en Vercel.
-- En `POST /api/chapters/generate` (o en un endpoint aparte, ej. `POST /api/chapters/:id/cover`), después de armar el `generated_text` de cada capítulo, un llamado a la API de imágenes con un prompt armado a partir del `theme`/`title` del capítulo (nunca texto libre sin filtrar — resumir a un prompt corto y seguro), pidiendo estilo "Studio Ghibli watercolor illustration" o similar.
-- Guardar la imagen resultante en Vercel Blob (mismo patrón que `media`/`put()` ya usado en `/api/contribute-media`), y la URL en una columna nueva `chapters.cover_url`.
-- Frontend (`capitulos.html`): mostrar la imagen arriba del título de cada capítulo.
-- Importante: no hace falta pedir foto del protagonista para esto (se descartó el enfoque "parecido a la foto real" por ser más caro y menos confiable) — si más adelante se quiere retomar esa idea, ver la nota de "Fotos/video de la familia" en la sección 2 de este mismo backlog (ya existe el flujo de subida de fotos con descripción).
+- En `POST /api/chapters/generate` (o un endpoint aparte), un llamado a la API de imágenes con un prompt armado a partir del `theme`/`title` del capítulo.
+- Guardar la imagen en Vercel Blob (mismo patrón que `/api/contribute-media`), URL en columna nueva `chapters.cover_url`.
+- Mostrarla arriba del título de cada capítulo en `capitulos.html`.
 
-## 4. (de acá para abajo, agregar nuevas ideas que vayan surgiendo)
+## 4. Colaboradores con acceso para preguntarle a la bitácora
+
+**Qué es:** hoy los colaboradores solo pueden **aportar** información (contar historias); no pueden hacerle preguntas a la bitácora de la persona principal (`POST /api/ask-familia` está bloqueado explícitamente para ellos con un 403).
+
+**Para retomarlo:** definir qué significa "acceso especial" — ¿lo habilita el dueño de la bitácora por colaborador? ¿es automático después de cierto tiempo o cierta cantidad de aportes? Falta esa decisión de producto antes de tocar código.
+
+## 5. Colaborador invitado sin cuenta propia ("guest")
+
+**Qué es:** hoy hace falta registrarse (usuario + clave) para poder colaborar con una historia. La idea es un modo más liviano: alguien recibe el código de invitación, entra sin crear cuenta, dice su nombre una sola vez, y aporta.
+
+**Nota:** el prompt de aportar (`buildAporteSystemPrompt`) ya tiene un caso contemplado para "colaborador guest" en el que sí haría falta preguntar el nombre (a diferencia del flujo actual, donde nunca se pregunta porque ya viene de la cuenta) — pero el flujo de entrada sin cuenta en sí no está construido.
+
+## 6. Mejorar automáticamente el parentesco que detecta el árbol
+
+**Qué es:** hoy, si la IA arma mal el parentesco de alguien (por ejemplo lo pone como "tío" cuando en realidad es "primo"), la única forma de corregirlo es a mano con el lápiz (✏️) en `arbol.html`. La idea pospuesta es que el propio sistema pudiera inferir/corregir esto solo con más contexto.
+
+## 7. Varias parejas por persona (medios hermanos)
+
+**Qué es:** el árbol ya no se rompe cuando alguien tuvo hijos con más de una pareja (antes causaba un error que impedía cargar el árbol) — pero el dibujo solo puede unir a una persona con **una** pareja mediante la línea horizontal de matrimonio. Si alguien tuvo hijos con dos o tres personas distintas, esos otros vínculos existen en los datos (cada hijo sabe quiénes son sus dos padres, si ambos están registrados) pero no se dibuja una línea de pareja adicional para cada una — visualmente se ve como una sola familia, aunque el parentesco de cada hijo hacia su padre/madre real sí es correcto.
+
+**Para retomarlo:** decidir cómo representar visualmente a alguien con varias parejas en la misma fila del árbol (¿varias líneas cortas hacia cada pareja? ¿un ícono que indique "más de una familia"?) antes de tocar el código de dibujo.
+
+## 8. (de acá para abajo, agregar nuevas ideas que vayan surgiendo)
