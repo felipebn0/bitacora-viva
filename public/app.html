@@ -157,6 +157,67 @@
     .panels-col .aportes:first-child { margin-top: 0; }
   }
 
+  .greeting-bar {
+    width: 100%;
+    max-width: 900px;
+    margin: 0 auto 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .greeting-bar .brand-logo { height: 62px; width: 62px; flex-shrink: 0; object-fit: contain; }
+  .greeting-bar .greeting-text {
+    flex: 1;
+    text-align: center;
+    font-family: var(--font-body);
+    font-size: 1rem;
+    color: var(--ink-soft);
+    min-width: 0;
+  }
+  .greeting-bar .greeting-text .greeting-name {
+    display: block;
+    font-family: var(--font-display);
+    font-size: 1.7rem;
+    font-weight: 700;
+    color: var(--gold-deep);
+    line-height: 1.25;
+  }
+  .user-menu { position: relative; flex-shrink: 0; }
+  .user-menu-panel {
+    display: none;
+    position: absolute;
+    top: 52px;
+    right: 0;
+    width: 260px;
+    background: #FBF6EA;
+    border: 1px solid #E7DFCC;
+    border-radius: 16px;
+    box-shadow: 0 12px 30px -12px rgba(0,0,0,0.35);
+    padding: 16px;
+    z-index: 20;
+    text-align: left;
+  }
+  .user-menu-panel.visible { display: block; }
+  .user-menu-panel .um-name { font-family: var(--font-display); font-weight: 700; color: var(--ink); font-size: 1.05rem; margin: 0 0 2px; }
+  .user-menu-panel .um-username { color: var(--ink-soft); font-size: 0.82rem; margin: 0 0 14px; word-break: break-all; }
+  .user-menu-panel hr { border: none; border-top: 1px solid #E7DFCC; margin: 12px 0; }
+  .user-menu-panel .um-section-title { font-size: 0.8rem; color: var(--ink-soft); margin: 0 0 8px; font-weight: 700; }
+  .user-menu-panel input {
+    width: 100%; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 10px;
+    font-family: var(--font-body); background: #fff; color: var(--ink); font-size: 0.88rem; margin-bottom: 8px;
+  }
+  .user-menu-panel .um-btn {
+    width: 100%; border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px;
+    padding: 9px; font-weight: 700; cursor: pointer; font-family: var(--font-body); font-size: 0.88rem;
+  }
+  .user-menu-panel .um-btn:disabled { opacity: 0.6; cursor: default; }
+  .user-menu-panel .um-btn.um-danger { background: #a33; }
+  .user-menu-panel .um-btn.um-plain { background: none; color: var(--ink-soft); text-decoration: underline; padding: 6px 0; }
+  .user-menu-panel .um-btn.um-warn { color: #a33; font-weight: 700; }
+  .user-menu-panel .um-msg { font-size: 0.8rem; min-height: 1.1em; margin: 6px 0 0; color: var(--moss); }
+  .user-menu-panel .um-msg.um-error { color: #a33; }
+
   .topbar {
     width: 100%;
     max-width: 900px;
@@ -256,6 +317,30 @@
   </div>
 
   <div id="appContent">
+   <div class="greeting-bar">
+     <img class="brand-logo" src="/images/logo-icon.png" alt="Los recuerdos de mis viejos">
+     <p class="greeting-text">Un gusto tenerte de vuelta<span class="greeting-name" id="greetingName"></span></p>
+     <div class="user-menu">
+       <button class="icon-btn" id="userMenuBtn" type="button" title="Mi cuenta" aria-label="Mi cuenta">👤</button>
+       <div class="user-menu-panel" id="userMenuPanel">
+         <p class="um-name" id="umName"></p>
+         <p class="um-username" id="umUsername"></p>
+         <p class="um-section-title">Cambiar clave</p>
+         <input type="password" id="umCurrentPassword" placeholder="Clave actual" autocomplete="current-password" aria-label="Clave actual">
+         <input type="password" id="umNewPassword" placeholder="Clave nueva" autocomplete="new-password" aria-label="Clave nueva">
+         <button class="um-btn" id="umChangePasswordBtn" type="button">Cambiar clave</button>
+         <p class="um-msg" id="umPasswordMsg"></p>
+         <hr>
+         <button class="um-btn um-plain" id="umLogoutBtn" type="button">Cerrar sesión</button>
+         <button class="um-btn um-plain um-warn" id="umDeleteToggle" type="button">⚠️ Borrar mi cuenta permanentemente</button>
+         <div id="umDeleteRow" style="display:none; margin-top:8px;">
+           <input type="password" id="umDeletePassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para borrar la cuenta">
+           <button class="um-btn um-danger" id="umDeleteConfirm" type="button">Borrar cuenta</button>
+           <p class="um-msg um-error" id="umDeleteError"></p>
+         </div>
+       </div>
+     </div>
+   </div>
    <div class="topbar">
      <button class="icon-btn" id="joinCollabBtn" type="button" title="Colaborar con otra historia" aria-label="Colaborar con otra historia">🤝</button>
      <div class="icon-btn-wrap">
@@ -324,15 +409,6 @@
         <p style="font-family: var(--font-display); font-size: 1.4rem; font-weight: 700; letter-spacing: 0.1em; margin: 0 0 4px;" id="inviteCode">…</p>
         <button class="write-toggle" id="inviteCopyBtn" type="button">copiar código</button>
       </div>
-      <button class="write-toggle" id="logoutBtn" type="button">cerrar sesión (<span id="whoami"></span>)</button>
-      <div class="danger-zone">
-        <button class="write-toggle end-toggle" id="deleteAccountToggle" type="button">⚠️ borrar mi cuenta permanentemente</button>
-        <div class="write-row" id="deleteAccountRow" style="margin: 10px auto 0;">
-          <input type="password" id="deleteAccountPassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para borrar la cuenta">
-          <button id="deleteAccountConfirm" type="button" style="background:#a33;">borrar</button>
-        </div>
-        <p class="error" id="deleteAccountError"></p>
-      </div>
     </div>
   </div>
 
@@ -344,13 +420,17 @@
   const loginPass = document.getElementById('loginPass');
   const loginBtn = document.getElementById('loginBtn');
   const loginError = document.getElementById('loginError');
-  const logoutBtn = document.getElementById('logoutBtn');
-  const whoami = document.getElementById('whoami');
+  const greetingName = document.getElementById('greetingName');
+  const umName = document.getElementById('umName');
+  const umUsername = document.getElementById('umUsername');
 
-  function showApp(username) {
+  function showApp(username, name) {
     loginScreen.style.display = 'none';
     appContent.style.display = 'flex';
-    whoami.textContent = username || '';
+    const displayName = name || username || '';
+    greetingName.textContent = displayName;
+    umName.textContent = name || '(sin nombre guardado)';
+    umUsername.textContent = username || '';
   }
 
   function showLogin() {
@@ -389,32 +469,89 @@
   loginPass.addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
   loginUser.addEventListener('keydown', (e) => { if (e.key === 'Enter') loginPass.focus(); });
 
-  logoutBtn.addEventListener('click', async () => {
+  // --- Menú de usuario (arriba a la derecha): cuenta, cambio de clave,
+  // cerrar sesión, borrar cuenta — todo lo que antes eran botones sueltos
+  // más abajo en la pantalla, ahora agrupado en un solo lugar. ---
+  const userMenuBtn = document.getElementById('userMenuBtn');
+  const userMenuPanel = document.getElementById('userMenuPanel');
+  userMenuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    userMenuPanel.classList.toggle('visible');
+  });
+  document.addEventListener('click', (e) => {
+    if (!userMenuPanel.contains(e.target) && e.target !== userMenuBtn) {
+      userMenuPanel.classList.remove('visible');
+    }
+  });
+
+  const umLogoutBtn = document.getElementById('umLogoutBtn');
+  umLogoutBtn.addEventListener('click', async () => {
     try { await fetch('/api/logout', { method: 'POST' }); } catch (e) {}
     window.location.href = '/';
+  });
+
+  const umCurrentPassword = document.getElementById('umCurrentPassword');
+  const umNewPassword = document.getElementById('umNewPassword');
+  const umChangePasswordBtn = document.getElementById('umChangePasswordBtn');
+  const umPasswordMsg = document.getElementById('umPasswordMsg');
+
+  umChangePasswordBtn.addEventListener('click', async () => {
+    const currentPassword = umCurrentPassword.value;
+    const newPassword = umNewPassword.value;
+    umPasswordMsg.className = 'um-msg';
+    if (!currentPassword || !newPassword) {
+      umPasswordMsg.className = 'um-msg um-error';
+      umPasswordMsg.textContent = 'Completa ambos campos.';
+      return;
+    }
+    umChangePasswordBtn.disabled = true;
+    umPasswordMsg.textContent = '';
+    try {
+      const resp = await fetch('/api/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        umPasswordMsg.className = 'um-msg um-error';
+        umPasswordMsg.textContent = data.error || 'No se pudo cambiar la clave.';
+        umChangePasswordBtn.disabled = false;
+        return;
+      }
+      umPasswordMsg.textContent = 'Clave cambiada ✓';
+      umCurrentPassword.value = '';
+      umNewPassword.value = '';
+      umChangePasswordBtn.disabled = false;
+    } catch (e) {
+      umPasswordMsg.className = 'um-msg um-error';
+      umPasswordMsg.textContent = 'Hubo un problema para conectar.';
+      umChangePasswordBtn.disabled = false;
+    }
   });
 
   // Borrar la cuenta para siempre — distinto de "reiniciar bitácora": acá
   // se va también el usuario/clave, no solo el contenido. Pide la clave de
   // nuevo y una confirmación aparte porque no se puede deshacer.
-  const deleteAccountToggle = document.getElementById('deleteAccountToggle');
-  const deleteAccountRow = document.getElementById('deleteAccountRow');
-  const deleteAccountPassword = document.getElementById('deleteAccountPassword');
-  const deleteAccountConfirm = document.getElementById('deleteAccountConfirm');
-  const deleteAccountError = document.getElementById('deleteAccountError');
+  const umDeleteToggle = document.getElementById('umDeleteToggle');
+  const umDeleteRow = document.getElementById('umDeleteRow');
+  const umDeletePassword = document.getElementById('umDeletePassword');
+  const umDeleteConfirm = document.getElementById('umDeleteConfirm');
+  const umDeleteError = document.getElementById('umDeleteError');
 
-  deleteAccountToggle.addEventListener('click', () => {
-    deleteAccountRow.classList.toggle('visible');
-    deleteAccountError.textContent = '';
-    if (deleteAccountRow.classList.contains('visible')) deleteAccountPassword.focus();
+  umDeleteToggle.addEventListener('click', () => {
+    const visible = umDeleteRow.style.display !== 'none';
+    umDeleteRow.style.display = visible ? 'none' : 'block';
+    umDeleteError.textContent = '';
+    if (!visible) umDeletePassword.focus();
   });
 
   async function borrarCuenta() {
-    const password = deleteAccountPassword.value;
+    const password = umDeletePassword.value;
     if (!password) return;
     if (!confirm('¿Seguro que quieres borrar tu cuenta para siempre? Se borra toda tu bitácora (charlas, árbol, capítulos, audios) y no se puede deshacer.')) return;
-    deleteAccountConfirm.disabled = true;
-    deleteAccountError.textContent = '';
+    umDeleteConfirm.disabled = true;
+    umDeleteError.textContent = '';
     try {
       const resp = await fetch('/api/delete-account', {
         method: 'POST',
@@ -423,18 +560,18 @@
       });
       const data = await resp.json();
       if (!resp.ok) {
-        deleteAccountError.textContent = data.error || 'No se pudo borrar la cuenta.';
-        deleteAccountConfirm.disabled = false;
+        umDeleteError.textContent = data.error || 'No se pudo borrar la cuenta.';
+        umDeleteConfirm.disabled = false;
         return;
       }
       window.location.href = '/';
     } catch (e) {
-      deleteAccountError.textContent = 'Hubo un problema para conectar.';
-      deleteAccountConfirm.disabled = false;
+      umDeleteError.textContent = 'Hubo un problema para conectar.';
+      umDeleteConfirm.disabled = false;
     }
   }
-  deleteAccountConfirm.addEventListener('click', borrarCuenta);
-  deleteAccountPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') borrarCuenta(); });
+  umDeleteConfirm.addEventListener('click', borrarCuenta);
+  umDeletePassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') borrarCuenta(); });
 
   const inviteToggle = document.getElementById('inviteToggle');
   const inviteRow = document.getElementById('inviteRow');
@@ -508,7 +645,7 @@
       // tienen esta app — solo aportan historias y le preguntan a la
       // bitácora de quien las invitó.
       if (data.isCollaborator) { window.location.href = '/colaborar.html'; return; }
-      showApp(data.username);
+      showApp(data.username, data.name);
     })
     .catch(() => showLogin());
 })();
