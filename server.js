@@ -859,8 +859,10 @@ app.post('/api/register', rateLimit, async (req, res) => {
     if (!process.env.SETUP_KEY || setupKey !== process.env.SETUP_KEY) {
       return res.status(403).json({ error: 'Clave de configuración incorrecta.' });
     }
-    if (!username || !password || String(password).length < 4) {
-      return res.status(400).json({ error: 'Usuario y clave (mínimo 4 caracteres) son obligatorios.' });
+    // Mismo mínimo que /api/signup y /api/change-password (antes era 4 acá,
+    // la única de las tres rutas que se quedó afuera cuando se unificó esto).
+    if (!username || !password || String(password).length < 6) {
+      return res.status(400).json({ error: 'Usuario y clave (mínimo 6 caracteres) son obligatorios.' });
     }
     const cleanUsername = String(username).trim().toLowerCase().slice(0, 50);
     if (!/^[a-z0-9_-]+$/.test(cleanUsername)) {
