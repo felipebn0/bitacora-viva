@@ -27,30 +27,63 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Limitador simple por IP: evita que alguien con el link gaste crédito de
 // Claude/ElevenLabs a lo loco (además del login, esto frena intentos de
 // adivinar contraseñas).
+//
+// El contador vive en la tabla rate_limits (Postgres), no en una variable
+// en memoria: esta función corre como función serverless de Vercel, y bajo
+// tráfico Vercel puede levantar varias copias del programa en paralelo,
+// cada una con su propia memoria. Con un contador en memoria, cada copia
+// vería solo una parte de los pedidos de una misma persona y el límite de
+// 30/minuto nunca se cumpliría de verdad. Guardando el conteo en la base,
+// todas las copias comparten el mismo número.
+//
+// La ventana es fija (no deslizante como antes): se identifica el minuto
+// actual con RATE_LIMIT_WINDOW_MS y se cuenta cuántos pedidos hubo en ESE
+// minuto exacto. Es un poco menos preciso que contar "los últimos 60
+// segundos exactos" (alguien podría, en el peor caso, mandar el doble justo
+// en el instante donde termina un minuto y empieza el otro), pero alcanza
+// de sobra para lo que este límite necesita frenar, y evita tener que
+// guardar y limpiar una lista de horarios por cada IP.
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX = 30;
-const rateLimitHits = new Map();
 
-function rateLimit(req, res, next) {
-  const ip = req.ip || 'desconocida';
-  const now = Date.now();
-  const hits = (rateLimitHits.get(ip) || []).filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
-  if (hits.length >= RATE_LIMIT_MAX) {
-    return res.status(429).json({ error: 'Demasiados pedidos, espera un momento.' });
+async function rateLimit(req, res, next) {
+  try {
+    const ip = req.ip || 'desconocida';
+    const windowStart = Math.floor(Date.now() / RATE_LIMIT_WINDOW_MS);
+    await ensureSchema();
+    const rows = await sql`
+      INSERT INTO rate_limits (ip_key, window_start, count)
+      VALUES (${ip}, ${windowStart}, 1)
+      ON CONFLICT (ip_key) DO UPDATE SET
+        count = CASE WHEN rate_limits.window_start = EXCLUDED.window_start THEN rate_limits.count + 1 ELSE 1 END,
+        window_start = EXCLUDED.window_start
+      RETURNING count
+    `;
+    const count = (rows[0] && rows[0].count) || 1;
+
+    // Limpieza oportunista de IPs viejas — no hace falta un cronjob aparte:
+    // 1 de cada ~200 pedidos de paso también borra filas de hace más de 10
+    // minutos, así la tabla no crece para siempre. No se espera (no se
+    // hace "await") para no atrasar la respuesta de este pedido.
+    if (Math.random() < 0.005) {
+      sql`DELETE FROM rate_limits WHERE window_start < ${windowStart - 10}`.catch((err) => {
+        console.error('No se pudo limpiar rate_limits:', err);
+      });
+    }
+
+    if (count > RATE_LIMIT_MAX) {
+      return res.status(429).json({ error: 'Demasiados pedidos, espera un momento.' });
+    }
+    next();
+  } catch (err) {
+    // Si la base falla acá, mejor dejar pasar el pedido que tirar la app
+    // entera por un problema del limitador — total, casi todas las rutas
+    // que usan este límite también dependen de la base para lo suyo, así
+    // que si la base está caída, van a fallar igual más adelante.
+    console.error('No se pudo aplicar el límite de pedidos:', err);
+    next();
   }
-  hits.push(now);
-  rateLimitHits.set(ip, hits);
-  next();
 }
-
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, hits] of rateLimitHits) {
-    const recent = hits.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
-    if (recent.length) rateLimitHits.set(ip, recent);
-    else rateLimitHits.delete(ip);
-  }
-}, RATE_LIMIT_WINDOW_MS).unref();
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const MODEL = 'claude-haiku-4-5-20251001';
@@ -257,6 +290,16 @@ function ensureSchema() {
       )`;
       await sql`ALTER TABLE timeline_events ADD COLUMN IF NOT EXISTS categoria TEXT`;
       await sql`CREATE INDEX IF NOT EXISTS idx_timeline_events_user ON timeline_events(user_id)`;
+
+      // Contador del limitador de pedidos (ver rateLimit más arriba) —
+      // vive en la base porque la función corre serverless: cada instancia
+      // en paralelo tendría su propia memoria, así que un contador en
+      // memoria no sirve para frenar de verdad.
+      await sql`CREATE TABLE IF NOT EXISTS rate_limits (
+        ip_key TEXT PRIMARY KEY,
+        window_start BIGINT NOT NULL,
+        count INT NOT NULL DEFAULT 0
+      )`;
     })();
   }
   return schemaReady;
