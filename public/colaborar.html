@@ -153,6 +153,9 @@
   }
 
   .logout-row { text-align: center; margin-top: 8px; }
+  /* "Borrar mi cuenta" es la única acción irreversible acá — antes se veía
+     como un link subrayado más, sin distinguirse de "cerrar sesión". */
+  .danger-zone { margin-top: 18px; padding-top: 14px; border-top: 1px solid #E7DFCC; }
   .write-toggle { background: none; border: none; color: var(--moss); text-decoration: underline; cursor: pointer; font-family: var(--font-body); font-size: 0.9rem; }
   .end-toggle { color: #a33; }
   .write-row { display: none; gap: 8px; width: 100%; max-width: 280px; }
@@ -165,8 +168,8 @@
   <div class="login" id="loginScreen">
     <h1>Los recuerdos de mis viejos</h1>
     <p class="sub" style="margin-bottom: 6px;">Inicia sesión para aportar historias.</p>
-    <input type="text" id="loginUser" placeholder="Correo" autocomplete="username">
-    <input type="password" id="loginPass" placeholder="Clave" autocomplete="current-password">
+    <input type="text" id="loginUser" placeholder="Correo" autocomplete="username" aria-label="Correo">
+    <input type="password" id="loginPass" placeholder="Clave" autocomplete="current-password" aria-label="Clave">
     <button id="loginBtn" type="button">Entrar</button>
     <p class="error" id="loginError"></p>
     <p class="sub" style="margin-top:2px;">¿No tienes cuenta? <a href="/?modo=colaborar#registro" style="color:var(--gold-deep);">Crea una</a>.</p>
@@ -199,7 +202,7 @@
           <label><input type="radio" name="quienHistoria" value="propia" checked> Mía</label>
           <label><input type="radio" name="quienHistoria" value="otra"> De otra persona</label>
         </div>
-        <input type="text" id="protagonistaInput" placeholder="¿De quién es esta historia?" style="display:none;">
+        <input type="text" id="protagonistaInput" placeholder="¿De quién es esta historia?" aria-label="¿De quién es esta historia?" style="display:none;">
       </div>
 
       <div class="aporte-chat" id="aporteChat"></div>
@@ -227,10 +230,10 @@
 
     <div class="logout-row">
       <button class="write-toggle" id="logoutBtn" type="button">cerrar sesión (<span id="whoami"></span>)</button>
-      <div>
-        <button class="write-toggle end-toggle" id="deleteAccountToggle" type="button">borrar mi cuenta permanentemente</button>
+      <div class="danger-zone">
+        <button class="write-toggle end-toggle" id="deleteAccountToggle" type="button">⚠️ borrar mi cuenta permanentemente</button>
         <div class="write-row" id="deleteAccountRow" style="margin: 10px auto 0;">
-          <input type="password" id="deleteAccountPassword" placeholder="Confirma tu clave" autocomplete="current-password">
+          <input type="password" id="deleteAccountPassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para borrar la cuenta">
           <button id="deleteAccountConfirm" type="button" style="background:#a33;">borrar</button>
         </div>
         <p class="error" id="deleteAccountError"></p>

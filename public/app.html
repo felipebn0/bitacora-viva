@@ -276,14 +276,18 @@
   .login .error { min-height: 1.2em; text-align: center; }
 
   .logout-row { text-align: center; margin-top: 20px; }
+  /* "Borrar mi cuenta" es la única acción irreversible acá — antes se veía
+     como un link subrayado más, del mismo tamaño que "invitar familiares"
+     o "cerrar sesión", con el rojo como única pista de que es distinta. */
+  .danger-zone { margin-top: 18px; padding-top: 14px; border-top: 1px solid #E7DFCC; }
 </style>
 </head>
 <body>
   <div class="login" id="loginScreen">
     <h1>Los recuerdos de mis viejos</h1>
     <p class="sub">Inicia sesión para entrar a tu bitácora.</p>
-    <input type="text" id="loginUser" placeholder="Correo o usuario" autocomplete="username">
-    <input type="password" id="loginPass" placeholder="Clave" autocomplete="current-password">
+    <input type="text" id="loginUser" placeholder="Correo o usuario" autocomplete="username" aria-label="Correo o usuario">
+    <input type="password" id="loginPass" placeholder="Clave" autocomplete="current-password" aria-label="Clave">
     <button id="loginBtn" type="button">Entrar</button>
     <p class="error" id="loginError"></p>
     <p class="sub" style="margin-top:2px;">¿No tienes cuenta? <a href="/" style="color:var(--gold-deep);">Crea una</a>.</p>
@@ -301,7 +305,7 @@
    <div class="join-collab-panel" id="joinCollabPanel" style="display:none;">
      <p class="sub">Quiero colaborar con otra historia — ingresa el código que te compartieron.</p>
      <div class="join-collab-row">
-       <input type="text" id="joinCollabCode" placeholder="Ej: AB12CD" maxlength="6">
+       <input type="text" id="joinCollabCode" placeholder="Ej: AB12CD" maxlength="6" aria-label="Código de invitación">
        <button id="joinCollabSubmit" type="button">Entrar</button>
      </div>
      <p class="msg" id="joinCollabMsg"></p>
@@ -359,10 +363,10 @@
         <button class="write-toggle" id="inviteCopyBtn" type="button">copiar código</button>
       </div>
       <button class="write-toggle" id="logoutBtn" type="button">cerrar sesión (<span id="whoami"></span>)</button>
-      <div>
-        <button class="write-toggle end-toggle" id="deleteAccountToggle" type="button">borrar mi cuenta permanentemente</button>
+      <div class="danger-zone">
+        <button class="write-toggle end-toggle" id="deleteAccountToggle" type="button">⚠️ borrar mi cuenta permanentemente</button>
         <div class="write-row" id="deleteAccountRow" style="margin: 10px auto 0;">
-          <input type="password" id="deleteAccountPassword" placeholder="Confirma tu clave" autocomplete="current-password">
+          <input type="password" id="deleteAccountPassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para borrar la cuenta">
           <button id="deleteAccountConfirm" type="button" style="background:#a33;">borrar</button>
         </div>
         <p class="error" id="deleteAccountError"></p>
