@@ -1066,7 +1066,7 @@
   const BUTTON_KEY = 'Enter';
   document.addEventListener('keydown', (e) => {
     const tag = (e.target && e.target.tagName) || '';
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return; // no pisar el Enter de los cuadros de texto
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON') return; // no pisar el Enter de los cuadros de texto ni de un botón con foco
     if (e.key === BUTTON_KEY) {
       e.preventDefault();
       handleOrbPress();

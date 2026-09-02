@@ -1894,9 +1894,9 @@ app.put('/api/tree/person/:id', requireAuth, bloquearColaborador, rateLimit, asy
     }
 
     if (padresUpdate !== undefined) {
-      await sql`UPDATE family_members SET nombre = ${cleanNombre}, relacion = ${cleanRelacion}, padres = ${padresUpdate.length ? JSON.stringify(padresUpdate) : null} WHERE id = ${id}`;
+      await sql`UPDATE family_members SET nombre = ${cleanNombre}, relacion = ${cleanRelacion}, padres = ${padresUpdate.length ? JSON.stringify(padresUpdate) : null} WHERE id = ${id} AND user_id = ${req.userId}`;
     } else {
-      await sql`UPDATE family_members SET nombre = ${cleanNombre}, relacion = ${cleanRelacion} WHERE id = ${id}`;
+      await sql`UPDATE family_members SET nombre = ${cleanNombre}, relacion = ${cleanRelacion} WHERE id = ${id} AND user_id = ${req.userId}`;
     }
 
     if (cleanNombre !== nombreAnterior) {
@@ -1905,7 +1905,7 @@ app.put('/api/tree/person/:id', requireAuth, bloquearColaborador, rateLimit, asy
         const lista = parseJsonArray(o.padres);
         if (!lista.includes(nombreAnterior)) continue;
         const actualizada = lista.map((n) => (n === nombreAnterior ? cleanNombre : n));
-        await sql`UPDATE family_members SET padres = ${JSON.stringify(actualizada)} WHERE id = ${o.id}`;
+        await sql`UPDATE family_members SET padres = ${JSON.stringify(actualizada)} WHERE id = ${o.id} AND user_id = ${req.userId}`;
       }
     }
 
@@ -1929,7 +1929,7 @@ app.get('/api/tree/pending', requireAuth, bloquearColaborador, async (req, res) 
   }
 });
 
-app.post('/api/tree/mark-seen', requireAuth, bloquearColaborador, async (req, res) => {
+app.post('/api/tree/mark-seen', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
   try {
     await ensureSchema();
     await sql`UPDATE users SET tree_pending_names = NULL WHERE id = ${req.userId}`;
@@ -1992,9 +1992,15 @@ app.post('/api/rebuild-tree', requireAuth, bloquearColaborador, rateLimit, async
   }
 });
 
-app.post('/api/save', requireAuth, bloquearColaborador, async (req, res) => {
+app.post('/api/save', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
   try {
     const history = Array.isArray(req.body.history) ? req.body.history.slice(0, 100) : [];
+    for (const m of history) {
+      if (!m || (m.role !== 'user' && m.role !== 'assistant') || typeof m.content !== 'string') {
+        return res.status(400).json({ error: 'Historial inválido.' });
+      }
+      if (m.content.length > 4000) m.content = m.content.slice(0, 4000);
+    }
     if (!history.length) return res.status(400).json({ error: 'Nada que guardar.' });
 
     // Una misma charla se puede guardar varias veces (por ejemplo: se pausa
