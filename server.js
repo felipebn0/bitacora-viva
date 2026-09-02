@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const Anthropic = require('@anthropic-ai/sdk');
 const { neon } = require('@neondatabase/serverless');
-const { put } = require('@vercel/blob');
+const { put, del } = require('@vercel/blob');
 
 const app = express();
 app.set('trust proxy', 1); // detrás del proxy de Vercel: para que req.ip y req.secure sean correctos
@@ -441,6 +441,23 @@ function urlHttpValida(str) {
   }
 }
 
+// Borra archivos reales de Vercel Blob (audio/foto) — se usa cuando se
+// reinicia la bitácora, para que "borrar tus recuerdos" también borre el
+// archivo y no solo la fila de la base de datos. Es best-effort: si Blob
+// falla para alguna URL, se loguea y se sigue con las demás — la bitácora
+// ya quedó vacía en la base de datos, que es lo que el usuario pidió, y no
+// tiene sentido devolverle un error por un archivo huérfano.
+async function borrarArchivosBlob(urls) {
+  const validas = [...new Set((urls || []).map((u) => urlHttpValida(u)).filter(Boolean))];
+  await Promise.all(validas.map(async (url) => {
+    try {
+      await del(url);
+    } catch (err) {
+      console.error('No se pudo borrar el archivo de Blob:', url, err.message);
+    }
+  }));
+}
+
 // Deriva una extensión de archivo razonable a partir del Content-Type de un
 // audio — se usa tanto para el nombre que se guarda en Blob storage como
 // para el nombre que se le manda a ElevenLabs (algunos formatos, como las
@@ -705,12 +722,25 @@ app.post('/api/reset-bitacora', requireAuth, bloquearColaborador, rateLimit, asy
     await ensureSchema();
     const s = await sql`DELETE FROM sessions WHERE user_id = ${req.userId} RETURNING id`;
     const r = await sql`DELETE FROM resumen WHERE user_id = ${req.userId} RETURNING user_id`;
-    const n = await sql`DELETE FROM family_notes WHERE user_id = ${req.userId} RETURNING id`;
-    const m = await sql`DELETE FROM media WHERE user_id = ${req.userId} RETURNING id`;
+    const n = await sql`DELETE FROM family_notes WHERE user_id = ${req.userId} RETURNING id, audio_url, audio_urls`;
+    const m = await sql`DELETE FROM media WHERE user_id = ${req.userId} RETURNING id, url`;
     const fm = await sql`DELETE FROM family_members WHERE user_id = ${req.userId} RETURNING id`;
     const te = await sql`DELETE FROM timeline_events WHERE user_id = ${req.userId} RETURNING id`;
-    const sl = await sql`DELETE FROM story_log WHERE user_id = ${req.userId} RETURNING id`;
+    const sl = await sql`DELETE FROM story_log WHERE user_id = ${req.userId} RETURNING id, audio_url`;
     const ch = await sql`DELETE FROM chapters WHERE user_id = ${req.userId} RETURNING id`;
+
+    // Los audios/fotos quedaban huérfanos en Vercel Blob después de un
+    // reset (solo se borraba la fila de la base de datos) — acá se borran
+    // también los archivos reales, para cumplir lo que promete la landing.
+    const audioUrls = [];
+    n.forEach((row) => {
+      if (row.audio_url) audioUrls.push(row.audio_url);
+      parseJsonArray(row.audio_urls).forEach((u) => { if (typeof u === 'string') audioUrls.push(u); });
+    });
+    sl.forEach((row) => { if (row.audio_url) audioUrls.push(row.audio_url); });
+    m.forEach((row) => { if (row.url) audioUrls.push(row.url); });
+    await borrarArchivosBlob(audioUrls);
+
     res.json({
       ok: true,
       deleted: {
