@@ -10,6 +10,29 @@ const { put, del } = require('@vercel/blob');
 const app = express();
 app.set('trust proxy', 1); // detrás del proxy de Vercel: para que req.ip y req.secure sean correctos
 
+// Política de seguridad de contenido "de destino": todavía NO se aplica de
+// verdad (ver CSP_MODE_ENFORCE más abajo) porque las páginas de public/
+// tienen <script> y <style> inline, y una CSP estricta rompería eso tal
+// como está hoy. Se manda como Content-Security-Policy-Report-Only: el
+// navegador no bloquea nada, pero muestra en la consola (F12 → Console, o
+// la pestaña Network → cualquier request → Response Headers) cada cosa que
+// violaría esta política — así se puede ver exactamente qué habría que
+// externalizar antes de activarla de verdad como Content-Security-Policy.
+const CSP_MODE_ENFORCE = false;
+const CSP_POLICY = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self'",
+  "img-src 'self' data: https://*.blob.vercel-storage.com",
+  "media-src 'self' https://*.blob.vercel-storage.com",
+  "connect-src 'self'",
+  "font-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join('; ');
+
 // Cabeceras de seguridad estándar en cada respuesta — no cambian nada
 // visible, solo cierran puertas que un navegador podría dejar abiertas.
 app.use((req, res, next) => {
@@ -18,6 +41,7 @@ app.use((req, res, next) => {
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'microphone=(self)'); // el mic solo lo pide este sitio, nada externo
   res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains');
+  res.setHeader(CSP_MODE_ENFORCE ? 'Content-Security-Policy' : 'Content-Security-Policy-Report-Only', CSP_POLICY);
   next();
 });
 
