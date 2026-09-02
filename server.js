@@ -1365,9 +1365,8 @@ app.post('/api/transcribe', requireAuth, rateLimit, express.raw({ type: '*/*', l
     });
 
     if (!resp.ok) {
-      const detalle = await resp.text();
-      console.error('ElevenLabs STT error:', resp.status, detalle);
-      return res.status(502).json({ error: 'No se pudo transcribir el audio.', debug: { status: resp.status, detalle } });
+      console.error('ElevenLabs STT error:', resp.status, await resp.text());
+      return res.status(502).json({ error: 'No se pudo transcribir el audio.' });
     }
 
     const data = await resp.json();
