@@ -214,7 +214,12 @@
     .reveal{opacity:0;transform:translateY(16px);transition:.7s ease}.reveal.show{opacity:1;transform:none}
 
     @media(max-width:980px){
-      .nav-links a:not(.nav-cta){display:none}
+      /* En celular se esconden los links que solo bajan a una sección de
+         esta misma página (Cómo funciona, La experiencia, etc.) — no hacen
+         falta arriba porque ya se ven al bajar. "Iniciar sesión" y "Crear
+         cuenta" quedan SIEMPRE visibles: son las dos acciones reales del
+         menú, alguien que ya tiene cuenta tiene que poder entrar desde acá. */
+      .nav-links a:not(.nav-cta):not(.nav-login){display:none}
       .hero{padding-top:62px}
       .hero-grid,.problem-grid,.voice-grid,.privacy-box,.registro-box{grid-template-columns:1fr;gap:46px}
       .hero-copy{text-align:center}.hero-copy h1{margin-left:auto;margin-right:auto}.hero-copy p{margin-left:auto;margin-right:auto}.hero-actions,.trust-row{justify-content:center}.eyebrow{justify-content:center}.hero-device-wrap{min-height:560px}
@@ -226,7 +231,16 @@
     }
     @media(max-width:640px){
       .wrap{width:min(100% - 24px,1180px)}
-      .nav-inner{height:68px}.nav-cta{display:none}
+      /* En pantallas muy angostas no entra el nombre completo + "Iniciar
+         sesión" + "Crear cuenta" en una sola fila — se esconde el nombre
+         de texto de la marca (el ícono solo queda) y se achican un poco
+         los dos botones, en vez de esconder alguno de los dos (antes se
+         escondía "Crear cuenta" acá y no quedaba forma de entrar al menú). */
+      .nav-inner{height:68px;gap:10px}
+      .brand span{display:none}
+      .nav-links{gap:10px}
+      .nav-login{font-size:.85rem;white-space:nowrap}
+      .nav-cta{padding:10px 14px;font-size:.85rem;white-space:nowrap}
       .hero{padding:48px 0 60px}h1{font-size:3.65rem}.hero-device-wrap{min-height:510px}.device{padding:16px;border-radius:26px}.demo-panel{min-height:410px;padding:22px 14px}.orb{width:142px;height:142px}.memory-chip{display:none}
       section{padding:72px 0}h2{font-size:2.8rem}.problem-grid{gap:32px}
       .window-content{min-height:auto}.conversation,.story-side{padding:24px}.bubble{max-width:92%}
@@ -250,7 +264,7 @@
         <a href="#producto">La experiencia</a>
         <a href="#familia">Familia</a>
         <a href="#privacidad">Privacidad</a>
-        <a href="/app.html">Iniciar sesión</a>
+        <a href="/app.html" class="nav-login">Iniciar sesión</a>
         <a class="btn btn-primary nav-cta" href="#registro">Crear cuenta</a>
       </div>
     </div>
