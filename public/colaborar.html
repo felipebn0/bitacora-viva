@@ -302,7 +302,10 @@
 
       <div class="orb-zone">
         <button class="orb" id="orb" data-state="idle" type="button" aria-label="Presiona para grabar tu historia">Presiona<br>para hablar</button>
-        <div class="state-label" id="recStatus"></div>
+        <!-- role="status" aria-live="polite" aria-atomic="true": mismo
+             motivo que #stateLabel en app.html — el texto cambia solo
+             (grabando/procesando/errores) y se reemplaza entero cada vez. -->
+        <div class="state-label" id="recStatus" role="status" aria-live="polite" aria-atomic="true"></div>
         <button class="write-toggle" id="subirAudioBtn" type="button">o sube una nota de voz que ya tengas</button>
         <input type="file" id="subirAudioInput" accept="audio/*" style="display:none;">
         <button class="write-toggle" id="writeToggleColab" type="button">o prefiero escribir mi historia</button>

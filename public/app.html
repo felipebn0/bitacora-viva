@@ -580,7 +580,11 @@
        </div>
      </div>
    </div>
-   <div class="topbar">
+   <!-- <nav>, no <div>: son los enlaces a las otras secciones de la
+        bitácora — sin esto un lector de pantalla no puede saltar
+        directamente a la navegación (o saltearla) como hace con el
+        contenido de <main>, más abajo. -->
+   <nav class="topbar" aria-label="Secciones de tu bitácora">
      <div class="icon-nav-item">
        <button class="icon-btn" id="joinCollabBtn" type="button" title="Colaborar con otra historia" aria-label="Colaborar con otra historia">🤝</button>
        <span class="icon-label" aria-hidden="true">Colaborar</span>
@@ -604,7 +608,12 @@
        <a class="icon-btn" href="/capitulos.html" title="Libro de la historia" aria-label="Libro de la historia">📖</a>
        <span class="icon-label" aria-hidden="true">Libro</span>
      </div>
-   </div>
+   </nav>
+   <!-- <main>: antes el contenido central (la charla con el orbe, y todo lo
+        de acá abajo) no estaba en ningún landmark — visualmente funciona
+        igual, pero un lector de pantalla no tiene forma de saltar directo
+        a "lo importante" sin pasar por el resto. -->
+   <main>
    <div class="join-collab-panel" id="joinCollabPanel" style="display:none;">
      <p class="sub">Quiero colaborar con otra historia — ingresa el código que te compartieron.</p>
      <div class="join-collab-row">
@@ -625,7 +634,13 @@
           <button class="orb" id="orb" data-state="idle" aria-label="Presionar para comenzar la charla">
             <span id="orbLabel">Presiona<br>para hablar</span>
           </button>
-          <div class="state-label" id="stateLabel"></div>
+          <!-- role="status" aria-live="polite" aria-atomic="true": este texto
+               cambia solo (Escuchando…/Transcribiendo…/pausa/errores) sin que
+               la persona toque nada — sin esto, alguien con lector de
+               pantalla no se entera de que el estado cambió. aria-atomic
+               porque el texto se REEMPLAZA entero cada vez (no se agrega),
+               así que conviene anunciarlo completo y no solo la diferencia. -->
+          <div class="state-label" id="stateLabel" role="status" aria-live="polite" aria-atomic="true"></div>
           <button class="write-toggle end-toggle" id="endBtn" type="button" style="display:none;">terminar la charla</button>
           <button class="write-toggle" id="treeModeBtn" type="button">armar árbol genealógico</button>
           <!-- Oculto a pedido: el botón manual "prefiero escribir" ya no se
@@ -652,6 +667,7 @@
         <button class="write-toggle" id="inviteRegenBtn" type="button">generar código nuevo</button>
       </div>
     </div>
+   </main>
   </div>
 
 <script>
