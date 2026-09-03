@@ -369,6 +369,19 @@ async function main() {
   check('nota pendiente -> 200', conNota.status === 200);
   check('nota pendiente: el prompt de arranque incluye el texto de la nota', capturedCalls[0].messages[0].content.includes('andar en bici'));
   check('nota pendiente: se marcó como discutida', familyNoteMarkedDiscussed.includes(42));
+
+  // --- 11b) Si Anthropic falla, la nota pendiente NO se marca como discutida --
+  // (server.js: el UPDATE se movió a después de validar la respuesta —
+  // antes corría ANTES de llamar a Anthropic, así que una falla del
+  // proveedor perdía el aporte en silencio: la nota quedaba marcada como
+  // discutida aunque la persona nunca llegó a enterarse).
+  resetAnthropicMock();
+  user.pendingFamilyNote = { id: 43, contributor: 'María', parentesco: 'hija', texto: 'Otra historia distinta.' };
+  pushAnthropicResponse({ throw: new Error('Anthropic no respondió (simulado)') });
+  const conNotaFallaProveedor = await nextForUser(server, cookie, { history: [], mode: 'historia' });
+  check('nota pendiente + falla del proveedor -> 500 (no 200)', conNotaFallaProveedor.status === 500);
+  check('nota pendiente + falla del proveedor: la nota NO se marca como discutida', !familyNoteMarkedDiscussed.includes(43));
+
   user.pendingFamilyNote = null;
   user.resumenTexto = '';
 
