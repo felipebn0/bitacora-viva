@@ -374,8 +374,15 @@
       /* "Iniciar sesión" + "Crear cuenta" ya no comparten fila con el
          control de letra (ver arriba), pero en un celular muy angosto
          (320px) con la letra en el máximo (140%) los dos solos todavía no
-         entraban en una fila — que se partan en dos en vez de desbordar. */
-      .nav-links{flex-wrap:wrap;justify-content:center}
+         entraban en una fila — que se partan en dos en vez de desbordar.
+         flex-basis:100%: sin esto, .nav-links (como flex item de
+         .nav-inner) solo mide lo que ocupa su contenido, angosto — el
+         justify-content:center de acá arriba termina centrando "Iniciar
+         sesión"/"Crear cuenta" dentro de ESE cuadro angosto, no dentro del
+         ancho real de la pantalla, y la fila queda corrida hacia la
+         izquierda en vez de centrada. Con flex-basis:100% el cuadro pasa a
+         medir el ancho completo de la fila, y ahí sí el centrado es real. */
+      .nav-links{flex-wrap:wrap;flex-basis:100%;justify-content:center}
       .hero{padding:48px 0 60px}h1{font-size:clamp(2.7rem,13vw,3.3rem)}.hero-device-wrap{min-height:440px}.device{padding:16px;border-radius:26px}.demo-panel{min-height:340px;padding:22px 14px}.orb{width:142px;height:142px}.memory-chip{display:none}
       section{padding:52px 0}h2{font-size:2.8rem}.problem-grid{gap:32px}
       .window-content{min-height:auto}.conversation,.story-side{padding:24px}.bubble{max-width:92%}
