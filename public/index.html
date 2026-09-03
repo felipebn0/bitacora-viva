@@ -333,12 +333,17 @@
       /* "Iniciar sesión" + "Crear cuenta" ya llenaban el ancho justo en
          pantallas angostas — meter el control de letra en la misma fila
          desbordaba el header (y peor al agrandar la letra, porque el
-         control también crece con el resto del texto). En vez de seguir
-         achicando algo que ya estaba al límite, el control baja a su
-         propia fila centrada debajo, así el header nunca se desborda sin
-         importar el tamaño de letra elegido. */
+         control también crece con el resto del texto). Se resuelve
+         dejando que el header se envuelva en varias filas en vez de
+         desbordar (ver .nav-inner{flex-wrap:wrap} abajo). */
       .nav-inner{flex-wrap:wrap;height:auto;padding:12px 0}
-      .nav-font-ctrl{order:3;flex-basis:100%;justify-content:center;margin-top:2px}
+      /* El control de tamaño de letra NO va en su propia fila aparte: acá
+         al lado de la marca (que en este ancho solo muestra el ícono, sin
+         el nombre) sobra espacio de sobra, así que entra bien en la misma
+         fila. Ponerlo en su propia fila completa (como se hacía antes)
+         agregaba una fila entera de alto extra al header en el caso más
+         angosto — a 320px con la letra al máximo (140%) llegaba a ocupar
+         232px, casi un tercio de una pantalla de celular chico. */
       /* "Iniciar sesión" + "Crear cuenta" ya no comparten fila con el
          control de letra (ver arriba), pero en un celular muy angosto
          (320px) con la letra en el máximo (140%) los dos solos todavía no
