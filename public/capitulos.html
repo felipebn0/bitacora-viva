@@ -101,21 +101,26 @@
     </div>
     <a class="volver" href="/app.html">← volver a la bitácora</a>
   </header>
-  <div class="wrap">
+  <!-- <main>, no <div>: mismo criterio que app.html — sin esto un lector de
+       pantalla no tiene forma de saltar directo al contenido. -->
+  <main class="wrap">
     <div class="aportes-section" id="aportesSection" style="display:none;">
       <h2>Aportes de la familia</h2>
       <p class="sub">Historias que colaboradores agregaron con su propia voz.</p>
-      <div id="aportesLista"></div>
+      <div id="aportesLista" role="status" aria-live="polite" aria-atomic="true"></div>
     </div>
 
     <div class="toolbar">
       <button class="generar" id="generarBtn" type="button">Generar capítulos</button>
-      <span class="status" id="status"></span>
+      <!-- role="status" aria-live: acá se anuncia "Generando…" y, cuando
+         termina, el resultado — sin esto no había forma de saber que
+         terminó sin mirar la pantalla todo el rato. -->
+      <span class="status" id="status" role="status" aria-live="polite" aria-atomic="true"></span>
     </div>
-    <div id="lista">
+    <div id="lista" role="status" aria-live="polite" aria-atomic="true">
       <p class="empty">Cargando…</p>
     </div>
-  </div>
+  </main>
 
 <script>
 (function () {

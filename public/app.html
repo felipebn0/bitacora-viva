@@ -29,6 +29,21 @@
      los <input> tenían :focus). :focus-visible solo aparece al navegar con
      Tab, no al hacer clic con mouse/dedo. */
   :focus-visible { outline: 3px solid var(--gold-deep); outline-offset: 2px; }
+  /* Link "saltar al contenido" — mismo patrón que la landing (index.html):
+     invisible y afuera del flujo normal, solo aparece al navegar con Tab
+     (primer elemento enfocable de la página), para no pasar por el saludo
+     y los 5 íconos del nav cada vez. */
+  .skip-link {
+    position: absolute; top: -100px; left: 12px; z-index: 100;
+    background: var(--moss); color: #fffaf0; padding: 12px 18px;
+    border-radius: 10px; text-decoration: none; font-weight: 700;
+    transition: top .15s ease;
+  }
+  .skip-link:focus { top: 12px; }
+  /* Sin esto, al saltar acá quedaba un anillo de foco rodeando TODO
+     el contenido de <main> — el salto ya se nota por dónde arranca a leer
+     un lector de pantalla / el scroll, no hace falta remarcarlo. */
+  main:focus { outline: none; }
   body {
     margin: 0;
     min-height: 100vh;
@@ -522,6 +537,11 @@
   </div>
 
   <div id="appContent">
+   <!-- Mismo patrón que la landing (public/index.html): invisible hasta que
+        se navega con Tab, para no obligar a pasar por el saludo y los 5
+        íconos del nav cada vez que se entra a la página con lector de
+        pantalla o teclado. -->
+   <a class="skip-link" href="#main-content">Saltar al contenido</a>
    <div class="greeting-bar">
      <img class="brand-logo" src="/images/logo-icon.png" alt="Los recuerdos de mis viejos">
      <h1 class="greeting-text"><span class="brand-tag">Los recuerdos de mis viejos</span>Hola, <span class="greeting-name" id="greetingName"></span></h1>
@@ -639,7 +659,7 @@
         de acá abajo) no estaba en ningún landmark — visualmente funciona
         igual, pero un lector de pantalla no tiene forma de saltar directo
         a "lo importante" sin pasar por el resto. -->
-   <main>
+   <main id="main-content" tabindex="-1">
    <div class="join-collab-panel" id="joinCollabPanel" style="display:none;">
      <p class="sub">Quiero colaborar con otra historia — ingresa el código que te compartieron.</p>
      <div class="join-collab-row">
@@ -1888,7 +1908,12 @@
   const BUTTON_KEY = 'Enter';
   document.addEventListener('keydown', (e) => {
     const tag = (e.target && e.target.tagName) || '';
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON') return; // no pisar el Enter de los cuadros de texto ni de un botón con foco
+    // "A" se suma acá encontrado al agregar el link "saltar al contenido":
+    // sin esto, el Enter de alguien navegando con teclado hasta CUALQUIER
+    // link enfocado (el skip-link, o los del nav de arriba — Aportes,
+    // Historias, Árbol, Libro) quedaba secuestrado por este listener y
+    // disparaba el orbe en vez de dejar que el link navegue.
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || tag === 'A') return; // no pisar el Enter de los cuadros de texto, un botón o un link con foco
     if (e.key === BUTTON_KEY) {
       e.preventDefault();
       handleOrbPress();

@@ -60,9 +60,15 @@
     </div>
     <a class="volver" href="/app.html">← volver a la bitácora</a>
   </header>
-  <div class="wrap">
-    <div id="storyLogLista"><p class="empty">Cargando…</p></div>
-  </div>
+  <!-- <main>, no <div>: mismo criterio que app.html — sin esto un lector de
+       pantalla no tiene forma de saltar directo al contenido. -->
+  <main class="wrap">
+    <!-- role="status" aria-live="polite" aria-atomic="true": esto reemplaza
+       todo su contenido (Cargando… → lista de historias, o un mensaje de
+       error) en vez de agregar de a poco — aria-atomic hace que se anuncie
+       el texto nuevo completo, no solo lo que cambió. -->
+    <div id="storyLogLista" role="status" aria-live="polite" aria-atomic="true"><p class="empty">Cargando…</p></div>
+  </main>
 
 <script>
 (function () {
