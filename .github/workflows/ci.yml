@@ -41,3 +41,24 @@ jobs:
 
       - name: Tests
         run: npm test
+
+      # Suite aparte (no entra en "npm test") porque necesita el navegador
+      # de Playwright instalado — más pesado que los smoke tests normales.
+      # Nace de una auditoría de UX que encontró bugs de layout (el nav
+      # tapando anclas, el header cortándose con la letra agrandada,
+      # botones por debajo del tamaño táctil mínimo) que ningún test
+      # anterior agarraba porque ninguno mide nada visual.
+      - name: Instalar navegador de Playwright (Chromium)
+        run: npx playwright install --with-deps chromium
+
+      - name: Pruebas responsive (ancho x escala de letra, Playwright)
+        run: npm run test:responsive
+
+      - name: Subir capturas de las pruebas responsive
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capturas-responsive
+          path: test-artifacts/responsive/
+          retention-days: 14
+          if-no-files-found: ignore
