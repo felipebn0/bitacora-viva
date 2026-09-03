@@ -740,9 +740,21 @@ function capitalizarInicio(str) {
 function fechaNacimientoValida(str) {
   const s = String(str || '').trim();
   if (!s) return null;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
-  const d = new Date(s + 'T00:00:00Z');
-  if (Number.isNaN(d.getTime())) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return null;
+  const anio = Number(m[1]);
+  const mes = Number(m[2]);
+  const dia = Number(m[3]);
+  const d = new Date(Date.UTC(anio, mes - 1, dia));
+  // new Date()/Date.UTC() NO rechazan fechas que no existen en el
+  // calendario — las normalizan en silencio en vez de fallar (30 de
+  // febrero pasa a ser 2 de marzo, 31 de abril pasa a ser 1 de mayo, y así
+  // con cualquier mes/día fuera de rango). Por eso no alcanza con chequear
+  // Number.isNaN(d.getTime()): hay que reconstruir la fecha y comparar sus
+  // propios componentes contra lo que se pidió — si no coinciden, esa
+  // fecha no existe de verdad (esto también agarra 29 de febrero en un año
+  // no bisiesto, y cualquier mes fuera de 1-12).
+  if (d.getUTCFullYear() !== anio || d.getUTCMonth() !== mes - 1 || d.getUTCDate() !== dia) return null;
   const hoy = new Date();
   const haceCientoTreintaAnios = new Date(Date.UTC(hoy.getUTCFullYear() - 130, 0, 1));
   if (d > hoy || d < haceCientoTreintaAnios) return null;
