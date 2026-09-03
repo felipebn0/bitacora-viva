@@ -1148,17 +1148,50 @@ app.post('/api/delete-account', requireAuth, rateLimit, async (req, res) => {
     const ok = await bcrypt.compare(password, rows[0].password_hash);
     if (!ok) return res.status(401).json({ error: 'La clave no es correcta.' });
 
-    // 1) Toda la bitácora propia de esta cuenta (si tiene una) — mismo
-    // criterio que /api/reset-bitacora, incluyendo Blob.
-    await sql`DELETE FROM sessions WHERE user_id = ${req.userId}`;
-    await sql`DELETE FROM resumen WHERE user_id = ${req.userId}`;
-    const n = await sql`DELETE FROM family_notes WHERE user_id = ${req.userId} RETURNING audio_url, audio_urls`;
-    const m = await sql`DELETE FROM media WHERE user_id = ${req.userId} RETURNING url`;
-    const fm = await sql`DELETE FROM family_members WHERE user_id = ${req.userId} RETURNING id`;
-    await sql`DELETE FROM timeline_events WHERE user_id = ${req.userId}`;
-    const sl = await sql`DELETE FROM story_log WHERE user_id = ${req.userId} RETURNING audio_url`;
-    await sql`DELETE FROM chapters WHERE user_id = ${req.userId}`;
+    // Antes eran 13 sentencias sueltas: una falla a mitad de camino podía
+    // dejar la cuenta a medio borrar — por ejemplo, sin bitácora propia
+    // pero la fila de "users" todavía viva, o peor, la fila de "users" ya
+    // borrada mientras otras cuentas seguían apuntándole por owner_user_id.
+    // Ahora corren todas dentro de una única transacción real de Postgres
+    // vía sql.transaction() — o se borra/desvincula todo, o no se toca nada.
+    //
+    // Mismo motivo que en /api/reset-bitacora para el orden: sql.transaction()
+    // de Neon manda todas las consultas juntas como una transacción no
+    // interactiva, así que el borrado de historia_versiones ligado a
+    // family_members va primero y por subconsulta (no por ids de un
+    // RETURNING previo) — tiene que correr ANTES de borrar family_members
+    // para poder verlas todavía.
+    //
+    // El resto respeta el mismo orden que ya tenía la versión sin
+    // transacción: 1) toda la bitácora propia (si tiene una), incluyendo lo
+    // que depende de ella; 2) soltar cualquier referencia a esta cuenta
+    // desde datos de OTRAS personas (colaboraciones, aportes hechos en
+    // otras bitácoras, ediciones hechas en el árbol de otra persona); 3)
+    // recién al final, con nada más apuntándole, la fila de "users" en sí.
+    const results = await sql.transaction([
+      sql`DELETE FROM historia_versiones WHERE tabla = 'family_members' AND registro_id IN (SELECT id FROM family_members WHERE user_id = ${req.userId})`,
+      sql`DELETE FROM sessions WHERE user_id = ${req.userId}`,
+      sql`DELETE FROM resumen WHERE user_id = ${req.userId}`,
+      sql`DELETE FROM family_notes WHERE user_id = ${req.userId} RETURNING audio_url, audio_urls`,
+      sql`DELETE FROM media WHERE user_id = ${req.userId} RETURNING url`,
+      sql`DELETE FROM family_members WHERE user_id = ${req.userId} RETURNING id`,
+      sql`DELETE FROM timeline_events WHERE user_id = ${req.userId}`,
+      sql`DELETE FROM story_log WHERE user_id = ${req.userId} RETURNING audio_url`,
+      sql`DELETE FROM chapters WHERE user_id = ${req.userId}`,
+      sql`UPDATE users SET owner_user_id = NULL WHERE owner_user_id = ${req.userId}`,
+      sql`DELETE FROM collaborations WHERE owner_user_id = ${req.userId} OR collaborator_user_id = ${req.userId}`,
+      sql`UPDATE family_notes SET contributed_by = NULL WHERE contributed_by = ${req.userId}`,
+      sql`UPDATE historia_versiones SET editado_por = NULL WHERE editado_por = ${req.userId}`,
+      sql`DELETE FROM users WHERE id = ${req.userId}`,
+    ]);
+    const n = results[3];
+    const m = results[4];
+    const sl = results[7];
 
+    // Blob queda deliberadamente FUERA de la transacción SQL (Vercel Blob no
+    // participa de una transacción de Postgres) — mismo motivo y misma
+    // función (con su reintento vía pending_blob_deletes) que en
+    // /api/reset-bitacora.
     const audioUrls = [];
     n.forEach((row) => {
       if (row.audio_url) audioUrls.push(row.audio_url);
@@ -1167,25 +1200,6 @@ app.post('/api/delete-account', requireAuth, rateLimit, async (req, res) => {
     sl.forEach((row) => { if (row.audio_url) audioUrls.push(row.audio_url); });
     m.forEach((row) => { if (row.url) audioUrls.push(row.url); });
     await borrarArchivosBlob(audioUrls);
-
-    // 1b) Igual que en /api/reset-bitacora: las versiones anteriores de las
-    // personas del árbol que se acaban de borrar (family_members) quedaban
-    // huérfanas en historia_versiones para siempre — se borran acá también,
-    // porque esto se promete como irreversible y total.
-    if (fm.length) {
-      const idsFm = fm.map((row) => row.id);
-      await sql`DELETE FROM historia_versiones WHERE tabla = 'family_members' AND registro_id = ANY(${idsFm})`;
-    }
-
-    // 2) Soltar cualquier referencia a esta cuenta desde datos de OTRAS
-    // personas, para poder borrar la fila de "users" sin romper nada ajeno.
-    await sql`UPDATE users SET owner_user_id = NULL WHERE owner_user_id = ${req.userId}`;
-    await sql`DELETE FROM collaborations WHERE owner_user_id = ${req.userId} OR collaborator_user_id = ${req.userId}`;
-    await sql`UPDATE family_notes SET contributed_by = NULL WHERE contributed_by = ${req.userId}`;
-    await sql`UPDATE historia_versiones SET editado_por = NULL WHERE editado_por = ${req.userId}`;
-
-    // 3) La cuenta en sí.
-    await sql`DELETE FROM users WHERE id = ${req.userId}`;
 
     clearSessionCookie(req, res);
     res.json({ ok: true });
