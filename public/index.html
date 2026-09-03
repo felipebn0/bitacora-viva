@@ -100,8 +100,15 @@
        header (quedaba con la parte de arriba cortada). Con min-height el
        header mide 76px igual que siempre a tamaño normal, pero puede
        crecer si el contenido lo necesita — mismo criterio que ya se usa
-       para el header angosto de mobile más abajo. */
-    .nav-inner{min-height:76px; display:flex; align-items:center; justify-content:space-between; gap:24px}
+       para el header angosto de mobile más abajo.
+       flex-wrap:wrap a cualquier ancho (no solo en mobile): sin esto, con
+       letra agrandada y poco espacio, cada link se partía SU PROPIO texto
+       en dos líneas ("La experiencia" → "La" / "experiencia", "Crear
+       cuenta" quedando casi un círculo) en vez de que la fila completa
+       bajara a una línea nueva. Con white-space:nowrap en los links (ver
+       abajo) más esto, ahora es la fila la que se envuelve — cada link se
+       mantiene entero, en una sola línea. */
+    .nav-inner{min-height:76px; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:24px}
     /* min-height/min-width:44px: en mobile el span del nombre se oculta
        (ver ".brand span{display:none}" más abajo) y queda solo el ícono de
        38x38px como zona táctil — por debajo del mínimo recomendado de
@@ -109,8 +116,16 @@
        zona táctil ensanchada; en desktop, donde el contenido (ícono+texto)
        ya supera 44px, esto no cambia nada visualmente. */
     .brand{display:flex; align-items:center; justify-content:center; gap:11px; min-height:44px; min-width:44px; text-decoration:none; font-family:var(--serif); font-size:1.28rem; font-weight:600}
+    .brand span{white-space:nowrap}
     .brand-mark{width:38px;height:38px;object-fit:contain;display:block}
-    .nav-links{display:flex;gap:26px;align-items:center}
+    /* gap:22px (antes 26px): con white-space:nowrap en los links (ver
+       abajo) el espacio real que ocupa la fila entera se nota más que
+       antes — sin este ajuste, a 100% (tamaño normal) el nav ya quedaba
+       justo 18px corto y pasaba a dos filas sin necesidad, un cambio de
+       diseño que nadie pidió. 22px alcanza para que siga entrando en una
+       sola fila a tamaño normal, y a partir de haber agrandado la letra
+       sigue pasando a dos filas prolijamente cuando hace falta. */
+    .nav-links{display:flex;gap:22px;align-items:center;flex-wrap:wrap}
     /* Tamaño de letra visible SIEMPRE en el header público, no solo dentro
        de la app después de iniciar sesión — para este público, no poder
        agrandar la letra para leer la landing o el registro es justo la
@@ -126,8 +141,11 @@
     .nav-font-ctrl span{color:var(--ink-soft);font-size:.78rem;font-weight:700;min-width:3ch;text-align:center}
     /* min-height:44px + inline-flex centrado: el link "Iniciar sesión" (y
        los anchors de escritorio) tenían solo el alto del texto (~23px) como
-       zona táctil real, aunque el texto se viera igual. */
-    .nav-links a{text-decoration:none;color:var(--ink-soft);font-size:.95rem;display:inline-flex;align-items:center;min-height:44px;padding:4px 2px}
+       zona táctil real, aunque el texto se viera igual.
+       white-space:nowrap: que el texto de CADA link no se parta en dos
+       líneas cuando falta espacio — la fila entera se envuelve en su
+       lugar (ver .nav-inner{flex-wrap:wrap} arriba). */
+    .nav-links a{text-decoration:none;color:var(--ink-soft);font-size:.95rem;display:inline-flex;align-items:center;min-height:44px;padding:4px 2px;white-space:nowrap}
     .nav-links a.nav-cta{color:#fffaf0}
     .nav-links a:hover{color:var(--ink)}
     .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:999px;padding:13px 20px;text-decoration:none;font-weight:700;border:1px solid transparent;transition:.22s ease;cursor:pointer}
@@ -297,14 +315,23 @@
     /* REVEAL */
     .reveal{opacity:0;transform:translateY(16px);transition:.7s ease}.reveal.show{opacity:1;transform:none}
 
-    @media(max-width:980px){
-      /* En celular se esconden los links que solo bajan a una sección de
-         esta misma página (Cómo funciona, La experiencia, etc.) — no hacen
-         falta arriba porque ya se ven al bajar. "Iniciar sesión" y "Crear
-         cuenta" quedan SIEMPRE visibles: son las dos acciones reales del
-         menú, alguien que ya tiene cuenta tiene que poder entrar desde acá. */
+    /* Breakpoint propio para el nav (más ancho que el de abajo, que es
+       sobre el resto de la landing): con los 6 links completos (marca,
+       tamaño de letra, 4 anchors, login, registro) y sin partir el texto
+       de cada uno (white-space:nowrap, ver .nav-links a más arriba), ya
+       no entran en una sola fila por debajo de 1220px — antes "entraban"
+       porque el texto de varios se partía en dos líneas silenciosamente
+       (el mismo problema que esto arregla, solo que menos visible a
+       tamaño de letra normal). Por debajo de ese ancho se esconden los
+       anchors secundarios, igual que ya se hacía en mobile — "Iniciar
+       sesión" y "Crear cuenta" quedan SIEMPRE visibles: son las dos
+       acciones reales del menú, alguien que ya tiene cuenta tiene que
+       poder entrar desde acá. */
+    @media(max-width:1220px){
       .nav-links a:not(.nav-cta):not(.nav-login){display:none}
       .nav-links{gap:14px}
+    }
+    @media(max-width:980px){
       .hero{padding-top:62px}
       .hero-grid,.problem-grid,.voice-grid,.privacy-box,.registro-box{grid-template-columns:1fr;gap:46px}
       .hero-copy{text-align:center}.hero-copy h1{margin-left:auto;margin-right:auto}.hero-copy p{margin-left:auto;margin-right:auto}.hero-actions,.trust-row{justify-content:center}.eyebrow{justify-content:center}.hero-device-wrap{min-height:560px}
