@@ -720,10 +720,29 @@
   let sessionId = 0;
   let sessionStartTime = null; // para ofrecer una pausa después de un rato charlando
   let ofrecioPausa = false; // una sola vez por sesión, no en cada turno
+  // Cuando el turno anterior ofreció la pausa, el turno SIGUIENTE (donde la
+  // persona ya respondió si quiere seguir o pausar) necesita avisarle al
+  // backend que interprete esa respuesta — el backend no puede "adivinarlo"
+  // solo mirando el historial (ver el comentario largo en server.js sobre
+  // por qué la instrucción no puede ir pegada solo al turno donde se
+  // ofrece). Se usa una sola vez y se resetea enseguida.
+  let esperandoRespuestaPausa = false;
   const OFRECER_PAUSA_MS = 5 * 60 * 1000;
   let mediaStream = null;
   let mediaRecorder = null;
   let audioChunks = [];
+  let recordingStartedAt = null;
+  let lastRecordingDurationMs = 0;
+  // No todo lo que se graba vale la pena guardarlo como audio (ocupa mucho
+  // más que el texto en Vercel Blob) — solo si la respuesta ya califica
+  // como "historia destacada" (mismo umbral que usa el backend para
+  // story_log) o si duró más de AUDIO_MIN_DURATION_MS, aunque el texto
+  // transcrito haya salido corto (una respuesta larga hablando despacio,
+  // con pausas, puede transcribirse corta en caracteres pero seguir siendo
+  // un audio que vale la pena conservar). Si no cumple ninguna de las dos,
+  // se guarda el texto igual — solo se descarta el archivo de audio.
+  const HISTORIA_MIN_CHARS = 180; // debe coincidir con el mismo nombre en server.js
+  const AUDIO_MIN_DURATION_MS = 50 * 1000;
   // Se guarda el motivo real del fallo (ver startRecordingAudio) para poder
   // avisar algo más útil que "no pude usar el micrófono" cuando el problema
   // es que el permiso quedó bloqueado — que es el caso más común y el único
@@ -778,6 +797,7 @@
       }
       mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
       mediaRecorder.start();
+      recordingStartedAt = Date.now();
       lastMicErrorName = null;
     } catch (e) {
       mediaRecorder = null; // sin permiso de mic aparte: seguimos solo con el texto
@@ -807,7 +827,10 @@
   function stopRecordingAudio() {
     return new Promise((resolve) => {
       if (!mediaRecorder || mediaRecorder.state === 'inactive') { resolve(null); return; }
-      mediaRecorder.onstop = () => resolve(new Blob(audioChunks, { type: 'audio/webm' }));
+      mediaRecorder.onstop = () => {
+        lastRecordingDurationMs = recordingStartedAt ? Date.now() - recordingStartedAt : 0;
+        resolve(new Blob(audioChunks, { type: 'audio/webm' }));
+      };
       mediaRecorder.stop();
     });
   }
@@ -1105,18 +1128,26 @@
     try {
       const lastEntry = sessionLog.length ? sessionLog[sessionLog.length - 1] : null;
       const lastAudioUrl = lastEntry && lastEntry.role === 'user' ? lastEntry.audioFile || null : null;
+      // Si el turno anterior ofreció la pausa, este turno tiene que avisarle
+      // al backend que interprete la respuesta (se lee y resetea antes de
+      // decidir si HOY se ofrece una pausa nueva — son dos cosas que nunca
+      // pasan en el mismo turno).
+      const interpretarRespuestaPausa = esperandoRespuestaPausa;
+      esperandoRespuestaPausa = false;
+
       // Después de un rato charlando, se le ofrece a la persona la opción
       // de pausar en vez de dejar que la sesión siga sin límite — una sola
       // vez por sesión, no en cada turno.
       let ofrecerPausa = false;
-      if (sessionMode === 'historia' && !ofrecioPausa && sessionStartTime && (Date.now() - sessionStartTime) >= OFRECER_PAUSA_MS) {
+      if (!interpretarRespuestaPausa && sessionMode === 'historia' && !ofrecioPausa && sessionStartTime && (Date.now() - sessionStartTime) >= OFRECER_PAUSA_MS) {
         ofrecerPausa = true;
         ofrecioPausa = true;
+        esperandoRespuestaPausa = true; // para el PRÓXIMO turno, no este
       }
       const resp = await fetch('/api/next', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ history, lastAudioUrl, mode: sessionMode, ofrecerPausa }),
+        body: JSON.stringify({ history, lastAudioUrl, mode: sessionMode, ofrecerPausa, interpretarRespuestaPausa }),
       });
       if (mySession !== sessionId) return;
       if (!resp.ok) {
@@ -1258,8 +1289,14 @@
     writeRow.classList.remove('visible');
     writeInput.value = '';
     if (audioBlob) {
-      const file = await uploadAudio(audioBlob, 'user', myTurn, 'audio/webm');
-      if (file) logEntry.audioFile = file;
+      const esHistoriaRelevante = text.trim().length >= HISTORIA_MIN_CHARS;
+      const duroBastante = lastRecordingDurationMs >= AUDIO_MIN_DURATION_MS;
+      if (esHistoriaRelevante || duroBastante) {
+        const file = await uploadAudio(audioBlob, 'user', myTurn, 'audio/webm');
+        if (file) logEntry.audioFile = file;
+      }
+      // Si no calificó, el audio del navegador se descarta solo (nunca se
+      // sube) — el texto transcrito ya quedó guardado en logEntry/history.
     }
     fetchNext();
   }
