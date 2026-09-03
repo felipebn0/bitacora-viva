@@ -432,7 +432,7 @@
      <h1 class="greeting-text">Un gusto tenerte de vuelta<span class="greeting-name" id="greetingName"></span></h1>
      <div class="user-menu">
        <div class="icon-nav-item">
-         <button class="icon-btn" id="userMenuBtn" type="button" title="Mi cuenta" aria-label="Mi cuenta">👤</button>
+         <button class="icon-btn" id="userMenuBtn" type="button" title="Mi cuenta" aria-label="Mi cuenta" aria-expanded="false" aria-controls="userMenuPanel">👤</button>
          <span class="icon-label" aria-hidden="true">Cuenta</span>
        </div>
        <div class="user-menu-panel" id="userMenuPanel">
@@ -694,11 +694,13 @@
   const userMenuPanel = document.getElementById('userMenuPanel');
   userMenuBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    userMenuPanel.classList.toggle('visible');
+    const abierto = userMenuPanel.classList.toggle('visible');
+    userMenuBtn.setAttribute('aria-expanded', String(abierto));
   });
   document.addEventListener('click', (e) => {
     if (!userMenuPanel.contains(e.target) && e.target !== userMenuBtn) {
       userMenuPanel.classList.remove('visible');
+      userMenuBtn.setAttribute('aria-expanded', 'false');
     }
   });
 
