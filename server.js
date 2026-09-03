@@ -1511,7 +1511,12 @@ async function speakWithElevenLabs(text) {
       body: JSON.stringify({
         text,
         model_id: 'eleven_flash_v2_5', // la mitad de precio por caracter que multilingual_v2, y más rápido
-        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+        // "style" le da variación emocional/prosódica a la voz — sin este
+        // parámetro (o en 0) suena plana, casi robótica, porque queda sin
+        // ninguna inflexión de estilo. "use_speaker_boost" mejora la
+        // claridad/similitud con la voz original, a costa de un poquito
+        // más de latencia (aceptable acá, no es una llamada en vivo).
+        voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.3, use_speaker_boost: true },
       }),
     }
   );
