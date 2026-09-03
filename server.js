@@ -209,36 +209,47 @@ if (!DB_URL) {
 }
 
 let schemaReady = null;
+// Antes esto era una función async que hacía 44 "await sql`...`" seguidos —
+// cada uno un viaje de red HTTP aparte a Neon. La memoización de schemaReady
+// ya hacía que esto solo corriera una vez por instancia tibia, pero esa
+// PRIMERA vez (cada arranque en frío en Vercel arranca con schemaReady en
+// null otra vez) pagaba los 44 round-trips seguidos — potencialmente
+// segundos de más justo en el peor momento, el primer pedido de alguien
+// abriendo la app después de un rato sin uso. Ahora las 44 sentencias van
+// todas juntas en un solo sql.transaction() (mismo mecanismo que ya usan
+// reset-bitacora/delete-account): un solo viaje de red, y de paso queda
+// atómico — si algo fallara a mitad de camino no deja el schema a medio
+// migrar, se puede reintentar limpio en el próximo arranque en frío.
 function ensureSchema() {
   if (!sql) throw new Error('Falta configurar la base de datos (DATABASE_URL).');
   if (!schemaReady) {
-    schemaReady = (async () => {
-      await sql`CREATE TABLE IF NOT EXISTS users (
+    schemaReady = sql.transaction([
+      sql`CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         username TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-      )`;
+      )`,
       // name/email: se agregaron para el registro abierto desde la landing
       // (public/landing.html) — las cuentas creadas a mano con SETUP_KEY
       // desde antes no tienen estos datos, por eso quedan nullable.
-      await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS name TEXT`;
-      await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT`;
-      await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL`;
+      sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS name TEXT`,
+      sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT`,
+      sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL`,
 
       // Familiares colaboradores: se unen con un código en vez de crear su
       // propia bitácora. "invite_code" es el código que cada cuenta "dueña"
       // puede compartir; "owner_user_id" marca que ESTA cuenta es
       // colaboradora de la cuenta dueña (NULL = cuenta normal/dueña).
-      await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_code TEXT`;
-      await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS owner_user_id INT REFERENCES users(id)`;
-      await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_invite_code ON users(invite_code) WHERE invite_code IS NOT NULL`;
+      sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_code TEXT`,
+      sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS owner_user_id INT REFERENCES users(id)`,
+      sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_invite_code ON users(invite_code) WHERE invite_code IS NOT NULL`,
 
       // Nombres nuevos que se agregaron al árbol genealógico (por charla o
       // por reconstrucción) y todavía no se vieron en /arbol.html — para la
       // campanita de aviso en el ícono del árbol. JSON con la lista de
       // nombres; se vacía cuando la persona entra a ver el árbol.
-      await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS tree_pending_names TEXT`;
+      sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS tree_pending_names TEXT`,
 
       // token_version: para poder revocar sesiones sin esperar a que
       // expiren solas. Cada cookie de sesión firmada lleva adentro el
@@ -246,67 +257,67 @@ function ensureSchema() {
       // coincide con el valor actual en esta columna, la sesión se rechaza
       // (ver requireAuth). Se incrementa al cambiar la clave, para cerrar
       // la sesión en cualquier otro dispositivo que tenga la clave vieja.
-      await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INT NOT NULL DEFAULT 0`;
+      sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INT NOT NULL DEFAULT 0`,
 
       // fecha_nacimiento: dato opcional del perfil (se agrega desde el menú
       // de cuenta) — le da a la entrevistadora contexto real de la edad de
       // la persona en vez de tener que inferirla o preguntarla, ver
       // loadFamilyContext más abajo.
-      await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS fecha_nacimiento DATE`;
+      sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS fecha_nacimiento DATE`,
 
       // sessions/resumen ya existían de una versión sin cuentas — se agrega
       // user_id de forma aditiva (nunca se borra nada existente).
-      await sql`CREATE TABLE IF NOT EXISTS sessions (
+      sql`CREATE TABLE IF NOT EXISTS sessions (
         id SERIAL PRIMARY KEY,
         fecha TIMESTAMPTZ NOT NULL DEFAULT now(),
         intercambios JSONB NOT NULL
-      )`;
-      await sql`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS user_id INT REFERENCES users(id)`;
-      await sql`CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)`;
+      )`,
+      sql`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS user_id INT REFERENCES users(id)`,
+      sql`CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)`,
 
-      await sql`CREATE TABLE IF NOT EXISTS resumen (
+      sql`CREATE TABLE IF NOT EXISTS resumen (
         id INT PRIMARY KEY DEFAULT 1,
         texto TEXT NOT NULL DEFAULT '',
         actualizado TIMESTAMPTZ
-      )`;
-      await sql`ALTER TABLE resumen ADD COLUMN IF NOT EXISTS user_id INT REFERENCES users(id)`;
+      )`,
+      sql`ALTER TABLE resumen ADD COLUMN IF NOT EXISTS user_id INT REFERENCES users(id)`,
       // "id" era la clave primaria de la versión vieja (sin cuentas), con un
       // default constante (1) en vez de un contador — eso hacía chocar
       // cualquier fila nueva. La sacamos; user_id (con su índice único de
       // abajo) es la clave real ahora.
-      await sql`ALTER TABLE resumen DROP CONSTRAINT IF EXISTS resumen_pkey`;
-      await sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_resumen_user ON resumen(user_id)`;
+      sql`ALTER TABLE resumen DROP CONSTRAINT IF EXISTS resumen_pkey`,
+      sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_resumen_user ON resumen(user_id)`,
 
       // Aportes de la familia: historias escritas, y fotos/videos con descripción.
-      await sql`CREATE TABLE IF NOT EXISTS family_notes (
+      sql`CREATE TABLE IF NOT EXISTS family_notes (
         id SERIAL PRIMARY KEY,
         user_id INT NOT NULL REFERENCES users(id),
         contributor TEXT,
         texto TEXT NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-      )`;
+      )`,
       // discussed: si ya se le contó al dueño de la bitácora que un
       // familiar aportó esta historia (para abrir la próxima charla con
       // eso), igual que "discussed" en la tabla media de acá abajo.
-      await sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS discussed BOOLEAN NOT NULL DEFAULT false`;
-      await sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS audio_url TEXT`;
-      await sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS parentesco TEXT`;
+      sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS discussed BOOLEAN NOT NULL DEFAULT false`,
+      sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS audio_url TEXT`,
+      sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS parentesco TEXT`,
       // Con la charla de aportar (varios turnos), puede haber más de un
       // audio — se guardan todos acá como JSON. audio_url (singular) sigue
       // sirviendo para los aportes viejos de un solo audio.
-      await sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS audio_urls TEXT`;
+      sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS audio_urls TEXT`,
       // Quién (qué CUENTA logueada) aportó esta historia — distinto de
       // "contributor", que es el nombre libre que la charla extrajo. Con
       // esto un colaborador solo ve sus propias historias aportadas, nunca
       // las de otros colaboradores de la misma bitácora; el dueño sigue
       // viéndolas todas.
-      await sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS contributed_by INT REFERENCES users(id)`;
+      sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS contributed_by INT REFERENCES users(id)`,
       // Quién vivió/protagonizó el recuerdo — normalmente es el mismo
       // colaborador, pero puede ser otra persona si solo está compartiendo
       // una historia que tenía guardada (ver /api/contribute-chat). NULL
       // significa "es la historia del propio colaborador".
-      await sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS protagonista TEXT`;
-      await sql`CREATE INDEX IF NOT EXISTS idx_family_notes_user ON family_notes(user_id)`;
+      sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS protagonista TEXT`,
+      sql`CREATE INDEX IF NOT EXISTS idx_family_notes_user ON family_notes(user_id)`,
 
       // Un usuario dueño de su propia bitácora también puede sumarse como
       // colaborador de OTRAS bitácoras usando el código de esa familia
@@ -314,17 +325,17 @@ function ensureSchema() {
       // una cuenta 100% colaboradora (users.owner_user_id), acá es
       // muchos-a-muchos: la misma persona puede colaborar en varias
       // historias distintas sin dejar de tener la suya propia.
-      await sql`CREATE TABLE IF NOT EXISTS collaborations (
+      sql`CREATE TABLE IF NOT EXISTS collaborations (
         id SERIAL PRIMARY KEY,
         collaborator_user_id INT NOT NULL REFERENCES users(id),
         owner_user_id INT NOT NULL REFERENCES users(id),
         parentesco TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         UNIQUE(collaborator_user_id, owner_user_id)
-      )`;
-      await sql`CREATE INDEX IF NOT EXISTS idx_collaborations_collaborator ON collaborations(collaborator_user_id)`;
+      )`,
+      sql`CREATE INDEX IF NOT EXISTS idx_collaborations_collaborator ON collaborations(collaborator_user_id)`,
 
-      await sql`CREATE TABLE IF NOT EXISTS media (
+      sql`CREATE TABLE IF NOT EXISTS media (
         id SERIAL PRIMARY KEY,
         user_id INT NOT NULL REFERENCES users(id),
         type TEXT NOT NULL,
@@ -333,40 +344,40 @@ function ensureSchema() {
         contributor TEXT,
         discussed BOOLEAN NOT NULL DEFAULT false,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-      )`;
-      await sql`CREATE INDEX IF NOT EXISTS idx_media_user ON media(user_id)`;
+      )`,
+      sql`CREATE INDEX IF NOT EXISTS idx_media_user ON media(user_id)`,
 
       // Log de historias detectadas dentro de la charla (no las que la
       // familia aporta a mano): cuando Claude nota que la respuesta fue una
       // historia completa, queda acá con el audio que ya se había subido.
-      await sql`CREATE TABLE IF NOT EXISTS story_log (
+      sql`CREATE TABLE IF NOT EXISTS story_log (
         id SERIAL PRIMARY KEY,
         user_id INT NOT NULL REFERENCES users(id),
         texto TEXT NOT NULL,
         audio_url TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-      )`;
-      await sql`CREATE INDEX IF NOT EXISTS idx_story_log_user ON story_log(user_id)`;
+      )`,
+      sql`CREATE INDEX IF NOT EXISTS idx_story_log_user ON story_log(user_id)`,
 
       // Historial de versiones: cuando se edita una historia (aportada o
       // detectada en la charla), el texto ANTERIOR queda acá antes de
       // pisarlo — nunca se borra, solo se guarda una versión más vieja.
       // Editar SÍ está permitido; borrar una historia no tiene ruta propia
       // a propósito — eso sigue siendo solo por pedido directo al dueño.
-      await sql`CREATE TABLE IF NOT EXISTS historia_versiones (
+      sql`CREATE TABLE IF NOT EXISTS historia_versiones (
         id SERIAL PRIMARY KEY,
         tabla TEXT NOT NULL,
         registro_id INT NOT NULL,
         texto_anterior TEXT NOT NULL,
         editado_por INT REFERENCES users(id),
         editado_at TIMESTAMPTZ NOT NULL DEFAULT now()
-      )`;
-      await sql`CREATE INDEX IF NOT EXISTS idx_historia_versiones_registro ON historia_versiones(tabla, registro_id)`;
+      )`,
+      sql`CREATE INDEX IF NOT EXISTS idx_historia_versiones_registro ON historia_versiones(tabla, registro_id)`,
 
       // Capítulos de biografía generados con IA a partir de las historias
       // detectadas (story_log). Se reemplazan enteros cada vez que se piden
       // de nuevo, igual que el árbol genealógico.
-      await sql`CREATE TABLE IF NOT EXISTS chapters (
+      sql`CREATE TABLE IF NOT EXISTS chapters (
         id SERIAL PRIMARY KEY,
         user_id INT NOT NULL REFERENCES users(id),
         title TEXT NOT NULL,
@@ -374,49 +385,49 @@ function ensureSchema() {
         generated_text TEXT NOT NULL,
         story_ids TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-      )`;
+      )`,
       // story_ids se guarda como JSON (no array nativo de Postgres): el
       // driver de Neon por HTTP no bindea bien arrays de JS, mismo motivo
       // por el que "padres" de family_members también es TEXT con JSON.
-      await sql`ALTER TABLE chapters ALTER COLUMN story_ids TYPE TEXT USING story_ids::text`;
-      await sql`CREATE INDEX IF NOT EXISTS idx_chapters_user ON chapters(user_id)`;
+      sql`ALTER TABLE chapters ALTER COLUMN story_ids TYPE TEXT USING story_ids::text`,
+      sql`CREATE INDEX IF NOT EXISTS idx_chapters_user ON chapters(user_id)`,
 
       // Árbol genealógico y línea de tiempo: se reemplazan enteros cada vez
       // que se actualizan (más simple que ir haciendo diff a mano).
-      await sql`CREATE TABLE IF NOT EXISTS family_members (
+      sql`CREATE TABLE IF NOT EXISTS family_members (
         id SERIAL PRIMARY KEY,
         user_id INT NOT NULL REFERENCES users(id),
         nombre TEXT NOT NULL,
         relacion TEXT NOT NULL,
         detalles TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-      )`;
+      )`,
       // padres: JSON con los nombres (tal cual aparecen acá) de los padres de
       // esta persona, para poder dibujar el árbol con las ramas reales en vez
       // de agrupar por generación nomás.
-      await sql`ALTER TABLE family_members ADD COLUMN IF NOT EXISTS padres TEXT`;
-      await sql`CREATE INDEX IF NOT EXISTS idx_family_members_user ON family_members(user_id)`;
+      sql`ALTER TABLE family_members ADD COLUMN IF NOT EXISTS padres TEXT`,
+      sql`CREATE INDEX IF NOT EXISTS idx_family_members_user ON family_members(user_id)`,
 
-      await sql`CREATE TABLE IF NOT EXISTS timeline_events (
+      sql`CREATE TABLE IF NOT EXISTS timeline_events (
         id SERIAL PRIMARY KEY,
         user_id INT NOT NULL REFERENCES users(id),
         descripcion TEXT NOT NULL,
         anio INT,
         edad_aprox INT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-      )`;
-      await sql`ALTER TABLE timeline_events ADD COLUMN IF NOT EXISTS categoria TEXT`;
-      await sql`CREATE INDEX IF NOT EXISTS idx_timeline_events_user ON timeline_events(user_id)`;
+      )`,
+      sql`ALTER TABLE timeline_events ADD COLUMN IF NOT EXISTS categoria TEXT`,
+      sql`CREATE INDEX IF NOT EXISTS idx_timeline_events_user ON timeline_events(user_id)`,
 
       // Contador del limitador de pedidos (ver rateLimit más arriba) —
       // vive en la base porque la función corre serverless: cada instancia
       // en paralelo tendría su propia memoria, así que un contador en
       // memoria no sirve para frenar de verdad.
-      await sql`CREATE TABLE IF NOT EXISTS rate_limits (
+      sql`CREATE TABLE IF NOT EXISTS rate_limits (
         ip_key TEXT PRIMARY KEY,
         window_start BIGINT NOT NULL,
         count INT NOT NULL DEFAULT 0
-      )`;
+      )`,
 
       // Si borrar un archivo de Vercel Blob falla (borrado de cuenta o
       // reset), antes solo quedaba un console.error — no había forma de
@@ -424,15 +435,22 @@ function ensureSchema() {
       // registro por cada intento fallido, para poder reintentar y para
       // poder confirmar que no quedó nada de una cuenta borrada dando
       // vueltas en el storage.
-      await sql`CREATE TABLE IF NOT EXISTS pending_blob_deletes (
+      sql`CREATE TABLE IF NOT EXISTS pending_blob_deletes (
         id SERIAL PRIMARY KEY,
         url TEXT NOT NULL UNIQUE,
         motivo TEXT,
         intentos INT NOT NULL DEFAULT 1,
         creado_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         ultimo_intento_at TIMESTAMPTZ NOT NULL DEFAULT now()
-      )`;
-    })();
+      )`,
+    ]).catch((err) => {
+      // Si la transacción falla, no dejamos una promesa rota memoizada para
+      // siempre — el próximo intento (esta misma instancia tibia, no hace
+      // falta esperar un arranque en frío) puede reintentar limpio en vez
+      // de quedar rota hasta que Vercel recicle la instancia.
+      schemaReady = null;
+      throw err;
+    });
   }
   return schemaReady;
 }

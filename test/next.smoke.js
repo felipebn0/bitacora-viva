@@ -90,6 +90,10 @@ function fakeSql(strings, ...values) {
 
   return Promise.resolve([]);
 }
+// ensureSchema() ahora manda todo el DDL junto con sql.transaction() (ver
+// server.js) en vez de un await por sentencia — el fake necesita este
+// método para no romper en la primera request.
+fakeSql.transaction = (queries) => Promise.all(queries);
 
 require.cache[require.resolve('@neondatabase/serverless')] = {
   id: require.resolve('@neondatabase/serverless'), filename: require.resolve('@neondatabase/serverless'), loaded: true,

@@ -23,6 +23,17 @@ function fakeSql(strings) {
   if (text.includes('rate_limits')) return Promise.resolve([{ count: 1 }]);
   return Promise.resolve([]);
 }
+// ensureSchema() ahora manda todo el DDL junto con sql.transaction() (ver
+// server.js) en vez de un await por sentencia — el fake necesita este
+// método para no romper en la primera request. transactionCalls queda para
+// poder verificar más abajo que el DDL se batchea de verdad en una sola
+// llamada (y no vuelve a las 44 llamadas sueltas de antes sin que ningún
+// test se entere).
+const transactionCalls = [];
+fakeSql.transaction = (queries) => {
+  transactionCalls.push(queries.length);
+  return Promise.all(queries);
+};
 require.cache[require.resolve('@neondatabase/serverless')] = {
   id: require.resolve('@neondatabase/serverless'), filename: require.resolve('@neondatabase/serverless'), loaded: true,
   exports: { neon: () => fakeSql },
@@ -91,6 +102,14 @@ async function main() {
   // Login con credenciales inválidas -> 401 (no 500, no filtra si el user existe o no de forma distinguible más allá del mensaje genérico).
   const badLogin = await request(server, { path: '/api/login', method: 'POST', body: { username: 'nadie', password: 'loquesea' }, headers: { Origin: `http://127.0.0.1:${port}` } });
   check(badLogin.status === 401, '/api/login con credenciales inválidas -> 401');
+
+  // ensureSchema(): /api/login ya lo dispara (es la primera ruta de este
+  // test que llega a llamarlo — /api/me sin cookie corta antes, en
+  // requireAuth). El DDL entero tiene que viajar en una sola llamada a
+  // sql.transaction() (un solo viaje de red a Neon), no en 44 sentencias
+  // sueltas como antes.
+  check(transactionCalls.length === 1, 'ensureSchema(): el DDL se manda en una sola llamada a sql.transaction()');
+  check(transactionCalls[0] >= 40, `ensureSchema(): esa llamada lleva las sentencias esperadas (${transactionCalls[0]})`);
 
   // CSRF: POST mutante sin Origin/Referer -> 403.
   const noOrigin = await request(server, { path: '/api/logout', method: 'POST' });
