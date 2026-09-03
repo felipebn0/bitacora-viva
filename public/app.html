@@ -239,6 +239,15 @@
     padding: 16px;
     z-index: 20;
     text-align: left;
+    /* Las secciones (Perfil, Tamaño de letra, cambiar clave, etc.) no son
+       exclusivas — se puede tener más de una abierta a la vez. Con letra
+       agrandada y varias abiertas, el panel entero podía terminar más alto
+       que la pantalla (overflow-y:visible de fábrica no ponía ningún
+       límite). max-height + scroll interno: el panel nunca crece más que
+       el viewport, y lo de abajo (cerrar sesión, borrar cuenta) sigue
+       siendo alcanzable con scroll en vez de quedar cortado sin aviso. */
+    max-height: calc(100dvh - 90px);
+    overflow-y: auto;
   }
   .user-menu-panel.visible { display: block; }
   .user-menu-panel .um-username { color: var(--ink-soft); font-size: 0.85rem; margin: 0 0 14px; word-break: break-all; }
