@@ -41,11 +41,17 @@
   header { max-width: 1400px; margin: 0 auto 28px; display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; position: relative; z-index: 1; text-align: center; }
   h1 { font-family: var(--font-display); font-size: 1.8rem; margin: 0; width: 100%; text-align: center; }
   header p { color: var(--ink-soft); margin: 4px 0 0; font-size: 0.95rem; width: 100%; text-align: center; }
-  a.volver { color: var(--gold-deep); font-size: 0.9rem; text-decoration: none; border-bottom: 1px solid var(--gold-deep); position: absolute; right: 0; top: 0; }
+  /* "volver" y "reconstruir" tenían solo el alto del texto (~17px y ~14px)
+     como zona táctil real. min-height:44px (con box-sizing:border-box, ver
+     arriba) agranda el área de toque sin agrandar el texto; se apilan una
+     debajo de la otra ajustando el "top" de la segunda para que no se
+     superpongan. */
+  a.volver { color: var(--gold-deep); font-size: 0.9rem; text-decoration: none; border-bottom: 1px solid var(--gold-deep); position: absolute; right: 0; top: 0; display: flex; align-items: center; min-height: 44px; padding: 10px 4px; }
   .rebuild-btn {
-    position: absolute; right: 0; top: 26px;
+    position: absolute; right: 0; top: 44px;
     background: none; border: none; color: var(--ink-soft); font-size: 0.875rem;
-    text-decoration: underline; cursor: pointer; font-family: var(--font-body); padding: 0;
+    text-decoration: underline; cursor: pointer; font-family: var(--font-body);
+    display: flex; align-items: center; min-height: 44px; padding: 10px 4px;
   }
   .rebuild-btn:disabled { opacity: 0.6; cursor: default; }
   /* En pantallas angostas el subtítulo puede pasar a dos líneas — con
@@ -66,11 +72,16 @@
   .tree-lines line { stroke: #B7A87E; stroke-width: 2; }
 
   .tree-node { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 108px; position: relative; }
+  /* Zona de toque de 40px (el mínimo que pide la auditoría) manteniendo el
+     ícono chico — el círculo visual sigue del mismo tamaño relativo gracias
+     a background-clip/font-size, solo crece el área clickeable. Reubicado
+     (top/right) para que, más grande, siga sin salirse del nodo de 108px
+     de ancho ni pisar al nodo vecino (26px de separación entre nodos). */
   .tree-node .edit-btn {
-    position: absolute; top: -4px; right: 14px; width: 20px; height: 20px;
+    position: absolute; top: -14px; right: 4px; width: 40px; height: 40px;
     border-radius: 50%; background: #FBF6EA; border: 1px solid #E7DFCC;
     font-size: 0.68rem; cursor: pointer; display: flex; align-items: center; justify-content: center;
-    opacity: 0; transition: opacity .15s; padding: 0;
+    opacity: 0; transition: opacity .15s;
   }
   .tree-node:hover .edit-btn, .tree-node:focus-within .edit-btn { opacity: 1; }
   /* En pantallas táctiles no existe ":hover" — sin esto, el botón de editar

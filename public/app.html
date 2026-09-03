@@ -287,6 +287,10 @@
   }
   .login h1 { margin: 0 0 4px; }
   .login p.sub { color: var(--ink-soft); font-size: 0.9rem; margin: 0 0 6px; text-align: center; }
+  /* El link "Crea una" adentro del párrafo solo tenía el alto del texto
+     (~18px) como zona táctil. inline-flex + min-height lo agranda sin
+     alterar el texto ni el resto de la oración. */
+  .login p.sub a { display: inline-flex; align-items: center; min-height: 44px; padding: 4px 2px; margin: -4px -2px; }
   .login input {
     border: 1px solid #E7DFCC; border-radius: 10px; padding: 12px 14px;
     font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink);

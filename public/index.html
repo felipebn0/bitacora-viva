@@ -56,7 +56,10 @@
     .brand{display:flex; align-items:center; gap:11px; text-decoration:none; font-family:var(--serif); font-size:1.28rem; font-weight:600}
     .brand-mark{width:38px;height:38px;object-fit:contain;display:block}
     .nav-links{display:flex;gap:26px;align-items:center}
-    .nav-links a{text-decoration:none;color:var(--ink-soft);font-size:.95rem}
+    /* min-height:44px + inline-flex centrado: el link "Iniciar sesión" (y
+       los anchors de escritorio) tenían solo el alto del texto (~23px) como
+       zona táctil real, aunque el texto se viera igual. */
+    .nav-links a{text-decoration:none;color:var(--ink-soft);font-size:.95rem;display:inline-flex;align-items:center;min-height:44px;padding:4px 2px}
     .nav-links a.nav-cta{color:#fffaf0}
     .nav-links a:hover{color:var(--ink)}
     .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:999px;padding:13px 20px;text-decoration:none;font-weight:700;border:1px solid transparent;transition:.22s ease;cursor:pointer}
@@ -138,7 +141,7 @@
     .bubble.q{align-self:flex-start;padding-left:0;font-family:var(--serif);font-style:italic;color:var(--moss);font-size:1.18rem}
     .bubble.a{align-self:flex-end;background:var(--bubble)}
     .audio-card{margin-top:auto;border:1px solid var(--line);border-radius:18px;padding:16px;display:flex;align-items:center;gap:13px;background:#FBF6EA}
-    .play{width:42px;height:42px;border:0;border-radius:50%;background:var(--moss);color:white;cursor:pointer}
+    .play{width:44px;height:44px;border:0;border-radius:50%;background:var(--moss);color:white;cursor:pointer}
     .wave{flex:1;height:32px;background:repeating-linear-gradient(90deg,var(--gold) 0 2px,transparent 2px 7px);mask:linear-gradient(180deg,transparent 0%,#000 22%,#000 78%,transparent 100%);opacity:.55}
     .story-side{padding:34px;background:#FCF8EF}
     .story-side h3{font-size:1.5rem;margin:0 0 18px}
@@ -208,7 +211,7 @@
     /* CTA */
     .final-cta{text-align:center;padding:120px 0}.final-cta .inner{max-width:840px;margin:auto}.final-cta h2{font-size:clamp(3rem,6.5vw,6rem)}.final-cta p{font-family:var(--serif);font-style:italic;color:var(--ink-soft);font-size:1.3rem;margin:0 0 30px}
 
-    footer{border-top:1px solid var(--line);padding:34px 0 48px;color:var(--ink-soft);font-size:.9rem}.footer-row{display:flex;justify-content:space-between;gap:20px;align-items:center;flex-wrap:wrap}.footer-links{display:flex;gap:20px}.footer-links a{text-decoration:none}
+    footer{border-top:1px solid var(--line);padding:34px 0 48px;color:var(--ink-soft);font-size:.9rem}.footer-row{display:flex;justify-content:space-between;gap:20px;align-items:center;flex-wrap:wrap}.footer-links{display:flex;gap:20px}.footer-links a{text-decoration:none;display:inline-flex;align-items:center;min-height:44px;padding:4px 2px}
 
     /* REVEAL */
     .reveal{opacity:0;transform:translateY(16px);transition:.7s ease}.reveal.show{opacity:1;transform:none}
