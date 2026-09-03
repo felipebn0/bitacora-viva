@@ -95,7 +95,13 @@
        ResizeObserver, porque el nav cambia de alto según el ancho de
        pantalla y la escala de letra elegida. */
     html{scroll-padding-top:133px}
-    .nav-inner{height:76px; display:flex; align-items:center; justify-content:space-between; gap:24px}
+    /* min-height, no height fija: con la letra agrandada (140%) el nombre
+       de la marca crece más alto de lo que entraba en 76px y se salía del
+       header (quedaba con la parte de arriba cortada). Con min-height el
+       header mide 76px igual que siempre a tamaño normal, pero puede
+       crecer si el contenido lo necesita — mismo criterio que ya se usa
+       para el header angosto de mobile más abajo. */
+    .nav-inner{min-height:76px; display:flex; align-items:center; justify-content:space-between; gap:24px}
     /* min-height/min-width:44px: en mobile el span del nombre se oculta
        (ver ".brand span{display:none}" más abajo) y queda solo el ícono de
        38x38px como zona táctil — por debajo del mínimo recomendado de
