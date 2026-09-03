@@ -248,6 +248,12 @@ function ensureSchema() {
       // la sesión en cualquier otro dispositivo que tenga la clave vieja.
       await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INT NOT NULL DEFAULT 0`;
 
+      // fecha_nacimiento: dato opcional del perfil (se agrega desde el menú
+      // de cuenta) — le da a la entrevistadora contexto real de la edad de
+      // la persona en vez de tener que inferirla o preguntarla, ver
+      // loadFamilyContext más abajo.
+      await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS fecha_nacimiento DATE`;
+
       // sessions/resumen ya existían de una versión sin cuentas — se agrega
       // user_id de forma aditiva (nunca se borra nada existente).
       await sql`CREATE TABLE IF NOT EXISTS sessions (
@@ -594,19 +600,89 @@ async function resolveProfileUserId(req) {
 // ruta para decidir si mostrar la app o la pantalla de login, eso dejaba
 // pasar cualquier cookie con firma válida sin las protecciones nuevas de
 // requireAuth. Ahora usa el mismo middleware que el resto de las rutas.
+// Convierte lo que devuelva la columna DATE de Postgres a "YYYY-MM-DD" tal
+// cual lo espera un <input type="date"> — el driver de Neon por HTTP suele
+// traerlo ya como string en ese formato, pero por si acaso llega como
+// objeto Date (o con hora incluida) se normaliza acá, sin depender de
+// toISOString() (que puede correr un día para atrás según la zona horaria).
+function fechaComoInputDate(valor) {
+  if (!valor) return null;
+  if (typeof valor === 'string') return valor.slice(0, 10);
+  if (valor instanceof Date && !Number.isNaN(valor.getTime())) {
+    const y = valor.getUTCFullYear();
+    const m = String(valor.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(valor.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return null;
+}
+
 app.get('/api/me', requireAuth, async (req, res) => {
   try {
-    const rows = await sql`SELECT name FROM users WHERE id = ${req.userId}`;
+    const rows = await sql`SELECT name, email, fecha_nacimiento FROM users WHERE id = ${req.userId}`;
     const name = capitalizarNombre((rows[0] && rows[0].name) || '') || null;
+    const email = (rows[0] && rows[0].email) || null;
+    const fechaNacimiento = fechaComoInputDate(rows[0] && rows[0].fecha_nacimiento);
     let ownerName = null;
     if (req.isCollaborator) {
       const ownerRows = await sql`SELECT name, username FROM users WHERE id = ${req.profileUserId}`;
       ownerName = capitalizarNombre((ownerRows[0] && (ownerRows[0].name || ownerRows[0].username)) || '') || null;
     }
-    res.json({ username: req.username, name, isCollaborator: req.isCollaborator, ownerName });
+    res.json({ username: req.username, name, email, fechaNacimiento, isCollaborator: req.isCollaborator, ownerName });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo cargar la cuenta.' });
+  }
+});
+
+// Editar nombre, correo y fecha de nacimiento del propio perfil — a
+// diferencia de reset-bitacora/delete-account no pide la clave de nuevo
+// (no es una acción irreversible ni destructiva) y no está restringido a
+// cuentas dueñas: una cuenta colaboradora también tiene su propio perfil.
+// La fecha de nacimiento es opcional y sirve para darle a la entrevistadora
+// contexto real de la edad de la persona (ver loadFamilyContext) en vez de
+// tener que inferirla o preguntarla.
+app.post('/api/update-profile', requireAuth, rateLimit, async (req, res) => {
+  try {
+    const { name, email, fechaNacimiento } = req.body || {};
+
+    const cleanName = capitalizarNombre(String(name || '').trim().slice(0, 100)) || null;
+    if (!cleanName) return res.status(400).json({ error: 'Falta el nombre.' });
+
+    const emailStr = String(email || '').trim().toLowerCase().slice(0, 200);
+    if (emailStr && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailStr)) {
+      return res.status(400).json({ error: 'El correo no parece válido.' });
+    }
+    const cleanEmail = emailStr || null;
+
+    let cleanFecha = null;
+    if (fechaNacimiento) {
+      cleanFecha = fechaNacimientoValida(fechaNacimiento);
+      if (!cleanFecha) return res.status(400).json({ error: 'La fecha de nacimiento no es válida.' });
+    }
+
+    await ensureSchema();
+    const updated = await sql`
+      UPDATE users SET name = ${cleanName}, email = ${cleanEmail}, fecha_nacimiento = ${cleanFecha}
+      WHERE id = ${req.userId}
+      RETURNING name, email, fecha_nacimiento
+    `;
+    if (!updated.length) return res.status(404).json({ error: 'No se encontró la cuenta.' });
+
+    res.json({
+      ok: true,
+      name: capitalizarNombre(updated[0].name || '') || null,
+      email: updated[0].email || null,
+      fechaNacimiento: fechaComoInputDate(updated[0].fecha_nacimiento),
+    });
+  } catch (err) {
+    // El índice único de email (idx_users_email) es la misma restricción que
+    // ya usa /api/signup — mismo manejo de conflicto.
+    if (err && err.code === '23505') {
+      return res.status(409).json({ error: 'Ya existe una cuenta con ese correo.' });
+    }
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo guardar el perfil.' });
   }
 });
 
@@ -637,6 +713,42 @@ function capitalizarInicio(str) {
   const m = s.match(/^(\s*)([\s\S])([\s\S]*)$/);
   if (!m) return s;
   return m[1] + m[2].toUpperCase() + m[3];
+}
+
+// Valida "YYYY-MM-DD" (formato de <input type="date">) como una fecha real
+// y razonable de nacimiento: ni en el futuro, ni de hace más de 130 años
+// (para atajar errores de tipeo obvios, como un año con un dígito de más).
+// Devuelve el string tal cual si es válida, o null.
+function fechaNacimientoValida(str) {
+  const s = String(str || '').trim();
+  if (!s) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const d = new Date(s + 'T00:00:00Z');
+  if (Number.isNaN(d.getTime())) return null;
+  const hoy = new Date();
+  const haceCientoTreintaAnios = new Date(Date.UTC(hoy.getUTCFullYear() - 130, 0, 1));
+  if (d > hoy || d < haceCientoTreintaAnios) return null;
+  return s;
+}
+
+const MESES_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+// Para el contexto que se le da a la entrevistadora (ver loadFamilyContext):
+// "el 14 de marzo de 1948 (tiene 78 años)" en vez de "1948-03-14" — más
+// natural para que aparezca adentro de un system prompt en español, y la
+// edad se calcula acá (no se le pide al modelo que haga la cuenta, con
+// fechas los modelos se equivocan seguido).
+function describirFechaNacimiento(fechaISO) {
+  const [anioStr, mesStr, diaStr] = fechaISO.split('-');
+  const anio = Number(anioStr);
+  const mes = Number(mesStr);
+  const dia = Number(diaStr);
+  const hoy = new Date();
+  let edad = hoy.getUTCFullYear() - anio;
+  const mesActual = hoy.getUTCMonth() + 1;
+  const diaActual = hoy.getUTCDate();
+  if (mesActual < mes || (mesActual === mes && diaActual < dia)) edad--;
+  return `${dia} de ${MESES_ES[mes - 1]} de ${anio} (tiene ${edad} años)`;
 }
 
 // Dominio real donde Vercel Blob sirve los archivos que subimos nosotros
@@ -1257,8 +1369,17 @@ async function loadFamilyContext(userId) {
   await ensureSchema();
   const notes = await sql`SELECT contributor, parentesco, texto FROM family_notes WHERE user_id = ${userId} ORDER BY created_at DESC LIMIT 20`;
   const pending = await sql`SELECT id, type, caption, contributor FROM media WHERE user_id = ${userId} AND discussed = false ORDER BY created_at ASC LIMIT 1`;
+  const perfil = await sql`SELECT fecha_nacimiento FROM users WHERE id = ${userId}`;
 
   let text = '';
+  const fechaNacimiento = fechaComoInputDate(perfil[0] && perfil[0].fecha_nacimiento);
+  if (fechaNacimiento) {
+    // Dato de contexto, no una instrucción de qué preguntar — así la
+    // entrevistadora entiende mejor las épocas que la persona menciona
+    // (por ejemplo, en qué año tenía 20 años) sin tener que preguntarle la
+    // edad ni hacer ella misma la cuenta con fechas.
+    text += `\n\nEsta persona nació el ${describirFechaNacimiento(fechaNacimiento)}. Puedes usar este dato como contexto para entender mejor en qué época pasó lo que te cuenta, pero no hace falta que lo menciones ni que hagas cálculos de fechas en voz alta.`;
+  }
   if (notes.length) {
     const listado = notes
       .map((n) => `- [${n.contributor || 'un familiar'}${n.parentesco ? ', ' + n.parentesco : ''}]: ${n.texto}`)

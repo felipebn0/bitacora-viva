@@ -221,10 +221,12 @@
     text-align: left;
   }
   .user-menu-panel.visible { display: block; }
-  .user-menu-panel .um-name { font-family: var(--font-display); font-weight: 700; color: var(--ink); font-size: 1.05rem; margin: 0 0 2px; }
   .user-menu-panel .um-username { color: var(--ink-soft); font-size: 0.85rem; margin: 0 0 14px; word-break: break-all; }
   .user-menu-panel hr { border: none; border-top: 1px solid #E7DFCC; margin: 12px 0; }
-  .user-menu-panel .um-section-title { font-size: 0.85rem; color: var(--ink-soft); margin: 0 0 8px; font-weight: 700; }
+  .user-menu-panel .um-section-title { font-size: 0.85rem; color: var(--ink-soft); margin: 14px 0 8px; font-weight: 700; }
+  .user-menu-panel .um-section-title:first-of-type { margin-top: 0; }
+  .user-menu-panel .um-field-label { display: block; font-size: 0.8rem; color: var(--ink-soft); margin: 0 0 4px; }
+  .user-menu-panel .um-hint { font-size: 0.78rem; color: var(--ink-soft); margin: -4px 0 8px; }
   .user-menu-panel input {
     width: 100%; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 10px;
     font-family: var(--font-body); background: #fff; color: var(--ink); font-size: 0.88rem; margin-bottom: 8px;
@@ -360,8 +362,17 @@
          <span class="icon-label" aria-hidden="true">Cuenta</span>
        </div>
        <div class="user-menu-panel" id="userMenuPanel">
-         <p class="um-name" id="umName"></p>
          <p class="um-username" id="umUsername"></p>
+
+         <p class="um-section-title">Perfil</p>
+         <input type="text" id="umProfileName" placeholder="Tu nombre" maxlength="100" aria-label="Tu nombre">
+         <input type="email" id="umProfileEmail" placeholder="Tu correo" maxlength="200" autocomplete="email" aria-label="Tu correo">
+         <label class="um-field-label" for="umProfileBirthdate">Fecha de nacimiento</label>
+         <input type="date" id="umProfileBirthdate" aria-label="Tu fecha de nacimiento">
+         <p class="um-hint">Para que la entrevistadora entienda mejor el contexto de tu edad al charlar — es opcional.</p>
+         <button class="um-btn" id="umProfileSaveBtn" type="button">Guardar perfil</button>
+         <p class="um-msg" id="umProfileMsg"></p>
+
          <p class="um-section-title">Cambiar clave</p>
          <input type="password" id="umCurrentPassword" placeholder="Clave actual" autocomplete="current-password" aria-label="Clave actual">
          <input type="password" id="umNewPassword" placeholder="Clave nueva" autocomplete="new-password" aria-label="Clave nueva">
@@ -476,16 +487,24 @@
   const loginBtn = document.getElementById('loginBtn');
   const loginError = document.getElementById('loginError');
   const greetingName = document.getElementById('greetingName');
-  const umName = document.getElementById('umName');
   const umUsername = document.getElementById('umUsername');
+  const umProfileName = document.getElementById('umProfileName');
+  const umProfileEmail = document.getElementById('umProfileEmail');
+  const umProfileBirthdate = document.getElementById('umProfileBirthdate');
 
-  function showApp(username, name) {
+  function showApp(username, name, email, fechaNacimiento) {
     loginScreen.style.display = 'none';
     appContent.style.display = 'flex';
     const displayName = name || username || '';
     greetingName.textContent = displayName;
-    umName.textContent = name || '(sin nombre guardado)';
-    umUsername.textContent = username || '';
+    // "Usuario" (con qué se inicia sesión) queda separado de "correo" (dato
+    // de perfil, editable acá abajo) — antes eran lo mismo en pantalla,
+    // ahora que el correo se puede editar hace falta dejar claro cuál es
+    // cuál, para no dar a entender que cambiar uno cambia el otro.
+    umUsername.textContent = username ? `Usuario: ${username}` : '';
+    umProfileName.value = name || '';
+    umProfileEmail.value = email || '';
+    umProfileBirthdate.value = fechaNacimiento || '';
   }
 
   function showLogin() {
@@ -536,6 +555,51 @@
   document.addEventListener('click', (e) => {
     if (!userMenuPanel.contains(e.target) && e.target !== userMenuBtn) {
       userMenuPanel.classList.remove('visible');
+    }
+  });
+
+  const umProfileSaveBtn = document.getElementById('umProfileSaveBtn');
+  const umProfileMsg = document.getElementById('umProfileMsg');
+
+  umProfileSaveBtn.addEventListener('click', async () => {
+    umProfileMsg.className = 'um-msg';
+    if (!umProfileName.value.trim()) {
+      umProfileMsg.className = 'um-msg um-error';
+      umProfileMsg.textContent = 'Falta el nombre.';
+      return;
+    }
+    umProfileSaveBtn.disabled = true;
+    umProfileMsg.textContent = '';
+    try {
+      const resp = await fetch('/api/update-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: umProfileName.value,
+          email: umProfileEmail.value,
+          fechaNacimiento: umProfileBirthdate.value || null,
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        umProfileMsg.className = 'um-msg um-error';
+        umProfileMsg.textContent = data.error || 'No se pudo guardar el perfil.';
+        umProfileSaveBtn.disabled = false;
+        return;
+      }
+      // Se completa con lo que realmente quedó guardado (por ejemplo, el
+      // nombre puede volver con la capitalización que aplica el backend) en
+      // vez de dejar tal cual lo que se había tipeado.
+      umProfileName.value = data.name || '';
+      umProfileEmail.value = data.email || '';
+      umProfileBirthdate.value = data.fechaNacimiento || '';
+      greetingName.textContent = data.name || umUsername.textContent.replace(/^Usuario:\s*/, '') || '';
+      umProfileMsg.textContent = 'Perfil guardado ✓';
+      umProfileSaveBtn.disabled = false;
+    } catch (e) {
+      umProfileMsg.className = 'um-msg um-error';
+      umProfileMsg.textContent = 'No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.';
+      umProfileSaveBtn.disabled = false;
     }
   });
 
@@ -763,7 +827,7 @@
       // tienen esta app — solo aportan historias y le preguntan a la
       // bitácora de quien las invitó.
       if (data.isCollaborator) { window.location.href = '/colaborar.html'; return; }
-      showApp(data.username, data.name);
+      showApp(data.username, data.name, data.email, data.fechaNacimiento);
     })
     .catch(() => showLogin());
 })();
