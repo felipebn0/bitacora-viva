@@ -1,10 +1,9 @@
-// Cobertura permanente para las tres rutas de cuenta más sensibles que se
-// tocaron esta sesión — antes cada una se probó a mano con un script
-// descartable que se borró después de pasar, así que no quedaba nada que
-// corriera en CI. Mismo patrón que test/next.smoke.js: mock programable de
-// @neondatabase/serverless (con .transaction() para las rutas que ya son
-// transaccionales), login real vía bcrypt para obtener una cookie firmada
-// de verdad.
+// Cobertura permanente para las rutas de cuenta más sensibles — antes cada
+// una se probó a mano con un script descartable que se borró después de
+// pasar, así que no quedaba nada que corriera en CI. Mismo patrón que
+// test/next.smoke.js: mock programable de @neondatabase/serverless (con
+// .transaction() para las rutas que ya son transaccionales), login real vía
+// bcrypt para obtener una cookie firmada de verdad.
 //
 // Cubre:
 //   POST /api/update-profile — nombre/correo/fecha válidos e inválidos
@@ -18,6 +17,11 @@
 //     nada aplicado (rollback).
 //   POST /api/delete-account — mismos casos que reset-bitacora, más que
 //     la cookie de sesión solo se borra si la transacción termina bien.
+//   POST /api/change-password — validación de entrada, clave actual
+//     incorrecta -> 401, éxito -> 200 con la clave vieja dejando de servir
+//     para loguearse y la nueva sirviendo, y que token_version+1 invalida
+//     cualquier cookie de sesión emitida ANTES del cambio (mientras que la
+//     cookie reemitida en la misma respuesta del cambio sí sigue sirviendo).
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'ci-smoke-secret';
 process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgres://fake:fake@localhost/fake';
 process.env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || 'fake';
@@ -88,6 +92,15 @@ function fakeSql(strings, ...values) {
     u.email = newEmail;
     u.fecha_nacimiento = newFecha;
     return Promise.resolve([{ name: u.name, email: u.email, fecha_nacimiento: u.fecha_nacimiento }]);
+  }
+
+  if (text.includes('UPDATE users SET password_hash') && text.includes('RETURNING username, token_version')) {
+    const [newHash, id] = values;
+    const u = users[id];
+    if (!u) return Promise.resolve([]);
+    u.password_hash = newHash; // hash real de bcryptjs — server.js lo calculó antes de esta llamada
+    u.token_version += 1;
+    return Promise.resolve([{ username: u.username, token_version: u.token_version }]);
   }
 
   // Cualquier otro SELECT/DELETE/UPDATE de las transacciones de
@@ -266,6 +279,48 @@ async function main() {
     allCalls.every((c) => !c.values.includes(users[1].id))
   );
   check('delete-account: éxito borra la cookie de sesión', (deleteOk.headers['set-cookie'] || []).some((c) => c.startsWith('bv_session=;') || /bv_session=;.*Max-Age=0|bv_session=;.*Expires/i.test(c)));
+
+  // ============================================================
+  // POST /api/change-password
+  // ============================================================
+  // Se prueba al final, con la cuenta A: ninguna de las secciones de
+  // arriba vuelve a usar cookieA después de esto, así que no importa que
+  // el cambio de clave la invalide (es justamente lo que se prueba).
+
+  const cambioSinDatos = await request(server, { path: '/api/change-password', method: 'POST', body: {} }, cookieA);
+  check('change-password: sin clave actual/nueva -> 400', cambioSinDatos.status === 400);
+
+  const cambioClaveCorta = await request(server, { path: '/api/change-password', method: 'POST', body: { currentPassword: 'claveA123', newPassword: '123' } }, cookieA);
+  check('change-password: clave nueva muy corta (<6 caracteres) -> 400', cambioClaveCorta.status === 400);
+
+  const cambioClaveActualIncorrecta = await request(server, { path: '/api/change-password', method: 'POST', body: { currentPassword: 'noesesta', newPassword: 'claveNuevaA1' } }, cookieA);
+  check('change-password: clave actual incorrecta -> 401', cambioClaveActualIncorrecta.status === 401);
+
+  allCalls = [];
+  const cambioOk = await request(server, { path: '/api/change-password', method: 'POST', body: { currentPassword: 'claveA123', newPassword: 'claveNuevaA1' } }, cookieA);
+  check('change-password: éxito -> 200', cambioOk.status === 200);
+  check(
+    'change-password: aislamiento — ninguna consulta de este pedido tocó el id de la cuenta B',
+    allCalls.every((c) => !c.values.includes(users[2].id))
+  );
+  const nuevaCookieA = ((cambioOk.headers['set-cookie'] || [])[0] || '').split(';')[0];
+  check('change-password: reemite una cookie de sesión nueva en la misma respuesta', !!nuevaCookieA);
+
+  // La clave vieja deja de servir para loguearse, la nueva sí.
+  const loginConClaveVieja = await request(server, { path: '/api/login', method: 'POST', body: { username: 'usuarioa', password: 'claveA123' } });
+  check('change-password: la clave vieja ya no sirve para loguearse', loginConClaveVieja.status === 401);
+  const loginConClaveNueva = await request(server, { path: '/api/login', method: 'POST', body: { username: 'usuarioa', password: 'claveNuevaA1' } });
+  check('change-password: la clave nueva sí sirve para loguearse', loginConClaveNueva.status === 200);
+
+  // token_version + 1 invalida cualquier sesión abierta con la clave vieja
+  // (por ejemplo, otro dispositivo con la cookie robada, o esta misma
+  // cookieA capturada antes del cambio) — pero la cookie reemitida en la
+  // propia respuesta del cambio sigue sirviendo, porque ya lleva el
+  // token_version nuevo.
+  const meConCookieDeAntesDelCambio = await request(server, { path: '/api/me', method: 'GET' }, cookieA);
+  check('change-password: la cookie de sesión de ANTES del cambio queda invalidada', meConCookieDeAntesDelCambio.status === 401);
+  const meConCookieNueva = await request(server, { path: '/api/me', method: 'GET' }, nuevaCookieA);
+  check('change-password: la cookie nueva reemitida en la misma respuesta sí sirve', meConCookieNueva.status === 200);
 
   server.close();
   console.log(`\n${passed} pasaron, ${failed} fallaron`);
