@@ -1484,7 +1484,7 @@ Ya pasaron varios minutos charlando en esta sesión. Después de reaccionar con 
 
 Si en su respuesta a esa pregunta te dice que prefiere pausar (o algo equivalente, como que está cansada o que sigue después), despídete muy brevemente y con calidez, avisando que puede volver cuando quiera y que lo hablado ya quedó guardado. Termina ese mensaje, y solo ese, con la palabra exacta [PAUSA] en una línea aparte — es una señal interna para el sistema, nunca se la menciones a la persona. Nunca uses [PAUSA] junto con [FIN] en el mismo mensaje.
 
-Si en cambio te dice que quiere seguir charlando, no uses ningún marcador — seguí la charla con toda normalidad, como si nada.`;
+Si en cambio te dice que quiere seguir charlando, no uses ningún marcador — sigue la charla con toda normalidad, como si nada.`;
 
 const HISTORIA_MIN_CHARS = 180; // umbral simple: una respuesta larga y elaborada = historia; un dato corto no.
 
@@ -2044,7 +2044,7 @@ async function classifyStoriesByTheme(stories) {
   const listado = stories
     .map((s) => `#${s.id} (${new Date(s.created_at).toLocaleDateString('es-CO')}): ${s.texto}`)
     .join('\n\n');
-  const prompt = `Estas son las historias detectadas en las charlas de esta persona (id, fecha, transcripción):${envolverDatoNoConfiable('historias', listado)}\n\nProponé una lista de temas o épocas de vida que REALMENTE aparecen en este material (que emerja de lo contado, no uses una lista fija predefinida), y para cada tema indica qué ids de historias corresponden (cada historia va en un solo tema, el que mejor le quede). Usa la herramienta para responder.`;
+  const prompt = `Estas son las historias detectadas en las charlas de esta persona (id, fecha, transcripción):${envolverDatoNoConfiable('historias', listado)}\n\nPropón una lista de temas o épocas de vida que REALMENTE aparecen en este material (que emerja de lo contado, no uses una lista fija predefinida), y para cada tema indica qué ids de historias corresponden (cada historia va en un solo tema, el que mejor le quede). Usa la herramienta para responder.`;
 
   const response = await anthropic.messages.create({
     model: MODEL,
