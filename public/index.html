@@ -526,9 +526,14 @@
           <div class="signup-card">
             <h3 id="signupTitle">Crea tu cuenta</h3>
             <p id="signupSubtitle">Nombre, correo y clave. Así de simple.</p>
-            <div class="signup-tabs" role="tablist">
-              <button type="button" class="signup-tab active" id="tabNueva" role="tab" aria-selected="true">Crear mi bitácora</button>
-              <button type="button" class="signup-tab" id="tabColaborar" role="tab" aria-selected="false">Unirme con un código</button>
+            <!-- Dos botones simples, no un patrón de "tabs" — un tablist de
+                 verdad promete navegación con flechas del teclado entre
+                 las opciones, que acá no está implementada. role="group"
+                 + aria-pressed describe justo lo que son: dos botones
+                 relacionados que alternan un estado, sin prometer de más. -->
+            <div class="signup-tabs" role="group" aria-label="Tipo de cuenta">
+              <button type="button" class="signup-tab active" id="tabNueva" aria-pressed="true">Crear mi bitácora</button>
+              <button type="button" class="signup-tab" id="tabColaborar" aria-pressed="false">Unirme con un código</button>
             </div>
             <form class="signup-form" id="signupForm" novalidate>
               <div class="field">
@@ -705,9 +710,9 @@
 
     function setSignupMode(esColaborador) {
       tabNueva.classList.toggle('active', !esColaborador);
-      tabNueva.setAttribute('aria-selected', String(!esColaborador));
+      tabNueva.setAttribute('aria-pressed', String(!esColaborador));
       tabColaborar.classList.toggle('active', esColaborador);
-      tabColaborar.setAttribute('aria-selected', String(esColaborador));
+      tabColaborar.setAttribute('aria-pressed', String(esColaborador));
       familyCodeField.style.display = esColaborador ? 'block' : 'none';
       familyCodeNote.style.display = esColaborador ? 'block' : 'none';
       if (!esColaborador) suCode.value = '';
