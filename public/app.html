@@ -187,7 +187,7 @@
   .user-menu-panel {
     display: none;
     position: absolute;
-    top: 52px;
+    top: 66px; /* 52px + el alto que suma la etiqueta "Cuenta" debajo del botón */
     right: 0;
     width: 260px;
     background: #FBF6EA;
@@ -227,6 +227,11 @@
     gap: 10px;
   }
   .icon-btn-wrap { position: relative; display: inline-flex; }
+  /* En móvil no hay ":hover" — el title/aria-label ya existían, pero sin
+     texto visible el significado de cada ícono (🌳📖👤🤝) no siempre es
+     inmediato. Esta etiqueta corta va siempre visible, no solo en hover. */
+  .icon-nav-item { display: inline-flex; flex-direction: column; align-items: center; gap: 3px; }
+  .icon-nav-item .icon-label { font-size: 0.68rem; color: var(--ink-soft); line-height: 1; white-space: nowrap; }
   .icon-btn {
     display: inline-flex;
     align-items: center;
@@ -325,7 +330,10 @@
      <img class="brand-logo" src="/images/logo-icon.png" alt="Los recuerdos de mis viejos">
      <p class="greeting-text">Un gusto tenerte de vuelta<span class="greeting-name" id="greetingName"></span></p>
      <div class="user-menu">
-       <button class="icon-btn" id="userMenuBtn" type="button" title="Mi cuenta" aria-label="Mi cuenta">👤</button>
+       <div class="icon-nav-item">
+         <button class="icon-btn" id="userMenuBtn" type="button" title="Mi cuenta" aria-label="Mi cuenta">👤</button>
+         <span class="icon-label" aria-hidden="true">Cuenta</span>
+       </div>
        <div class="user-menu-panel" id="userMenuPanel">
          <p class="um-name" id="umName"></p>
          <p class="um-username" id="umUsername"></p>
@@ -346,12 +354,21 @@
      </div>
    </div>
    <div class="topbar">
-     <button class="icon-btn" id="joinCollabBtn" type="button" title="Colaborar con otra historia" aria-label="Colaborar con otra historia">🤝</button>
-     <div class="icon-btn-wrap">
-       <a class="icon-btn" href="/arbol.html" title="Árbol genealógico" aria-label="Árbol genealógico">🌳</a>
-       <span class="icon-badge" id="treeBadge"></span>
+     <div class="icon-nav-item">
+       <button class="icon-btn" id="joinCollabBtn" type="button" title="Colaborar con otra historia" aria-label="Colaborar con otra historia">🤝</button>
+       <span class="icon-label" aria-hidden="true">Colaborar</span>
      </div>
-     <a class="icon-btn" href="/capitulos.html" title="Libro de la historia" aria-label="Libro de la historia">📖</a>
+     <div class="icon-nav-item">
+       <div class="icon-btn-wrap">
+         <a class="icon-btn" href="/arbol.html" title="Árbol genealógico" aria-label="Árbol genealógico">🌳</a>
+         <span class="icon-badge" id="treeBadge"></span>
+       </div>
+       <span class="icon-label" aria-hidden="true">Árbol</span>
+     </div>
+     <div class="icon-nav-item">
+       <a class="icon-btn" href="/capitulos.html" title="Libro de la historia" aria-label="Libro de la historia">📖</a>
+       <span class="icon-label" aria-hidden="true">Libro</span>
+     </div>
    </div>
    <div class="join-collab-panel" id="joinCollabPanel" style="display:none;">
      <p class="sub">Quiero colaborar con otra historia — ingresa el código que te compartieron.</p>
