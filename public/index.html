@@ -59,7 +59,13 @@
       border-bottom:1px solid rgba(229,219,198,.72);
     }
     .nav-inner{height:76px; display:flex; align-items:center; justify-content:space-between; gap:24px}
-    .brand{display:flex; align-items:center; gap:11px; text-decoration:none; font-family:var(--serif); font-size:1.28rem; font-weight:600}
+    /* min-height/min-width:44px: en mobile el span del nombre se oculta
+       (ver ".brand span{display:none}" más abajo) y queda solo el ícono de
+       38x38px como zona táctil — por debajo del mínimo recomendado de
+       44x44px. justify-content:center mantiene el ícono centrado en la
+       zona táctil ensanchada; en desktop, donde el contenido (ícono+texto)
+       ya supera 44px, esto no cambia nada visualmente. */
+    .brand{display:flex; align-items:center; justify-content:center; gap:11px; min-height:44px; min-width:44px; text-decoration:none; font-family:var(--serif); font-size:1.28rem; font-weight:600}
     .brand-mark{width:38px;height:38px;object-fit:contain;display:block}
     .nav-links{display:flex;gap:26px;align-items:center}
     /* min-height:44px + inline-flex centrado: el link "Iniciar sesión" (y
@@ -210,7 +216,11 @@
     .form-status.error{color:#9B3A32}
     .form-note{grid-column:1/-1;color:var(--ink-soft);font-size:.85rem;margin:-4px 0 0}
     .signup-alt{grid-column:1/-1;text-align:center;font-size:.86rem;color:var(--ink-soft);margin:0}
-    .signup-alt a{color:var(--gold-deep);font-weight:700;text-decoration:none}
+    /* display:inline-block + padding con margin negativo: agranda la zona
+       táctil real del link "Inicia sesión" a 44px de alto sin mover el
+       texto de alrededor (el link solo, sin esto, mide unos 17-20px de
+       alto — bien por debajo del mínimo recomendado de 44px). */
+    .signup-alt a{display:inline-block;color:var(--gold-deep);font-weight:700;text-decoration:none;padding:14px 4px;margin:-14px -4px}
     .family-code-toggle{grid-column:1/-1;background:none;border:none;color:var(--gold-deep);font-weight:700;font-size:.84rem;text-decoration:underline;cursor:pointer;padding:0;text-align:left;font-family:inherit}
     .field-note{grid-column:1/-1;color:var(--ink-soft);font-size:.85rem;margin:-6px 0 0}
 
