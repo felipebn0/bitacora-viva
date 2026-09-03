@@ -1024,12 +1024,11 @@ app.post('/api/login', rateLimit, async (req, res) => {
     const { username, password } = req.body || {};
     if (!username || !password) return res.status(400).json({ error: 'Faltan usuario o clave.' });
     const cleanUsername = String(username).trim().toLowerCase();
-    // Además del límite por IP (rateLimit, arriba en la cadena de esta
-    // ruta), un límite por cuenta: si alguien reparte los intentos entre
-    // muchas IPs para no chocar con ese límite, esto igual los frena
-    // porque mira a qué cuenta apuntan, no desde dónde vienen.
-    const permitido = await limitePorClave(`login:${cleanUsername}`, 15 * 60 * 1000, 10);
-    if (!permitido) return res.status(429).json({ error: 'Demasiados intentos con esa cuenta, espera unos minutos.' });
+    // Límite por cuenta desactivado por ahora (ver BACKLOG.md para
+    // reactivarlo). Queda el límite por IP (rateLimit, arriba en la
+    // cadena de esta ruta).
+    // const permitido = await limitePorClave(`login:${cleanUsername}`, 15 * 60 * 1000, 10);
+    // if (!permitido) return res.status(429).json({ error: 'Demasiados intentos con esa cuenta, espera unos minutos.' });
     await ensureSchema();
     const rows = await sql`SELECT id, username, password_hash, token_version FROM users WHERE username = ${cleanUsername}`;
     if (!rows.length) return res.status(401).json({ error: 'Usuario o clave incorrectos.' });

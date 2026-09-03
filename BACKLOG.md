@@ -52,4 +52,10 @@ Cosas que se pidieron pero se decidió posponer, con suficiente detalle para ret
 
 **Para retomarlo:** decidir cómo representar visualmente a alguien con varias parejas en la misma fila del árbol (¿varias líneas cortas hacia cada pareja? ¿un ícono que indique "más de una familia"?) antes de tocar el código de dibujo.
 
-## 8. (de acá para abajo, agregar nuevas ideas que vayan surgiendo)
+## 8. Reactivar el límite de intentos de login por cuenta
+
+**Qué es:** en `/api/login` (server.js) había un límite de 10 intentos fallidos por cuenta cada 15 minutos (`limitePorClave`), además del límite por IP que sigue activo. Se desactivó (comentado, no borrado) porque bloqueó a Felipe mientras recuperaba su propia clave.
+
+**Para retomarlo:** descomentar las dos líneas marcadas en `/api/login` cerca de `limitePorClave(\`login:...\`)`. Antes de reactivarlo, considerar un tiempo de espera más corto o un mensaje que aclare cuánto falta, para que no vuelva a pasar lo mismo.
+
+## 9. (de acá para abajo, agregar nuevas ideas que vayan surgiendo)
