@@ -122,7 +122,12 @@
   .end-toggle { color: #a33; font-size: 0.85rem; }
   .write-row { display: none; gap: 8px; width: 100%; max-width: 280px; }
   .write-row.visible { display: flex; }
-  .write-row input, .write-row select { flex: 1; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 12px; font-family: var(--font-body); background: #fff; color: var(--ink); }
+  /* font-size:1rem (16px): sin un font-size explícito, el <input> toma el
+     tamaño chico por defecto del navegador — y en iOS Safari, cualquier
+     campo de texto con menos de 16px hace zoom automático al tocarlo (para
+     "ayudar" a leer), corriendo todo el layout hasta que se saca el zoom a
+     mano. Mismo motivo en los demás input/select de este archivo. */
+  .write-row input, .write-row select { flex: 1; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 12px; font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink); }
   .write-row button { border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px; padding: 0 14px; font-weight: 700; cursor: pointer; }
   .error { color: #a33; font-size: 0.85rem; }
   /* Antes era un link chico igual que "copiar código" o "prefiero
@@ -249,9 +254,13 @@
      acá abajo, envuelto en varias líneas si hace falta. */
   .user-menu-panel .um-value-full { font-size: 0.875rem; color: var(--ink-soft); margin: -5px 0 8px; overflow-wrap: anywhere; }
   .user-menu-panel .um-hint { font-size: 0.78rem; color: var(--ink-soft); margin: -4px 0 8px; }
+  /* font-size:1rem (antes 0.88rem = 14.08px): por debajo de 16px, iOS
+     Safari hace zoom automático al enfocar el campo (nombre, correo,
+     fecha de nacimiento, cambio de clave, confirmar clave para
+     reiniciar/borrar la cuenta — todos pasan por esta regla). */
   .user-menu-panel input, .user-menu-panel select {
     width: 100%; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 10px;
-    font-family: var(--font-body); background: #fff; color: var(--ink); font-size: 0.88rem; margin-bottom: 8px;
+    font-family: var(--font-body); background: #fff; color: var(--ink); font-size: 1rem; margin-bottom: 8px;
   }
   .user-menu-panel .um-btn {
     display: block; box-sizing: border-box; text-align: center; text-decoration: none;
@@ -351,9 +360,12 @@
     border: 1px solid #E7DFCC; border-radius: 16px; padding: 16px 20px; text-align: center;
   }
   .join-collab-row { display: flex; gap: 8px; margin-top: 8px; }
+  /* font-size:1rem: sin esto, el campo de código de invitación disparaba
+     el zoom automático de iOS Safari al tocarlo (ver comentario junto a
+     .write-row input más arriba). */
   .join-collab-row input {
     flex: 1; border: 1px solid #E7DFCC; border-radius: 10px; padding: 10px 12px;
-    font-family: var(--font-body); background: #fff; color: var(--ink); text-transform: uppercase;
+    font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink); text-transform: uppercase;
   }
   .join-collab-row button {
     border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px;
