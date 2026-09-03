@@ -337,15 +337,38 @@
      (~18px) como zona táctil. inline-flex + min-height lo agranda sin
      alterar el texto ni el resto de la oración. */
   .login p.sub a { display: inline-flex; align-items: center; min-height: 44px; padding: 4px 2px; margin: -4px -2px; }
+  /* Antes el nombre/clave del campo solo se veía en el placeholder, que
+     desaparece apenas se escribe o incluso solo con el cursor puesto ahí
+     — para alguien que se distrae a mitad de llenar el formulario, o que
+     ya no se acuerda bien qué campo era cuál, no queda ninguna pista
+     visible. Un <label> siempre visible arriba de cada campo no depende
+     de esa memoria. */
+  .login-field { display: flex; flex-direction: column; gap: 5px; }
+  .login-field label { font-size: 0.85rem; font-weight: 700; color: var(--ink-soft); }
   .login input {
     border: 1px solid #E7DFCC; border-radius: 10px; padding: 12px 14px;
     font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink);
+    width: 100%; box-sizing: border-box;
   }
+  .login-pass-row { display: flex; gap: 8px; }
+  .login-pass-row input { flex: 1; min-width: 0; }
   .login button {
     border: none; background: var(--gold-deep); color: #FBF6EA; border-radius: 10px;
     padding: 12px; font-weight: 700; font-size: 1rem; cursor: pointer; font-family: var(--font-body);
   }
   .login button:disabled { opacity: 0.6; cursor: default; }
+  /* Botón "Mostrar/Ocultar" al lado de la clave — sin esto, la única forma
+     de confirmar que se tipeó bien la clave es borrar y volver a intentar
+     si el login falla. min-width en vez de un ancho fijo: el texto cambia
+     entre "Mostrar" y "Ocultar", que no miden lo mismo. Va DESPUÉS de la
+     regla ".login button" de arriba a propósito, para pisar ese estilo
+     (mismo ancho/alto de botón "Entrar") con uno más chico — misma técnica
+     que ya usa ".login-fontsize-row button" más abajo. */
+  .login-pass-row button {
+    border: 1px solid #E7DFCC; background: #fff; color: var(--ink); border-radius: 10px;
+    padding: 0 14px; font-weight: 700; font-size: 0.85rem; cursor: pointer;
+    font-family: var(--font-body); min-height: 44px; min-width: 44px; flex: 0 0 auto;
+  }
   .login .error { min-height: 1.2em; text-align: center; }
 
   .logout-row { text-align: center; margin-top: 20px; }
@@ -387,8 +410,17 @@
     </div>
     <h1>Los recuerdos de mis viejos</h1>
     <p class="sub">Inicia sesión para entrar a tu bitácora.</p>
-    <input type="text" id="loginUser" placeholder="Correo o usuario" autocomplete="username" aria-label="Correo o usuario">
-    <input type="password" id="loginPass" placeholder="Clave" autocomplete="current-password" aria-label="Clave">
+    <div class="login-field">
+      <label for="loginUser">Correo o usuario</label>
+      <input type="text" id="loginUser" placeholder="Correo o usuario" autocomplete="username">
+    </div>
+    <div class="login-field">
+      <label for="loginPass">Clave</label>
+      <div class="login-pass-row">
+        <input type="password" id="loginPass" placeholder="Clave" autocomplete="current-password">
+        <button type="button" id="loginPassToggle" aria-pressed="false" aria-label="Mostrar la clave">Mostrar</button>
+      </div>
+    </div>
     <button id="loginBtn" type="button">Entrar</button>
     <p class="error" id="loginError"></p>
     <p class="sub" style="margin-top:2px;">¿No tienes cuenta? <a href="/" style="color:var(--gold-deep);">Crea una</a>.</p>
@@ -548,6 +580,7 @@
   const appContent = document.getElementById('appContent');
   const loginUser = document.getElementById('loginUser');
   const loginPass = document.getElementById('loginPass');
+  const loginPassToggle = document.getElementById('loginPassToggle');
   const loginBtn = document.getElementById('loginBtn');
   const loginError = document.getElementById('loginError');
   const greetingName = document.getElementById('greetingName');
@@ -601,8 +634,29 @@
     appContent.style.display = 'none';
     loginScreen.style.display = 'flex';
     loginPass.value = '';
+    ocultarClave();
     loginUser.focus();
   }
+
+  // Sin esto, la única forma de confirmar que se tipeó bien la clave era
+  // borrar y volver a intentar si el login fallaba — un fastidio extra
+  // para quien ya tiene que pelear con un teclado chico o con temblor en
+  // las manos. type="text"/"password" es el mismo mecanismo que usa
+  // cualquier formulario de login con esta función.
+  function ocultarClave() {
+    loginPass.type = 'password';
+    loginPassToggle.textContent = 'Mostrar';
+    loginPassToggle.setAttribute('aria-pressed', 'false');
+    loginPassToggle.setAttribute('aria-label', 'Mostrar la clave');
+  }
+  loginPassToggle.addEventListener('click', () => {
+    const oculta = loginPass.type === 'password';
+    loginPass.type = oculta ? 'text' : 'password';
+    loginPassToggle.textContent = oculta ? 'Ocultar' : 'Mostrar';
+    loginPassToggle.setAttribute('aria-pressed', String(oculta));
+    loginPassToggle.setAttribute('aria-label', oculta ? 'Ocultar la clave' : 'Mostrar la clave');
+    loginPass.focus();
+  });
 
   async function doLogin() {
     const username = loginUser.value.trim();
