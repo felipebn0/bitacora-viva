@@ -73,15 +73,30 @@
     gap: 14px;
     margin-top: 60px;
   }
+  /* Mismo componente de login que app.html (label visible + Mostrar/Ocultar
+     clave) — antes este login solo tenía placeholders, sin esas ayudas,
+     aunque es la misma app para quien colabora. */
+  .login-field { display: flex; flex-direction: column; gap: 5px; }
+  .login-field label { font-size: 0.85rem; font-weight: 700; color: var(--ink-soft); }
   .login input {
     border: 1px solid #E7DFCC; border-radius: 10px; padding: 12px 14px;
     font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink);
+    width: 100%; box-sizing: border-box;
   }
+  .login-pass-row { display: flex; gap: 8px; }
+  .login-pass-row input { flex: 1; min-width: 0; }
   .login button {
     border: none; background: var(--gold-deep); color: #FBF6EA; border-radius: 10px;
     padding: 12px; font-weight: 700; font-size: 1rem; cursor: pointer; font-family: var(--font-body);
   }
   .login button:disabled { opacity: 0.6; cursor: default; }
+  /* Va DESPUÉS de ".login button" a propósito, para pisar ese estilo (mismo
+     ancho/alto que "Entrar") con uno más chico — igual que en app.html. */
+  .login-pass-row button {
+    border: 1px solid #E7DFCC; background: #fff; color: var(--ink); border-radius: 10px;
+    padding: 0 14px; font-weight: 700; font-size: 0.85rem; cursor: pointer;
+    font-family: var(--font-body); min-height: 44px; min-width: 44px; flex: 0 0 auto;
+  }
   .error { color: #a33; font-size: 0.85rem; min-height: 1.2em; text-align: center; }
 
   #appContent { display: none; flex-direction: column; align-items: center; width: 100%; }
@@ -228,8 +243,17 @@
   <div class="login" id="loginScreen">
     <h1>Los recuerdos de mis viejos</h1>
     <p class="sub" style="margin-bottom: 6px;">Inicia sesión para aportar historias.</p>
-    <input type="text" id="loginUser" placeholder="Correo" autocomplete="username" aria-label="Correo">
-    <input type="password" id="loginPass" placeholder="Clave" autocomplete="current-password" aria-label="Clave">
+    <div class="login-field">
+      <label for="loginUser">Correo o usuario</label>
+      <input type="text" id="loginUser" placeholder="Correo o usuario" autocomplete="username">
+    </div>
+    <div class="login-field">
+      <label for="loginPass">Clave</label>
+      <div class="login-pass-row">
+        <input type="password" id="loginPass" placeholder="Clave" autocomplete="current-password">
+        <button type="button" id="loginPassToggle" aria-pressed="false" aria-label="Mostrar la clave">Mostrar</button>
+      </div>
+    </div>
     <button id="loginBtn" type="button">Entrar</button>
     <p class="error" id="loginError"></p>
     <p class="sub" style="margin-top:2px;">¿No tienes cuenta? <a href="/?modo=colaborar#registro" style="color:var(--gold-deep);">Crea una</a>.</p>
@@ -317,6 +341,7 @@
   const appContent = document.getElementById('appContent');
   const loginUser = document.getElementById('loginUser');
   const loginPass = document.getElementById('loginPass');
+  const loginPassToggle = document.getElementById('loginPassToggle');
   const loginBtn = document.getElementById('loginBtn');
   const loginError = document.getElementById('loginError');
   const logoutBtn = document.getElementById('logoutBtn');
@@ -345,8 +370,24 @@
     appContent.style.display = 'none';
     loginScreen.style.display = 'flex';
     loginPass.value = '';
+    ocultarClave();
     loginUser.focus();
   }
+
+  function ocultarClave() {
+    loginPass.type = 'password';
+    loginPassToggle.textContent = 'Mostrar';
+    loginPassToggle.setAttribute('aria-pressed', 'false');
+    loginPassToggle.setAttribute('aria-label', 'Mostrar la clave');
+  }
+  loginPassToggle.addEventListener('click', () => {
+    const oculta = loginPass.type === 'password';
+    loginPass.type = oculta ? 'text' : 'password';
+    loginPassToggle.textContent = oculta ? 'Ocultar' : 'Mostrar';
+    loginPassToggle.setAttribute('aria-pressed', String(oculta));
+    loginPassToggle.setAttribute('aria-label', oculta ? 'Ocultar la clave' : 'Mostrar la clave');
+    loginPass.focus();
+  });
 
   async function doLogin() {
     const username = loginUser.value.trim();
