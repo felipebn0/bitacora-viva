@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
-    "test": "node test/smoke.js && node test/next.smoke.js && node test/shutdown.smoke.js && node test/account-actions.smoke.js"
+    "test": "node test/smoke.js && node test/next.smoke.js && node test/shutdown.smoke.js && node test/account-actions.smoke.js",
+    "eval:conversacion": "node test/eval-conversacion.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
