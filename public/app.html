@@ -408,6 +408,10 @@
        <span class="icon-label" aria-hidden="true">Colaborar</span>
      </div>
      <div class="icon-nav-item">
+       <a class="icon-btn" href="/colaboraciones.html" title="Colaboraciones" aria-label="Colaboraciones">👥</a>
+       <span class="icon-label" aria-hidden="true">Aportes</span>
+     </div>
+     <div class="icon-nav-item">
        <div class="icon-btn-wrap">
          <a class="icon-btn" href="/arbol.html" title="Árbol genealógico" aria-label="Árbol genealógico">🌳</a>
          <span class="icon-badge" id="treeBadge"></span>
@@ -464,11 +468,6 @@
       <div class="lista" id="storyLogLista"></div>
     </div>
 
-    <div class="aportes" id="colaboracionesPanel" style="display:none;">
-      <h2>Colaboraciones</h2>
-      <p class="sub">Historias que tus familiares aportaron con su propia voz.</p>
-      <div class="lista" id="colaboracionesLista"></div>
-    </div>
     </div>
    </div>
 
@@ -1609,42 +1608,6 @@
     } catch (e) {}
   }
   cargarBadgeArbol();
-
-  async function cargarColaboraciones() {
-    const panel = document.getElementById('colaboracionesPanel');
-    const lista = document.getElementById('colaboracionesLista');
-    if (!panel || !lista) return;
-    try {
-      const resp = await fetch('/api/contributions');
-      if (!resp.ok) return;
-      const data = await resp.json();
-      const notes = data.notes || [];
-      if (!notes.length) return;
-      lista.innerHTML = '';
-      notes.forEach((n) => {
-        const div = document.createElement('div');
-        div.className = 'item';
-        const quien = n.contributor ? n.contributor + (n.parentesco ? ` (${n.parentesco})` : '') : 'Familia';
-        const etiqueta = n.protagonista ? `Historia de ${n.protagonista} — compartida por ${quien}` : quien;
-        const urls = (n.audio_urls && n.audio_urls.length) ? n.audio_urls : (n.audio_url ? [n.audio_url] : []);
-        const strong = document.createElement('strong');
-        strong.textContent = etiqueta + ':';
-        div.appendChild(strong);
-        div.appendChild(document.createTextNode(' ' + n.texto));
-        urls.forEach((u) => {
-          if (typeof u === 'string' && /^https?:\/\//.test(u)) {
-            const audio = document.createElement('audio');
-            audio.controls = true;
-            audio.src = u;
-            div.appendChild(audio);
-          }
-        });
-        lista.appendChild(div);
-      });
-      panel.style.display = 'flex';
-    } catch (e) {}
-  }
-  cargarColaboraciones();
 
   cargarStoryLog();
 })();
