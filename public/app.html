@@ -224,7 +224,7 @@
      texto visible el significado de cada ícono (🤝💬🗒️🌳📖) no siempre es
      inmediato. Esta etiqueta corta va siempre visible, no solo en hover. */
   .icon-nav-item { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; }
-  .icon-nav-item .icon-label { font-size: 0.8rem; color: var(--ink-soft); line-height: 1; white-space: nowrap; }
+  .icon-nav-item .icon-label { font-size: 0.875rem; color: var(--ink-soft); line-height: 1; white-space: nowrap; }
   .icon-btn {
     display: inline-flex;
     align-items: center;
@@ -268,10 +268,22 @@
   @media (max-width: 400px) {
     .topbar { gap: 8px; }
     .icon-btn { width: 48px; height: 48px; font-size: 1.4rem; }
-    .icon-nav-item .icon-label { font-size: 0.7rem; }
+    /* Antes la etiqueta bajaba a 0.7rem (~11px) acá para que las 5 entren
+       en una sola fila — muy chico para el público de esta app. Se deja
+       en el mismo 0.875rem que el resto, y en vez de forzar una fila se
+       acepta que se acomoden en dos filas parejas (ver .topbar abajo). */
     .greeting-bar { gap: 8px; }
     .greeting-bar .brand-logo { height: 48px; width: 48px; }
     .greeting-bar .greeting-text .greeting-name { font-size: 1.35rem; }
+  }
+  /* Con la etiqueta en 0.875rem, 5 íconos con nombre ya no entran en una
+     sola fila en celulares angostos sin apretarlos — en vez de seguir
+     achicando, se acomodan en dos filas de a 3, en vez de la fila
+     desbalanceada de 4+1 que salía con el "flex-wrap" librado a su suerte.
+     460px/2 ≈ 230px, alcanza para 3 íconos con su etiqueta pero no para 4,
+     así el wrap cae siempre en un punto parejo (3 arriba, 2 abajo). */
+  @media (max-width: 460px) {
+    .topbar { max-width: 230px; }
   }
 
   .join-collab-panel {
@@ -426,7 +438,7 @@
        <span class="icon-label" aria-hidden="true">Colaborar</span>
      </div>
      <div class="icon-nav-item">
-       <a class="icon-btn" href="/colaboraciones.html" title="Colaboraciones" aria-label="Colaboraciones">💬</a>
+       <a class="icon-btn" href="/colaboraciones.html" title="Aportes de la familia" aria-label="Aportes de la familia">💬</a>
        <span class="icon-label" aria-hidden="true">Aportes</span>
      </div>
      <div class="icon-nav-item">
