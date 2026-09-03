@@ -1485,7 +1485,19 @@ Reglas:
 // turnos (mismo patrón que ya funciona confiable para "terminar charla" y
 // "primera vez"), el modelo le presta mucha más atención porque es lo más
 // inmediato que tiene que resolver, no una regla general más.
-const OFRECER_PAUSA_PROMPT = '(Ya pasaron varios minutos charlando en esta sesión. Tu PRÓXIMO mensaje no puede ser una pregunta de seguimiento normal sobre la historia, por más interesante que haya sido lo que se acaba de contar — nada de pedir más detalle ni profundizar. En vez de eso: reacciona con una sola frase breve y cálida a lo último que te dijo, y a continuación, en ese mismo mensaje, pregúntale con calidez si quiere seguir charlando un rato más o si prefiere hacer una pausa por ahora y retomar en otro momento — esa pregunta reemplaza cualquier otra que harías normalmente en este turno. Esto es aparte de la regla normal de cierre con [FIN]: acá no estás cerrando la charla del todo, solo ofreciendo un descanso. Si en un mensaje siguiente te dice que prefiere pausar (o algo equivalente, como que está cansada o que sigue después), despídete muy brevemente y con calidez, avisando que puede volver cuando quiera y que lo hablado ya quedó guardado, y termina ese mensaje, y solo ese, con la palabra exacta [PAUSA] en una línea aparte — señal interna, nunca se la menciones a la persona; nunca uses [PAUSA] junto con [FIN]. Si en cambio dice que quiere seguir charlando, no uses ningún marcador y sigue la charla con toda normalidad, como si nada.)';
+// Separado en DOS mensajes de DOS turnos distintos, coordinados con el
+// frontend (ver ofrecerPausa/interpretarRespuestaPausa en /api/next): la
+// instrucción de "agrega [PAUSA] si dice que sí" no puede ir pegada solo
+// al turno donde se OFRECE la pausa — para cuando la persona responde,
+// ese mensaje (con la instrucción pegada) ya no forma parte del history
+// real que el frontend reenvía (el history solo guarda el texto real que
+// dijo, nunca lo que el backend le pegó de forma efímera para una llamada
+// puntual) — así que sin este segundo mensaje, el turno donde hay que
+// LEER la respuesta nunca tiene ninguna instrucción sobre qué hacer con
+// ella, y el modelo simplemente sigue la charla como si nada.
+const OFRECER_PAUSA_PROMPT = '(Ya pasaron varios minutos charlando en esta sesión. Tu PRÓXIMO mensaje no puede ser una pregunta de seguimiento normal sobre la historia, por más interesante que haya sido lo que se acaba de contar — nada de pedir más detalle ni profundizar. En vez de eso: reacciona con una sola frase breve y cálida a lo último que te dijo, y a continuación, en ese mismo mensaje, pregúntale con calidez si quiere seguir charlando un rato más o si prefiere hacer una pausa por ahora y retomar en otro momento — esa pregunta reemplaza cualquier otra que harías normalmente en este turno. Esto es aparte de la regla normal de cierre con [FIN]: acá no estás cerrando la charla del todo, solo ofreciendo un descanso. No uses ningún marcador todavía en este mensaje.)';
+
+const INTERPRETAR_RESPUESTA_PAUSA_PROMPT = '(En tu mensaje anterior le preguntaste si quería seguir charlando o prefería pausar. Mira lo que acaba de responder: si dice que prefiere pausar (o algo equivalente, como que está cansada o que sigue después), despídete muy brevemente y con calidez, avisando que puede volver cuando quiera y que lo hablado ya quedó guardado, y termina ese mensaje, y solo ese, con la palabra exacta [PAUSA] en una línea aparte — señal interna para el sistema, nunca se la menciones a la persona; nunca uses [PAUSA] junto con [FIN]. Si en cambio dice que quiere seguir charlando, no uses ningún marcador — reacciona con naturalidad a lo que diga y sigue la charla como si nada.)';
 
 const HISTORIA_MIN_CHARS = 180; // umbral simple: una respuesta larga y elaborada = historia; un dato corto no.
 
@@ -1528,19 +1540,24 @@ app.post('/api/next', requireAuth, bloquearColaborador, rateLimit, async (req, r
     if (notaPendiente) {
       await sql`UPDATE family_notes SET discussed = true WHERE id = ${notaPendiente.id}`;
     }
-    // Ver el comentario de OFRECER_PAUSA_PROMPT: va pegada al final del
-    // propio último mensaje real de la persona (no como un mensaje "user"
-    // aparte a continuación) — probado que un mensaje separado también se
-    // ignoraba casi siempre, aparentemente porque el modelo le daba más
-    // peso al contenido sustancioso del turno real y trataba el segundo
-    // mensaje "user" como una nota de menor prioridad. Pegada al mismo
-    // mensaje, la instrucción queda inequívocamente asociada a ESE turno.
-    // new_object en vez de mutar: "messages[i]" es la MISMA referencia que
-    // "history[i]", y history se usa después para lo que se guarda en
-    // story_log — no puede quedar contaminado con esta instrucción.
-    if (mode === 'historia' && req.body.ofrecerPausa && messages.length && messages[messages.length - 1].role === 'user') {
+    // Ambos flags van pegados al final del propio último mensaje real de
+    // la persona (no como un mensaje "user" aparte a continuación) —
+    // probado que un mensaje separado se ignoraba casi siempre, aparente-
+    // mente porque el modelo le daba más peso al contenido sustancioso del
+    // turno real y trataba el segundo mensaje "user" como una nota de
+    // menor prioridad. Pegada al mismo mensaje, la instrucción queda
+    // inequívocamente asociada a ESE turno. new_object en vez de mutar:
+    // "messages[i]" es la MISMA referencia que "history[i]", y history se
+    // usa después para lo que se guarda en story_log — no puede quedar
+    // contaminado con esta instrucción.
+    const promptTurnoExtra = req.body.interpretarRespuestaPausa
+      ? INTERPRETAR_RESPUESTA_PAUSA_PROMPT
+      : req.body.ofrecerPausa
+      ? OFRECER_PAUSA_PROMPT
+      : null;
+    if (mode === 'historia' && promptTurnoExtra && messages.length && messages[messages.length - 1].role === 'user') {
       const ultimo = messages[messages.length - 1];
-      messages[messages.length - 1] = { role: 'user', content: ultimo.content + '\n\n' + OFRECER_PAUSA_PROMPT };
+      messages[messages.length - 1] = { role: 'user', content: ultimo.content + '\n\n' + promptTurnoExtra };
     }
 
     let system;
