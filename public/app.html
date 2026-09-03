@@ -81,8 +81,6 @@
     flex-direction: column;
     gap: 12px;
     width: 100%;
-    overflow-y: auto;
-    max-height: 380px;
     flex: 1;
   }
   .transcript.visible { display: flex; }
@@ -142,7 +140,7 @@
   .aportes button:disabled { opacity: 0.6; cursor: default; }
   .aportes hr { border: none; border-top: 1px solid #E7DFCC; margin: 4px 0; }
   .aportes .msg { font-size: 0.85rem; min-height: 1.2em; color: var(--moss); }
-  .aportes .lista { display: flex; flex-direction: column; gap: 10px; max-height: 220px; overflow-y: auto; }
+  .aportes .lista { display: flex; flex-direction: column; gap: 10px; }
   .aportes .lista img { max-width: 100%; border-radius: 10px; display: block; }
   .aportes .lista video { max-width: 100%; border-radius: 10px; display: block; }
   .aportes .lista .item { font-size: 0.85rem; color: var(--ink-soft); }
@@ -159,6 +157,14 @@
     .device-col { width: min(440px, 100%); flex-shrink: 0; order: 2; position: sticky; top: 24px; }
     .panels-col { width: min(420px, 100%); flex-shrink: 0; order: 1; }
     .panels-col .aportes:first-child { margin-top: 0; }
+    /* Con el celular en una sola columna (ver arriba), la página entera ya
+       scrollea de una — un scroll interno acá adentro obligaba a scrollear
+       dos cosas distintas (la charla y la página) para seguir leyendo,
+       confuso al tacto. Acá en desktop sí hace falta acotar la altura:
+       .device-col queda "sticky" con un presupuesto de alto fijo, y sin
+       este límite una charla larga lo empujaría más alto que la pantalla. */
+    .transcript { overflow-y: auto; max-height: 380px; }
+    .aportes .lista { overflow-y: auto; max-height: 220px; }
   }
 
   .greeting-bar {
@@ -1015,7 +1021,13 @@
     div.className = 'bubble ' + kind;
     div.textContent = text;
     transcript.appendChild(div);
-    transcript.scrollTop = transcript.scrollHeight;
+    // scrollIntoView (a diferencia de fijar transcript.scrollTop a mano)
+    // encuentra solo el ancestro que de verdad scrollea: en desktop es
+    // .transcript (tiene su propio scroll acotado, ver CSS), y en el
+    // celular — donde .transcript ya no tiene scroll propio, ver Bloque 21
+    // — es la página entera. Así el último mensaje queda visible en ambos
+    // casos sin tener que distinguir de cuál de los dos se trata acá.
+    div.scrollIntoView({ block: 'end' });
   }
 
   // Detección de pausas por volumen (en vez del reconocimiento de voz del
