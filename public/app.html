@@ -1448,7 +1448,11 @@
   // navegador, que Safari/iPad no soportan): mientras haya sonido, seguimos
   // escuchando; recién cuando pasan SILENCE_MS sin volumen, cerramos la
   // grabación y la mandamos al servidor para transcribirla.
-  const SILENCE_MS = 2000; // pausa tolerada antes de dar la respuesta por terminada
+  // Antes eran 2000ms — para este público (recordando fechas, nombres,
+  // eventos) es fácil hacer una pausa más larga sin haber terminado de
+  // responder, y el corte prematuro contradice la idea de una charla
+  // paciente. 4000ms como punto de partida conservador.
+  const SILENCE_MS = 4000; // pausa tolerada antes de dar la respuesta por terminada
   const VAD_THRESHOLD = 0.02; // umbral de volumen para considerar que hay voz
   let audioContext = null;
   let analyser = null;

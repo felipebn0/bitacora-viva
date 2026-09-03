@@ -661,7 +661,10 @@
   // Igual que en la charla principal: no hace falta presionar de nuevo
   // para "cortar" — mientras haya voz seguimos grabando, y recién cuando
   // pasan unos segundos de silencio se corta y se manda solo.
-  const SILENCE_MS = 2000;
+  // Antes eran 2000ms — mismo motivo que en app.html: quien está
+  // recordando una historia puede pausar más de 2 segundos sin haber
+  // terminado. 4000ms como punto de partida conservador.
+  const SILENCE_MS = 4000;
   const VAD_THRESHOLD = 0.02;
   let audioContext = null;
   let analyser = null;
