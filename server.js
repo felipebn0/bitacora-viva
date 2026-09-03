@@ -1395,6 +1395,16 @@ async function loadMemorySummary(userId) {
 
 // Historias y fotos/videos que la familia fue aportando, para que la
 // entrevistadora los use y pregunte por las personas o momentos que aparecen.
+//
+// Devuelve { text, mediaPendienteId } en vez de marcar la media como
+// discutida acá adentro: antes lo hacía con un UPDATE "fire and forget"
+// apenas se armaba el texto, ANTES de llamar a Anthropic — el mismo
+// problema que ya se arregló para family_notes (ver el comentario en
+// /api/next): si el proveedor fallaba, la foto/video quedaba marcada como
+// "ya se la mencioné" aunque la persona nunca llegó a enterarse, sin
+// ninguna forma de que volviera a aparecer como pendiente. Ahora es quien
+// llama (/api/next) el que decide cuándo es seguro marcarla — recién
+// después de validar que la respuesta de Anthropic sirve.
 async function loadFamilyContext(userId) {
   await ensureSchema();
   const notes = await sql`SELECT contributor, parentesco, texto FROM family_notes WHERE user_id = ${userId} ORDER BY created_at DESC LIMIT 20`;
@@ -1402,6 +1412,7 @@ async function loadFamilyContext(userId) {
   const perfil = await sql`SELECT fecha_nacimiento FROM users WHERE id = ${userId}`;
 
   let text = '';
+  let mediaPendienteId = null;
   const fechaNacimiento = fechaComoInputDate(perfil[0] && perfil[0].fecha_nacimiento);
   if (fechaNacimiento) {
     // Dato de contexto, no una instrucción de qué preguntar — así la
@@ -1420,9 +1431,9 @@ async function loadFamilyContext(userId) {
     const m = pending[0];
     const tipo = m.type === 'video' ? 'un video' : 'una foto';
     text += `\n\nLa familia subió ${tipo} (de ${m.contributor || 'un familiar'}) con esta descripción` + envolverDatoNoConfiable('descripcion_de_media', m.caption || 'sin descripción') + `. En algún momento de esta charla, pregúntale con naturalidad sobre eso (quién aparece, qué recuerda de ese momento) — no hace falta que sea lo primero que preguntes.`;
-    sql`UPDATE media SET discussed = true WHERE id = ${m.id}`.catch(() => {});
+    mediaPendienteId = m.id;
   }
-  return text;
+  return { text, mediaPendienteId };
 }
 
 // La historia más vieja que un colaborador aportó y todavía no se usó para
@@ -1830,15 +1841,17 @@ app.post('/api/next', requireAuth, bloquearColaborador, rateLimit, async (req, r
     }
 
     let system;
+    let mediaPendienteId = null;
     if (mode === 'arbol') {
       const conocidos = await loadKnownFamilyMembers(req.userId);
       system = ARBOL_SYSTEM_PROMPT + conocidos;
     } else {
       const familia = await loadFamilyContext(req.userId);
+      mediaPendienteId = familia.mediaPendienteId;
       system =
         SYSTEM_PROMPT +
         (memoria ? `\n\nResumen de charlas anteriores (no repitas lo que ya está acá):` + envolverDatoNoConfiable('resumen_charlas_anteriores', memoria) : '') +
-        familia;
+        familia.text;
     }
 
     const response = await anthropic.messages.create(
@@ -1866,6 +1879,13 @@ app.post('/api/next', requireAuth, bloquearColaborador, rateLimit, async (req, r
     // en silencio por una falla del proveedor de IA.
     if (notaPendiente) {
       await sql`UPDATE family_notes SET discussed = true WHERE id = ${notaPendiente.id}`;
+    }
+    // Mismo criterio para la foto/video pendiente que loadFamilyContext()
+    // haya incluido en el contexto (ver el comentario ahí): recién se marca
+    // como discutida una vez que sabemos que la charla de verdad va a
+    // mencionarla, no antes.
+    if (mediaPendienteId) {
+      await sql`UPDATE media SET discussed = true WHERE id = ${mediaPendienteId}`;
     }
 
     let text = bloqueDeTexto.trim();

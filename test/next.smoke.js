@@ -36,10 +36,12 @@ const user = {
   fecha_nacimiento: null,
   resumenTexto: '', // memoria de charlas anteriores (loadMemorySummary)
   pendingFamilyNote: null, // { id, contributor, parentesco, texto } | null
+  pendingMedia: null, // { id, type, caption, contributor } | null
 };
 
 let storyLogInserts = []; // para verificar que se guardó (o no) una historia larga
 let familyNoteMarkedDiscussed = []; // ids marcados como discussed=true
+let mediaMarkedDiscussed = []; // ids marcados como discussed=true
 
 function fakeSql(strings, ...values) {
   const text = strings.join('?');
@@ -75,7 +77,13 @@ function fakeSql(strings, ...values) {
     return Promise.resolve([]); // loadFamilyContext: sin notas guardadas, para simplificar estos tests
   }
 
-  if (text.includes('SELECT id, type, caption, contributor FROM media')) return Promise.resolve([]);
+  if (text.includes('SELECT id, type, caption, contributor FROM media')) {
+    return Promise.resolve(user.pendingMedia ? [user.pendingMedia] : []);
+  }
+  if (text.includes('UPDATE media SET discussed = true')) {
+    mediaMarkedDiscussed.push(values[0]);
+    return Promise.resolve([]);
+  }
   if (text.includes('SELECT fecha_nacimiento FROM users WHERE id')) {
     if (values[0] === user.id) return Promise.resolve([{ fecha_nacimiento: user.fecha_nacimiento }]);
     return Promise.resolve([]);
@@ -384,6 +392,30 @@ async function main() {
 
   user.pendingFamilyNote = null;
   user.resumenTexto = '';
+
+  // --- 11c) Foto/video pendiente se incorpora al contexto y se marca discutida --
+  // (mismo mecanismo que la nota de un colaborador, pero para media)
+  resetAnthropicMock();
+  user.pendingMedia = { id: 77, type: 'foto', caption: 'Cumpleaños de 15 en el patio de la abuela.', contributor: 'María' };
+  pushAnthropicResponse('Qué lindo, ¿quién más estaba en esa foto del cumpleaños?');
+  const conMedia = await nextForUser(server, cookie, { history: historial, mode: 'historia' });
+  check('media pendiente -> 200', conMedia.status === 200);
+  check('media pendiente: el contexto incluye la descripción', capturedCalls[0].system.includes('Cumpleaños de 15'));
+  check('media pendiente: se marcó como discutida', mediaMarkedDiscussed.includes(77));
+
+  // --- 11d) Si Anthropic falla, la media pendiente NO se marca como discutida --
+  // (mismo bug que 11b, encontrado en una revisión propia del código: el
+  // UPDATE vivía adentro de loadFamilyContext() y corría ANTES de llamar a
+  // Anthropic — si el proveedor fallaba, la foto/video quedaba marcada
+  // como "ya la mencioné" aunque la persona nunca se enteró).
+  resetAnthropicMock();
+  user.pendingMedia = { id: 78, type: 'video', caption: 'Otro momento distinto.', contributor: 'María' };
+  pushAnthropicResponse({ throw: new Error('Anthropic no respondió (simulado)') });
+  const conMediaFallaProveedor = await nextForUser(server, cookie, { history: historial, mode: 'historia' });
+  check('media pendiente + falla del proveedor -> 500 (no 200)', conMediaFallaProveedor.status === 500);
+  check('media pendiente + falla del proveedor: la media NO se marca como discutida', !mediaMarkedDiscussed.includes(78));
+
+  user.pendingMedia = null;
 
   // --- 12) Respuesta de Anthropic vacía/malformada -> 500 controlado, no cuelga --
   resetAnthropicMock();
