@@ -30,6 +30,12 @@
     }
 
     *{box-sizing:border-box}
+    /* Antes solo los <input> del registro mostraban algo al enfocar con
+       teclado — links, botones de ícono, tabs, etc. dependían del estilo
+       por default del navegador (que algunos temas/navegadores dejan casi
+       invisible). Con :focus-visible el anillo solo aparece al navegar con
+       teclado (Tab), no al hacer clic con mouse/dedo. */
+    :focus-visible{outline:3px solid var(--gold-deep);outline-offset:2px}
     html{scroll-behavior:smooth}
     body{
       margin:0;

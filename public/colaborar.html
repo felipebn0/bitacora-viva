@@ -24,6 +24,9 @@
     --font-body: "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif;
   }
   * { box-sizing: border-box; }
+  /* Antes ningún link/botón mostraba nada al enfocar con teclado.
+     :focus-visible solo aparece al navegar con Tab, no al hacer clic. */
+  :focus-visible { outline: 3px solid var(--gold-deep); outline-offset: 2px; }
   body {
     margin: 0;
     min-height: 100vh;
