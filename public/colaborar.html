@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Aportar — Los recuerdos de mis viejos</title>
 <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/images/favicon-192.png">
@@ -30,13 +30,25 @@
   body {
     margin: 0;
     min-height: 100vh;
+    /* 100dvh sigue el alto REAL visible del navegador en el celular — a
+       diferencia de 100vh a secas, descuenta la barra de direcciones de
+       Safari/Chrome cuando está visible, evitando el salto raro al
+       aparecer/desaparecer esa barra al hacer scroll. Se declara después
+       de 100vh (no en vez de) para que los navegadores viejos que no
+       entienden "dvh" se queden con el 100vh de respaldo. */
+    min-height: 100dvh;
     background: var(--bg);
     color: var(--ink);
     font-family: var(--font-body);
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 28px 20px 60px;
+    /* env(safe-area-inset-*) evita que el contenido quede debajo del
+       notch/Dynamic Island o de la barra inferior en los iPhone con
+       pantalla completa (requiere viewport-fit=cover en el <meta
+       viewport>, ver arriba) — en el resto de los navegadores estos
+       env() valen 0, así que no cambia nada. */
+    padding: calc(28px + env(safe-area-inset-top)) calc(20px + env(safe-area-inset-right)) calc(60px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));
   }
   @media (prefers-reduced-motion: reduce) {
     /* El selector "*" solo no alcanza a la animación del ::before del
