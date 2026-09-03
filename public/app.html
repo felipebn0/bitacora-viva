@@ -208,29 +208,29 @@
 
   .topbar {
     width: 100%;
-    max-width: 440px;
+    max-width: 460px;
     margin: 0 auto 18px;
     display: flex;
     justify-content: center;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 14px;
   }
   .icon-btn-wrap { position: relative; display: inline-flex; }
   /* En móvil no hay ":hover" — el title/aria-label ya existían, pero sin
-     texto visible el significado de cada ícono (🌳📖👤🤝) no siempre es
+     texto visible el significado de cada ícono (🔑👪📔🌳📖) no siempre es
      inmediato. Esta etiqueta corta va siempre visible, no solo en hover. */
-  .icon-nav-item { display: inline-flex; flex-direction: column; align-items: center; gap: 3px; }
-  .icon-nav-item .icon-label { font-size: 0.72rem; color: var(--ink-soft); line-height: 1; white-space: nowrap; }
+  .icon-nav-item { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; }
+  .icon-nav-item .icon-label { font-size: 0.8rem; color: var(--ink-soft); line-height: 1; white-space: nowrap; }
   .icon-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 44px;
-    height: 44px;
+    width: 56px;
+    height: 56px;
     border-radius: 50%;
     background: #FBF6EA;
     border: 1px solid #E7DFCC;
-    font-size: 1.3rem;
+    font-size: 1.7rem;
     text-decoration: none;
     cursor: pointer;
     box-shadow: 0 2px 6px -3px rgba(0,0,0,0.2);
@@ -368,15 +368,15 @@
    </div>
    <div class="topbar">
      <div class="icon-nav-item">
-       <button class="icon-btn" id="joinCollabBtn" type="button" title="Colaborar con otra historia" aria-label="Colaborar con otra historia">🤝</button>
+       <button class="icon-btn" id="joinCollabBtn" type="button" title="Colaborar con otra historia" aria-label="Colaborar con otra historia">🔑</button>
        <span class="icon-label" aria-hidden="true">Colaborar</span>
      </div>
      <div class="icon-nav-item">
-       <a class="icon-btn" href="/colaboraciones.html" title="Colaboraciones" aria-label="Colaboraciones">👥</a>
+       <a class="icon-btn" href="/colaboraciones.html" title="Colaboraciones" aria-label="Colaboraciones">👪</a>
        <span class="icon-label" aria-hidden="true">Aportes</span>
      </div>
      <div class="icon-nav-item">
-       <a class="icon-btn" href="/historias.html" title="Historias detectadas en la charla" aria-label="Historias detectadas en la charla">📝</a>
+       <a class="icon-btn" href="/historias.html" title="Historias detectadas en la charla" aria-label="Historias detectadas en la charla">📔</a>
        <span class="icon-label" aria-hidden="true">Historias</span>
      </div>
      <div class="icon-nav-item">
