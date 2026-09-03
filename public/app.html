@@ -847,20 +847,25 @@
   // más abajo en la pantalla, ahora agrupado en un solo lugar. ---
   const userMenuBtn = document.getElementById('userMenuBtn');
   const userMenuPanel = document.getElementById('userMenuPanel');
+  // El límite fijo en CSS (calc(100dvh - 90px)) asume que el panel siempre
+  // arranca casi pegado al borde superior. En pantallas chicas con letra
+  // agrandada el botón puede quedar más abajo, así que el espacio real
+  // disponible es menor. Se recalcula con la posición real del panel —
+  // pero no solo al abrir: cambiar el tamaño de letra (con Cuenta ya
+  // abierta) o el alto visible de la pantalla (rotar el celular, que
+  // aparezca el teclado, que se esconda la barra de direcciones) también
+  // puede volver viejo un cálculo hecho antes. No hace nada si el panel
+  // está cerrado.
+  function ajustarAltoCuenta() {
+    if (!userMenuPanel.classList.contains('visible')) return;
+    const top = userMenuPanel.getBoundingClientRect().top;
+    userMenuPanel.style.maxHeight = Math.max(120, window.innerHeight - top - 12) + 'px';
+  }
   userMenuBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     const abierto = userMenuPanel.classList.toggle('visible');
     userMenuBtn.setAttribute('aria-expanded', String(abierto));
-    if (abierto) {
-      // El límite fijo en CSS (calc(100dvh - 90px)) asume que el panel
-      // siempre arranca casi pegado al borde superior. En pantallas chicas
-      // con letra agrandada el botón puede quedar más abajo, así que el
-      // espacio real disponible es menor. Lo recalculamos con la posición
-      // real del panel cada vez que se abre, para que nunca se pase del
-      // borde inferior de la pantalla.
-      const top = userMenuPanel.getBoundingClientRect().top;
-      userMenuPanel.style.maxHeight = Math.max(120, window.innerHeight - top - 12) + 'px';
-    }
+    if (abierto) ajustarAltoCuenta();
   });
   document.addEventListener('click', (e) => {
     if (!userMenuPanel.contains(e.target) && e.target !== userMenuBtn) {
@@ -868,6 +873,11 @@
       userMenuBtn.setAttribute('aria-expanded', 'false');
     }
   });
+  window.addEventListener('resize', ajustarAltoCuenta);
+  // visualViewport (no todos los navegadores lo tienen) avisa cambios de
+  // alto visible que "resize" a veces no dispara solo — sobre todo el
+  // teclado virtual abriéndose/cerrándose en el celular.
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', ajustarAltoCuenta);
 
   // Acordeón: cada sección de Cuenta arranca cerrada y se abre solo al
   // tocar su título — antes se veían las 6 secciones de una, amontonadas.
@@ -915,11 +925,13 @@
       window.bitacoraFontSize.decrease();
       actualizarBotonesFuente();
       ajustarCamposDePerfil();
+      ajustarAltoCuenta(); // la letra más chica/grande cambia cuánto mide el panel
     });
     umFontIncBtn.addEventListener('click', () => {
       window.bitacoraFontSize.increase();
       actualizarBotonesFuente();
       ajustarCamposDePerfil();
+      ajustarAltoCuenta();
     });
     loginFontDecBtn.addEventListener('click', () => {
       window.bitacoraFontSize.decrease();

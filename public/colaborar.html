@@ -28,6 +28,16 @@
   /* Antes ningún link/botón mostraba nada al enfocar con teclado.
      :focus-visible solo aparece al navegar con Tab, no al hacer clic. */
   :focus-visible { outline: 3px solid var(--gold-deep); outline-offset: 2px; }
+  /* Link "saltar al contenido" — mismo patrón que app.html/index.html:
+     invisible y afuera del flujo normal, solo aparece al navegar con Tab. */
+  .skip-link {
+    position: absolute; top: -100px; left: 12px; z-index: 100;
+    background: var(--moss); color: #fffaf0; padding: 12px 18px;
+    border-radius: 10px; text-decoration: none; font-weight: 700;
+    transition: top .15s ease;
+  }
+  .skip-link:focus { top: 12px; }
+  main:focus { outline: none; }
   body {
     margin: 0;
     min-height: 100vh;
@@ -265,7 +275,13 @@
   </div>
 
   <div id="appContent">
-    <div class="topbar" id="ownTopbar" style="display:none;">
+    <!-- Mismo patrón que app.html: invisible hasta que se navega con Tab. -->
+    <a class="skip-link" href="#main-content">Saltar al contenido</a>
+    <!-- <nav>, no <div>: son enlaces a otras secciones de la propia
+         bitácora (cuando quien colabora está viendo la suya) — mismo
+         criterio que el topbar de app.html, esté visible o no en este
+         momento. -->
+    <nav class="topbar" id="ownTopbar" aria-label="Tu bitácora" style="display:none;">
       <div class="icon-nav-item">
         <a class="icon-btn" href="/app.html" title="Volver a mi historia" aria-label="Volver a mi historia">↩️</a>
         <span class="icon-label" aria-hidden="true">Volver</span>
@@ -278,7 +294,7 @@
         <a class="icon-btn" href="/capitulos.html" title="Mi libro de la historia" aria-label="Mi libro de la historia">📖</a>
         <span class="icon-label" aria-hidden="true">Libro</span>
       </div>
-    </div>
+    </nav>
 
     <header>
       <h1>Aportar a la bitácora</h1>
@@ -286,6 +302,9 @@
       <p class="sub">Cuenta una historia — la entrevistadora te va guiando.</p>
     </header>
 
+    <!-- <main>: el resto del contenido autenticado — antes no estaba en
+         ningún landmark, igual que le pasaba a app.html. -->
+    <main id="main-content" tabindex="-1">
     <div class="collab-switch" id="collabSwitch" style="display:none;">
       <p class="sub">Tus colaboraciones:</p>
       <div class="collab-switch-list" id="collabSwitchList"></div>
@@ -340,6 +359,7 @@
         <p class="error" id="deleteAccountError"></p>
       </div>
     </div>
+    </main>
   </div>
 
 <script>
@@ -580,6 +600,17 @@
     const div = document.createElement('div');
     div.className = 'aporte-bubble ' + kind;
     div.textContent = text;
+    // El saludo inicial de la IA (iniciarAporte(), ver más abajo) agrega la
+    // primera burbuja solo, apenas carga la página — antes de que la
+    // persona haya hecho nada. Si en ESE momento se hace scroll, se pierde
+    // algo sutil: Chrome usa la posición de scroll como pista de por dónde
+    // arrancar la navegación por teclado mientras nada tiene foco todavía,
+    // así que quien presiona Tab justo después de cargar la página (para
+    // saltar directo al contenido, el motivo de tener el skip-link) puede
+    // terminar más abajo de lo esperado, salteándoselo — comprobado
+    // reproduciendo el caso con Playwright. No hace falta de todos modos:
+    // con un solo mensaje corto la página entera ya entra en la pantalla.
+    const esPrimeraBurbuja = aporteChat.children.length === 0;
     aporteChat.appendChild(div);
     // scrollIntoView (a diferencia de fijar aporteChat.scrollTop a mano)
     // encuentra solo el ancestro que de verdad scrollea: en desktop es
@@ -587,7 +618,7 @@
     // celular — donde .aporte-chat ya no tiene scroll propio, ver Bloque 21
     // — es la página entera. Así el último mensaje queda visible en ambos
     // casos sin tener que distinguir de cuál de los dos se trata acá.
-    div.scrollIntoView({ block: 'end' });
+    if (!esPrimeraBurbuja) div.scrollIntoView({ block: 'end' });
     return div;
   }
 

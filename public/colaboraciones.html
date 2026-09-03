@@ -47,6 +47,12 @@
     border-bottom: 1px solid var(--gold-deep); display: inline-flex; align-items: center;
     min-height: 44px; padding: 10px 4px; margin-top: -6px;
   }
+  /* Solo para lectores de pantalla — ver el comentario junto a
+     #colaboradoresStatus más abajo. */
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  }
 
   .colab-grid { display: flex; flex-wrap: wrap; gap: 14px; }
   .colab-card {
@@ -85,23 +91,29 @@
     <section id="colaboradoresSection">
       <h2>Quiénes han colaborado</h2>
       <p class="sub">Familiares que aportaron historias con tu código de invitación.</p>
-      <!-- role="status" aria-live="polite" aria-atomic="true": reemplaza
-         todo su contenido de una (Cargando… → tarjetas o mensaje), así que
-         aria-atomic hace que se anuncie el texto nuevo completo. -->
-      <div id="colaboradoresLista" role="status" aria-live="polite" aria-atomic="true"><p class="empty">Cargando…</p></div>
+      <!-- El anuncio corto (aria-live) va aparte del contenido visual: si
+         aria-live estuviera en #colaboradoresLista directamente, un lector
+         de pantalla anunciaría TODAS las tarjetas de golpe cada vez que la
+         lista cambia — acá solo se avisa algo corto como "Se cargaron 3
+         colaboradores.", y la lista se explora aparte, a su ritmo. -->
+      <p id="colaboradoresStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
+      <div id="colaboradoresLista"><p class="empty">Cargando…</p></div>
     </section>
 
     <section id="aportesSection">
       <h2>Lo que contaron</h2>
       <p class="sub">Las historias completas, con su audio si lo grabaron.</p>
-      <div id="aportesLista" role="status" aria-live="polite" aria-atomic="true"><p class="empty">Cargando…</p></div>
+      <p id="aportesStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
+      <div id="aportesLista"><p class="empty">Cargando…</p></div>
     </section>
   </main>
 
 <script>
 (function () {
   const colaboradoresLista = document.getElementById('colaboradoresLista');
+  const colaboradoresStatus = document.getElementById('colaboradoresStatus');
   const aportesLista = document.getElementById('aportesLista');
+  const aportesStatus = document.getElementById('aportesStatus');
 
   // Mismo criterio que el resto de las páginas: si la sesión venció, decirlo
   // claro en vez de mostrar un error genérico de conexión.
@@ -115,14 +127,18 @@
       const resp = await fetch('/api/tree/colaboradores');
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) {
-        colaboradoresLista.innerHTML = '<p class="empty">' + mensajeDeError(resp, data, 'No se pudo cargar quiénes colaboraron.') + '</p>';
+        const msg = mensajeDeError(resp, data, 'No se pudo cargar quiénes colaboraron.');
+        colaboradoresStatus.textContent = msg;
+        colaboradoresLista.innerHTML = '<p class="empty">' + msg + '</p>';
         return;
       }
       const colaboradores = data.colaboradores || [];
       if (!colaboradores.length) {
+        colaboradoresStatus.textContent = 'Todavía nadie ha colaborado.';
         colaboradoresLista.innerHTML = '<p class="empty">Todavía nadie ha colaborado.</p><a class="empty-cta" href="/app.html#inviteToggle">Invitar familiares →</a>';
-        return;
+        return true; // vacío — ver cargarAportes(), evita repetir el mismo CTA dos veces
       }
+      colaboradoresStatus.textContent = colaboradores.length === 1 ? 'Se cargó 1 colaborador.' : `Se cargaron ${colaboradores.length} colaboradores.`;
       const grid = document.createElement('div');
       grid.className = 'colab-grid';
       colaboradores.forEach((c) => {
@@ -151,23 +167,33 @@
       colaboradoresLista.innerHTML = '';
       colaboradoresLista.appendChild(grid);
     } catch (e) {
+      colaboradoresStatus.textContent = 'No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.';
       colaboradoresLista.innerHTML = '<p class="empty">No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.</p>';
     }
   }
 
-  async function cargarAportes() {
+  async function cargarAportes(colaboradoresVacios) {
     try {
       const resp = await fetch('/api/contributions');
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) {
-        aportesLista.innerHTML = '<p class="empty">' + mensajeDeError(resp, data, 'No se pudieron cargar los aportes.') + '</p>';
+        const msg = mensajeDeError(resp, data, 'No se pudieron cargar los aportes.');
+        aportesStatus.textContent = msg;
+        aportesLista.innerHTML = '<p class="empty">' + msg + '</p>';
         return;
       }
       const notes = data.notes || [];
       if (!notes.length) {
-        aportesLista.innerHTML = '<p class="empty">Todavía no hay historias aportadas por la familia.</p><a class="empty-cta" href="/app.html#inviteToggle">Invitar familiares →</a>';
+        // Si arriba (colaboradores) también está vacío, esa sección ya
+        // muestra "Invitar familiares →" — repetirlo acá es el mismo CTA
+        // dos veces en la misma pantalla, sin agregar nada nuevo.
+        aportesStatus.textContent = 'Todavía no hay historias aportadas por la familia.';
+        aportesLista.innerHTML = colaboradoresVacios
+          ? '<p class="empty">Todavía no hay historias aportadas por la familia.</p>'
+          : '<p class="empty">Todavía no hay historias aportadas por la familia.</p><a class="empty-cta" href="/app.html#inviteToggle">Invitar familiares →</a>';
         return;
       }
+      aportesStatus.textContent = notes.length === 1 ? 'Se cargó 1 aporte.' : `Se cargaron ${notes.length} aportes.`;
       aportesLista.innerHTML = '';
       notes.forEach((n) => {
         const item = document.createElement('div');
@@ -194,12 +220,20 @@
         aportesLista.appendChild(item);
       });
     } catch (e) {
+      aportesStatus.textContent = 'No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.';
       aportesLista.innerHTML = '<p class="empty">No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.</p>';
     }
   }
 
-  cargarColaboradores();
-  cargarAportes();
+  // Antes las dos llamadas salían en paralelo (más rápido, pero con las
+  // dos vacías a la vez no había forma de saber, desde acá, que "aportes"
+  // no debía repetir el CTA de "colaboradores"). Encadenarlas es un viaje
+  // extra al servidor en el caso más común, pero esta pantalla no es
+  // sensible a esa demora.
+  (async () => {
+    const colaboradoresVacios = await cargarColaboradores();
+    await cargarAportes(colaboradoresVacios);
+  })();
 })();
 </script>
 </body>

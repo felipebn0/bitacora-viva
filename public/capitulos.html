@@ -61,6 +61,12 @@
   .status { color: var(--ink-soft); font-size: 0.9rem; }
 
   .empty { color: var(--ink-soft); font-style: italic; margin-top: 40px; }
+  /* Solo para lectores de pantalla — ver el comentario junto a
+     #listaStatus más abajo. */
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  }
 
   .chapter {
     background: #FBF6EA;
@@ -107,7 +113,11 @@
     <div class="aportes-section" id="aportesSection" style="display:none;">
       <h2>Aportes de la familia</h2>
       <p class="sub">Historias que colaboradores agregaron con su propia voz.</p>
-      <div id="aportesLista" role="status" aria-live="polite" aria-atomic="true"></div>
+      <!-- El anuncio corto va aparte del contenido: si aria-live estuviera
+         en #aportesLista directamente, un lector de pantalla leería TODOS
+         los aportes de golpe cada vez que la lista cambia. -->
+      <p id="aportesListaStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
+      <div id="aportesLista"></div>
     </div>
 
     <div class="toolbar">
@@ -117,7 +127,13 @@
          terminó sin mirar la pantalla todo el rato. -->
       <span class="status" id="status" role="status" aria-live="polite" aria-atomic="true"></span>
     </div>
-    <div id="lista" role="status" aria-live="polite" aria-atomic="true">
+    <!-- Mismo criterio que #aportesListaStatus: el anuncio corto
+       ("Se cargaron 3 capítulos.") va en un elemento aparte, sr-only —
+       #lista mismo no tiene aria-live, porque cada capítulo trae un texto
+       largo y anunciarlos todos de una cada vez que cambia algo sería más
+       ruido que ayuda. -->
+    <p id="listaStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
+    <div id="lista">
       <p class="empty">Cargando…</p>
     </div>
   </main>
@@ -125,10 +141,12 @@
 <script>
 (function () {
   const lista = document.getElementById('lista');
+  const listaStatus = document.getElementById('listaStatus');
   const status = document.getElementById('status');
   const generarBtn = document.getElementById('generarBtn');
   const aportesSection = document.getElementById('aportesSection');
   const aportesLista = document.getElementById('aportesLista');
+  const aportesListaStatus = document.getElementById('aportesListaStatus');
 
   // Antes cualquier falla acá (sesión vencida, error del servidor) mostraba
   // el mismo "Hubo un problema para conectar" sin distinguir si hacía
@@ -145,6 +163,7 @@
       const data = await resp.json();
       const notes = data.notes || [];
       if (!notes.length) return;
+      aportesListaStatus.textContent = notes.length === 1 ? 'Se cargó 1 aporte de la familia.' : `Se cargaron ${notes.length} aportes de la familia.`;
       aportesLista.innerHTML = '';
       notes.forEach((n) => {
         const item = document.createElement('div');
@@ -257,14 +276,20 @@
     try {
       const resp = await fetch('/api/chapters');
       if (resp.status === 401) {
+        listaStatus.textContent = 'Inicia sesión en la bitácora primero.';
         lista.innerHTML = '<p class="empty">Inicia sesión en la bitácora primero. <a class="volver" href="/app.html">Ir a la bitácora</a></p>';
         generarBtn.disabled = true;
         return;
       }
       if (!resp.ok) throw new Error('fallo');
       const data = await resp.json();
-      renderChapters(data.chapters || []);
+      const chapters = data.chapters || [];
+      listaStatus.textContent = chapters.length
+        ? (chapters.length === 1 ? 'Se cargó 1 capítulo.' : `Se cargaron ${chapters.length} capítulos.`)
+        : 'Todavía no hay capítulos generados.';
+      renderChapters(chapters);
     } catch (e) {
+      listaStatus.textContent = 'No se pudieron cargar los capítulos.';
       lista.innerHTML = '<p class="empty">No se pudieron cargar los capítulos. Intenta de nuevo más tarde.</p>';
     }
   }

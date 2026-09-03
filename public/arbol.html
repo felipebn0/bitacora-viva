@@ -95,6 +95,12 @@
   .wrap-outer.is-scrollable::after { opacity: 1; }
   .wrap { overflow-x: auto; padding-bottom: 12px; position: relative; z-index: 1; }
   .empty, .msg { color: var(--ink-soft); font-style: italic; text-align: center; margin-top: 60px; }
+  .empty-cta {
+    color: var(--gold-deep); font-size: 0.9rem; font-weight: 700; text-decoration: none;
+    border-bottom: 1px solid var(--gold-deep); display: flex; align-items: center;
+    justify-content: center; min-height: 44px; padding: 10px 4px; width: fit-content;
+    margin: 4px auto 0;
+  }
 
   .tree-graphic { position: relative; display: flex; flex-direction: column; gap: 52px; padding: 10px; width: max-content; min-width: 100%; }
   .tree-row { display: flex; flex-wrap: nowrap; justify-content: center; gap: 26px; position: relative; z-index: 1; width: max-content; margin: 0 auto; }
@@ -427,7 +433,7 @@
     if (scrollHint) scrollHint.classList.remove('visible');
     if (wrapOuter) wrapOuter.classList.remove('is-scrollable');
     if (!people.length) {
-      wrap.innerHTML = '<p class="empty">Todavía no hay nadie registrado — va a ir apareciendo a medida que se charla.</p>';
+      wrap.innerHTML = '<p class="empty">Todavía no hay nadie registrado — va a ir apareciendo a medida que se charla.</p><a class="empty-cta" href="/app.html">Empezar a charlar →</a>';
       return;
     }
 
