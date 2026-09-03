@@ -87,6 +87,14 @@
       background:rgba(245,239,226,.78);
       border-bottom:1px solid rgba(229,219,198,.72);
     }
+    /* El nav es sticky y se superpone al contenido, así que un anchor
+       (#como-funciona, etc.) sin este ajuste hace scroll hasta dejar el
+       destino justo debajo del borde superior — tapado por el nav. Este
+       valor de respaldo (117px+16px, el alto real del nav en mobile a
+       escala 100%) se sobreescribe en JS con la altura real medida vía
+       ResizeObserver, porque el nav cambia de alto según el ancho de
+       pantalla y la escala de letra elegida. */
+    html{scroll-padding-top:133px}
     .nav-inner{height:76px; display:flex; align-items:center; justify-content:space-between; gap:24px}
     /* min-height/min-width:44px: en mobile el span del nombre se oculta
        (ver ".brand span{display:none}" más abajo) y queda solo el ícono de
@@ -663,6 +671,24 @@
       actualizar();
       dec.addEventListener('click', () => { window.bitacoraFontSize.decrease(); actualizar(); });
       inc.addEventListener('click', () => { window.bitacoraFontSize.increase(); actualizar(); });
+    })();
+
+    // El nav sticky cambia de alto según el ancho de pantalla y la escala
+    // de letra (el link "Cómo funciona" a 320px/140% no mide lo mismo que
+    // en desktop), así que un valor fijo de scroll-padding-top no alcanza:
+    // sin esto, al usar los links del menú (o el botón "Ver cómo
+    // funciona") el destino queda tapado por el nav en vez de aparecer
+    // debajo. Se mide el alto real cada vez que cambia y se guarda en
+    // scroll-padding-top, que es lo que usa el navegador para no scrollear
+    // "de más" al saltar a un ancla.
+    (function () {
+      const nav = document.querySelector('nav');
+      if (!nav || !window.ResizeObserver) return;
+      const actualizar = () => {
+        document.documentElement.style.scrollPaddingTop = (nav.offsetHeight + 16) + 'px';
+      };
+      new ResizeObserver(actualizar).observe(nav);
+      actualizar();
     })();
 
     // Demo orb (decorativo, no llama al backend)
