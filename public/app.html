@@ -191,7 +191,7 @@
   .user-menu-panel .um-section-title:first-of-type { margin-top: 0; }
   .user-menu-panel .um-field-label { display: block; font-size: 0.8rem; color: var(--ink-soft); margin: 0 0 4px; }
   .user-menu-panel .um-hint { font-size: 0.78rem; color: var(--ink-soft); margin: -4px 0 8px; }
-  .user-menu-panel input {
+  .user-menu-panel input, .user-menu-panel select {
     width: 100%; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 10px;
     font-family: var(--font-body); background: #fff; color: var(--ink); font-size: 0.88rem; margin-bottom: 8px;
   }
@@ -357,6 +357,10 @@
          </div>
          <p class="um-hint">Cambia el tamaño de la letra en toda la app — se recuerda la próxima vez que entres.</p>
 
+         <p class="um-section-title">Voz</p>
+         <select id="voiceSelect" aria-label="Elegir voz"></select>
+         <p class="um-hint">Elige qué voz usa la entrevistadora para hablarte.</p>
+
          <p class="um-section-title">Perfil</p>
          <input type="text" id="umProfileName" placeholder="Tu nombre" maxlength="100" aria-label="Tu nombre">
          <input type="email" id="umProfileEmail" placeholder="Tu correo" maxlength="200" autocomplete="email" aria-label="Tu correo">
@@ -447,10 +451,6 @@
             <input type="text" id="writeInput" placeholder="Escribe tu respuesta…" aria-label="Escribir respuesta">
             <button id="writeSend" type="button">Enviar</button>
           </div>
-          <button class="write-toggle" id="voiceToggle" type="button">cambiar voz</button>
-          <div class="write-row" id="voiceRow">
-            <select id="voiceSelect" aria-label="Elegir voz"></select>
-          </div>
         </div>
       </div>
     </div>
@@ -482,6 +482,33 @@
   const umProfileEmail = document.getElementById('umProfileEmail');
   const umProfileBirthdate = document.getElementById('umProfileBirthdate');
 
+  // El correo (o el nombre) puede ser más largo de lo que entra en el
+  // cuadro del panel de Cuenta — en vez de dejarlo cortado (el propio
+  // input recorta y hay que hacer scroll adentro para leerlo completo),
+  // se achica solo el tamaño de letra de ESE cuadro lo necesario para
+  // que el texto quepa de una, sin bajar de un mínimo legible. Se
+  // recalcula cada vez que el texto cambia (al cargar el perfil, al
+  // guardar, al tipear) y también si cambia el tamaño de letra general
+  // de la app, porque eso también cambia cuánto entra en el cuadro.
+  function ajustarFuenteParaQueQuepa(el) {
+    if (!el) return;
+    const BASE_REM = 0.88;
+    const MIN_REM = 0.62;
+    const STEP = 0.03;
+    let size = BASE_REM;
+    el.style.fontSize = size + 'rem';
+    while (el.scrollWidth > el.clientWidth + 1 && size > MIN_REM) {
+      size -= STEP;
+      el.style.fontSize = size.toFixed(2) + 'rem';
+    }
+  }
+  function ajustarCamposDePerfil() {
+    ajustarFuenteParaQueQuepa(umProfileName);
+    ajustarFuenteParaQueQuepa(umProfileEmail);
+  }
+  umProfileName.addEventListener('input', () => ajustarFuenteParaQueQuepa(umProfileName));
+  umProfileEmail.addEventListener('input', () => ajustarFuenteParaQueQuepa(umProfileEmail));
+
   function showApp(username, name, email, fechaNacimiento) {
     loginScreen.style.display = 'none';
     appContent.style.display = 'flex';
@@ -495,6 +522,7 @@
     umProfileName.value = name || '';
     umProfileEmail.value = email || '';
     umProfileBirthdate.value = fechaNacimiento || '';
+    ajustarCamposDePerfil();
   }
 
   function showLogin() {
@@ -541,6 +569,10 @@
   userMenuBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     userMenuPanel.classList.toggle('visible');
+    // Los cuadros de nombre/correo recién se pueden medir (scrollWidth
+    // vs. clientWidth) cuando el panel ya está visible — mientras estaba
+    // en display:none el ancho medía 0 y no se ajustaba nada.
+    if (userMenuPanel.classList.contains('visible')) ajustarCamposDePerfil();
   });
   document.addEventListener('click', (e) => {
     if (!userMenuPanel.contains(e.target) && e.target !== userMenuBtn) {
@@ -565,10 +597,12 @@
     umFontDecBtn.addEventListener('click', () => {
       window.bitacoraFontSize.decrease();
       actualizarBotonesFuente();
+      ajustarCamposDePerfil();
     });
     umFontIncBtn.addEventListener('click', () => {
       window.bitacoraFontSize.increase();
       actualizarBotonesFuente();
+      ajustarCamposDePerfil();
     });
   }
 
@@ -607,6 +641,7 @@
       umProfileName.value = data.name || '';
       umProfileEmail.value = data.email || '';
       umProfileBirthdate.value = data.fechaNacimiento || '';
+      ajustarCamposDePerfil();
       greetingName.textContent = data.name || umUsername.textContent.replace(/^Usuario:\s*/, '') || '';
       umProfileMsg.textContent = 'Perfil guardado ✓';
       umProfileSaveBtn.disabled = false;
@@ -858,8 +893,6 @@
   const writeRow = document.getElementById('writeRow');
   const writeInput = document.getElementById('writeInput');
   const writeSend = document.getElementById('writeSend');
-  const voiceToggle = document.getElementById('voiceToggle');
-  const voiceRow = document.getElementById('voiceRow');
   const voiceSelect = document.getElementById('voiceSelect');
   const endBtn = document.getElementById('endBtn');
   const treeModeBtn = document.getElementById('treeModeBtn');
@@ -1051,8 +1084,6 @@
     selectedVoice = voices.find((v) => v.name === voiceSelect.value) || null;
     if (selectedVoice) localStorage.setItem('bitacoraVoiceName', selectedVoice.name);
   });
-
-  voiceToggle.addEventListener('click', () => voiceRow.classList.toggle('visible'));
 
   if ('speechSynthesis' in window) {
     loadVoices();
