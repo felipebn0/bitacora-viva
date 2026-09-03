@@ -38,6 +38,11 @@
 
   .wrap { max-width: 720px; margin: 0 auto; }
   .empty { color: var(--ink-soft); font-style: italic; }
+  .empty-cta {
+    color: var(--gold-deep); font-size: 0.9rem; font-weight: 700; text-decoration: none;
+    border-bottom: 1px solid var(--gold-deep); display: inline-flex; align-items: center;
+    min-height: 44px; padding: 10px 4px; margin-top: -6px;
+  }
 
   .item {
     background: #FBF6EA; border: 1px solid #E7DFCC; border-radius: 14px;
@@ -78,7 +83,7 @@
       }
       const stories = data.stories || [];
       if (!stories.length) {
-        storyLogLista.innerHTML = '<p class="empty">Todavía no hay historias detectadas en tus charlas.</p>';
+        storyLogLista.innerHTML = '<p class="empty">Todavía no hay historias detectadas en tus charlas.</p><a class="empty-cta" href="/app.html">Empezar a charlar →</a>';
         return;
       }
       storyLogLista.innerHTML = '';

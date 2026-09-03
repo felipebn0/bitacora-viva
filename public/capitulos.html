@@ -228,6 +228,26 @@
     }
   }
 
+  // "Generar capítulos" agrupa lo que haya en story_log — si todavía no
+  // hay ninguna historia detectada, tocar el botón solo hace un viaje al
+  // servidor para volver con "no hay nada que generar". Mejor avisar de
+  // entrada y dejar el botón deshabilitado, en vez de que la persona lo
+  // descubra recién después de esperar la respuesta. Si esta consulta
+  // falla (sesión vencida, sin conexión), se deja el botón habilitado
+  // como estaba — el servidor sigue validando igual del otro lado.
+  async function chequearMaterialDisponible() {
+    try {
+      const resp = await fetch('/api/story-log');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const stories = data.stories || [];
+      if (!stories.length) {
+        generarBtn.disabled = true;
+        status.textContent = 'Todavía no hay historias detectadas en tus charlas para armar un capítulo.';
+      }
+    } catch (e) {}
+  }
+
   async function cargar() {
     try {
       const resp = await fetch('/api/chapters');
@@ -267,6 +287,7 @@
 
   cargar();
   cargarAportes();
+  chequearMaterialDisponible();
 })();
 </script>
 </body>

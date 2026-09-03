@@ -42,6 +42,11 @@
   section h2 { font-family: var(--font-display); font-size: 1.2rem; margin: 0 0 4px; }
   section .sub { color: var(--ink-soft); font-size: 0.9rem; margin: 0 0 16px; }
   .empty { color: var(--ink-soft); font-style: italic; }
+  .empty-cta {
+    color: var(--gold-deep); font-size: 0.9rem; font-weight: 700; text-decoration: none;
+    border-bottom: 1px solid var(--gold-deep); display: inline-flex; align-items: center;
+    min-height: 44px; padding: 10px 4px; margin-top: -6px;
+  }
 
   .colab-grid { display: flex; flex-wrap: wrap; gap: 14px; }
   .colab-card {
@@ -110,7 +115,7 @@
       }
       const colaboradores = data.colaboradores || [];
       if (!colaboradores.length) {
-        colaboradoresLista.innerHTML = '<p class="empty">Todavía nadie ha colaborado. Comparte tu código de invitación desde "invitar familiares" en la bitácora.</p>';
+        colaboradoresLista.innerHTML = '<p class="empty">Todavía nadie ha colaborado.</p><a class="empty-cta" href="/app.html#inviteToggle">Invitar familiares →</a>';
         return;
       }
       const grid = document.createElement('div');
@@ -155,7 +160,7 @@
       }
       const notes = data.notes || [];
       if (!notes.length) {
-        aportesLista.innerHTML = '<p class="empty">Todavía no hay historias aportadas por la familia.</p>';
+        aportesLista.innerHTML = '<p class="empty">Todavía no hay historias aportadas por la familia.</p><a class="empty-cta" href="/app.html#inviteToggle">Invitar familiares →</a>';
         return;
       }
       aportesLista.innerHTML = '';

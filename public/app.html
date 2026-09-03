@@ -752,6 +752,16 @@
     umProfileEmail.value = email || '';
     umProfileBirthdate.value = fechaNacimiento || '';
     ajustarCamposDePerfil();
+    if (location.hash === '#inviteToggle') {
+      // Llegó acá con un enlace directo a "invitar familiares" (por ejemplo
+      // desde el estado vacío de Aportes) — abrimos el código de una en vez
+      // de dejar que tenga que encontrarlo y tocarlo de nuevo.
+      requestAnimationFrame(() => {
+        inviteToggle.scrollIntoView({ block: 'center' });
+        inviteToggle.click();
+      });
+      history.replaceState(null, '', location.pathname + location.search);
+    }
   }
 
   function showLogin() {
