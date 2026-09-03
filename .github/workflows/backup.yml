@@ -1,0 +1,84 @@
+name: Backup semanal de la base de datos
+
+# Corre una vez por semana y también se puede disparar a mano desde la
+# pestaña "Actions" del repo (botón "Run workflow"). Hace un pg_dump
+# completo de la base de Neon y lo sube como archivo adjunto a una
+# release de este mismo repo (que es privado). No usa ningún servicio
+# pago nuevo: solo Postgres (que ya existe) y GitHub Releases (gratis).
+#
+# Para que esto funcione hace falta UN solo paso manual, una sola vez:
+# agregar la connection string de la base como secret del repo, con
+# el nombre DATABASE_URL (Settings → Secrets and variables → Actions
+# → New repository secret, o `gh secret set DATABASE_URL`). Ese valor
+# nunca pasa por este archivo ni por ningún commit.
+
+on:
+  schedule:
+    # Domingos ~02:17 hora Colombia (UTC-5) = 07:17 UTC. El minuto "17"
+    # (en vez de en punto) es a propósito: evita la hora exacta, que es
+    # cuando más workflows de todo GitHub se disparan a la vez.
+    - cron: '17 7 * * 0'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verificar que exista el secret DATABASE_URL
+        run: |
+          if [ -z "${{ secrets.DATABASE_URL }}" ]; then
+            echo "::error::Falta el secret DATABASE_URL en este repo. Sin él no se puede hacer el backup. Agregalo en Settings → Secrets and variables → Actions → New repository secret."
+            exit 1
+          fi
+
+      - name: Instalar un cliente de Postgres actualizado
+        run: |
+          # El apt-get por defecto de ubuntu-latest puede traer una versión
+          # de pg_dump más vieja que la del servidor de Neon, y pg_dump no
+          # puede volcar una base más nueva que él mismo. Instalamos desde
+          # el repositorio oficial de PostgreSQL para tener siempre una
+          # versión reciente (más nueva que el servidor siempre funciona
+          # para hacer el dump).
+          sudo apt-get update
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Hacer el pg_dump
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          FECHA=$(date -u +%Y-%m-%d)
+          echo "FECHA=$FECHA" >> "$GITHUB_ENV"
+          pg_dump "$DATABASE_URL" --no-owner --no-privileges -F c -f "backup-$FECHA.dump"
+
+      - name: Subir el dump como release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "backup-$FECHA" "backup-$FECHA.dump" \
+            --repo "${{ github.repository }}" \
+            --title "Backup $FECHA" \
+            --notes "Backup automático semanal de la base de datos (formato pg_dump custom).
+
+          Para restaurar:
+
+          \`\`\`
+          pg_restore --clean --no-owner -d \"\$DATABASE_URL\" backup-$FECHA.dump
+          \`\`\`
+
+          Necesita un cliente de Postgres (pg_restore) instalado y la connection string de destino en \$DATABASE_URL."
+
+      - name: Limpiar backups viejos (dejar solo los últimos 8 = ~2 meses)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release list --repo "${{ github.repository }}" --json tagName,createdAt \
+            | jq -r '[.[] | select(.tagName | startswith("backup-"))] | sort_by(.createdAt) | reverse | .[8:] | .[].tagName' \
+            | while read -r tag; do
+                echo "Borrando release vieja: $tag"
+                gh release delete "$tag" --repo "${{ github.repository }}" --yes --cleanup-tag
+              done
