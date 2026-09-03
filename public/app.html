@@ -94,7 +94,6 @@
     flex-direction: column;
     gap: 12px;
     width: 100%;
-    flex: 1;
   }
   .transcript.visible { display: flex; }
   .bubble { max-width: 90%; text-align: left; }
@@ -126,6 +125,23 @@
   .write-row input, .write-row select { flex: 1; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 12px; font-family: var(--font-body); background: #fff; color: var(--ink); }
   .write-row button { border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px; padding: 0 14px; font-weight: 700; cursor: pointer; }
   .error { color: #a33; font-size: 0.85rem; }
+  /* Antes era un link chico igual que "copiar código" o "prefiero
+     escribir" — se perdía entre el resto de texto. Invitar familiares es
+     la acción que hace crecer la bitácora, así que ahora se ve como un
+     botón propio, más grande. */
+  .invite-cta {
+    background: var(--moss);
+    color: #FBF6EA;
+    border: none;
+    border-radius: 12px;
+    padding: 13px 24px;
+    font-family: var(--font-body);
+    font-size: 1.05rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 10px 22px -12px rgba(63,77,49,0.55);
+  }
+  .invite-cta:hover { background: #4a5738; }
 
   #appContent { display: none; flex-direction: column; align-items: center; }
   /* .login (más abajo) pone display:flex por defecto, así que sin esto el
@@ -170,6 +186,20 @@
     font-size: 1rem;
     color: var(--ink-soft);
     min-width: 0;
+  }
+  /* Nombre de la app, de vuelta arriba para que quede algo de recordación
+     de marca en la pantalla principal — antes de esto solo quedaba el
+     ícono del logo, sin ningún texto al lado. Chico y en mayúsculas
+     espaciadas (estilo "kicker") para que sume identidad sin competir
+     con el saludo, que sigue siendo lo más grande de la barra. */
+  .greeting-bar .greeting-text .brand-tag {
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--gold-deep);
+    margin-bottom: 2px;
   }
   .greeting-bar .greeting-text .greeting-name {
     display: block;
@@ -439,7 +469,7 @@
   <div id="appContent">
    <div class="greeting-bar">
      <img class="brand-logo" src="/images/logo-icon.png" alt="Los recuerdos de mis viejos">
-     <h1 class="greeting-text">Un gusto tenerte de vuelta<span class="greeting-name" id="greetingName"></span></h1>
+     <h1 class="greeting-text"><span class="brand-tag">Los recuerdos de mis viejos</span>Un gusto tenerte de vuelta<span class="greeting-name" id="greetingName"></span></h1>
      <div class="user-menu">
        <div class="icon-nav-item">
          <button class="icon-btn" id="userMenuBtn" type="button" title="Mi cuenta" aria-label="Mi cuenta" aria-expanded="false" aria-controls="userMenuPanel">👤</button>
@@ -542,7 +572,7 @@
    <div class="join-collab-panel" id="joinCollabPanel" style="display:none;">
      <p class="sub">Quiero colaborar con otra historia — ingresa el código que te compartieron.</p>
      <div class="join-collab-row">
-       <input type="text" id="joinCollabCode" placeholder="Ej: AB12CD" maxlength="6" aria-label="Código de invitación">
+       <input type="text" id="joinCollabCode" placeholder="Ej: B46NWEC7" maxlength="8" aria-label="Código de invitación">
        <button id="joinCollabSubmit" type="button">Entrar</button>
      </div>
      <p class="msg" id="joinCollabMsg"></p>
@@ -562,7 +592,11 @@
           <div class="state-label" id="stateLabel"></div>
           <button class="write-toggle end-toggle" id="endBtn" type="button" style="display:none;">terminar la charla</button>
           <button class="write-toggle" id="treeModeBtn" type="button">armar árbol genealógico</button>
-          <button class="write-toggle" id="writeToggle" type="button">prefiero escribir</button>
+          <!-- Oculto a pedido: el botón manual "prefiero escribir" ya no se
+               muestra. El cuadro para escribir (writeRow) sigue apareciendo
+               solo, automáticamente, cuando el micrófono falla o no se
+               entendió bien lo dicho — ver listenForAnswer/finalizeSpokenAnswer. -->
+          <button class="write-toggle" id="writeToggle" type="button" style="display:none;">prefiero escribir</button>
           <div class="write-row" id="writeRow">
             <input type="text" id="writeInput" placeholder="Escribe tu respuesta…" aria-label="Escribir respuesta">
             <button id="writeSend" type="button">Enviar</button>
@@ -574,7 +608,7 @@
    </div>
 
     <div class="logout-row">
-      <button class="write-toggle" id="inviteToggle" type="button">invitar familiares</button>
+      <button class="invite-cta" id="inviteToggle" type="button">Invitar familiares a colaborar</button>
       <div id="inviteRow" style="display:none; margin-top: 10px;">
         <p class="sub" style="max-width: 340px; margin: 0 auto 8px;">Comparte este código con familiares — crean su propia cuenta y pueden aportar historias, sin ver ni tocar tus charlas.</p>
         <p style="font-family: var(--font-display); font-size: 1.4rem; font-weight: 700; letter-spacing: 0.1em; margin: 0 0 4px;" id="inviteCode">…</p>
@@ -1449,13 +1483,23 @@
     }
   }
 
+  // Antes, si la grabación salía muy corta o no se pudo transcribir, el
+  // estado se quedaba trabado en 'listening'/'thinking' — el mensaje decía
+  // "presiona de nuevo" pero un segundo toque del botón caía en la rama de
+  // "pausar" de handleOrbPress() (cualquier estado que no sea
+  // idle/ended/paused se interpreta como pausa), así que la charla se
+  // pausaba sola en vez de volver a grabar. Ahora se reintenta solo,
+  // llamando listenForAnswer() de nuevo — el cuadro de texto se muestra
+  // igual por si la persona prefiere escribir en vez de seguir hablando,
+  // pero sin robarle el foco (que en el celular abriría el teclado encima
+  // de la charla que sigue en curso).
   async function finalizeSpokenAnswer() {
     if (fallbackRecognition) { try { fallbackRecognition.stop(); } catch (e) {} }
     const audioBlob = await stopRecordingAudio();
     if (!audioBlob || audioBlob.size < 800) {
       writeRow.classList.add('visible');
-      writeInput.focus();
-      stateLabel.textContent = 'No te escuché bien — escribe tu respuesta o presiona de nuevo.';
+      stateLabel.textContent = 'No te escuché bien — te sigo escuchando (o escribe tu respuesta).';
+      listenForAnswer();
       return;
     }
     setState('thinking', 'Transcribiendo…');
@@ -1467,8 +1511,8 @@
       handleAnswer(text, audioBlob);
     } else {
       writeRow.classList.add('visible');
-      writeInput.focus();
-      stateLabel.textContent = 'No te escuché bien — escribe tu respuesta o presiona de nuevo.';
+      stateLabel.textContent = 'No te escuché bien — te sigo escuchando (o escribe tu respuesta).';
+      listenForAnswer();
     }
   }
 
@@ -1573,6 +1617,12 @@
     if (ttsAudioEl) { try { ttsAudioEl.pause(); } catch (e) {} }
     sessionId += 1; // invalida cualquier respuesta pendiente de este turno
     await stopRecordingAudio();
+    // stopRecordingAudio() para la grabación en curso, pero no suelta el
+    // micrófono en sí — sin esto, "pausar" dejaba el micrófono prendido de
+    // fondo (el punto/ícono de grabación seguía encendido) aunque no se
+    // estuviera grabando nada. resumeConversation() lo vuelve a pedir solo
+    // cuando hace falta, sin volver a preguntar el permiso.
+    releaseMic();
     writeRow.classList.remove('visible');
     setState('paused', 'En pausa — presiona para seguir');
     orbLabel.innerHTML = 'Presiona<br>para seguir';
@@ -1589,6 +1639,7 @@
   function entrarEnPausaOfrecida() {
     pausedFromState = 'thinking';
     releaseWakeLock();
+    releaseMic(); // el micrófono del turno anterior podía seguir abierto — ver pauseConversation()
     setState('paused', 'En pausa — presiona para seguir');
     orbLabel.innerHTML = 'Presiona<br>para seguir';
     saveSessionLog();
@@ -1614,7 +1665,6 @@
   async function listenForAnswer() {
     setState('listening', 'Escuchando…');
     orbLabel.innerHTML = 'Escuchando<br>…';
-    writeToggle.style.display = 'inline';
     if (!window.MediaRecorder || !navigator.mediaDevices) {
       writeRow.classList.add('visible');
       writeInput.focus();
