@@ -106,6 +106,10 @@
     .demo-panel{min-height:445px;border-radius:26px;background:linear-gradient(180deg,#FBF6EA,#F7F0E2);padding:28px 22px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;position:relative;overflow:hidden}
     .demo-panel:after{content:"";position:absolute;inset:auto -35% -50% -35%;height:220px;background:radial-gradient(circle,rgba(91,107,69,.11),transparent 68%)}
     .demo-kicker{font-family:var(--serif);font-style:italic;color:var(--moss);margin-bottom:16px}
+    /* Insignia fija que aclara, ANTES de que alguien toque el botón, que
+       esto es una demostración visual y no una grabación real — se ve
+       siempre, no solo después de interactuar con el botón. */
+    .demo-badge{display:inline-block;background:rgba(91,107,69,.1);color:var(--moss);font-size:.68rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:3px 10px;border-radius:20px;margin-bottom:14px;border:1px solid rgba(91,107,69,.28);z-index:1;position:relative}
     .orb{width:168px;height:168px;border-radius:50%;border:0;background:radial-gradient(circle at 35% 30%,var(--gold),var(--gold-deep));color:#fff8ea;font-weight:700;box-shadow:0 16px 36px rgba(168,106,38,.28);position:relative;cursor:pointer;z-index:1;transition:.3s ease}
     .orb:before,.orb:after{content:"";position:absolute;inset:-15px;border:1px solid rgba(201,138,60,.34);border-radius:50%;animation:breathe 3s ease-in-out infinite}
     .orb:after{inset:-29px;opacity:.45;animation-delay:.6s}
@@ -317,9 +321,10 @@
               <div class="device-icons"><span class="mini-icon">🌳</span><span class="mini-icon">📖</span></div>
             </div>
             <div class="demo-panel">
+              <span class="demo-badge">Demostración visual</span>
               <div class="demo-kicker">Una conversación. Un recuerdo que queda.</div>
-              <button class="orb" id="demoOrb" aria-label="Probar demostración"><span id="orbText">Presiona<br>para hablar</span></button>
-              <div class="demo-state" id="demoState">Prueba el botón</div>
+              <button class="orb" id="demoOrb" aria-label="Probar demostración visual (no graba audio real)"><span id="orbText">Presiona<br>para hablar</span></button>
+              <div class="demo-state" id="demoState">Prueba el botón — es solo un ejemplo</div>
               <div class="demo-question" id="demoQuestion">“Quiero guardar una historia de mi familia.”</div>
             </div>
           </div>
@@ -375,7 +380,7 @@
               <div class="bubble a">Era una casa pequeña, pero siempre estaba llena de gente. Mi mamá cocinaba los domingos y mis hermanos llegaban desde temprano...</div>
               <div class="bubble q">¿Hay algún domingo que recuerdes especialmente?</div>
               <div class="bubble a">Sí. El día que mi hermano volvió después de varios años. Nadie sabía que venía.</div>
-              <div class="audio-card"><button class="play" id="playDemo" aria-label="Reproducir demo">▶</button><div><strong>Escuchar recuerdo</strong><div class="quiet" style="font-size:.85rem">02:14 · voz original</div></div><div class="wave" id="waveDemo"></div></div>
+              <div class="audio-card"><button class="play" id="playDemo" aria-label="Vista previa visual — este ejemplo no tiene audio real">▶</button><div><strong>Así se guarda un recuerdo con audio</strong><div class="quiet" style="font-size:.85rem">Vista previa · sin audio</div></div><div class="wave" id="waveDemo"></div></div>
             </div>
             <aside class="story-side">
               <h3>Libro de la historia</h3>
@@ -393,7 +398,7 @@
       <div class="wrap voice-grid">
         <div class="voice-art reveal">
           <div class="portrait" role="img" aria-label="Representación abstracta de un retrato familiar"></div>
-          <div class="voice-wave"><button class="play" aria-label="Reproducir recuerdo">▶</button><div class="wave"></div></div>
+          <div class="voice-wave"><button class="play" aria-label="Vista previa visual — este ejemplo no tiene audio real">▶</button><div class="wave"></div></div>
         </div>
         <div class="voice-copy reveal">
           <div class="eyebrow">Más que palabras</div>
@@ -584,13 +589,13 @@
       active = !active;
       orb.classList.toggle('listening', active);
       if (active) {
-        orbText.innerHTML = 'Escuchando<br>…';
-        state.textContent = 'Cuéntame el recuerdo con tus propias palabras';
+        orbText.innerHTML = 'Ejemplo:<br>escuchando…';
+        state.textContent = 'Así te escucharía la app — cuéntale el recuerdo con tus propias palabras';
         question.textContent = demoQuestions[qIndex % demoQuestions.length];
         qIndex++;
       } else {
         orbText.innerHTML = 'Presiona<br>para hablar';
-        state.textContent = 'Recuerdo guardado';
+        state.textContent = 'Así se vería un recuerdo guardado';
         question.textContent = '“La historia queda lista para volver a encontrarla.”';
       }
     });
