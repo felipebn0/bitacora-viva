@@ -1844,12 +1844,15 @@ app.post('/api/next', requireAuth, bloquearColaborador, rateLimit, async (req, r
         familia;
     }
 
-    const response = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: 300,
-      system,
-      messages,
-    });
+    const response = await anthropic.messages.create(
+      {
+        model: MODEL,
+        max_tokens: 300,
+        system,
+        messages,
+      },
+      { timeout: PROVIDER_TIMEOUT_MS }
+    );
 
     const bloqueDeTexto = primerBloqueDeTexto(response);
     if (!bloqueDeTexto) throw new Error('Respuesta de Anthropic sin bloque de texto utilizable.');
@@ -1888,6 +1891,17 @@ app.post('/api/next', requireAuth, bloquearColaborador, rateLimit, async (req, r
   }
 });
 
+// Timeout explícito para las llamadas a proveedores externos que son parte
+// del camino principal (la llamada de /api/next a Anthropic, y las de acá
+// abajo a ElevenLabs/Azure) — sin esto, dependen del timeout por defecto de
+// cada cliente (el del SDK de Anthropic son 10 minutos; fetch() de Node no
+// tiene ninguno), así que un proveedor lento o colgado se comía toda la
+// ventana de ejecución de la función serverless en vez de fallar rápido y
+// claro. 20s es generoso para lo que tarda normalmente cualquiera de estos
+// (un turno de charla, un texto a voz, una transcripción corta) pero corta
+// bastante antes de cualquier límite de tiempo de Vercel.
+const PROVIDER_TIMEOUT_MS = 20000;
+
 const ELEVEN_KEY = process.env.ELEVENLABS_API_KEY;
 const ELEVEN_VOICE_ID = process.env.ELEVENLABS_VOICE_ID;
 
@@ -1922,6 +1936,7 @@ async function speakWithElevenLabs(text) {
         // más de latencia (aceptable acá, no es una llamada en vivo).
         voice_settings: { stability: 0.4, similarity_boost: 0.75, style: 0.5, use_speaker_boost: true },
       }),
+      signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
     }
   );
   if (!resp.ok) throw new Error(`ElevenLabs ${resp.status}: ${await resp.text()}`);
@@ -1940,6 +1955,7 @@ async function speakWithAzure(text) {
         'X-Microsoft-OutputFormat': 'audio-16khz-128kbitrate-mono-mp3',
       },
       body: ssml,
+      signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
     }
   );
   if (!resp.ok) throw new Error(`Azure ${resp.status}: ${await resp.text()}`);
@@ -1974,6 +1990,7 @@ app.post('/api/transcribe', requireAuth, rateLimit, express.raw({ type: '*/*', l
       method: 'POST',
       headers: { 'xi-api-key': ELEVEN_KEY },
       body: formData,
+      signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
     });
 
     if (!resp.ok) {
