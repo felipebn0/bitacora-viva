@@ -59,7 +59,14 @@
        encontrado al probar el mismo arreglo en colaborar.html: la
        animación de "respirar" seguía a toda velocidad con "reducir
        movimiento" activado a pesar de esta regla. */
-    *, *::before, *::after { animation-duration: 0.001ms !important; }
+    /* "animation-duration: 0.001ms" (lo que había antes) no cumple lo que
+       pide "reducir movimiento": una animación con loop infinito sigue
+       en loop infinito, solo que carreras de 0.001ms en 0.001ms — sigue
+       corriendo (y puede verse como un parpadeo), además de que no tocaba
+       las transiciones en absoluto. "none" saca la animación/transición
+       de la ecuación directamente, igual que ya hace la landing
+       (public/index.html) con esta misma media query. */
+    *, *::before, *::after { animation: none !important; transition: none !important; }
   }
   .device {
     width: min(440px, 100%);
@@ -188,7 +195,7 @@
   .greeting-bar {
     width: 100%;
     max-width: 900px;
-    margin: 0 auto 14px;
+    margin: 0 auto 8px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -218,7 +225,14 @@
     margin-bottom: 2px;
   }
   .greeting-bar .greeting-text .greeting-name {
-    display: block;
+    /* Antes iba en su propia línea, debajo de "Un gusto tenerte de
+       vuelta" — con letra grande (140%) esas dos líneas más la marca de
+       arriba dejaban el saludo ocupando casi la mitad de la pantalla en
+       celulares chicos, antes de que empiece el contenido. Ahora es
+       "Hola, {nombre}" en una sola línea (que puede envolver como
+       cualquier texto si el nombre es largo, pero ya no suma una línea
+       fija de más), sin cambiar el tamaño de letra.  */
+    display: inline;
     font-family: var(--font-display);
     font-size: 1.7rem;
     font-weight: 700;
@@ -302,7 +316,7 @@
   .topbar {
     width: 100%;
     max-width: 460px;
-    margin: 0 auto 18px;
+    margin: 0 auto 10px;
     display: flex;
     justify-content: center;
     flex-wrap: wrap;
@@ -355,8 +369,13 @@
      nada más en esas pantallas, lo suficiente para que todo entre en una
      fila y el nombre quede en dos líneas como mucho. */
   @media (max-width: 400px) {
-    .topbar { gap: 8px; }
+    /* column-gap para separar los íconos entre sí (evita toques
+       accidentales al vecino, sobre todo con letra agrandada) se deja
+       igual; row-gap (el espacio entre la fila de arriba y la de abajo)
+       se achica un poco — ahí no hay riesgo de tocar el ícono equivocado. */
+    .topbar { row-gap: 6px; column-gap: 8px; }
     .icon-btn { width: 48px; height: 48px; font-size: 1.4rem; }
+    .icon-nav-item { gap: 2px; }
     /* Antes la etiqueta bajaba a 0.7rem (~11px) acá para que las 5 entren
        en una sola fila — muy chico para el público de esta app. Se deja
        en el mismo 0.875rem que el resto, y en vez de forzar una fila se
@@ -505,7 +524,7 @@
   <div id="appContent">
    <div class="greeting-bar">
      <img class="brand-logo" src="/images/logo-icon.png" alt="Los recuerdos de mis viejos">
-     <h1 class="greeting-text"><span class="brand-tag">Los recuerdos de mis viejos</span>Un gusto tenerte de vuelta<span class="greeting-name" id="greetingName"></span></h1>
+     <h1 class="greeting-text"><span class="brand-tag">Los recuerdos de mis viejos</span>Hola, <span class="greeting-name" id="greetingName"></span></h1>
      <div class="user-menu">
        <div class="icon-nav-item">
          <button class="icon-btn" id="userMenuBtn" type="button" title="Mi cuenta" aria-label="Mi cuenta" aria-expanded="false" aria-controls="userMenuPanel">👤</button>
@@ -802,6 +821,16 @@
     e.stopPropagation();
     const abierto = userMenuPanel.classList.toggle('visible');
     userMenuBtn.setAttribute('aria-expanded', String(abierto));
+    if (abierto) {
+      // El límite fijo en CSS (calc(100dvh - 90px)) asume que el panel
+      // siempre arranca casi pegado al borde superior. En pantallas chicas
+      // con letra agrandada el botón puede quedar más abajo, así que el
+      // espacio real disponible es menor. Lo recalculamos con la posición
+      // real del panel cada vez que se abre, para que nunca se pase del
+      // borde inferior de la pantalla.
+      const top = userMenuPanel.getBoundingClientRect().top;
+      userMenuPanel.style.maxHeight = Math.max(120, window.innerHeight - top - 12) + 'px';
+    }
   });
   document.addEventListener('click', (e) => {
     if (!userMenuPanel.contains(e.target) && e.target !== userMenuBtn) {
