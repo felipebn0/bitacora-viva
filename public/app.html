@@ -126,57 +126,20 @@
   .write-row button { border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px; padding: 0 14px; font-weight: 700; cursor: pointer; }
   .error { color: #a33; font-size: 0.85rem; }
 
-  .aportes {
-    width: min(440px, 100%);
-    margin: 28px auto 0;
-    background: #FBF6EA;
-    border: 1px solid #E7DFCC;
-    border-radius: 20px;
-    padding: 22px 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-  .aportes h2 { font-family: var(--font-display); font-size: 1.1rem; margin: 0; font-weight: 600; }
-  .aportes .sub { color: var(--ink-soft); font-size: 0.9rem; margin: 0; }
-  .aportes label { font-size: 0.85rem; color: var(--ink-soft); margin-bottom: -6px; }
-  .aportes input[type="text"], .aportes textarea, .aportes input[type="file"] {
-    border: 1px solid #E7DFCC; border-radius: 10px; padding: 10px 12px;
-    font-family: var(--font-body); background: #fff; color: var(--ink); font-size: 0.95rem;
-  }
-  .aportes textarea { resize: vertical; min-height: 70px; }
-  .aportes button {
-    border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px;
-    padding: 10px 16px; font-weight: 700; cursor: pointer; font-family: var(--font-body); align-self: flex-start;
-  }
-  .aportes button:disabled { opacity: 0.6; cursor: default; }
-  .aportes hr { border: none; border-top: 1px solid #E7DFCC; margin: 4px 0; }
-  .aportes .msg { font-size: 0.85rem; min-height: 1.2em; color: var(--moss); }
-  .aportes .lista { display: flex; flex-direction: column; gap: 10px; }
-  .aportes .lista img { max-width: 100%; border-radius: 10px; display: block; }
-  .aportes .lista video { max-width: 100%; border-radius: 10px; display: block; }
-  .aportes .lista .item { font-size: 0.85rem; color: var(--ink-soft); }
-  .aportes .lista .item strong { color: var(--ink); }
-
   #appContent { display: none; flex-direction: column; align-items: center; }
 
   .main-layout { display: flex; flex-direction: column; align-items: center; }
   .device-col { display: flex; flex-direction: column; align-items: center; width: 100%; }
-  .panels-col { display: flex; flex-direction: column; align-items: center; width: 100%; }
 
   @media (min-width: 980px) {
-    .main-layout { flex-direction: row; align-items: flex-start; justify-content: center; gap: 28px; }
-    .device-col { width: min(440px, 100%); flex-shrink: 0; order: 2; position: sticky; top: 24px; }
-    .panels-col { width: min(420px, 100%); flex-shrink: 0; order: 1; }
-    .panels-col .aportes:first-child { margin-top: 0; }
+    .device-col { width: min(440px, 100%); }
     /* Con el celular en una sola columna (ver arriba), la página entera ya
        scrollea de una — un scroll interno acá adentro obligaba a scrollear
        dos cosas distintas (la charla y la página) para seguir leyendo,
-       confuso al tacto. Acá en desktop sí hace falta acotar la altura:
-       .device-col queda "sticky" con un presupuesto de alto fijo, y sin
-       este límite una charla larga lo empujaría más alto que la pantalla. */
+       confuso al tacto. Acá en desktop sí hace falta acotar la altura de la
+       charla, y sin este límite una conversación larga la empujaría más
+       alto que la pantalla. */
     .transcript { overflow-y: auto; max-height: 380px; }
-    .aportes .lista { overflow-y: auto; max-height: 220px; }
   }
 
   .greeting-bar {
@@ -412,6 +375,10 @@
        <span class="icon-label" aria-hidden="true">Aportes</span>
      </div>
      <div class="icon-nav-item">
+       <a class="icon-btn" href="/historias.html" title="Historias detectadas en la charla" aria-label="Historias detectadas en la charla">📝</a>
+       <span class="icon-label" aria-hidden="true">Historias</span>
+     </div>
+     <div class="icon-nav-item">
        <div class="icon-btn-wrap">
          <a class="icon-btn" href="/arbol.html" title="Árbol genealógico" aria-label="Árbol genealógico">🌳</a>
          <span class="icon-badge" id="treeBadge"></span>
@@ -459,15 +426,6 @@
         </div>
       </div>
     </div>
-    </div>
-
-    <div class="panels-col">
-    <div class="aportes">
-      <h2>Historias detectadas en la charla</h2>
-      <p class="sub">Cuando lo que cuenta parece una historia completa (no un dato corto), queda anotado acá junto con su audio.</p>
-      <div class="lista" id="storyLogLista"></div>
-    </div>
-
     </div>
    </div>
 
@@ -1314,7 +1272,6 @@
       const logEntry = { role: 'assistant', content: data.message, timestamp: new Date().toISOString() };
       sessionLog.push(logEntry);
       addBubble('q', data.message);
-      cargarStoryLog();
       setState('speaking', 'Hablando…');
       speak(data.message, () => {
         if (mySession !== sessionId) return;
@@ -1541,43 +1498,10 @@
     writeToggle.textContent = 'escribir respuesta';
   }
 
-  const storyLogLista = document.getElementById('storyLogLista');
-
   // El árbol genealógico y la línea de tiempo ahora viven en /arbol.html
-  // (se llega por el ícono 🌳 de arriba) — ya no hay un mini-árbol acá.
-
-  async function cargarStoryLog() {
-    try {
-      const resp = await fetch('/api/story-log');
-      if (!resp.ok) return;
-      const data = await resp.json();
-      storyLogLista.innerHTML = '';
-      (data.stories || []).forEach((s) => {
-        const div = document.createElement('div');
-        div.className = 'item';
-        const fecha = new Date(s.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
-        const audioWrap = document.createElement('div');
-        if (typeof s.audio_url === 'string' && /^https?:\/\//.test(s.audio_url)) {
-          const audio = document.createElement('audio');
-          audio.controls = true;
-          audio.src = s.audio_url;
-          audioWrap.appendChild(audio);
-        } else {
-          const em = document.createElement('em');
-          em.textContent = '(sin audio guardado)';
-          audioWrap.appendChild(em);
-        }
-        div.appendChild(audioWrap);
-        const textoWrap = document.createElement('div');
-        const strong = document.createElement('strong');
-        strong.textContent = fecha + ':';
-        textoWrap.appendChild(strong);
-        textoWrap.appendChild(document.createTextNode(' ' + s.texto));
-        div.appendChild(textoWrap);
-        storyLogLista.appendChild(div);
-      });
-    } catch (e) {}
-  }
+  // (se llega por el ícono 🌳 de arriba) — ya no hay un mini-árbol acá. Lo
+  // mismo pasa con las historias detectadas en la charla: viven en
+  // /historias.html (ícono 📝) para no llenar de ruido esta pantalla.
 
   // Si se cierra la pestaña o se navega a otro lado a mitad de charla,
   // intentamos guardar lo que se alcanzó a hablar en vez de perderlo.
@@ -1608,8 +1532,6 @@
     } catch (e) {}
   }
   cargarBadgeArbol();
-
-  cargarStoryLog();
 })();
 </script>
 </body>
