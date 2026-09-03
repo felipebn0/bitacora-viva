@@ -118,7 +118,10 @@
        regla de abajo que oculta los links intermedios en pantallas
        angostas no lo toca. */
     .nav-font-ctrl{display:flex;align-items:center;gap:6px;flex:0 0 auto}
-    .nav-font-ctrl button{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:8px;padding:6px 10px;font-weight:700;font-size:.85rem;cursor:pointer;font-family:inherit;min-height:36px}
+    /* min-height:44px: zona táctil mínima recomendada, el mismo criterio
+       que ya se usa en el resto del header (.brand, .nav-links a) — a
+       estos botones se les había quedado en 36px. */
+    .nav-font-ctrl button{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:8px;padding:6px 10px;font-weight:700;font-size:.85rem;cursor:pointer;font-family:inherit;min-height:44px;min-width:44px}
     .nav-font-ctrl button:disabled{opacity:.5;cursor:default}
     .nav-font-ctrl span{color:var(--ink-soft);font-size:.78rem;font-weight:700;min-width:3ch;text-align:center}
     /* min-height:44px + inline-flex centrado: el link "Iniciar sesión" (y
