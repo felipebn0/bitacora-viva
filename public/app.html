@@ -1473,13 +1473,23 @@
     }
   }
 
+  // Antes, si la grabación salía muy corta o no se pudo transcribir, el
+  // estado se quedaba trabado en 'listening'/'thinking' — el mensaje decía
+  // "presiona de nuevo" pero un segundo toque del botón caía en la rama de
+  // "pausar" de handleOrbPress() (cualquier estado que no sea
+  // idle/ended/paused se interpreta como pausa), así que la charla se
+  // pausaba sola en vez de volver a grabar. Ahora se reintenta solo,
+  // llamando listenForAnswer() de nuevo — el cuadro de texto se muestra
+  // igual por si la persona prefiere escribir en vez de seguir hablando,
+  // pero sin robarle el foco (que en el celular abriría el teclado encima
+  // de la charla que sigue en curso).
   async function finalizeSpokenAnswer() {
     if (fallbackRecognition) { try { fallbackRecognition.stop(); } catch (e) {} }
     const audioBlob = await stopRecordingAudio();
     if (!audioBlob || audioBlob.size < 800) {
       writeRow.classList.add('visible');
-      writeInput.focus();
-      stateLabel.textContent = 'No te escuché bien — escribe tu respuesta o presiona de nuevo.';
+      stateLabel.textContent = 'No te escuché bien — te sigo escuchando (o escribe tu respuesta).';
+      listenForAnswer();
       return;
     }
     setState('thinking', 'Transcribiendo…');
@@ -1491,8 +1501,8 @@
       handleAnswer(text, audioBlob);
     } else {
       writeRow.classList.add('visible');
-      writeInput.focus();
-      stateLabel.textContent = 'No te escuché bien — escribe tu respuesta o presiona de nuevo.';
+      stateLabel.textContent = 'No te escuché bien — te sigo escuchando (o escribe tu respuesta).';
+      listenForAnswer();
     }
   }
 
@@ -1597,6 +1607,12 @@
     if (ttsAudioEl) { try { ttsAudioEl.pause(); } catch (e) {} }
     sessionId += 1; // invalida cualquier respuesta pendiente de este turno
     await stopRecordingAudio();
+    // stopRecordingAudio() para la grabación en curso, pero no suelta el
+    // micrófono en sí — sin esto, "pausar" dejaba el micrófono prendido de
+    // fondo (el punto/ícono de grabación seguía encendido) aunque no se
+    // estuviera grabando nada. resumeConversation() lo vuelve a pedir solo
+    // cuando hace falta, sin volver a preguntar el permiso.
+    releaseMic();
     writeRow.classList.remove('visible');
     setState('paused', 'En pausa — presiona para seguir');
     orbLabel.innerHTML = 'Presiona<br>para seguir';
@@ -1613,6 +1629,7 @@
   function entrarEnPausaOfrecida() {
     pausedFromState = 'thinking';
     releaseWakeLock();
+    releaseMic(); // el micrófono del turno anterior podía seguir abierto — ver pauseConversation()
     setState('paused', 'En pausa — presiona para seguir');
     orbLabel.innerHTML = 'Presiona<br>para seguir';
     saveSessionLog();
