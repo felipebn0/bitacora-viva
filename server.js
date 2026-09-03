@@ -1516,7 +1516,7 @@ async function speakWithElevenLabs(text) {
         // ninguna inflexión de estilo. "use_speaker_boost" mejora la
         // claridad/similitud con la voz original, a costa de un poquito
         // más de latencia (aceptable acá, no es una llamada en vivo).
-        voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.3, use_speaker_boost: true },
+        voice_settings: { stability: 0.4, similarity_boost: 0.75, style: 0.5, use_speaker_boost: true },
       }),
     }
   );
