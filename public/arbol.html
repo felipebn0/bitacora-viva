@@ -41,32 +41,46 @@
   .leaf.bl { bottom: 10px; left: 10px; transform: rotate(160deg) scaleX(-1); }
   .leaf.br { bottom: 10px; right: 10px; transform: rotate(-160deg); }
 
-  header { max-width: 1400px; margin: 0 auto 28px; display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; position: relative; z-index: 1; text-align: center; }
-  h1 { font-family: var(--font-display); font-size: 1.8rem; margin: 0; width: 100%; text-align: center; }
-  header p { color: var(--ink-soft); margin: 4px 0 0; font-size: 0.95rem; width: 100%; text-align: center; }
-  /* "volver" y "reconstruir" tenían solo el alto del texto (~17px y ~14px)
-     como zona táctil real. min-height:44px (con box-sizing:border-box, ver
-     arriba) agranda el área de toque sin agrandar el texto; se apilan una
-     debajo de la otra ajustando el "top" de la segunda para que no se
-     superpongan. */
-  a.volver { color: var(--gold-deep); font-size: 0.9rem; text-decoration: none; border-bottom: 1px solid var(--gold-deep); position: absolute; right: 0; top: 0; display: flex; align-items: center; min-height: 44px; padding: 10px 4px; }
+  header { max-width: 1400px; margin: 0 auto 28px; position: relative; z-index: 1; text-align: center; }
+  /* Antes "volver" y "reconstruir" vivían con position:absolute apiladas a
+     mano en la esquina (una con top:0, la otra con top:44px) — funcionaba,
+     pero era frágil: cualquier cambio de alto en una rompía a la otra.
+     Ahora son una fila normal (flex), alineada a la derecha en desktop y
+     centrada en el celular — mismo lugar visual, sin coordenadas fijas.
+     min-height:44px sigue dando una zona táctil real de 44px aunque el
+     texto sea más chico. */
+  .header-actions { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 4px 18px; margin-bottom: 6px; }
+  h1 { font-family: var(--font-display); font-size: 1.8rem; margin: 0; }
+  header p { color: var(--ink-soft); margin: 4px 0 0; font-size: 0.95rem; }
+  a.volver { color: var(--gold-deep); font-size: 0.9rem; text-decoration: none; border-bottom: 1px solid var(--gold-deep); display: inline-flex; align-items: center; min-height: 44px; padding: 10px 4px; }
   .rebuild-btn {
-    position: absolute; right: 0; top: 44px;
     background: none; border: none; color: var(--ink-soft); font-size: 0.875rem;
     text-decoration: underline; cursor: pointer; font-family: var(--font-body);
-    display: flex; align-items: center; min-height: 44px; padding: 10px 4px;
+    display: inline-flex; align-items: center; min-height: 44px; padding: 10px 4px;
   }
   .rebuild-btn:disabled { opacity: 0.6; cursor: default; }
-  /* En pantallas angostas el subtítulo puede pasar a dos líneas — con
-     "volver" y "reconstruir" siempre en la esquina (position:absolute,
-     apenas 26px de separación) terminaban superpuestos o muy pegados. Acá
-     vuelven al flujo normal, como una fila propia debajo del subtítulo. */
   @media (max-width: 560px) {
-    a.volver, .rebuild-btn { position: static; }
-    header { justify-content: center; gap: 6px 22px; }
+    .header-actions { justify-content: center; }
   }
 
-  .wrap { max-width: 1400px; margin: 0 auto; overflow-x: auto; padding-bottom: 12px; position: relative; z-index: 1; }
+  .scroll-hint {
+    max-width: 1400px; margin: 0 auto 8px; padding: 0 4px;
+    display: none; align-items: center; justify-content: flex-end; gap: 4px;
+    color: var(--ink-soft); font-size: 0.82rem; position: relative; z-index: 1;
+  }
+  .scroll-hint.visible { display: flex; }
+  /* Pista de que el árbol sigue para el costado: el texto de arriba lo dice,
+     y este degradado a la derecha del área visible da la misma señal sin
+     depender de que se lea. Solo aparece cuando el árbol no entra completo
+     (JS agrega/saca "is-scrollable" según el ancho real). */
+  .wrap-outer { position: relative; max-width: 1400px; margin: 0 auto; }
+  .wrap-outer::after {
+    content: ''; position: absolute; top: 0; right: 0; bottom: 0; width: 36px;
+    background: linear-gradient(to right, rgba(245,239,226,0), var(--bg));
+    pointer-events: none; opacity: 0; transition: opacity .2s ease;
+  }
+  .wrap-outer.is-scrollable::after { opacity: 1; }
+  .wrap { overflow-x: auto; padding-bottom: 12px; position: relative; z-index: 1; }
   .empty, .msg { color: var(--ink-soft); font-style: italic; text-align: center; margin-top: 60px; }
 
   .tree-graphic { position: relative; display: flex; flex-direction: column; gap: 52px; padding: 10px; width: max-content; min-width: 100%; }
@@ -125,13 +139,18 @@
   <span class="leaf bl">🌿</span>
   <span class="leaf br">🌿</span>
   <header>
+    <div class="header-actions">
+      <a class="volver" href="/app.html">← volver a la bitácora</a>
+      <button class="rebuild-btn" id="rebuildBtn" type="button">🔄 reconstruir árbol</button>
+    </div>
     <h1>Árbol genealógico</h1>
     <p>Se va armando solo con lo que se cuenta en las charlas.</p>
-    <a class="volver" href="/app.html">← volver a la bitácora</a>
-    <button class="rebuild-btn" id="rebuildBtn" type="button">🔄 reconstruir árbol</button>
   </header>
-  <div class="wrap" id="wrap">
-    <p class="msg">Cargando…</p>
+  <p class="scroll-hint" id="scrollHint">Desliza para ver todo el árbol →</p>
+  <div class="wrap-outer" id="wrapOuter">
+    <div class="wrap" id="wrap">
+      <p class="msg">Cargando…</p>
+    </div>
   </div>
 
   <section class="colab-section" id="colabSection" style="display:none;">
@@ -143,6 +162,8 @@
 <script>
 (function () {
   const wrap = document.getElementById('wrap');
+  const wrapOuter = document.getElementById('wrapOuter');
+  const scrollHint = document.getElementById('scrollHint');
 
   function esNovio(relacion) {
     return /\bnovi[oa]\b/i.test(relacion || '');
@@ -374,6 +395,8 @@
 
   function renderTree(people) {
     wrap.innerHTML = '';
+    if (scrollHint) scrollHint.classList.remove('visible');
+    if (wrapOuter) wrapOuter.classList.remove('is-scrollable');
     if (!people.length) {
       wrap.innerHTML = '<p class="empty">Todavía no hay nadie registrado — va a ir apareciendo a medida que se charla.</p>';
       return;
@@ -710,15 +733,29 @@
       // igual no entra completo, ".wrap" ya tiene overflow-x:auto para que
       // se pueda desplazar en vez de forzar una letra ilegible.
       const MIN_ESCALA = 0.75;
+      let scrollable = false;
       if (naturalAncho > disponibleAncho) {
         const escala = Math.max(MIN_ESCALA, disponibleAncho / naturalAncho);
         graphic.style.transform = `scale(${escala})`;
         graphic.style.transformOrigin = 'top left';
         wrap.style.height = (graphic.offsetHeight * escala) + 'px';
+        scrollable = (naturalAncho * escala) > disponibleAncho + 1;
+        // El botón ✏️ quedaba con una zona de toque real por debajo de los
+        // 40x40 declarados porque se achicaba junto con todo el árbol (ver
+        // Bloque 13). Se lo "contra-escala" para que mantenga su tamaño
+        // real en pantalla — el resto del árbol se sigue achicando igual.
+        const contraEscala = 1 / escala;
+        graphic.querySelectorAll('.edit-btn').forEach((btn) => {
+          btn.style.transform = `scale(${contraEscala})`;
+          btn.style.transformOrigin = 'top right';
+        });
       } else {
         graphic.style.transform = '';
         wrap.style.height = '';
+        graphic.querySelectorAll('.edit-btn').forEach((btn) => { btn.style.transform = ''; });
       }
+      if (scrollHint) scrollHint.classList.toggle('visible', scrollable);
+      if (wrapOuter) wrapOuter.classList.toggle('is-scrollable', scrollable);
     });
   }
 
@@ -769,6 +806,8 @@
       const resp = await fetch('/api/tree');
       if (resp.status === 401) {
         wrap.innerHTML = '<p class="msg">Inicia sesión en la bitácora primero. <a class="volver" href="/app.html">Ir a la bitácora</a></p>';
+        if (scrollHint) scrollHint.classList.remove('visible');
+        if (wrapOuter) wrapOuter.classList.remove('is-scrollable');
         return;
       }
       if (!resp.ok) throw new Error('fallo');
@@ -782,6 +821,8 @@
       }
     } catch (e) {
       wrap.innerHTML = '<p class="msg">No se pudo cargar el árbol. Intenta de nuevo más tarde.</p>';
+      if (scrollHint) scrollHint.classList.remove('visible');
+      if (wrapOuter) wrapOuter.classList.remove('is-scrollable');
     }
   }
 
