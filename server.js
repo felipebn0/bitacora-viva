@@ -2606,22 +2606,61 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Algo salió mal.' });
 });
 
-// Red de seguridad: si algo inesperado falla fuera de una ruta, lo dejamos
-// registrado y seguimos corriendo en vez de que el proceso se caiga solo
-// (importante para cuando esto quede desatendido en la Raspberry Pi).
-process.on('uncaughtException', (err) => {
-  console.error('Error no capturado:', err);
-});
-process.on('unhandledRejection', (err) => {
-  console.error('Promesa rechazada sin capturar:', err);
-});
+// server (la instancia http.Server de app.listen) solo se asigna más abajo
+// cuando este archivo corre standalone (Raspberry Pi/local, ver el bloque
+// require.main === module). En Vercel nunca se asigna — server.js se
+// exporta como función serverless y Vercel maneja el ciclo de vida del
+// proceso, no nosotros.
+let server = null;
+
+// Red de seguridad: después de un error no capturado, el proceso queda en
+// un estado que Node mismo no garantiza como seguro (puede haber timers,
+// listeners o handles a medio cerrar) — la recomendación de sus propios
+// docs es no intentar seguir operando ahí. Antes esto solo logueaba y
+// dejaba el proceso corriendo, con la idea de que así era "más seguro para
+// cuando esto quede desatendido en la Raspberry Pi" — pero es al revés: la
+// Pi va a correr esto bajo un service de systemd (con reinicio automático
+// si el proceso termina), y si el proceso nunca termina, systemd nunca se
+// entera de que algo se rompió y ese reinicio no pasa nunca. Ahora: se
+// loguea, se deja de aceptar conexiones nuevas, se les da un margen corto
+// a las que ya estaban en curso para terminar solas, y se sale con código
+// distinto de cero para que el supervisor de procesos reinicie desde cero.
+let apagandoPorErrorFatal = false;
+function apagarPorErrorFatal(tipo, err) {
+  console.error(`${tipo} — cerrando el proceso:`, err);
+  if (apagandoPorErrorFatal) return; // ya se está apagando, no dupliques el intento
+  apagandoPorErrorFatal = true;
+  if (server) {
+    server.close(() => process.exit(1));
+    // Si alguna conexión quedara colgada y server.close() nunca terminara
+    // de cerrar sola, este timeout fuerza la salida igual — 3 segundos
+    // sobra para lo que esta app tarda en responder cualquier pedido.
+    setTimeout(() => process.exit(1), 3000).unref();
+  } else {
+    // Corriendo como función serverless (Vercel): no hay un server propio
+    // que cerrar, esta invocación puntual simplemente termina.
+    process.exit(1);
+  }
+}
+process.on('uncaughtException', (err) => apagarPorErrorFatal('Error no capturado', err));
+process.on('unhandledRejection', (err) => apagarPorErrorFatal('Promesa rechazada sin capturar', err));
+
+// Gancho SOLO para test/shutdown.smoke.js: fuerza un error no capturado a
+// pedido, para poder probar en un proceso hijo que el mecanismo de arriba
+// realmente corta y sale. Nunca se activa con solo requerir este módulo —
+// ningún deploy real define esta variable de entorno.
+if (process.env.TEST_FORZAR_ERROR_NO_CAPTURADO === '1') {
+  setTimeout(() => {
+    throw new Error('Error de prueba (test/shutdown.smoke.js)');
+  }, 50);
+}
 
 // En Vercel, este archivo se exporta como función serverless (ver api/index.js)
 // y Vercel maneja el puerto. Corriendo local (npm run dev / npm start), sí
 // levantamos el servidor nosotros mismos.
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => {
+  server = app.listen(PORT, () => {
     console.log(`Los recuerdos de mis viejos corriendo en http://localhost:${PORT}`);
   });
 }
