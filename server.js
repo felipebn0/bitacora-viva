@@ -1528,11 +1528,19 @@ app.post('/api/next', requireAuth, bloquearColaborador, rateLimit, async (req, r
     if (notaPendiente) {
       await sql`UPDATE family_notes SET discussed = true WHERE id = ${notaPendiente.id}`;
     }
-    // Ver el comentario de OFRECER_PAUSA_PROMPT: va metido en el flujo de
-    // turnos, no en el system — necesita al menos un mensaje real antes
-    // (si no, ya se cubre con la bienvenida de esPrimeraVez).
-    if (mode === 'historia' && req.body.ofrecerPausa && messages.length) {
-      messages.push({ role: 'user', content: OFRECER_PAUSA_PROMPT });
+    // Ver el comentario de OFRECER_PAUSA_PROMPT: va pegada al final del
+    // propio último mensaje real de la persona (no como un mensaje "user"
+    // aparte a continuación) — probado que un mensaje separado también se
+    // ignoraba casi siempre, aparentemente porque el modelo le daba más
+    // peso al contenido sustancioso del turno real y trataba el segundo
+    // mensaje "user" como una nota de menor prioridad. Pegada al mismo
+    // mensaje, la instrucción queda inequívocamente asociada a ESE turno.
+    // new_object en vez de mutar: "messages[i]" es la MISMA referencia que
+    // "history[i]", y history se usa después para lo que se guarda en
+    // story_log — no puede quedar contaminado con esta instrucción.
+    if (mode === 'historia' && req.body.ofrecerPausa && messages.length && messages[messages.length - 1].role === 'user') {
+      const ultimo = messages[messages.length - 1];
+      messages[messages.length - 1] = { role: 'user', content: ultimo.content + '\n\n' + OFRECER_PAUSA_PROMPT };
     }
 
     let system;
