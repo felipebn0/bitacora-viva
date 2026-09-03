@@ -159,6 +159,17 @@
      especificidad a .login (clase) y lo mantiene oculto hasta que ese
      fetch resuelve — ni el login ni la app se ven de más. */
   #loginScreen { display: none; }
+  /* #checkingScreen: se ve DESDE el primer frame (a diferencia de login y
+     app, que arrancan ocultos) y es lo único visible mientras se espera la
+     respuesta de fetch('/api/me'). Sin esto la página quedaba en blanco
+     ese rato — con red lenta se puede confundir con que algo se rompió.
+     No dice si hay sesión o no (mismo mensaje siempre), para no filtrar
+     esa información antes de que el servidor confirme. */
+  #checkingScreen {
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    padding: 40px 20px; color: var(--ink-soft); font-size: 0.9rem;
+  }
+  #checkingScreen img { width: 40px; height: 40px; opacity: 0.7; }
 
   .main-layout { display: flex; flex-direction: column; align-items: center; }
   .device-col { display: flex; flex-direction: column; align-items: center; width: 100%; }
@@ -454,6 +465,10 @@
 </style>
 </head>
 <body>
+  <div id="checkingScreen" role="status" aria-live="polite">
+    <img src="/images/logo-icon.png" alt="">
+    <span>Comprobando tu sesión…</span>
+  </div>
   <div class="login" id="loginScreen">
     <div class="login-fontsize-row" role="group" aria-label="Tamaño de letra">
       <button type="button" id="loginFontDecBtn" aria-label="Achicar la letra">A-</button>
@@ -632,6 +647,7 @@
 
 <script>
 (function () {
+  const checkingScreen = document.getElementById('checkingScreen');
   const loginScreen = document.getElementById('loginScreen');
   const appContent = document.getElementById('appContent');
   const loginUser = document.getElementById('loginUser');
@@ -671,6 +687,7 @@
   umProfileEmail.addEventListener('input', () => mostrarCompletoSiNoCabe(umProfileEmail, umProfileEmailFull));
 
   function showApp(username, name, email, fechaNacimiento) {
+    checkingScreen.style.display = 'none';
     loginScreen.style.display = 'none';
     appContent.style.display = 'flex';
     const displayName = name || username || '';
@@ -687,6 +704,7 @@
   }
 
   function showLogin() {
+    checkingScreen.style.display = 'none';
     appContent.style.display = 'none';
     loginScreen.style.display = 'flex';
     loginPass.value = '';
