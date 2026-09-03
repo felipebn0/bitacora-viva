@@ -1517,6 +1517,38 @@ async function loadKnownFamilyMembers(userId) {
     .join('\n')}`;
 }
 
+// Cuenta signos de interrogación de cierre ("?") — cada pregunta real en
+// español termina en uno, así que 2 o más significa 2 o más preguntas en
+// el mismo mensaje, aunque estén conectadas por una coma dentro de la
+// misma oración ("¿cómo eran, dónde jugaban?").
+function contarPreguntas(texto) {
+  const matches = texto.match(/\?/g);
+  return matches ? matches.length : 0;
+}
+
+// Con prompting solo no se llega al 100% de "una sola pregunta por turno"
+// — el modelo (Haiku, rápido y económico) a veces sigue colando una
+// segunda pregunta pegada a la primera con una coma. En vez de pedirle más
+// texto de reglas (rendimientos decrecientes), esta segunda pasada corta
+// solo se dispara cuando el mensaje YA tiene el problema, y le pide al
+// modelo que se quede con la mejor de las preguntas — no agrega latencia
+// ni costo en los turnos que ya salieron bien (la mayoría).
+async function dejarUnaSolaPregunta(texto) {
+  try {
+    const response = await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: 300,
+      system: 'Vas a recibir un mensaje de una entrevistadora cálida, en español de Colombia con tuteo (nunca "vos"), que por error quedó con más de una pregunta (dos o más signos "?", aunque estén conectadas por una coma en la misma oración). Reescribe el mensaje quedándote SOLO con la pregunta más abierta e interesante de las que había — o sin ninguna pregunta al final, si el mensaje funciona igual de bien como comentario o reacción sola. El resto del mensaje (reacciones, comentarios) se mantiene tal cual, mismo tono, mismas palabras en lo posible. Responde ÚNICAMENTE con el mensaje ya corregido, sin explicaciones, sin comillas alrededor.',
+      messages: [{ role: 'user', content: texto }],
+    });
+    const reescrito = response.content[0].text.trim();
+    return reescrito || texto;
+  } catch (err) {
+    console.error('No se pudo dejar el mensaje con una sola pregunta:', err);
+    return texto; // si esta segunda pasada falla, se manda el original tal cual
+  }
+}
+
 app.post('/api/next', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
   try {
     const history = Array.isArray(req.body.history) ? req.body.history.slice(0, 60) : [];
@@ -1590,6 +1622,13 @@ app.post('/api/next', requireAuth, bloquearColaborador, rateLimit, async (req, r
     const done = text.includes('[FIN]');
     const pausado = text.includes('[PAUSA]');
     text = text.replace('[FIN]', '').replace('[PAUSA]', '').trim();
+
+    // Segunda pasada solo si hace falta (ver dejarUnaSolaPregunta) — nunca
+    // en el cierre ni en la despedida de pausa, esos casi no tienen este
+    // problema y no vale la pena la llamada extra ahí.
+    if (mode === 'historia' && !done && !pausado && contarPreguntas(text) > 1) {
+      text = await dejarUnaSolaPregunta(text);
+    }
 
     // Los mensajes "sintéticos" que le mandamos a Claude por dentro (avisos
     // de que se presionó un botón, no algo que la persona realmente dijo)
