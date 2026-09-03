@@ -10,6 +10,29 @@ const { put, del } = require('@vercel/blob');
 const app = express();
 app.set('trust proxy', 1); // detrás del proxy de Vercel: para que req.ip y req.secure sean correctos
 
+// Política de seguridad de contenido "de destino": todavía NO se aplica de
+// verdad (ver CSP_MODE_ENFORCE más abajo) porque las páginas de public/
+// tienen <script> y <style> inline, y una CSP estricta rompería eso tal
+// como está hoy. Se manda como Content-Security-Policy-Report-Only: el
+// navegador no bloquea nada, pero muestra en la consola (F12 → Console, o
+// la pestaña Network → cualquier request → Response Headers) cada cosa que
+// violaría esta política — así se puede ver exactamente qué habría que
+// externalizar antes de activarla de verdad como Content-Security-Policy.
+const CSP_MODE_ENFORCE = false;
+const CSP_POLICY = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self'",
+  "img-src 'self' data: https://*.blob.vercel-storage.com",
+  "media-src 'self' https://*.blob.vercel-storage.com",
+  "connect-src 'self'",
+  "font-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join('; ');
+
 // Cabeceras de seguridad estándar en cada respuesta — no cambian nada
 // visible, solo cierran puertas que un navegador podría dejar abiertas.
 app.use((req, res, next) => {
@@ -18,11 +41,49 @@ app.use((req, res, next) => {
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'microphone=(self)'); // el mic solo lo pide este sitio, nada externo
   res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains');
+  res.setHeader(CSP_MODE_ENFORCE ? 'Content-Security-Policy' : 'Content-Security-Policy-Report-Only', CSP_POLICY);
   next();
 });
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Las respuestas de /api/ pueden traer datos privados (historias, datos de
+// sesión, árbol familiar) — se marcan como no cacheables para que no queden
+// guardadas en el navegador ni en un proxy/CDN intermedio (por ejemplo, si
+// alguien comparte una computadora, o si un proxy corporativo cachea GETs
+// "por las dudas").
+app.use('/api', (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+});
+
+// Defensa contra CSRF: en un pedido que cambia estado (POST/PUT/PATCH/
+// DELETE), un navegador real siempre manda el header Origin (o, si no,
+// Referer) con el origen de la página que hizo el pedido — y una página de
+// otro sitio no puede falsificarlo. Si ese origen no coincide con el host
+// que recibió el pedido, no vino de nuestro propio frontend: es justo el
+// patrón de un sitio de terceros aprovechando la cookie de sesión de la
+// víctima para hacer pedidos en su nombre sin que se dé cuenta.
+const METODOS_MUTANTES = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+function origenPermitido(req) {
+  const header = req.headers.origin || req.headers.referer;
+  if (!header) return false;
+  try {
+    return new URL(header).host === req.headers.host;
+  } catch (e) {
+    return false;
+  }
+}
+
+app.use('/api', (req, res, next) => {
+  if (!METODOS_MUTANTES.has(req.method)) return next();
+  if (!origenPermitido(req)) {
+    return res.status(403).json({ error: 'Solicitud rechazada: no se pudo verificar el origen.' });
+  }
+  next();
+});
 
 // Limitador simple por IP: evita que alguien con el link gaste crédito de
 // Claude/ElevenLabs a lo loco (además del login, esto frena intentos de
@@ -380,7 +441,22 @@ if (!SESSION_SECRET) {
   throw new Error('SESSION_SECRET no está definida — configurala en las variables de entorno antes de arrancar la app.');
 }
 const SESSION_COOKIE = 'bv_session';
-const SESSION_MAX_AGE = 60 * 60 * 24 * 365; // 1 año, para no tener que loguearse siempre en el dispositivo físico
+// Antes eran 365 días — una cookie robada (o un dispositivo compartido/
+// perdido) quedaba utilizable durante un año entero. 30 días sigue siendo
+// cómodo para no tener que loguearse todo el tiempo, pero acota la ventana
+// de exposición si una sesión se compromete.
+const SESSION_MAX_AGE = 60 * 60 * 24 * 30; // 30 días
+
+// En Vercel (producción y preview) el tráfico siempre llega por HTTPS, pero
+// la cookie Secure dependía de req.secure — que a su vez depende de que el
+// proxy mande bien el header X-Forwarded-Proto. Si ese header faltara o
+// viniera mal por algún motivo, la cookie se emitía sin Secure y quedaría
+// viajando también por HTTP. process.env.VERCEL lo pone la propia
+// plataforma (no lo controla el request), así que sirve como señal
+// independiente de que estamos en un entorno que siempre es HTTPS.
+function cookieEsSegura(req) {
+  return !!(req.secure || process.env.VERCEL);
+}
 
 function signSession(payload) {
   // iat (issued-at, en ms) queda adentro del propio token firmado — así la
@@ -430,12 +506,12 @@ function parseCookies(header) {
 
 function setSessionCookie(req, res, payload) {
   const token = signSession(payload);
-  const secure = req.secure ? '; Secure' : '';
+  const secure = cookieEsSegura(req) ? '; Secure' : '';
   res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${token}; Max-Age=${SESSION_MAX_AGE}; Path=/; HttpOnly; SameSite=Lax${secure}`);
 }
 
 function clearSessionCookie(req, res) {
-  const secure = req.secure ? '; Secure' : '';
+  const secure = cookieEsSegura(req) ? '; Secure' : '';
   res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax${secure}`);
 }
 
@@ -563,14 +639,28 @@ function capitalizarInicio(str) {
   return m[1] + m[2].toUpperCase() + m[3];
 }
 
-// Valida que un string sea una URL http(s) real antes de guardarla — así no
-// se puede meter "javascript:" ni cualquier otro esquema en un campo que
-// después se usa como src de un <audio> en el front.
+// Dominio real donde Vercel Blob sirve los archivos que subimos nosotros
+// mismos (confirmado en node_modules/@vercel/blob). Cualquier audioUrl que
+// no viva ahí no puede venir de un upload legítimo de esta app.
+const BLOB_HOST_SUFFIX = '.blob.vercel-storage.com';
+
+function esHostDeNuestroBlob(hostname) {
+  return hostname === BLOB_HOST_SUFFIX.slice(1) || hostname.endsWith(BLOB_HOST_SUFFIX);
+}
+
+// Valida que un string sea una URL http(s) real, alojada en nuestro propio
+// storage de Vercel Blob, antes de guardarla — así no se puede meter
+// "javascript:", ni cualquier otro esquema, ni una URL externa arbitraria en
+// un campo que después se usa como src de un <audio> en el front (evita que
+// alguien registre audio_url apuntando a un sitio de terceros, por ejemplo
+// para exfiltrar datos vía el Referer o para spoofear contenido).
 function urlHttpValida(str) {
   if (typeof str !== 'string' || !str.trim()) return null;
   try {
     const u = new URL(str.trim());
-    return /^https?:$/.test(u.protocol) ? u.toString() : null;
+    if (!/^https?:$/.test(u.protocol)) return null;
+    if (!esHostDeNuestroBlob(u.hostname)) return null;
+    return u.toString();
   } catch (e) {
     return null;
   }
@@ -859,8 +949,10 @@ app.post('/api/register', rateLimit, async (req, res) => {
     if (!process.env.SETUP_KEY || setupKey !== process.env.SETUP_KEY) {
       return res.status(403).json({ error: 'Clave de configuración incorrecta.' });
     }
-    if (!username || !password || String(password).length < 4) {
-      return res.status(400).json({ error: 'Usuario y clave (mínimo 4 caracteres) son obligatorios.' });
+    // Mismo mínimo que /api/signup y /api/change-password (antes era 4 acá,
+    // la única de las tres rutas que se quedó afuera cuando se unificó esto).
+    if (!username || !password || String(password).length < 6) {
+      return res.status(400).json({ error: 'Usuario y clave (mínimo 6 caracteres) son obligatorios.' });
     }
     const cleanUsername = String(username).trim().toLowerCase().slice(0, 50);
     if (!/^[a-z0-9_-]+$/.test(cleanUsername)) {

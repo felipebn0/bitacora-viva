@@ -1,0 +1,43 @@
+name: CI
+
+# Corre en cada push y cada Pull Request contra main y pruebas. El repo no
+# tenía ningún check automático antes de esto — main solo estaba protegida
+# por "requiere PR", sin ningún status check obligatorio, así que un PR
+# rompiendo la app se podía mergear igual sin que nada avisara.
+#
+# NOTA: que este workflow corra no alcanza por sí solo. Para que realmente
+# bloquee un merge con errores, hay que ir a GitHub → Settings → Branches →
+# reglas de protección de main (y opcionalmente pruebas) y marcar el job
+# "build-and-test" de acá abajo como "required status check". Eso es un
+# cambio de configuración del repo que tiene que hacer quien administra el
+# repositorio — no se puede activar desde un workflow.
+on:
+  push:
+    branches: [main, pruebas]
+  pull_request:
+    branches: [main, pruebas]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Chequeo de sintaxis
+        run: |
+          node -c server.js
+          node -c api/index.js
+
+      - name: Auditoría de dependencias (falla en vulnerabilidades altas/críticas)
+        run: npm audit --audit-level=high
+
+      - name: Tests
+        run: npm test
