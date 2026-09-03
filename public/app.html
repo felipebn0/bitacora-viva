@@ -731,6 +731,18 @@
   let mediaStream = null;
   let mediaRecorder = null;
   let audioChunks = [];
+  let recordingStartedAt = null;
+  let lastRecordingDurationMs = 0;
+  // No todo lo que se graba vale la pena guardarlo como audio (ocupa mucho
+  // más que el texto en Vercel Blob) — solo si la respuesta ya califica
+  // como "historia destacada" (mismo umbral que usa el backend para
+  // story_log) o si duró más de AUDIO_MIN_DURATION_MS, aunque el texto
+  // transcrito haya salido corto (una respuesta larga hablando despacio,
+  // con pausas, puede transcribirse corta en caracteres pero seguir siendo
+  // un audio que vale la pena conservar). Si no cumple ninguna de las dos,
+  // se guarda el texto igual — solo se descarta el archivo de audio.
+  const HISTORIA_MIN_CHARS = 180; // debe coincidir con el mismo nombre en server.js
+  const AUDIO_MIN_DURATION_MS = 50 * 1000;
   // Se guarda el motivo real del fallo (ver startRecordingAudio) para poder
   // avisar algo más útil que "no pude usar el micrófono" cuando el problema
   // es que el permiso quedó bloqueado — que es el caso más común y el único
@@ -785,6 +797,7 @@
       }
       mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
       mediaRecorder.start();
+      recordingStartedAt = Date.now();
       lastMicErrorName = null;
     } catch (e) {
       mediaRecorder = null; // sin permiso de mic aparte: seguimos solo con el texto
@@ -814,7 +827,10 @@
   function stopRecordingAudio() {
     return new Promise((resolve) => {
       if (!mediaRecorder || mediaRecorder.state === 'inactive') { resolve(null); return; }
-      mediaRecorder.onstop = () => resolve(new Blob(audioChunks, { type: 'audio/webm' }));
+      mediaRecorder.onstop = () => {
+        lastRecordingDurationMs = recordingStartedAt ? Date.now() - recordingStartedAt : 0;
+        resolve(new Blob(audioChunks, { type: 'audio/webm' }));
+      };
       mediaRecorder.stop();
     });
   }
@@ -1258,8 +1274,14 @@
     writeRow.classList.remove('visible');
     writeInput.value = '';
     if (audioBlob) {
-      const file = await uploadAudio(audioBlob, 'user', myTurn, 'audio/webm');
-      if (file) logEntry.audioFile = file;
+      const esHistoriaRelevante = text.trim().length >= HISTORIA_MIN_CHARS;
+      const duroBastante = lastRecordingDurationMs >= AUDIO_MIN_DURATION_MS;
+      if (esHistoriaRelevante || duroBastante) {
+        const file = await uploadAudio(audioBlob, 'user', myTurn, 'audio/webm');
+        if (file) logEntry.audioFile = file;
+      }
+      // Si no calificó, el audio del navegador se descarta solo (nunca se
+      // sube) — el texto transcrito ya quedó guardado en logEntry/history.
     }
     fetchNext();
   }
