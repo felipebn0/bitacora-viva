@@ -232,6 +232,7 @@
     font-family: var(--font-body); background: #fff; color: var(--ink); font-size: 0.88rem; margin-bottom: 8px;
   }
   .user-menu-panel .um-btn {
+    display: block; box-sizing: border-box; text-align: center; text-decoration: none;
     width: 100%; border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px;
     padding: 9px; font-weight: 700; cursor: pointer; font-family: var(--font-body); font-size: 0.88rem;
   }
@@ -378,6 +379,10 @@
          <input type="password" id="umNewPassword" placeholder="Clave nueva" autocomplete="new-password" aria-label="Clave nueva">
          <button class="um-btn" id="umChangePasswordBtn" type="button">Cambiar clave</button>
          <p class="um-msg" id="umPasswordMsg"></p>
+
+         <p class="um-section-title">Tu copia</p>
+         <a class="um-btn um-plain" id="umExportLink" href="/api/export" download>⬇️ Descargar mi historia</a>
+         <p class="um-hint">Un archivo .zip con todas tus historias, aportes de la familia, árbol genealógico y capítulos — para que tengas tu propia copia, aparte de esta app.</p>
          <hr>
          <button class="um-btn um-plain" id="umLogoutBtn" type="button">Cerrar sesión</button>
          <div class="danger-zone">

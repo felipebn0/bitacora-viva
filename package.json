@@ -7,13 +7,14 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
-    "test": "node test/smoke.js && node test/next.smoke.js && node test/shutdown.smoke.js && node test/account-actions.smoke.js",
+    "test": "node test/smoke.js && node test/next.smoke.js && node test/shutdown.smoke.js && node test/account-actions.smoke.js && node test/export.smoke.js",
     "eval:conversacion": "node test/eval-conversacion.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
     "@neondatabase/serverless": "^1.1.0",
     "@vercel/blob": "^2.8.0",
+    "archiver": "^7.0.1",
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",

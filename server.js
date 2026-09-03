@@ -6,6 +6,7 @@ const bcrypt = require('bcryptjs');
 const Anthropic = require('@anthropic-ai/sdk');
 const { neon } = require('@neondatabase/serverless');
 const { put, del } = require('@vercel/blob');
+const archiver = require('archiver');
 
 const app = express();
 app.set('trust proxy', 1); // detrás del proxy de Vercel: para que req.ip y req.secure sean correctos
@@ -2356,6 +2357,105 @@ app.get('/api/story-log', requireAuth, bloquearColaborador, async (req, res) => 
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo cargar el log de historias.' });
+  }
+});
+
+// Exportar toda la bitácora en un .zip — para que cada familia tenga su
+// propia copia, independiente de que esta app siga funcionando o no. Es el
+// complemento del backup automático del lado del servidor (que protege
+// aunque nadie se acuerde de pedirlo): este botón es para el día que
+// alguien SÍ quiere llevarse su copia — antes de borrar la cuenta, o
+// simplemente para guardarla en su propia computadora.
+//
+// Incluye todo el TEXTO tal cual está guardado (historias, aportes, árbol,
+// capítulos, resumen). Los audios y fotos/videos NO se descargan ni se
+// empaquetan acá adentro — son archivos en Vercel Blob que en conjunto
+// pueden pesar bastante, y bajarlos todos dentro de este mismo pedido HTTP
+// arriesgaría pasarse del tiempo de ejecución de la función serverless. En
+// su lugar, el export lleva el link directo a cada uno, con una nota
+// explicando que esos links (a diferencia del texto) dependen de que Vercel
+// Blob los siga sirviendo.
+app.get('/api/export', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    const userId = req.userId;
+
+    const [perfilRows, historias, resumenRows, aportesRaw, media, miembrosRaw, eventos, capitulosRaw] = await Promise.all([
+      sql`SELECT name, username, email, fecha_nacimiento, created_at FROM users WHERE id = ${userId}`,
+      sql`SELECT texto, audio_url, created_at FROM story_log WHERE user_id = ${userId} ORDER BY created_at ASC`,
+      sql`SELECT texto FROM resumen WHERE user_id = ${userId}`,
+      sql`SELECT contributor, parentesco, protagonista, texto, audio_url, audio_urls, created_at FROM family_notes WHERE user_id = ${userId} ORDER BY created_at ASC`,
+      sql`SELECT type, url, caption, contributor, created_at FROM media WHERE user_id = ${userId} ORDER BY created_at ASC`,
+      sql`SELECT nombre, relacion, detalles, padres, created_at FROM family_members WHERE user_id = ${userId} ORDER BY id ASC`,
+      sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${userId} ORDER BY anio NULLS LAST, id ASC`,
+      sql`SELECT title, theme, generated_text, story_ids, created_at FROM chapters WHERE user_id = ${userId} ORDER BY created_at ASC`,
+    ]);
+
+    const perfil = perfilRows[0] || {};
+    const aportes = aportesRaw.map((a) => ({ ...a, audio_urls: parseJsonArray(a.audio_urls) }));
+    const miembros = miembrosRaw.map((m) => ({ ...m, padres: parseJsonArray(m.padres) }));
+    const capitulos = capitulosRaw.map((c) => ({ ...c, story_ids: parseJsonArray(c.story_ids) }));
+
+    const fechaExport = new Date().toISOString().slice(0, 10);
+    const nombreArchivo = `bitacora-${String(perfil.username || 'export').replace(/[^a-zA-Z0-9_-]/g, '')}-${fechaExport}.zip`;
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${nombreArchivo}"`);
+
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    archive.on('error', (err) => {
+      console.error('Error armando el .zip de export:', err);
+      res.destroy(); // ya se empezó a mandar el stream, no se puede cambiar el status acá
+    });
+    archive.pipe(res);
+
+    const readme = `Bitácora de ${capitalizarNombre(perfil.name || perfil.username || '')}
+Exportado el ${fechaExport}.
+
+Este .zip tiene una copia de todo el TEXTO guardado en tu bitácora: historias, aportes de la familia, árbol genealógico, capítulos y resumen — en formato JSON (se puede abrir con cualquier editor de texto) y en historia-completa.txt (para leer de corrido, como un libro).
+
+Los audios y fotos/videos NO están incluidos como archivos acá adentro — cada uno tiene un link directo en el JSON correspondiente (historias.json, aportes_familiares.json, fotos_y_videos.json). A diferencia del texto de este .zip, esos links dependen de que el servicio de almacenamiento (Vercel Blob) los siga sirviendo — si querés conservar los audios/fotos en sí, te recomendamos descargarlos desde esos links mientras la cuenta esté activa.
+`;
+    archive.append(readme, { name: 'LEEME.txt' });
+    archive.append(
+      JSON.stringify(
+        {
+          nombre: perfil.name || null,
+          usuario: perfil.username || null,
+          correo: perfil.email || null,
+          fecha_nacimiento: perfil.fecha_nacimiento || null,
+          cuenta_creada: perfil.created_at || null,
+        },
+        null,
+        2
+      ),
+      { name: 'perfil.json' }
+    );
+    archive.append(JSON.stringify(historias, null, 2), { name: 'historias.json' });
+    archive.append((resumenRows[0] && resumenRows[0].texto) || '', { name: 'resumen.txt' });
+    archive.append(JSON.stringify(aportes, null, 2), { name: 'aportes_familiares.json' });
+    archive.append(JSON.stringify(media, null, 2), { name: 'fotos_y_videos.json' });
+    archive.append(JSON.stringify({ personas: miembros, linea_de_tiempo: eventos }, null, 2), { name: 'arbol_genealogico.json' });
+    archive.append(JSON.stringify(capitulos, null, 2), { name: 'capitulos.json' });
+
+    // Versión "para leer de corrido": todas las historias detectadas en la
+    // charla, en orden cronológico, sin todo el detalle técnico de
+    // historias.json — lo más parecido a un libro simple.
+    const historiaCompleta = historias.length
+      ? historias
+          .map((h) => `--- ${new Date(h.created_at).toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' })} ---\n\n${h.texto}\n`)
+          .join('\n')
+      : 'Todavía no hay historias guardadas.';
+    archive.append(historiaCompleta, { name: 'historia-completa.txt' });
+
+    await archive.finalize();
+  } catch (err) {
+    console.error(err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'No se pudo generar el export.' });
+    } else {
+      res.destroy();
+    }
   }
 });
 
