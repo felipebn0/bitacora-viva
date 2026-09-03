@@ -741,6 +741,12 @@ function cargarFileType() {
   return fileTypeModulePromise;
 }
 
+let musicMetadataModulePromise = null;
+function cargarMusicMetadata() {
+  if (!musicMetadataModulePromise) musicMetadataModulePromise = import('music-metadata');
+  return musicMetadataModulePromise;
+}
+
 // Un audio grabado por el navegador (MediaRecorder) es un .webm válido,
 // pero como no tiene pista de video, la firma de bytes del contenedor es
 // indistinguible de un .webm de video — mismo caso con .3gp y con .mp4
@@ -1016,6 +1022,87 @@ app.post('/api/signup', rateLimit, async (req, res) => {
       return res.status(409).json({ error: 'Ya existe una cuenta con ese correo.' });
     }
     res.status(500).json({ error: 'No se pudo crear la cuenta.' });
+  }
+});
+
+// --- Ruta temporal de limpieza (protegida con SETUP_KEY, igual que
+// /api/register): borra audios reales de menos de "minDurationSeconds"
+// segundos ya guardados en story_log y family_notes, tanto el archivo en
+// Vercel Blob como la referencia en la base. Por seguridad, dryRun=true
+// por defecto — solo REVISA y cuenta, sin borrar nada, hasta que se pida
+// explícitamente con dryRun=false. SACAR esta ruta apenas se use.
+app.post('/api/admin-clean-short-audios', rateLimit, async (req, res) => {
+  try {
+    const { setupKey, minDurationSeconds, dryRun } = req.body || {};
+    if (!process.env.SETUP_KEY || setupKey !== process.env.SETUP_KEY) {
+      return res.status(403).json({ error: 'Clave de configuración incorrecta.' });
+    }
+    const minMs = (Number(minDurationSeconds) || 10) * 1000;
+    const soloRevisar = dryRun !== false; // default: no borrar nada
+
+    await ensureSchema();
+    const { parseBuffer } = await cargarMusicMetadata();
+    const resumen = { revisados: 0, cortos: 0, borrados: 0, errores: 0, soloRevisar, detalle: [] };
+
+    async function evaluarUrl(url) {
+      resumen.revisados++;
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) { resumen.errores++; return { ok: false, motivo: `HTTP ${resp.status}` }; }
+        const buf = Buffer.from(await resp.arrayBuffer());
+        const meta = await parseBuffer(buf);
+        const durSeg = meta.format.duration || 0;
+        const esCorto = durSeg > 0 && durSeg * 1000 < minMs;
+        if (esCorto) {
+          resumen.cortos++;
+          if (!soloRevisar) {
+            await del(url).catch((err) => console.error('No se pudo borrar de Blob:', url, err.message));
+            resumen.borrados++;
+          }
+        }
+        return { ok: true, esCorto, durSeg: Number(durSeg.toFixed(1)) };
+      } catch (err) {
+        resumen.errores++;
+        return { ok: false, motivo: err.message };
+      }
+    }
+
+    const storyRows = await sql`SELECT id, audio_url FROM story_log WHERE audio_url IS NOT NULL`;
+    for (const row of storyRows) {
+      const info = await evaluarUrl(row.audio_url);
+      if (info.esCorto && !soloRevisar) {
+        await sql`UPDATE story_log SET audio_url = NULL WHERE id = ${row.id}`;
+      }
+      resumen.detalle.push({ tabla: 'story_log', id: row.id, url: row.audio_url, ...info });
+    }
+
+    const notesRows = await sql`SELECT id, audio_url, audio_urls FROM family_notes WHERE audio_url IS NOT NULL OR audio_urls IS NOT NULL`;
+    for (const row of notesRows) {
+      if (row.audio_url) {
+        const info = await evaluarUrl(row.audio_url);
+        if (info.esCorto && !soloRevisar) {
+          await sql`UPDATE family_notes SET audio_url = NULL WHERE id = ${row.id}`;
+        }
+        resumen.detalle.push({ tabla: 'family_notes.audio_url', id: row.id, url: row.audio_url, ...info });
+      }
+      const urls = parseJsonArray(row.audio_urls);
+      if (urls.length) {
+        const urlsRestantes = [];
+        for (const u of urls) {
+          const info = await evaluarUrl(u);
+          resumen.detalle.push({ tabla: 'family_notes.audio_urls', id: row.id, url: u, ...info });
+          if (!info.esCorto) urlsRestantes.push(u);
+        }
+        if (!soloRevisar && urlsRestantes.length !== urls.length) {
+          await sql`UPDATE family_notes SET audio_urls = ${urlsRestantes.length ? JSON.stringify(urlsRestantes) : null} WHERE id = ${row.id}`;
+        }
+      }
+    }
+
+    res.json(resumen);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo limpiar los audios.' });
   }
 });
 

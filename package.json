@@ -16,7 +16,8 @@
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "file-type": "^22.0.2"
+    "file-type": "^22.0.2",
+    "music-metadata": "^11.15.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"
