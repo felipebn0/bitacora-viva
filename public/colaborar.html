@@ -503,6 +503,15 @@
     protagonistaInput.value = '';
   }
 
+  // Igual que en la charla principal (app.html): antes, una sesión vencida
+  // a mitad de aportar una historia mostraba el mismo "Hubo un problema
+  // para conectar" que un error real de red — sin ninguna pista de que
+  // hacía falta volver a iniciar sesión.
+  function mensajeDeErrorDeTurno(resp, data) {
+    if (resp && resp.status === 401) return 'Tu sesión venció — actualiza la página para volver a iniciar sesión.';
+    return (data && data.error) || 'Hubo un problema en el servidor. Intenta de nuevo en un momento.';
+  }
+
   async function enviarTurno() {
     const thinking = agregarBurbuja('thinking', 'Pensando…');
     try {
@@ -514,7 +523,7 @@
       const data = await resp.json();
       thinking.remove();
       if (!resp.ok) {
-        agregarBurbuja('a', data.error || 'No se pudo continuar la charla.');
+        agregarBurbuja('a', mensajeDeErrorDeTurno(resp, data));
         return;
       }
       historyLocal.push({ role: 'assistant', content: data.message });
@@ -535,7 +544,7 @@
       }
     } catch (e) {
       thinking.remove();
-      agregarBurbuja('a', 'Hubo un problema para conectar.');
+      agregarBurbuja('a', 'No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.');
     }
   }
 

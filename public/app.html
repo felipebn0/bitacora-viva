@@ -1087,6 +1087,17 @@
     }
   }
 
+  // Antes cualquier falla acá (sesión vencida a mitad de charla, un error
+  // del servidor, o quedarse sin conexión) mostraba el mismo "Hubo un
+  // problema para conectar. Prueba de nuevo." — si la sesión había
+  // vencido, "prueba de nuevo" no arreglaba nada: hacía falta volver a
+  // iniciar sesión, y nada en el mensaje lo decía.
+  function mensajeDeErrorDeTurno(err) {
+    if (err && err.status === 401) return 'Tu sesión venció — actualiza la página para volver a iniciar sesión.';
+    if (err && err.status) return 'Hubo un problema en el servidor. Intenta de nuevo en un momento.';
+    return 'No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.';
+  }
+
   async function fetchNext() {
     const mySession = sessionId;
     setState('thinking', 'Pensando…');
@@ -1108,7 +1119,11 @@
         body: JSON.stringify({ history, lastAudioUrl, mode: sessionMode, ofrecerPausa }),
       });
       if (mySession !== sessionId) return;
-      if (!resp.ok) throw new Error('server error');
+      if (!resp.ok) {
+        const err = new Error('server error');
+        err.status = resp.status;
+        throw err;
+      }
       const data = await resp.json();
       if (mySession !== sessionId) return;
       turnIndex += 1;
@@ -1131,11 +1146,11 @@
       }, logEntry, myTurn);
     } catch (err) {
       if (mySession !== sessionId) return;
-      stateLabel.textContent = 'Hubo un problema para conectar. Prueba de nuevo.';
+      stateLabel.textContent = mensajeDeErrorDeTurno(err);
       setState('idle', stateLabel.textContent);
       orbLabel.innerHTML = 'Presiona<br>para hablar';
       releaseMic();
-      await saveSessionLog(); // no perder lo ya hablado por un problema de red
+      await saveSessionLog(); // best-effort: no perder lo ya hablado si de verdad fue un problema de red
     }
   }
 

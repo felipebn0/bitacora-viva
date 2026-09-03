@@ -165,6 +165,14 @@
   const wrapOuter = document.getElementById('wrapOuter');
   const scrollHint = document.getElementById('scrollHint');
 
+  // Antes cualquier falla acá (sesión vencida, error del servidor) mostraba
+  // el mismo "Hubo un problema para conectar" sin distinguir si hacía
+  // falta volver a iniciar sesión o si fue otra cosa.
+  function mensajeDeError(resp, data, fallback) {
+    if (resp && resp.status === 401) return 'Tu sesión venció — actualiza la página para volver a iniciar sesión.';
+    return (data && data.error) || fallback;
+  }
+
   function esNovio(relacion) {
     return /\bnovi[oa]\b/i.test(relacion || '');
   }
@@ -792,10 +800,10 @@
         cargar();
       } else {
         const data = await resp.json().catch(() => ({}));
-        alert(data.error || 'No se pudo guardar el cambio.');
+        alert(mensajeDeError(resp, data, 'No se pudo guardar el cambio.'));
       }
     } catch (e) {
-      alert('Hubo un problema para conectar.');
+      alert('No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.');
     }
   }
 
@@ -878,10 +886,10 @@
         cargarColaboradores();
       } else {
         const data = await resp.json().catch(() => ({}));
-        alert(data.error || 'No se pudo reconstruir el árbol.');
+        alert(mensajeDeError(resp, data, 'No se pudo reconstruir el árbol.'));
       }
     } catch (e) {
-      alert('Hubo un problema para conectar.');
+      alert('No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.');
     }
     rebuildBtn.disabled = false;
     rebuildBtn.textContent = '🔄 reconstruir árbol';
