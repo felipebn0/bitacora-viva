@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,500&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<script src="/font-size.js"></script>
 <style>
   :root {
     --bg: #F5EFE2;
@@ -200,6 +201,9 @@
     padding: 9px; font-weight: 700; cursor: pointer; font-family: var(--font-body); font-size: 0.88rem;
   }
   .user-menu-panel .um-btn:disabled { opacity: 0.6; cursor: default; }
+  .user-menu-panel .um-fontsize-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .user-menu-panel .um-fontsize-row .um-btn { width: auto; flex: 0 0 auto; padding: 9px 16px; font-size: 1.05rem; }
+  .user-menu-panel .um-fontsize-value { flex: 1; text-align: center; font-weight: 700; color: var(--ink-soft); font-size: 0.95rem; }
   .user-menu-panel .um-btn.um-danger { background: #a33; }
   .user-menu-panel .um-btn.um-plain { background: none; color: var(--ink-soft); text-decoration: underline; padding: 6px 0; }
   .user-menu-panel .um-btn.um-warn { color: #a33; font-weight: 700; }
@@ -217,7 +221,7 @@
   }
   .icon-btn-wrap { position: relative; display: inline-flex; }
   /* En móvil no hay ":hover" — el title/aria-label ya existían, pero sin
-     texto visible el significado de cada ícono (🔑👪📔🌳📖) no siempre es
+     texto visible el significado de cada ícono (🤝💬🗒️🌳📖) no siempre es
      inmediato. Esta etiqueta corta va siempre visible, no solo en hover. */
   .icon-nav-item { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; }
   .icon-nav-item .icon-label { font-size: 0.8rem; color: var(--ink-soft); line-height: 1; white-space: nowrap; }
@@ -345,6 +349,14 @@
        <div class="user-menu-panel" id="userMenuPanel">
          <p class="um-username" id="umUsername"></p>
 
+         <p class="um-section-title">Tamaño de letra</p>
+         <div class="um-fontsize-row">
+           <button class="um-btn" id="umFontDecBtn" type="button" aria-label="Achicar la letra">A-</button>
+           <span class="um-fontsize-value" id="umFontSizeValue">100%</span>
+           <button class="um-btn" id="umFontIncBtn" type="button" aria-label="Agrandar la letra">A+</button>
+         </div>
+         <p class="um-hint">Cambia el tamaño de la letra en toda la app — se recuerda la próxima vez que entres.</p>
+
          <p class="um-section-title">Perfil</p>
          <input type="text" id="umProfileName" placeholder="Tu nombre" maxlength="100" aria-label="Tu nombre">
          <input type="email" id="umProfileEmail" placeholder="Tu correo" maxlength="200" autocomplete="email" aria-label="Tu correo">
@@ -384,15 +396,15 @@
    </div>
    <div class="topbar">
      <div class="icon-nav-item">
-       <button class="icon-btn" id="joinCollabBtn" type="button" title="Colaborar con otra historia" aria-label="Colaborar con otra historia">🔑</button>
+       <button class="icon-btn" id="joinCollabBtn" type="button" title="Colaborar con otra historia" aria-label="Colaborar con otra historia">🤝</button>
        <span class="icon-label" aria-hidden="true">Colaborar</span>
      </div>
      <div class="icon-nav-item">
-       <a class="icon-btn" href="/colaboraciones.html" title="Colaboraciones" aria-label="Colaboraciones">👪</a>
+       <a class="icon-btn" href="/colaboraciones.html" title="Colaboraciones" aria-label="Colaboraciones">💬</a>
        <span class="icon-label" aria-hidden="true">Aportes</span>
      </div>
      <div class="icon-nav-item">
-       <a class="icon-btn" href="/historias.html" title="Historias detectadas en la charla" aria-label="Historias detectadas en la charla">📔</a>
+       <a class="icon-btn" href="/historias.html" title="Historias detectadas en la charla" aria-label="Historias detectadas en la charla">🗒️</a>
        <span class="icon-label" aria-hidden="true">Historias</span>
      </div>
      <div class="icon-nav-item">
@@ -535,6 +547,30 @@
       userMenuPanel.classList.remove('visible');
     }
   });
+
+  // Tamaño de letra: la lógica de guardar/aplicar vive en font-size.js
+  // (compartido por todas las páginas) — acá solo está el control visual.
+  const umFontDecBtn = document.getElementById('umFontDecBtn');
+  const umFontIncBtn = document.getElementById('umFontIncBtn');
+  const umFontSizeValue = document.getElementById('umFontSizeValue');
+  function actualizarBotonesFuente() {
+    if (!window.bitacoraFontSize) return;
+    const v = window.bitacoraFontSize.get();
+    umFontSizeValue.textContent = v + '%';
+    umFontDecBtn.disabled = v <= window.bitacoraFontSize.min;
+    umFontIncBtn.disabled = v >= window.bitacoraFontSize.max;
+  }
+  if (window.bitacoraFontSize) {
+    actualizarBotonesFuente();
+    umFontDecBtn.addEventListener('click', () => {
+      window.bitacoraFontSize.decrease();
+      actualizarBotonesFuente();
+    });
+    umFontIncBtn.addEventListener('click', () => {
+      window.bitacoraFontSize.increase();
+      actualizarBotonesFuente();
+    });
+  }
 
   const umProfileSaveBtn = document.getElementById('umProfileSaveBtn');
   const umProfileMsg = document.getElementById('umProfileMsg');
