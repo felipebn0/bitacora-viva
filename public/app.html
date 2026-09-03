@@ -254,6 +254,22 @@
   }
   .icon-badge.visible { display: flex; }
 
+  /* En celulares angostos (iPhone SE, muchos Android chicos: ~360-375px)
+     los cinco íconos de 56px con etiqueta no entraban en una sola fila y
+     el "Libro" quedaba solo, descentrado, en una segunda fila — y el
+     nombre del saludo (que puede ser largo) se partía en tres líneas
+     apretado entre el logo y el ícono de Cuenta. Acá se achican un poco
+     nada más en esas pantallas, lo suficiente para que todo entre en una
+     fila y el nombre quede en dos líneas como mucho. */
+  @media (max-width: 400px) {
+    .topbar { gap: 8px; }
+    .icon-btn { width: 48px; height: 48px; font-size: 1.4rem; }
+    .icon-nav-item .icon-label { font-size: 0.7rem; }
+    .greeting-bar { gap: 8px; }
+    .greeting-bar .brand-logo { height: 48px; width: 48px; }
+    .greeting-bar .greeting-text .greeting-name { font-size: 1.35rem; }
+  }
+
   .join-collab-panel {
     width: 100%; max-width: 420px; margin: -8px auto 18px; background: #FBF6EA;
     border: 1px solid #E7DFCC; border-radius: 16px; padding: 16px 20px; text-align: center;
