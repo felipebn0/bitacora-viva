@@ -943,6 +943,45 @@ app.get('/api/my-collaborators', requireAuth, bloquearColaborador, async (req, r
   }
 });
 
+// --- Rutas temporales para recuperar el acceso de una cuenta que perdió su
+// clave (protegidas con SETUP_KEY, igual que /api/register). SACAR ambas
+// apenas se usen, no dejarlas: cualquiera con la SETUP_KEY podría resetear
+// la clave de cualquier cuenta mientras sigan acá. ---
+app.get('/api/admin-list-users', rateLimit, async (req, res) => {
+  try {
+    if (!process.env.SETUP_KEY || req.query.setupKey !== process.env.SETUP_KEY) {
+      return res.status(403).json({ error: 'Clave de configuración incorrecta.' });
+    }
+    await ensureSchema();
+    const rows = await sql`SELECT id, username, name, created_at FROM users ORDER BY id`;
+    res.json({ users: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo listar los usuarios.' });
+  }
+});
+
+app.post('/api/admin-reset-password', rateLimit, async (req, res) => {
+  try {
+    const { setupKey, username, newPassword } = req.body || {};
+    if (!process.env.SETUP_KEY || setupKey !== process.env.SETUP_KEY) {
+      return res.status(403).json({ error: 'Clave de configuración incorrecta.' });
+    }
+    if (!username || !newPassword || String(newPassword).length < 4) {
+      return res.status(400).json({ error: 'Falta el usuario o la clave nueva (mínimo 4 caracteres).' });
+    }
+    await ensureSchema();
+    const cleanUsername = String(username).trim().toLowerCase();
+    const hash = await bcrypt.hash(String(newPassword), 10);
+    const rows = await sql`UPDATE users SET password_hash = ${hash} WHERE username = ${cleanUsername} RETURNING id, username`;
+    if (!rows.length) return res.status(404).json({ error: 'No existe ese usuario.' });
+    res.json({ ok: true, username: rows[0].username });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo cambiar la clave.' });
+  }
+});
+
 app.post('/api/register', rateLimit, async (req, res) => {
   try {
     const { username, password, setupKey } = req.body || {};
