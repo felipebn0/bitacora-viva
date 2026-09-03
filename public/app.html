@@ -203,6 +203,11 @@
   .user-menu-panel .um-section-toggle[aria-expanded="true"] .um-chevron { transform: rotate(90deg); }
   .user-menu-panel .um-section-body { padding: 4px 0 10px; }
   .user-menu-panel .um-field-label { display: block; font-size: 0.8rem; color: var(--ink-soft); margin: 0 0 4px; }
+  /* Se muestra solo cuando el nombre/correo no entra completo en el
+     cuadro a tamaño normal — en vez de achicar la letra del campo
+     editable (que puede volverse ilegible), se ve el valor completo
+     acá abajo, envuelto en varias líneas si hace falta. */
+  .user-menu-panel .um-value-full { font-size: 0.78rem; color: var(--ink-soft); margin: -5px 0 8px; overflow-wrap: anywhere; }
   .user-menu-panel .um-hint { font-size: 0.78rem; color: var(--ink-soft); margin: -4px 0 8px; }
   .user-menu-panel input, .user-menu-panel select {
     width: 100%; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 10px;
@@ -420,7 +425,9 @@
          <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecPerfil">Perfil <span class="um-chevron" aria-hidden="true">›</span></button>
          <div class="um-section-body" id="umSecPerfil" hidden>
            <input type="text" id="umProfileName" placeholder="Tu nombre" maxlength="100" aria-label="Tu nombre">
+           <p class="um-value-full" id="umProfileNameFull" hidden></p>
            <input type="email" id="umProfileEmail" placeholder="Tu correo" maxlength="200" autocomplete="email" aria-label="Tu correo">
+           <p class="um-value-full" id="umProfileEmailFull" hidden></p>
            <label class="um-field-label" for="umProfileBirthdate">Fecha de nacimiento</label>
            <input type="date" id="umProfileBirthdate" aria-label="Tu fecha de nacimiento">
            <p class="um-hint">Para que la entrevistadora entienda mejor el contexto de tu edad al charlar — es opcional.</p>
@@ -547,34 +554,32 @@
   const umUsername = document.getElementById('umUsername');
   const umProfileName = document.getElementById('umProfileName');
   const umProfileEmail = document.getElementById('umProfileEmail');
+  const umProfileNameFull = document.getElementById('umProfileNameFull');
+  const umProfileEmailFull = document.getElementById('umProfileEmailFull');
   const umProfileBirthdate = document.getElementById('umProfileBirthdate');
 
   // El correo (o el nombre) puede ser más largo de lo que entra en el
-  // cuadro del panel de Cuenta — en vez de dejarlo cortado (el propio
-  // input recorta y hay que hacer scroll adentro para leerlo completo),
-  // se achica solo el tamaño de letra de ESE cuadro lo necesario para
-  // que el texto quepa de una, sin bajar de un mínimo legible. Se
-  // recalcula cada vez que el texto cambia (al cargar el perfil, al
-  // guardar, al tipear) y también si cambia el tamaño de letra general
-  // de la app, porque eso también cambia cuánto entra en el cuadro.
-  function ajustarFuenteParaQueQuepa(el) {
-    if (!el) return;
-    const BASE_REM = 0.88;
-    const MIN_REM = 0.62;
-    const STEP = 0.03;
-    let size = BASE_REM;
-    el.style.fontSize = size + 'rem';
-    while (el.scrollWidth > el.clientWidth + 1 && size > MIN_REM) {
-      size -= STEP;
-      el.style.fontSize = size.toFixed(2) + 'rem';
-    }
+  // cuadro del panel de Cuenta. Antes se achicaba la letra del campo para
+  // que quepa, pero eso termina siendo contraproducente: quien agrandó la
+  // letra general de la app (el control de accesibilidad) porque le cuesta
+  // leer, terminaba viendo SU PROPIO correo en letra diminuta. En vez de
+  // eso, el cuadro mantiene siempre un tamaño legible, y si el texto no
+  // entra completo se muestra aparte, debajo, envuelto en varias líneas.
+  // Se recalcula cada vez que el texto cambia (al cargar el perfil, al
+  // guardar, al tipear) y también si cambia el tamaño de letra general de
+  // la app, porque eso también cambia cuánto entra en el cuadro.
+  function mostrarCompletoSiNoCabe(el, elCompleto) {
+    if (!el || !elCompleto) return;
+    const cabe = el.scrollWidth <= el.clientWidth + 1;
+    elCompleto.hidden = cabe;
+    elCompleto.textContent = cabe ? '' : el.value;
   }
   function ajustarCamposDePerfil() {
-    ajustarFuenteParaQueQuepa(umProfileName);
-    ajustarFuenteParaQueQuepa(umProfileEmail);
+    mostrarCompletoSiNoCabe(umProfileName, umProfileNameFull);
+    mostrarCompletoSiNoCabe(umProfileEmail, umProfileEmailFull);
   }
-  umProfileName.addEventListener('input', () => ajustarFuenteParaQueQuepa(umProfileName));
-  umProfileEmail.addEventListener('input', () => ajustarFuenteParaQueQuepa(umProfileEmail));
+  umProfileName.addEventListener('input', () => mostrarCompletoSiNoCabe(umProfileName, umProfileNameFull));
+  umProfileEmail.addEventListener('input', () => mostrarCompletoSiNoCabe(umProfileEmail, umProfileEmailFull));
 
   function showApp(username, name, email, fechaNacimiento) {
     loginScreen.style.display = 'none';
