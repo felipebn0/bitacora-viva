@@ -532,9 +532,16 @@
 
          <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecPerfil">Perfil <span class="um-chevron" aria-hidden="true">›</span></button>
          <div class="um-section-body" id="umSecPerfil" hidden>
-           <input type="text" id="umProfileName" placeholder="Tu nombre" maxlength="100" aria-label="Tu nombre">
+           <!-- <label> visible en vez de solo placeholder+aria-label —
+                mismo motivo que en el login (ver .login-field): el
+                placeholder desaparece en cuanto se escribe algo, así que
+                para alguien que se distrae a mitad de editar no queda
+                ninguna pista visible de cuál campo es cuál. -->
+           <label class="um-field-label" for="umProfileName">Tu nombre</label>
+           <input type="text" id="umProfileName" placeholder="Tu nombre" maxlength="100">
            <p class="um-value-full" id="umProfileNameFull" hidden></p>
-           <input type="email" id="umProfileEmail" placeholder="Tu correo" maxlength="200" autocomplete="email" aria-label="Tu correo">
+           <label class="um-field-label" for="umProfileEmail">Tu correo</label>
+           <input type="email" id="umProfileEmail" placeholder="Tu correo" maxlength="200" autocomplete="email">
            <p class="um-value-full" id="umProfileEmailFull" hidden></p>
            <label class="um-field-label" for="umProfileBirthdate">Fecha de nacimiento</label>
            <input type="date" id="umProfileBirthdate" aria-label="Tu fecha de nacimiento">
