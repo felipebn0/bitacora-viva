@@ -187,8 +187,21 @@
   .user-menu-panel.visible { display: block; }
   .user-menu-panel .um-username { color: var(--ink-soft); font-size: 0.85rem; margin: 0 0 14px; word-break: break-all; }
   .user-menu-panel hr { border: none; border-top: 1px solid #E7DFCC; margin: 12px 0; }
-  .user-menu-panel .um-section-title { font-size: 0.85rem; color: var(--ink-soft); margin: 14px 0 8px; font-weight: 700; }
-  .user-menu-panel .um-section-title:first-of-type { margin-top: 0; }
+  /* El panel de Cuenta llegó a juntar 6 secciones (letra, voz, perfil,
+     clave, copia, zona de riesgo) todas abiertas a la vez — se veía todo
+     amontonado de una. Cada sección ahora es un acordeón: un botón con el
+     nombre nada más, y el contenido se abre solo al tocarlo. */
+  .user-menu-panel .um-section-toggle {
+    display: flex; align-items: center; justify-content: space-between; width: 100%;
+    background: none; border: none; border-top: 1px solid #E7DFCC;
+    padding: 12px 2px; margin: 4px 0 0; font-family: var(--font-body);
+    font-size: 0.9rem; color: var(--ink); font-weight: 700; text-align: left; cursor: pointer;
+  }
+  .user-menu-panel .um-section-toggle:first-of-type { border-top: none; margin-top: 0; }
+  .user-menu-panel .um-section-toggle-warn { color: #a33; }
+  .user-menu-panel .um-chevron { flex-shrink: 0; margin-left: 10px; color: var(--ink-soft); transition: transform 0.15s ease; }
+  .user-menu-panel .um-section-toggle[aria-expanded="true"] .um-chevron { transform: rotate(90deg); }
+  .user-menu-panel .um-section-body { padding: 4px 0 10px; }
   .user-menu-panel .um-field-label { display: block; font-size: 0.8rem; color: var(--ink-soft); margin: 0 0 4px; }
   .user-menu-panel .um-hint { font-size: 0.78rem; color: var(--ink-soft); margin: -4px 0 8px; }
   .user-menu-panel input, .user-menu-panel select {
@@ -383,50 +396,65 @@
        <div class="user-menu-panel" id="userMenuPanel">
          <p class="um-username" id="umUsername"></p>
 
-         <p class="um-section-title">Tamaño de letra</p>
-         <div class="um-fontsize-row">
-           <button class="um-btn" id="umFontDecBtn" type="button" aria-label="Achicar la letra">A-</button>
-           <span class="um-fontsize-value" id="umFontSizeValue">100%</span>
-           <button class="um-btn" id="umFontIncBtn" type="button" aria-label="Agrandar la letra">A+</button>
+         <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecFuente">Tamaño de letra <span class="um-chevron" aria-hidden="true">›</span></button>
+         <div class="um-section-body" id="umSecFuente" hidden>
+           <div class="um-fontsize-row">
+             <button class="um-btn" id="umFontDecBtn" type="button" aria-label="Achicar la letra">A-</button>
+             <span class="um-fontsize-value" id="umFontSizeValue">100%</span>
+             <button class="um-btn" id="umFontIncBtn" type="button" aria-label="Agrandar la letra">A+</button>
+           </div>
+           <p class="um-hint">Cambia el tamaño de la letra en toda la app — se recuerda la próxima vez que entres.</p>
          </div>
-         <p class="um-hint">Cambia el tamaño de la letra en toda la app — se recuerda la próxima vez que entres.</p>
 
-         <p class="um-section-title">Voz</p>
-         <select id="voiceSelect" aria-label="Elegir voz"></select>
-         <p class="um-hint">Elige qué voz usa la entrevistadora para hablarte.</p>
+         <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecVoz">Voz <span class="um-chevron" aria-hidden="true">›</span></button>
+         <div class="um-section-body" id="umSecVoz" hidden>
+           <select id="voiceSelect" aria-label="Elegir voz"></select>
+           <p class="um-hint">Elige qué voz usa la entrevistadora para hablarte.</p>
+         </div>
 
-         <p class="um-section-title">Perfil</p>
-         <input type="text" id="umProfileName" placeholder="Tu nombre" maxlength="100" aria-label="Tu nombre">
-         <input type="email" id="umProfileEmail" placeholder="Tu correo" maxlength="200" autocomplete="email" aria-label="Tu correo">
-         <label class="um-field-label" for="umProfileBirthdate">Fecha de nacimiento</label>
-         <input type="date" id="umProfileBirthdate" aria-label="Tu fecha de nacimiento">
-         <p class="um-hint">Para que la entrevistadora entienda mejor el contexto de tu edad al charlar — es opcional.</p>
-         <button class="um-btn" id="umProfileSaveBtn" type="button">Guardar perfil</button>
-         <p class="um-msg" id="umProfileMsg"></p>
+         <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecPerfil">Perfil <span class="um-chevron" aria-hidden="true">›</span></button>
+         <div class="um-section-body" id="umSecPerfil" hidden>
+           <input type="text" id="umProfileName" placeholder="Tu nombre" maxlength="100" aria-label="Tu nombre">
+           <input type="email" id="umProfileEmail" placeholder="Tu correo" maxlength="200" autocomplete="email" aria-label="Tu correo">
+           <label class="um-field-label" for="umProfileBirthdate">Fecha de nacimiento</label>
+           <input type="date" id="umProfileBirthdate" aria-label="Tu fecha de nacimiento">
+           <p class="um-hint">Para que la entrevistadora entienda mejor el contexto de tu edad al charlar — es opcional.</p>
+           <button class="um-btn" id="umProfileSaveBtn" type="button">Guardar perfil</button>
+           <p class="um-msg" id="umProfileMsg"></p>
+         </div>
 
-         <p class="um-section-title">Cambiar clave</p>
-         <input type="password" id="umCurrentPassword" placeholder="Clave actual" autocomplete="current-password" aria-label="Clave actual">
-         <input type="password" id="umNewPassword" placeholder="Clave nueva" autocomplete="new-password" aria-label="Clave nueva">
-         <button class="um-btn" id="umChangePasswordBtn" type="button">Cambiar clave</button>
-         <p class="um-msg" id="umPasswordMsg"></p>
+         <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecClave">Cambiar clave <span class="um-chevron" aria-hidden="true">›</span></button>
+         <div class="um-section-body" id="umSecClave" hidden>
+           <input type="password" id="umCurrentPassword" placeholder="Clave actual" autocomplete="current-password" aria-label="Clave actual">
+           <input type="password" id="umNewPassword" placeholder="Clave nueva" autocomplete="new-password" aria-label="Clave nueva">
+           <button class="um-btn" id="umChangePasswordBtn" type="button">Cambiar clave</button>
+           <p class="um-msg" id="umPasswordMsg"></p>
+         </div>
 
-         <p class="um-section-title">Tu copia</p>
-         <a class="um-btn um-plain" id="umExportLink" href="/api/export" download>⬇️ Descargar mi historia</a>
-         <p class="um-hint">Un archivo .zip con todas tus historias, aportes de la familia, árbol genealógico y capítulos — para que tengas tu propia copia, aparte de esta app.</p>
+         <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecCopia">Tu copia <span class="um-chevron" aria-hidden="true">›</span></button>
+         <div class="um-section-body" id="umSecCopia" hidden>
+           <a class="um-btn um-plain" id="umExportLink" href="/api/export" download>⬇️ Descargar mi historia</a>
+           <p class="um-hint">Un archivo .zip con todas tus historias, aportes de la familia, árbol genealógico y capítulos — para que tengas tu propia copia, aparte de esta app.</p>
+         </div>
+
          <hr>
          <button class="um-btn um-plain" id="umLogoutBtn" type="button">Cerrar sesión</button>
-         <div class="danger-zone">
-           <button class="um-btn um-plain um-warn" id="umResetToggle" type="button">🔄 Reiniciar mi bitácora</button>
-           <div id="umResetRow" style="display:none; margin-top:8px;">
-             <input type="password" id="umResetPassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para reiniciar la bitácora">
-             <button class="um-btn um-danger" id="umResetConfirm" type="button">Reiniciar bitácora</button>
-             <p class="um-msg um-error" id="umResetError"></p>
-           </div>
-           <button class="um-btn um-plain um-warn" id="umDeleteToggle" type="button">⚠️ Borrar mi cuenta permanentemente</button>
-           <div id="umDeleteRow" style="display:none; margin-top:8px;">
-             <input type="password" id="umDeletePassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para borrar la cuenta">
-             <button class="um-btn um-danger" id="umDeleteConfirm" type="button">Borrar cuenta</button>
-             <p class="um-msg um-error" id="umDeleteError"></p>
+
+         <button type="button" class="um-section-toggle um-section-toggle-warn" aria-expanded="false" aria-controls="umSecRiesgo">Zona de riesgo <span class="um-chevron" aria-hidden="true">›</span></button>
+         <div class="um-section-body" id="umSecRiesgo" hidden>
+           <div class="danger-zone">
+             <button class="um-btn um-plain um-warn" id="umResetToggle" type="button">🔄 Reiniciar mi bitácora</button>
+             <div id="umResetRow" style="display:none; margin-top:8px;">
+               <input type="password" id="umResetPassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para reiniciar la bitácora">
+               <button class="um-btn um-danger" id="umResetConfirm" type="button">Reiniciar bitácora</button>
+               <p class="um-msg um-error" id="umResetError"></p>
+             </div>
+             <button class="um-btn um-plain um-warn" id="umDeleteToggle" type="button">⚠️ Borrar mi cuenta permanentemente</button>
+             <div id="umDeleteRow" style="display:none; margin-top:8px;">
+               <input type="password" id="umDeletePassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para borrar la cuenta">
+               <button class="um-btn um-danger" id="umDeleteConfirm" type="button">Borrar cuenta</button>
+               <p class="um-msg um-error" id="umDeleteError"></p>
+             </div>
            </div>
          </div>
        </div>
@@ -603,15 +631,27 @@
   userMenuBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     userMenuPanel.classList.toggle('visible');
-    // Los cuadros de nombre/correo recién se pueden medir (scrollWidth
-    // vs. clientWidth) cuando el panel ya está visible — mientras estaba
-    // en display:none el ancho medía 0 y no se ajustaba nada.
-    if (userMenuPanel.classList.contains('visible')) ajustarCamposDePerfil();
   });
   document.addEventListener('click', (e) => {
     if (!userMenuPanel.contains(e.target) && e.target !== userMenuBtn) {
       userMenuPanel.classList.remove('visible');
     }
+  });
+
+  // Acordeón: cada sección de Cuenta arranca cerrada y se abre solo al
+  // tocar su título — antes se veían las 6 secciones de una, amontonadas.
+  document.querySelectorAll('.um-section-toggle').forEach((toggle) => {
+    const body = document.getElementById(toggle.getAttribute('aria-controls'));
+    if (!body) return;
+    toggle.addEventListener('click', () => {
+      const abrir = body.hidden;
+      body.hidden = !abrir;
+      toggle.setAttribute('aria-expanded', String(abrir));
+      // Los cuadros de nombre/correo recién se pueden medir (scrollWidth
+      // vs. clientWidth) cuando su sección ya está visible — mientras
+      // estaba con "hidden" el ancho medía 0 y no se ajustaba nada.
+      if (abrir && body.id === 'umSecPerfil') ajustarCamposDePerfil();
+    });
   });
 
   // Tamaño de letra: la lógica de guardar/aplicar vive en font-size.js
