@@ -126,8 +126,8 @@ require.cache[require.resolve('@anthropic-ai/sdk')] = {
     constructor() {}
     get messages() {
       return {
-        create: async (opts) => {
-          capturedCalls.push(opts);
+        create: async (opts, requestOptions) => {
+          capturedCalls.push(Object.assign({}, opts, { __requestOptions: requestOptions }));
           if (!responseQueue.length) {
             throw new Error('FakeAnthropic: se llamó a messages.create() sin respuesta programada (llamada #' + capturedCalls.length + ')');
           }
@@ -172,6 +172,13 @@ async function nextForUser(server, cookie, body) {
   return request(server, { path: '/api/next', method: 'POST', body }, cookie);
 }
 
+// Reimplementación local de server.js:contarPreguntas (no está exportada) —
+// solo para verificar en las aserciones de este archivo.
+function contarPreguntasTest(texto) {
+  const matches = texto.match(/\?/g);
+  return matches ? matches.length : 0;
+}
+
 let passed = 0, failed = 0;
 function check(name, cond) {
   if (cond) { passed++; console.log(`OK  - ${name}`); }
@@ -181,6 +188,22 @@ function check(name, cond) {
 async function main() {
   const server = app.listen(0);
   await new Promise((r) => server.once('listening', r));
+
+  // Captura las líneas de console.log/console.error (sin silenciarlas) para
+  // poder verificar la "métrica" de la segunda pasada (grep por
+  // "[segunda-pasada]") y sus logs de error, sin tener que ir a leer
+  // stdout/stderr a mano.
+  const capturedLogs = [];
+  const originalConsoleLog = console.log;
+  const originalConsoleError = console.error;
+  console.log = (...args) => {
+    capturedLogs.push(args.join(' '));
+    originalConsoleLog(...args);
+  };
+  console.error = (...args) => {
+    capturedLogs.push(args.map((a) => (a instanceof Error ? a.message : String(a))).join(' '));
+    originalConsoleError(...args);
+  };
 
   const loginResp = await request(server, { path: '/api/login', method: 'POST', body: { username: 'diego', password: 'miclave123' } });
   if (loginResp.status !== 200) console.log('LOGIN DEBUG:', loginResp.status, loginResp.body);
@@ -248,6 +271,7 @@ async function main() {
 
   // --- 6) Segunda pasada: el modelo cuela dos preguntas en un turno normal ---
   resetAnthropicMock();
+  capturedLogs.length = 0;
   pushAnthropicResponse('Qué lindo. ¿En qué año fue eso? ¿Y quién más vivía con ustedes?'); // 2 "?" de cierre reales
   pushAnthropicResponse('Qué lindo. ¿Quién más vivía con ustedes?'); // reescritura: 1 sola pregunta
   const dosPreguntas = await nextForUser(server, cookie, { history: historial, mode: 'historia' });
@@ -255,6 +279,36 @@ async function main() {
   const dosPreguntasBody = JSON.parse(dosPreguntas.body);
   check('dos preguntas: dispara la segunda pasada (2 llamadas a Anthropic)', capturedCalls.length === 2);
   check('dos preguntas: el mensaje final es el reescrito, con una sola pregunta', dosPreguntasBody.message === 'Qué lindo. ¿Quién más vivía con ustedes?');
+  check('dos preguntas: la llamada a la segunda pasada llevó timeout corto', capturedCalls[1] && capturedCalls[1].__requestOptions && capturedCalls[1].__requestOptions.timeout === 8000);
+  check('dos preguntas: quedó la línea de métrica con resultado=reescritura-ok', capturedLogs.some((l) => l.includes('[segunda-pasada]') && l.includes('preguntas_original=2') && l.includes('resultado=reescritura-ok')));
+
+  // --- 6b) Segunda pasada: la reescritura del modelo TODAVÍA tiene 2+ "?" ----
+  // (el modelo no obedeció del todo) -> no se acepta a ciegas, cae al
+  // fallback determinista (corta en el primer "?" del texto original).
+  resetAnthropicMock();
+  capturedLogs.length = 0;
+  pushAnthropicResponse('Qué lindo. ¿En qué año fue eso? ¿Y quién más vivía con ustedes?');
+  pushAnthropicResponse('¿En qué año fue eso? ¿Y con quién vivías, y qué hacían?'); // reescritura mal hecha: sigue con 2+ "?"
+  const reescrituraInvalida = await nextForUser(server, cookie, { history: historial, mode: 'historia' });
+  const reescrituraInvalidaBody = JSON.parse(reescrituraInvalida.body);
+  check('reescritura inválida: cae al fallback determinista (corta en el primer "?")', reescrituraInvalidaBody.message === 'Qué lindo. ¿En qué año fue eso?');
+  check('reescritura inválida: el mensaje final tiene una sola pregunta', contarPreguntasTest(reescrituraInvalidaBody.message) === 1);
+  check('reescritura inválida: queda logueado como fallback determinista', capturedLogs.some((l) => l.includes('[segunda-pasada]') && l.includes('resultado=reescritura-invalida-fallback-deterministico')));
+
+  // --- 6c) Segunda pasada: la llamada a Anthropic falla del todo -------------
+  // -> antes esto mandaba el texto original (con las 2+ preguntas) tal
+  // cual; ahora también cae al fallback determinista, así que el mensaje
+  // que le llega a la persona nunca tiene más de una pregunta.
+  resetAnthropicMock();
+  capturedLogs.length = 0;
+  pushAnthropicResponse('Qué lindo. ¿En qué año fue eso? ¿Y quién más vivía con ustedes?');
+  pushAnthropicResponse({ throw: new Error('Anthropic no respondió (simulado)') });
+  const fallaSegundaPasada = await nextForUser(server, cookie, { history: historial, mode: 'historia' });
+  check('falla la segunda pasada -> igual 200 (no se cae el pedido)', fallaSegundaPasada.status === 200);
+  const fallaSegundaPasadaBody = JSON.parse(fallaSegundaPasada.body);
+  check('falla la segunda pasada: cae al fallback determinista igual', fallaSegundaPasadaBody.message === 'Qué lindo. ¿En qué año fue eso?');
+  check('falla la segunda pasada: queda logueado el error de la llamada', capturedLogs.some((l) => l.includes('No se pudo dejar el mensaje con una sola pregunta')));
+  check('falla la segunda pasada: queda logueado como fallback por error', capturedLogs.some((l) => l.includes('[segunda-pasada]') && l.includes('resultado=reescritura-fallo-error')));
 
   // --- 7) La segunda pasada NO se dispara en el cierre, aunque haya 2+ "?" ---
   resetAnthropicMock();
@@ -322,6 +376,8 @@ async function main() {
   check('respuesta de Anthropic vacía: mensaje de error genérico, no un stack trace', JSON.parse(respuestaVacia.body).error === 'No se pudo generar la siguiente pregunta.');
 
   server.close();
+  console.log = originalConsoleLog;
+  console.error = originalConsoleError;
   console.log(`\n${passed} pasaron, ${failed} fallaron`);
   process.exit(failed ? 1 : 0);
 }

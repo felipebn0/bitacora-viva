@@ -1681,6 +1681,28 @@ function contarPreguntas(texto) {
   return matches ? matches.length : 0;
 }
 
+// Selecciona el primer bloque de tipo "text" de una respuesta de Anthropic,
+// en vez de asumir a ciegas que content[0] existe y es texto — si la
+// respuesta llegara vacía o con otro tipo de bloque primero, esto no
+// explota con un TypeError, simplemente no encuentra nada que usar.
+function primerBloqueDeTexto(response) {
+  const bloques = (response && response.content) || [];
+  const bloque = bloques.find((b) => b && b.type === 'text' && typeof b.text === 'string');
+  return bloque ? bloque.text : '';
+}
+
+// Fallback determinista (sin IA) para cuando la reescritura de abajo no se
+// puede confiar: se queda con todo el texto hasta el primer "?" (inclusive)
+// y descarta lo que venga después. No inventa ni cambia nada de lo que ya
+// estaba — achica en vez de reescribir — así que es seguro usarlo como
+// último recurso, a diferencia de aceptar cualquier texto libre que
+// devuelva el modelo sin verificarlo.
+function dejarSoloPrimeraPregunta(texto) {
+  const idx = texto.indexOf('?');
+  if (idx === -1) return texto;
+  return texto.slice(0, idx + 1).trim();
+}
+
 // Con prompting solo no se llega al 100% de "una sola pregunta por turno"
 // — el modelo (Haiku, rápido y económico) a veces sigue colando una
 // segunda pregunta pegada a la primera con una coma. En vez de pedirle más
@@ -1688,20 +1710,46 @@ function contarPreguntas(texto) {
 // solo se dispara cuando el mensaje YA tiene el problema, y le pide al
 // modelo que se quede con la mejor de las preguntas — no agrega latencia
 // ni costo en los turnos que ya salieron bien (la mayoría).
+//
+// La reescritura que devuelve el modelo NO se acepta a ciegas como texto
+// libre: se valida que de verdad haya quedado con una sola pregunta (o
+// ninguna) antes de usarla. Si no — o si la llamada a Anthropic falla, o
+// tarda más de lo razonable para ser solo una corrección rápida — se cae
+// al fallback determinista de arriba, que sí garantiza el resultado sin
+// tener que confiar en una segunda respuesta del modelo. Cada activación
+// deja una línea de log con el resultado (grep por "[segunda-pasada]") a
+// modo de métrica simple de cuánto se dispara esto y qué tan seguido la
+// reescritura sale bien — esta app no tiene un sistema de métricas propio,
+// así que por ahora esto es lo que hay, en línea con el resto del proyecto
+// (sin cronjobs ni librerías nuevas para algo que console.log ya resuelve).
 async function dejarUnaSolaPregunta(texto) {
+  let resultado;
+  let final;
   try {
-    const response = await anthropic.messages.create({
-      model: MODEL,
-      max_tokens: 300,
-      system: 'Vas a recibir un mensaje de una entrevistadora cálida, en español de Colombia con tuteo (nunca "vos"), que por error quedó con más de una pregunta (dos o más signos "?", aunque estén conectadas por una coma en la misma oración). Reescribe el mensaje quedándote SOLO con la pregunta más abierta e interesante de las que había — o sin ninguna pregunta al final, si el mensaje funciona igual de bien como comentario o reacción sola. El resto del mensaje (reacciones, comentarios) se mantiene tal cual, mismo tono, mismas palabras en lo posible. Responde ÚNICAMENTE con el mensaje ya corregido, sin explicaciones, sin comillas alrededor.',
-      messages: [{ role: 'user', content: texto }],
-    });
-    const reescrito = response.content[0].text.trim();
-    return reescrito || texto;
+    const response = await anthropic.messages.create(
+      {
+        model: MODEL,
+        max_tokens: 300,
+        system: 'Vas a recibir un mensaje de una entrevistadora cálida, en español de Colombia con tuteo (nunca "vos"), que por error quedó con más de una pregunta (dos o más signos "?", aunque estén conectadas por una coma en la misma oración). Reescribe el mensaje quedándote SOLO con la pregunta más abierta e interesante de las que había — o sin ninguna pregunta al final, si el mensaje funciona igual de bien como comentario o reacción sola. El resto del mensaje (reacciones, comentarios) se mantiene tal cual, mismo tono, mismas palabras en lo posible. Responde ÚNICAMENTE con el mensaje ya corregido, sin explicaciones, sin comillas alrededor.',
+        messages: [{ role: 'user', content: texto }],
+      },
+      { timeout: 8000 } // es una corrección rápida, no vale la pena esperar el timeout default (10 min) del SDK
+    );
+    const reescrito = primerBloqueDeTexto(response).trim();
+    if (reescrito && contarPreguntas(reescrito) <= 1) {
+      final = reescrito;
+      resultado = 'reescritura-ok';
+    } else {
+      final = dejarSoloPrimeraPregunta(texto);
+      resultado = reescrito ? 'reescritura-invalida-fallback-deterministico' : 'reescritura-vacia-fallback-deterministico';
+    }
   } catch (err) {
     console.error('No se pudo dejar el mensaje con una sola pregunta:', err);
-    return texto; // si esta segunda pasada falla, se manda el original tal cual
+    final = dejarSoloPrimeraPregunta(texto);
+    resultado = 'reescritura-fallo-error';
   }
+  console.log(`[segunda-pasada] preguntas_original=${contarPreguntas(texto)} resultado=${resultado}`);
+  return final;
 }
 
 app.post('/api/next', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
@@ -1773,7 +1821,9 @@ app.post('/api/next', requireAuth, bloquearColaborador, rateLimit, async (req, r
       messages,
     });
 
-    let text = response.content[0].text.trim();
+    const bloqueDeTexto = primerBloqueDeTexto(response);
+    if (!bloqueDeTexto) throw new Error('Respuesta de Anthropic sin bloque de texto utilizable.');
+    let text = bloqueDeTexto.trim();
     const done = text.includes('[FIN]');
     const pausado = text.includes('[PAUSA]');
     text = text.replace('[FIN]', '').replace('[PAUSA]', '').trim();
