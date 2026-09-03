@@ -87,7 +87,7 @@
     gap: 18px;
     text-align: center;
   }
-  .greeting .sub { color: var(--ink-soft); font-size: 0.95rem; max-width: 26ch; margin: 0 auto; }
+  .greeting .sub { color: var(--ink-soft); font-size: 1.15rem; max-width: 26ch; margin: 0 auto; }
   .transcript {
     display: none;
     flex-direction: column;
@@ -104,7 +104,7 @@
     width: 168px; height: 168px; border-radius: 50%; border: none; cursor: pointer;
     position: relative; display: grid; place-items: center;
     background: radial-gradient(circle at 35% 30%, var(--gold), var(--gold-deep));
-    color: #FBF6EA; font-family: var(--font-body); font-weight: 700; font-size: 1.05rem;
+    color: #FBF6EA; font-family: var(--font-body); font-weight: 700; font-size: 1.2rem;
     box-shadow: 0 10px 26px -10px rgba(168,106,38,0.55);
   }
   .orb::before {
@@ -320,7 +320,7 @@
   <div id="appContent">
    <div class="greeting-bar">
      <img class="brand-logo" src="/images/logo-icon.png" alt="Los recuerdos de mis viejos">
-     <p class="greeting-text">Un gusto tenerte de vuelta<span class="greeting-name" id="greetingName"></span></p>
+     <h1 class="greeting-text">Un gusto tenerte de vuelta<span class="greeting-name" id="greetingName"></span></h1>
      <div class="user-menu">
        <div class="icon-nav-item">
          <button class="icon-btn" id="userMenuBtn" type="button" title="Mi cuenta" aria-label="Mi cuenta">👤</button>
@@ -402,7 +402,6 @@
    <div class="main-layout">
     <div class="device-col">
     <div class="device">
-      <h1>Los recuerdos de mis viejos</h1>
       <div class="body-area">
         <div class="greeting" id="greeting">
           <div class="sub">Presiona el botón para empezar a charlar.</div>
