@@ -1050,30 +1050,50 @@ app.post('/api/logout', (req, res) => {
 
 // Borra las charlas, el resumen y los aportes de la cuenta logueada, para
 // empezar de cero. No borra la cuenta en sí (usuario/clave siguen sirviendo).
+// Pide la clave de nuevo como confirmación, igual que /api/delete-account —
+// es irreversible, aunque menos grave (la cuenta en sí sigue existiendo).
 app.post('/api/reset-bitacora', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
   try {
+    const { password } = req.body || {};
+    if (!password) return res.status(400).json({ error: 'Falta la clave para confirmar.' });
+
     await ensureSchema();
-    const s = await sql`DELETE FROM sessions WHERE user_id = ${req.userId} RETURNING id`;
-    const r = await sql`DELETE FROM resumen WHERE user_id = ${req.userId} RETURNING user_id`;
-    const n = await sql`DELETE FROM family_notes WHERE user_id = ${req.userId} RETURNING id, audio_url, audio_urls`;
-    const m = await sql`DELETE FROM media WHERE user_id = ${req.userId} RETURNING id, url`;
-    const fm = await sql`DELETE FROM family_members WHERE user_id = ${req.userId} RETURNING id`;
-    const te = await sql`DELETE FROM timeline_events WHERE user_id = ${req.userId} RETURNING id`;
-    const sl = await sql`DELETE FROM story_log WHERE user_id = ${req.userId} RETURNING id, audio_url`;
-    const ch = await sql`DELETE FROM chapters WHERE user_id = ${req.userId} RETURNING id`;
+    const userRows = await sql`SELECT password_hash FROM users WHERE id = ${req.userId}`;
+    if (!userRows.length) return res.status(404).json({ error: 'No se encontró la cuenta.' });
+    const passwordOk = await bcrypt.compare(password, userRows[0].password_hash);
+    if (!passwordOk) return res.status(401).json({ error: 'La clave no es correcta.' });
 
-    // Se borró family_members recién arriba, pero eso dejaba huérfanas las
-    // versiones anteriores de esas personas en historia_versiones (nombre,
-    // relación o padres previos a la última edición) — nunca se limpiaban,
-    // así que "reiniciar la bitácora" no borraba todo lo que decía borrar.
-    if (fm.length) {
-      const idsFm = fm.map((row) => row.id);
-      await sql`DELETE FROM historia_versiones WHERE tabla = 'family_members' AND registro_id = ANY(${idsFm})`;
-    }
+    // Antes eran 8 sentencias sueltas: una falla a mitad de camino podía
+    // dejar la bitácora borrada a medias (por ejemplo, sin historias pero
+    // con el árbol todavía ahí). Ahora corren como una única transacción
+    // real de Postgres — o se borra todo, o no se borra nada.
+    //
+    // El borrado de historia_versiones va primero y por subconsulta (no por
+    // los ids que traía el "RETURNING" de family_members en la versión
+    // vieja) porque sql.transaction() de Neon manda todas las consultas
+    // juntas como una transacción no interactiva: no hay forma de leer acá
+    // el resultado de una consulta anterior para armar la siguiente dentro
+    // de la misma transacción. Con la subconsulta no hace falta — mientras
+    // corra antes de borrar family_members, ve exactamente las mismas filas
+    // que ese "RETURNING" hubiera traído.
+    const [, s, r, n, m, fm, te, sl, ch] = await sql.transaction([
+      sql`DELETE FROM historia_versiones WHERE tabla = 'family_members' AND registro_id IN (SELECT id FROM family_members WHERE user_id = ${req.userId})`,
+      sql`DELETE FROM sessions WHERE user_id = ${req.userId} RETURNING id`,
+      sql`DELETE FROM resumen WHERE user_id = ${req.userId} RETURNING user_id`,
+      sql`DELETE FROM family_notes WHERE user_id = ${req.userId} RETURNING id, audio_url, audio_urls`,
+      sql`DELETE FROM media WHERE user_id = ${req.userId} RETURNING id, url`,
+      sql`DELETE FROM family_members WHERE user_id = ${req.userId} RETURNING id`,
+      sql`DELETE FROM timeline_events WHERE user_id = ${req.userId} RETURNING id`,
+      sql`DELETE FROM story_log WHERE user_id = ${req.userId} RETURNING id, audio_url`,
+      sql`DELETE FROM chapters WHERE user_id = ${req.userId} RETURNING id`,
+    ]);
 
-    // Los audios/fotos quedaban huérfanos en Vercel Blob después de un
-    // reset (solo se borraba la fila de la base de datos) — acá se borran
-    // también los archivos reales, para cumplir lo que promete la landing.
+    // Blob queda deliberadamente FUERA de la transacción SQL (Vercel Blob no
+    // participa de una transacción de Postgres). borrarArchivosBlob ya sabe
+    // registrar en pending_blob_deletes y reintentar solo lo que falle, así
+    // que un fallo acá no deja nada bloqueado de lo que sí se borró recién
+    // en la base — y no hay riesgo de haber borrado el archivo real sin
+    // haber confirmado antes, de verdad, que el borrado relacional cerró.
     const audioUrls = [];
     n.forEach((row) => {
       if (row.audio_url) audioUrls.push(row.audio_url);

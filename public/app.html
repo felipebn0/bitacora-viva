@@ -330,9 +330,12 @@
   .login .error { min-height: 1.2em; text-align: center; }
 
   .logout-row { text-align: center; margin-top: 20px; }
-  /* "Borrar mi cuenta" es la única acción irreversible acá — antes se veía
-     como un link subrayado más, del mismo tamaño que "invitar familiares"
-     o "cerrar sesión", con el rojo como única pista de que es distinta. */
+  /* "Reiniciar bitácora" y "Borrar mi cuenta" son las únicas acciones
+     irreversibles acá — antes "borrar cuenta" se veía como un link
+     subrayado más, del mismo tamaño que "invitar familiares" o "cerrar
+     sesión", con el rojo como única pista de que era distinta. Las dos
+     quedan agrupadas en esta franja separada, con "cerrar sesión" (que no
+     es destructivo) afuera. */
   .danger-zone { margin-top: 18px; padding-top: 14px; border-top: 1px solid #E7DFCC; }
 </style>
 </head>
@@ -366,11 +369,19 @@
          <p class="um-msg" id="umPasswordMsg"></p>
          <hr>
          <button class="um-btn um-plain" id="umLogoutBtn" type="button">Cerrar sesión</button>
-         <button class="um-btn um-plain um-warn" id="umDeleteToggle" type="button">⚠️ Borrar mi cuenta permanentemente</button>
-         <div id="umDeleteRow" style="display:none; margin-top:8px;">
-           <input type="password" id="umDeletePassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para borrar la cuenta">
-           <button class="um-btn um-danger" id="umDeleteConfirm" type="button">Borrar cuenta</button>
-           <p class="um-msg um-error" id="umDeleteError"></p>
+         <div class="danger-zone">
+           <button class="um-btn um-plain um-warn" id="umResetToggle" type="button">🔄 Reiniciar mi bitácora</button>
+           <div id="umResetRow" style="display:none; margin-top:8px;">
+             <input type="password" id="umResetPassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para reiniciar la bitácora">
+             <button class="um-btn um-danger" id="umResetConfirm" type="button">Reiniciar bitácora</button>
+             <p class="um-msg um-error" id="umResetError"></p>
+           </div>
+           <button class="um-btn um-plain um-warn" id="umDeleteToggle" type="button">⚠️ Borrar mi cuenta permanentemente</button>
+           <div id="umDeleteRow" style="display:none; margin-top:8px;">
+             <input type="password" id="umDeletePassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para borrar la cuenta">
+             <button class="um-btn um-danger" id="umDeleteConfirm" type="button">Borrar cuenta</button>
+             <p class="um-msg um-error" id="umDeleteError"></p>
+           </div>
          </div>
        </div>
      </div>
@@ -573,6 +584,54 @@
       umChangePasswordBtn.disabled = false;
     }
   });
+
+  // Reiniciar la bitácora — distinto de "borrar cuenta": el usuario/clave
+  // siguen sirviendo, se borra solo el contenido (charlas, resumen, árbol,
+  // capítulos, aportes, audios/fotos). Misma lógica que borrar cuenta: pide
+  // la clave de nuevo y una confirmación aparte porque no se puede deshacer.
+  const umResetToggle = document.getElementById('umResetToggle');
+  const umResetRow = document.getElementById('umResetRow');
+  const umResetPassword = document.getElementById('umResetPassword');
+  const umResetConfirm = document.getElementById('umResetConfirm');
+  const umResetError = document.getElementById('umResetError');
+
+  umResetToggle.addEventListener('click', () => {
+    const visible = umResetRow.style.display !== 'none';
+    umResetRow.style.display = visible ? 'none' : 'block';
+    umResetError.textContent = '';
+    if (!visible) umResetPassword.focus();
+  });
+
+  async function reiniciarBitacora() {
+    const password = umResetPassword.value;
+    if (!password) return;
+    if (!confirm('¿Seguro que quieres reiniciar tu bitácora? Se borran todas tus charlas, el resumen, el árbol genealógico, los capítulos y los aportes de la familia (con sus audios y fotos) — tu usuario y clave siguen sirviendo, pero no se puede deshacer.')) return;
+    umResetConfirm.disabled = true;
+    umResetError.textContent = '';
+    try {
+      const resp = await fetch('/api/reset-bitacora', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        umResetError.textContent = data.error || 'No se pudo reiniciar la bitácora.';
+        umResetConfirm.disabled = false;
+        return;
+      }
+      // Recargar en vez de tratar de limpiar a mano cada variable en
+      // memoria (historial de la charla, resumen, nombres pendientes del
+      // árbol, etc.) — la cuenta sigue logueada, así que vuelve a caer acá
+      // mismo, pero con todo recién cargado desde cero.
+      window.location.reload();
+    } catch (e) {
+      umResetError.textContent = 'No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.';
+      umResetConfirm.disabled = false;
+    }
+  }
+  umResetConfirm.addEventListener('click', reiniciarBitacora);
+  umResetPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') reiniciarBitacora(); });
 
   // Borrar la cuenta para siempre — distinto de "reiniciar bitácora": acá
   // se va también el usuario/clave, no solo el contenido. Pide la clave de
