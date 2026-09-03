@@ -38,6 +38,20 @@
        teclado (Tab), no al hacer clic con mouse/dedo. */
     :focus-visible{outline:3px solid var(--gold-deep);outline-offset:2px}
     html{scroll-behavior:smooth}
+    /* Red de seguridad: con letra grande (140%) en celulares muy angostos
+       (320-375px) aparecía un desborde horizontal chico (unos px) que no
+       vino de ningún elemento en particular que se pudiera acotar — probé
+       apagando pseudo-elementos decorativos y el círculo de fondo del hero
+       y el desborde seguía igual, así que en vez de perseguir el origen
+       exacto se corta acá: nunca debería haber scroll horizontal en esta
+       página, así que si algo lo produce, que quede oculto en vez de
+       agregar una barra de scroll lateral rara. */
+    /* OJO: overflow-x:hidden en html/body rompe el nav sticky (deja de
+       "pegarse" al hacer scroll) — probado y confirmado. Se corta el
+       desborde acá, en <main> nada más (que es donde vive, no en nav ni
+       footer), así el nav queda afuera de cualquier contenedor con
+       overflow y sigue sticky sin problema. */
+    main{overflow-x:hidden}
     body{
       margin:0;
       color:var(--ink);
@@ -69,6 +83,16 @@
     .brand{display:flex; align-items:center; justify-content:center; gap:11px; min-height:44px; min-width:44px; text-decoration:none; font-family:var(--serif); font-size:1.28rem; font-weight:600}
     .brand-mark{width:38px;height:38px;object-fit:contain;display:block}
     .nav-links{display:flex;gap:26px;align-items:center}
+    /* Tamaño de letra visible SIEMPRE en el header público, no solo dentro
+       de la app después de iniciar sesión — para este público, no poder
+       agrandar la letra para leer la landing o el registro es justo la
+       barrera que este control debería evitar. No es un <a>, así que la
+       regla de abajo que oculta los links intermedios en pantallas
+       angostas no lo toca. */
+    .nav-font-ctrl{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+    .nav-font-ctrl button{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:8px;padding:6px 10px;font-weight:700;font-size:.85rem;cursor:pointer;font-family:inherit;min-height:36px}
+    .nav-font-ctrl button:disabled{opacity:.5;cursor:default}
+    .nav-font-ctrl span{color:var(--ink-soft);font-size:.78rem;font-weight:700;min-width:3ch;text-align:center}
     /* min-height:44px + inline-flex centrado: el link "Iniciar sesión" (y
        los anchors de escritorio) tenían solo el alto del texto (~23px) como
        zona táctil real, aunque el texto se viera igual. */
@@ -232,7 +256,12 @@
     /* CTA */
     .final-cta{text-align:center;padding:120px 0}.final-cta .inner{max-width:840px;margin:auto}.final-cta h2{font-size:clamp(3rem,6.5vw,6rem)}.final-cta p{font-family:var(--serif);font-style:italic;color:var(--ink-soft);font-size:1.3rem;margin:0 0 30px}
 
-    footer{border-top:1px solid var(--line);padding:34px 0 48px;color:var(--ink-soft);font-size:.9rem}.footer-row{display:flex;justify-content:space-between;gap:20px;align-items:center;flex-wrap:wrap}.footer-links{display:flex;gap:20px}.footer-links a{text-decoration:none;display:inline-flex;align-items:center;min-height:44px;padding:4px 2px}
+    footer{border-top:1px solid var(--line);padding:34px 0 48px;color:var(--ink-soft);font-size:.9rem}.footer-row{display:flex;justify-content:space-between;gap:20px;align-items:center;flex-wrap:wrap}.footer-links{display:flex;gap:20px;flex-wrap:wrap}.footer-links a{text-decoration:none;display:inline-flex;align-items:center;min-height:44px;padding:4px 2px}
+    /* Sin min-width:0 este texto no se ajustaba: un div flex, por defecto,
+       no se achica/ajusta por debajo del ancho que ocuparía en una sola
+       línea, así que en pantallas angostas con letra grande el texto se
+       salía del borde en vez de partirse en más líneas. */
+    .footer-tagline{min-width:0;max-width:100%}
 
     /* REVEAL */
     .reveal{opacity:0;transform:translateY(16px);transition:.7s ease}.reveal.show{opacity:1;transform:none}
@@ -244,6 +273,7 @@
          cuenta" quedan SIEMPRE visibles: son las dos acciones reales del
          menú, alguien que ya tiene cuenta tiene que poder entrar desde acá. */
       .nav-links a:not(.nav-cta):not(.nav-login){display:none}
+      .nav-links{gap:14px}
       .hero{padding-top:62px}
       .hero-grid,.problem-grid,.voice-grid,.privacy-box,.registro-box{grid-template-columns:1fr;gap:46px}
       .hero-copy{text-align:center}.hero-copy h1{margin-left:auto;margin-right:auto}.hero-copy p{margin-left:auto;margin-right:auto}.hero-actions,.trust-row{justify-content:center}.eyebrow{justify-content:center}.hero-device-wrap{min-height:560px}
@@ -262,9 +292,27 @@
          escondía "Crear cuenta" acá y no quedaba forma de entrar al menú). */
       .nav-inner{height:68px;gap:10px}
       .brand span{display:none}
+      /* Con el control de tamaño de letra sumado a "Iniciar sesión" y
+         "Crear cuenta", el espacio de 26px entre cada uno (heredado del
+         header de escritorio) ya no entraba en pantallas angostas y el
+         header se desbordaba horizontalmente. */
       .nav-links{gap:10px}
       .nav-login{font-size:.85rem;white-space:nowrap}
       .nav-cta{padding:10px 14px;font-size:.85rem;white-space:nowrap}
+      /* "Iniciar sesión" + "Crear cuenta" ya llenaban el ancho justo en
+         pantallas angostas — meter el control de letra en la misma fila
+         desbordaba el header (y peor al agrandar la letra, porque el
+         control también crece con el resto del texto). En vez de seguir
+         achicando algo que ya estaba al límite, el control baja a su
+         propia fila centrada debajo, así el header nunca se desborda sin
+         importar el tamaño de letra elegido. */
+      .nav-inner{flex-wrap:wrap;height:auto;padding:12px 0}
+      .nav-font-ctrl{order:3;flex-basis:100%;justify-content:center;margin-top:2px}
+      /* "Iniciar sesión" + "Crear cuenta" ya no comparten fila con el
+         control de letra (ver arriba), pero en un celular muy angosto
+         (320px) con la letra en el máximo (140%) los dos solos todavía no
+         entraban en una fila — que se partan en dos en vez de desbordar. */
+      .nav-links{flex-wrap:wrap;justify-content:center}
       .hero{padding:48px 0 60px}h1{font-size:clamp(2.7rem,13vw,3.3rem)}.hero-device-wrap{min-height:440px}.device{padding:16px;border-radius:26px}.demo-panel{min-height:340px;padding:22px 14px}.orb{width:142px;height:142px}.memory-chip{display:none}
       section{padding:52px 0}h2{font-size:2.8rem}.problem-grid{gap:32px}
       .window-content{min-height:auto}.conversation,.story-side{padding:24px}.bubble{max-width:92%}
@@ -283,6 +331,11 @@
         <img class="brand-mark" src="/images/logo-icon.png" alt="" aria-hidden="true">
         <span>Los recuerdos de mis viejos</span>
       </a>
+      <div class="nav-font-ctrl" role="group" aria-label="Tamaño de letra">
+        <button type="button" id="navFontDecBtn" aria-label="Achicar la letra">A-</button>
+        <span id="navFontSizeValue">100%</span>
+        <button type="button" id="navFontIncBtn" aria-label="Agrandar la letra">A+</button>
+      </div>
       <div class="nav-links">
         <a href="#como-funciona">Cómo funciona</a>
         <a href="#producto">La experiencia</a>
@@ -567,12 +620,31 @@
   <footer>
     <div class="wrap footer-row">
       <div class="brand"><img class="brand-mark" src="/images/logo-icon.png" alt="" aria-hidden="true" style="width:30px;height:30px"><span>Los recuerdos de mis viejos</span></div>
-      <div>Las historias pasan. Los recuerdos pueden quedarse.</div>
+      <div class="footer-tagline">Las historias pasan. Los recuerdos pueden quedarse.</div>
       <div class="footer-links"><a href="#como-funciona">Cómo funciona</a><a href="#registro">Crear cuenta</a><a href="/app.html">Iniciar sesión</a><a href="#privacidad">Privacidad</a></div>
     </div>
   </footer>
 
   <script>
+    // Tamaño de letra — mismo mecanismo global de font-size.js que usa el
+    // resto de la app (localStorage + document.documentElement), acá solo
+    // el control visual del header público.
+    (function () {
+      const dec = document.getElementById('navFontDecBtn');
+      const inc = document.getElementById('navFontIncBtn');
+      const value = document.getElementById('navFontSizeValue');
+      if (!dec || !inc || !value || !window.bitacoraFontSize) return;
+      function actualizar() {
+        const v = window.bitacoraFontSize.get();
+        value.textContent = v + '%';
+        dec.disabled = v <= window.bitacoraFontSize.min;
+        inc.disabled = v >= window.bitacoraFontSize.max;
+      }
+      actualizar();
+      dec.addEventListener('click', () => { window.bitacoraFontSize.decrease(); actualizar(); });
+      inc.addEventListener('click', () => { window.bitacoraFontSize.increase(); actualizar(); });
+    })();
+
     // Demo orb (decorativo, no llama al backend)
     const orb = document.getElementById('demoOrb');
     const orbText = document.getElementById('orbText');

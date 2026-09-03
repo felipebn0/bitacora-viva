@@ -324,10 +324,32 @@
      quedan agrupadas en esta franja separada, con "cerrar sesión" (que no
      es destructivo) afuera. */
   .danger-zone { margin-top: 18px; padding-top: 14px; border-top: 1px solid #E7DFCC; }
+
+  /* Control de tamaño de letra ANTES de iniciar sesión — el mismo control
+     ya existía dentro de Cuenta, pero ahí solo aparece DESPUÉS de entrar,
+     lo cual no sirve de nada si a alguien la letra chica no lo deja leer
+     ni siquiera el formulario de login. Mismo mecanismo (font-size.js),
+     solo un control visual distinto para que quepa arriba de la tarjeta. */
+  .login-fontsize-row {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    margin: 0 0 4px;
+  }
+  .login-fontsize-row button {
+    border: 1px solid #E7DFCC; background: #fff; color: var(--ink);
+    border-radius: 10px; padding: 8px 15px; font-weight: 700; font-size: 1rem;
+    cursor: pointer; font-family: var(--font-body);
+  }
+  .login-fontsize-row button:disabled { opacity: 0.6; cursor: default; }
+  .login-fontsize-row span { color: var(--ink-soft); font-size: 0.85rem; font-weight: 700; min-width: 3.2ch; text-align: center; }
 </style>
 </head>
 <body>
   <div class="login" id="loginScreen">
+    <div class="login-fontsize-row" role="group" aria-label="Tamaño de letra">
+      <button type="button" id="loginFontDecBtn" aria-label="Achicar la letra">A-</button>
+      <span id="loginFontSizeValue">100%</span>
+      <button type="button" id="loginFontIncBtn" aria-label="Agrandar la letra">A+</button>
+    </div>
     <h1>Los recuerdos de mis viejos</h1>
     <p class="sub">Inicia sesión para entrar a tu bitácora.</p>
     <input type="text" id="loginUser" placeholder="Correo o usuario" autocomplete="username" aria-label="Correo o usuario">
@@ -582,15 +604,27 @@
 
   // Tamaño de letra: la lógica de guardar/aplicar vive en font-size.js
   // (compartido por todas las páginas) — acá solo está el control visual.
+  // Hay DOS controles en esta misma página (uno en Cuenta, otro en la
+  // pantalla de login, para que se pueda agrandar la letra ANTES de poder
+  // iniciar sesión) — los dos leen/escriben el mismo estado global, así
+  // que se actualizan juntos sin importar cuál se haya usado.
   const umFontDecBtn = document.getElementById('umFontDecBtn');
   const umFontIncBtn = document.getElementById('umFontIncBtn');
   const umFontSizeValue = document.getElementById('umFontSizeValue');
+  const loginFontDecBtn = document.getElementById('loginFontDecBtn');
+  const loginFontIncBtn = document.getElementById('loginFontIncBtn');
+  const loginFontSizeValue = document.getElementById('loginFontSizeValue');
   function actualizarBotonesFuente() {
     if (!window.bitacoraFontSize) return;
     const v = window.bitacoraFontSize.get();
+    const enMin = v <= window.bitacoraFontSize.min;
+    const enMax = v >= window.bitacoraFontSize.max;
     umFontSizeValue.textContent = v + '%';
-    umFontDecBtn.disabled = v <= window.bitacoraFontSize.min;
-    umFontIncBtn.disabled = v >= window.bitacoraFontSize.max;
+    umFontDecBtn.disabled = enMin;
+    umFontIncBtn.disabled = enMax;
+    loginFontSizeValue.textContent = v + '%';
+    loginFontDecBtn.disabled = enMin;
+    loginFontIncBtn.disabled = enMax;
   }
   if (window.bitacoraFontSize) {
     actualizarBotonesFuente();
@@ -603,6 +637,14 @@
       window.bitacoraFontSize.increase();
       actualizarBotonesFuente();
       ajustarCamposDePerfil();
+    });
+    loginFontDecBtn.addEventListener('click', () => {
+      window.bitacoraFontSize.decrease();
+      actualizarBotonesFuente();
+    });
+    loginFontIncBtn.addEventListener('click', () => {
+      window.bitacoraFontSize.increase();
+      actualizarBotonesFuente();
     });
   }
 
