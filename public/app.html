@@ -128,6 +128,16 @@
   .error { color: #a33; font-size: 0.85rem; }
 
   #appContent { display: none; flex-direction: column; align-items: center; }
+  /* .login (más abajo) pone display:flex por defecto, así que sin esto el
+     login se ve un instante SIEMPRE al cargar esta página — incluso ya
+     logueado, cada vez que se navega acá con un link normal (por ejemplo
+     "volver a la bitácora" desde historias/aportes/árbol/libro), porque es
+     una recarga real de la página: entra a mostrar el login por defecto y
+     recién cuando responde el fetch('/api/me') de abajo, si hay sesión,
+     showApp() lo cambia a appContent. #loginScreen (id) le gana en
+     especificidad a .login (clase) y lo mantiene oculto hasta que ese
+     fetch resuelve — ni el login ni la app se ven de más. */
+  #loginScreen { display: none; }
 
   .main-layout { display: flex; flex-direction: column; align-items: center; }
   .device-col { display: flex; flex-direction: column; align-items: center; width: 100%; }
