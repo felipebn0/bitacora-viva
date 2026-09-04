@@ -2252,8 +2252,10 @@ app.post('/api/transcribe', requireAuth, rateLimit, express.raw({ type: '*/*', l
     });
 
     if (!resp.ok) {
-      console.error('ElevenLabs STT error:', resp.status, await resp.text());
-      return res.status(502).json({ error: 'No se pudo transcribir el audio.' });
+      const detalle = await resp.text().catch(() => '');
+      console.error('ElevenLabs STT error:', resp.status, detalle);
+      // DEBUG TEMPORAL — sacar "debug" de la respuesta una vez diagnosticado.
+      return res.status(502).json({ error: 'No se pudo transcribir el audio.', debug: `ElevenLabs ${resp.status}: ${detalle}`.slice(0, 300) });
     }
 
     const data = await resp.json();
@@ -2480,7 +2482,9 @@ app.post('/api/contribute-audio', requireAuth, rateLimit, express.raw({ type: '*
     res.json({ ok: true, url: blob.url });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'No se pudo guardar el audio.' });
+    // DEBUG TEMPORAL — sacar err.message de la respuesta una vez
+    // diagnosticado el reporte de "no se pudo guardar el audio".
+    res.status(500).json({ error: 'No se pudo guardar el audio.', debug: err.message });
   }
 });
 
