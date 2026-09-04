@@ -414,8 +414,13 @@
 
   // Si venimos de "colaborar con otra historia" (botón en app.html), la URL
   // trae ?owner=<id> — todas las llamadas a la API de acá en adelante deben
-  // avisar para cuál historia son, además de quién está logueado.
-  const activeOwnerId = new URLSearchParams(window.location.search).get('owner');
+  // avisar para cuál historia son, además de quién está logueado. "let", no
+  // "const": cuando se llega con ?codigo= y una cuenta real ya sumada como
+  // colaboradora (ver más abajo), se actualiza a mano después del join sin
+  // recargar la página — si no, conOwner() seguía sin mandar ningún owner y
+  // /api/contribute-chat terminaba resolviendo la bitácora de quien está
+  // logueado en vez de la del código, mezclando las charlas.
+  let activeOwnerId = new URLSearchParams(window.location.search).get('owner');
   // Entrada de invitado sin cuenta — llega con ?codigo=XXXXXXXX (link de
   // WhatsApp compartido desde app.html, ver /api/guest-start).
   const codigoInvitado = new URLSearchParams(window.location.search).get('codigo');
@@ -675,7 +680,12 @@
           });
           const info = await resp.json();
           if (!resp.ok) { window.location.href = '/app.html'; return; }
-          history.replaceState(null, '', location.pathname);
+          // Clave: sin esto, conOwner() seguía sin mandar "owner" en el
+          // resto de los pedidos de esta misma carga de página (chat,
+          // audio, contribuciones) — y esos terminaban resolviendo la
+          // bitácora de quien está logueado, no la del código.
+          activeOwnerId = info.ownerId;
+          history.replaceState(null, '', location.pathname + '?owner=' + info.ownerId);
           showApp({ username: data.username, ownerName: info.ownerName, isGuest: false });
           cargarMisColaboraciones(info.ownerId);
           iniciarAporte();
