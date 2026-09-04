@@ -728,6 +728,7 @@
       <div id="inviteRow" style="display:none; margin-top: 10px;">
         <p class="sub" style="max-width: 340px; margin: 0 auto 8px;">Comparte este código con familiares — crean su propia cuenta y pueden aportar historias, sin ver ni tocar tus charlas.</p>
         <p style="font-family: var(--font-display); font-size: 1.4rem; font-weight: 700; letter-spacing: 0.1em; margin: 0 0 4px;" id="inviteCode">…</p>
+        <a class="write-toggle" id="inviteWhatsappBtn" href="#" target="_blank" rel="noopener" style="display:none;">📲 mandar por WhatsApp</a>
         <button class="write-toggle" id="inviteCopyBtn" type="button">copiar código</button>
         <button class="write-toggle" id="inviteRegenBtn" type="button">generar código nuevo</button>
       </div>
@@ -1186,7 +1187,27 @@
   const inviteRow = document.getElementById('inviteRow');
   const inviteCode = document.getElementById('inviteCode');
   const inviteCopyBtn = document.getElementById('inviteCopyBtn');
+  const inviteWhatsappBtn = document.getElementById('inviteWhatsappBtn');
   let inviteLoaded = false;
+
+  // El link de acá abajo va a colaborar.html?codigo=... — la entrada
+  // liviana de invitado (sin cuenta, sin clave, solo el nombre, ver
+  // /api/guest-start): quien lo reciba por WhatsApp toca el link y arranca
+  // directo a contar su historia. No manda nada por su cuenta: es un link
+  // de WhatsApp normal (wa.me) que abre con el mensaje ya escrito, listo
+  // para elegir a quién mandárselo — la persona sigue eligiendo y tocando
+  // enviar, como cualquier mensaje.
+  function actualizarLinkWhatsapp(code) {
+    if (!code || code === 'No se pudo obtener el código.' || code === 'No se pudo generar el código.') {
+      inviteWhatsappBtn.style.display = 'none';
+      return;
+    }
+    const link = `${location.origin}/colaborar.html?codigo=${encodeURIComponent(code)}`;
+    const mensaje = `Te invito a sumar una historia a nuestra bitácora familiar — entrá acá, no hace falta crear cuenta: ${link}`;
+    inviteWhatsappBtn.href = `https://wa.me/?text=${encodeURIComponent(mensaje)}`;
+    inviteWhatsappBtn.style.display = 'inline-block';
+  }
+
   inviteToggle.addEventListener('click', async () => {
     const visible = inviteRow.style.display !== 'none';
     if (visible) {
@@ -1202,8 +1223,10 @@
       const data = await resp.json();
       inviteCode.textContent = resp.ok ? data.code : 'No se pudo obtener el código.';
       inviteLoaded = resp.ok;
+      actualizarLinkWhatsapp(resp.ok ? data.code : null);
     } catch (e) {
       inviteCode.textContent = 'No se pudo obtener el código.';
+      actualizarLinkWhatsapp(null);
     }
   });
   inviteCopyBtn.addEventListener('click', async () => {
@@ -1222,8 +1245,10 @@
       const resp = await fetch('/api/invite-code/regenerate', { method: 'POST' });
       const data = await resp.json();
       inviteCode.textContent = resp.ok ? data.code : 'No se pudo generar el código.';
+      actualizarLinkWhatsapp(resp.ok ? data.code : null);
     } catch (e) {
       inviteCode.textContent = 'No se pudo generar el código.';
+      actualizarLinkWhatsapp(null);
     } finally {
       inviteRegenBtn.disabled = false;
     }

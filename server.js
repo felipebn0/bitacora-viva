@@ -544,11 +544,39 @@ function clearSessionCookie(req, res) {
 async function requireAuth(req, res, next) {
   const cookies = parseCookies(req.headers.cookie);
   const session = verifySession(cookies[SESSION_COOKIE]);
-  if (!session || !session.userId) {
+  if (!session) {
+    return res.status(401).json({ error: 'No autenticado.' });
+  }
+  // Sesión de invitado (ver /api/guest-start): entró con el código de
+  // familia y su nombre, sin crear cuenta ni clave. No hay fila en "users"
+  // para esta sesión — req.userId queda null a propósito, así que
+  // cualquier ruta que solo tenga sentido para una cuenta real (borrar
+  // cuenta, cambiar clave, editar perfil) tiene que rechazarla mirando
+  // req.isGuest. req.isCollaborator=true de paso hace que
+  // bloquearColaborador ya la excluya sola de las rutas solo-dueño.
+  if (session.guest) {
+    try {
+      await ensureSchema();
+      const rows = await sql`SELECT id FROM users WHERE id = ${session.ownerId} AND owner_user_id IS NULL`;
+      if (!rows.length) return res.status(401).json({ error: 'No autenticado.' });
+    } catch (err) {
+      console.error('No se pudo validar la sesión de invitado:', err);
+      return res.status(401).json({ error: 'No se pudo validar la sesión, intenta de nuevo.' });
+    }
+    req.userId = null;
+    req.username = null;
+    req.isGuest = true;
+    req.isCollaborator = true;
+    req.profileUserId = session.ownerId;
+    req.guestName = session.guestName || null;
+    return next();
+  }
+  if (!session.userId) {
     return res.status(401).json({ error: 'No autenticado.' });
   }
   req.userId = session.userId;
   req.username = session.username;
+  req.isGuest = false;
   // Una cuenta "colaboradora" (se unió con el código de otra familia, ver
   // /api/signup) no tiene bitácora propia — sus aportes van al perfil de
   // la cuenta dueña. req.profileUserId es a quién pertenecen los datos que
@@ -601,6 +629,10 @@ async function resolveProfileUserId(req) {
   const raw = (req.query && req.query.owner) || (req.body && req.body.owner);
   const requestedOwner = parseInt(raw, 10);
   if (!requestedOwner) return req.profileUserId;
+  // Un invitado (sin cuenta propia, ver /api/guest-start) solo puede
+  // trabajar para la única bitácora de su sesión — nunca para otra, ni
+  // aunque el pedido mande un "owner" distinto.
+  if (req.isGuest) return requestedOwner === req.profileUserId ? req.profileUserId : null;
   if (requestedOwner === req.userId) return req.userId;
 
   await ensureSchema();
@@ -639,6 +671,14 @@ function fechaComoInputDate(valor) {
 
 app.get('/api/me', requireAuth, async (req, res) => {
   try {
+    if (req.isGuest) {
+      const ownerRows = await sql`SELECT name, username FROM users WHERE id = ${req.profileUserId}`;
+      const ownerName = capitalizarNombre((ownerRows[0] && (ownerRows[0].name || ownerRows[0].username)) || '') || null;
+      return res.json({
+        username: null, name: null, email: null, fechaNacimiento: null,
+        isCollaborator: true, isGuest: true, guestName: req.guestName, ownerName,
+      });
+    }
     const rows = await sql`SELECT name, email, fecha_nacimiento FROM users WHERE id = ${req.userId}`;
     const name = capitalizarNombre((rows[0] && rows[0].name) || '') || null;
     const email = (rows[0] && rows[0].email) || null;
@@ -648,7 +688,7 @@ app.get('/api/me', requireAuth, async (req, res) => {
       const ownerRows = await sql`SELECT name, username FROM users WHERE id = ${req.profileUserId}`;
       ownerName = capitalizarNombre((ownerRows[0] && (ownerRows[0].name || ownerRows[0].username)) || '') || null;
     }
-    res.json({ username: req.username, name, email, fechaNacimiento, isCollaborator: req.isCollaborator, ownerName });
+    res.json({ username: req.username, name, email, fechaNacimiento, isCollaborator: req.isCollaborator, isGuest: false, ownerName });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo cargar la cuenta.' });
@@ -664,6 +704,7 @@ app.get('/api/me', requireAuth, async (req, res) => {
 // tener que inferirla o preguntarla.
 app.post('/api/update-profile', requireAuth, rateLimit, async (req, res) => {
   try {
+    if (req.isGuest) return res.status(403).json({ error: 'No disponible para invitados sin cuenta.' });
     const { name, email, fechaNacimiento } = req.body || {};
 
     const cleanName = capitalizarNombre(String(name || '').trim().slice(0, 100)) || null;
@@ -1035,6 +1076,59 @@ app.get('/api/collaboration-info', requireAuth, async (req, res) => {
   }
 });
 
+// --- Entrar como invitado, sin crear cuenta (BACKLOG #5) ---------------
+// El mismo código de 8 caracteres que ya sirve para registrarse con cuenta
+// completa (/api/signup) también sirve para este camino más liviano: sin
+// correo, sin clave — solo el nombre. No hace falta ningún proveedor de
+// correo ni SMS: el link con el código se comparte a mano (WhatsApp,
+// mensaje), como ya se comparte hoy el código pelado.
+
+// Antes de pedirle el nombre, colaborar.html usa esto para mostrar "vas a
+// colaborar con la bitácora de <nombre>" — sin crear ninguna sesión
+// todavía. rateLimit por IP alcanza acá: el código ya es aleatoriedad
+// criptográfica de 8 caracteres (~852 mil millones de combinaciones),
+// adivinarlo a fuerza bruta no es viable.
+app.get('/api/guest-code-info', rateLimit, async (req, res) => {
+  try {
+    const cleanCode = String(req.query.codigo || '').trim().toUpperCase();
+    if (!cleanCode) return res.status(400).json({ error: 'Falta el código.' });
+    await ensureSchema();
+    const rows = await sql`SELECT id, name, username FROM users WHERE invite_code = ${cleanCode} AND owner_user_id IS NULL`;
+    if (!rows.length) return res.status(404).json({ error: 'Ese código no existe.' });
+    res.json({ ownerName: capitalizarNombre(rows[0].name || rows[0].username) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo verificar el código.' });
+  }
+});
+
+// Crea la sesión de invitado en sí — el código resuelve a qué bitácora
+// queda atada (para siempre, dentro de esa sesión: ver resolveProfileUserId
+// más arriba, nunca puede pedir otra), y el nombre queda firmado adentro de
+// la propia cookie. No se crea ninguna fila en "users" — por eso
+// req.userId queda null en requireAuth para este tipo de sesión.
+app.post('/api/guest-start', rateLimit, async (req, res) => {
+  try {
+    const cleanCode = String((req.body && req.body.codigo) || '').trim().toUpperCase();
+    const cleanName = capitalizarNombre(String((req.body && req.body.name) || '').trim().slice(0, 60));
+    if (!cleanCode) return res.status(400).json({ error: 'Falta el código.' });
+    if (!cleanName) return res.status(400).json({ error: 'Falta el nombre.' });
+
+    await ensureSchema();
+    const rows = await sql`SELECT id, name, username FROM users WHERE invite_code = ${cleanCode} AND owner_user_id IS NULL`;
+    if (!rows.length) return res.status(404).json({ error: 'Ese código no existe.' });
+    const owner = rows[0];
+
+    const token = signSession({ guest: true, ownerId: owner.id, guestName: cleanName });
+    const secure = cookieEsSegura(req) ? '; Secure' : '';
+    res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${token}; Max-Age=${SESSION_MAX_AGE}; Path=/; HttpOnly; SameSite=Lax${secure}`);
+    res.json({ ok: true, ownerName: capitalizarNombre(owner.name || owner.username) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo entrar con ese código.' });
+  }
+});
+
 // Las bitácoras a las que ESTA cuenta se sumó como colaboradora — para
 // mostrar en colaborar.html un ir-y-venir entre ellas sin pedir el código
 // de nuevo cada vez. Solo lo suyo, nunca lo de otras cuentas.
@@ -1282,6 +1376,7 @@ app.post('/api/reset-bitacora', requireAuth, bloquearColaborador, rateLimit, asy
 //   nunca se borra el contenido de otra persona.
 app.post('/api/delete-account', requireAuth, rateLimit, async (req, res) => {
   try {
+    if (req.isGuest) return res.status(403).json({ error: 'No disponible para invitados sin cuenta.' });
     const { password } = req.body || {};
     if (!password) return res.status(400).json({ error: 'Falta la clave para confirmar.' });
 
@@ -1355,6 +1450,7 @@ app.post('/api/delete-account', requireAuth, rateLimit, async (req, res) => {
 // Cambiar la clave sin borrar nada — pide la clave actual como confirmación.
 app.post('/api/change-password', requireAuth, rateLimit, async (req, res) => {
   try {
+    if (req.isGuest) return res.status(403).json({ error: 'No disponible para invitados sin cuenta.' });
     const { currentPassword, newPassword } = req.body || {};
     if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Faltan la clave actual y la nueva.' });
     // Antes pedía solo 4 caracteres acá contra 6 en /api/signup — se
@@ -2333,8 +2429,15 @@ app.post('/api/contribute-chat', requireAuth, rateLimit, async (req, res) => {
     await ensureSchema();
     const ownerRow = await sql`SELECT name, username FROM users WHERE id = ${ownerId}`;
     const ownerNombre = capitalizarNombre((ownerRow[0] && (ownerRow[0].name || ownerRow[0].username)) || '') || null;
-    const colaboradorRow = await sql`SELECT name, username FROM users WHERE id = ${req.userId}`;
-    const colaboradorNombre = capitalizarNombre((colaboradorRow[0] && (colaboradorRow[0].name || colaboradorRow[0].username)) || '') || 'la persona que colabora';
+    // Un invitado sin cuenta (ver /api/guest-start) ya trae su nombre
+    // firmado en la propia sesión — no hay fila en "users" que consultar.
+    let colaboradorNombre = 'la persona que colabora';
+    if (req.isGuest) {
+      colaboradorNombre = req.guestName || colaboradorNombre;
+    } else {
+      const colaboradorRow = await sql`SELECT name, username FROM users WHERE id = ${req.userId}`;
+      colaboradorNombre = capitalizarNombre((colaboradorRow[0] && (colaboradorRow[0].name || colaboradorRow[0].username)) || '') || colaboradorNombre;
+    }
     // Si quien aporta aclaró que esta historia no es propia sino de otra
     // persona (ver colaborar.html), acá viene ese nombre.
     const protagonista = capitalizarNombre(String(req.body.protagonista || '').trim().slice(0, 60)) || colaboradorNombre;
@@ -2417,10 +2520,17 @@ app.get('/api/contributions', requireAuth, async (req, res) => {
     if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
     await ensureSchema();
     // El dueño ve todos los aportes de su bitácora; un colaborador solo ve
-    // los que él mismo aportó, nunca los de otros colaboradores.
+    // los que él mismo aportó, nunca los de otros colaboradores. Un
+    // invitado sin cuenta (ver /api/guest-start) no tiene id numérico
+    // propio — contributed_by queda NULL en sus aportes — así que se
+    // identifica por nombre en vez de por id; si dos invitados de la misma
+    // bitácora comparten nombre, verían el aporte del otro (limitación
+    // conocida, no un hueco de privacidad hacia afuera de la familia).
     const esDueño = ownerId === req.userId;
     const notesRaw = esDueño
       ? await sql`SELECT id, contributor, parentesco, protagonista, texto, audio_url, audio_urls, created_at FROM family_notes WHERE user_id = ${ownerId} ORDER BY created_at DESC LIMIT 30`
+      : req.isGuest
+      ? await sql`SELECT id, contributor, parentesco, protagonista, texto, audio_url, audio_urls, created_at FROM family_notes WHERE user_id = ${ownerId} AND contributed_by IS NULL AND contributor = ${req.guestName} ORDER BY created_at DESC LIMIT 30`
       : await sql`SELECT id, contributor, parentesco, protagonista, texto, audio_url, audio_urls, created_at FROM family_notes WHERE user_id = ${ownerId} AND contributed_by = ${req.userId} ORDER BY created_at DESC LIMIT 30`;
     const mediaRaw = esDueño
       ? await sql`SELECT type, url, caption, contributor, created_at FROM media WHERE user_id = ${ownerId} ORDER BY created_at DESC LIMIT 30`

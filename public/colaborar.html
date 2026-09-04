@@ -285,6 +285,22 @@
     <p class="sub" style="margin-top:2px;">¿No tienes cuenta? <a href="/?modo=colaborar#registro" style="color:var(--gold-deep);">Crea una</a>.</p>
   </div>
 
+  <!-- Entrada de invitado: llega con ?codigo=XXXXXXXX (link de WhatsApp
+       compartido desde app.html) — sin cuenta, sin clave, solo el nombre.
+       Ver /api/guest-start. Distinto de #loginScreen a propósito: no tiene
+       sentido pedirle usuario/clave a alguien que nunca va a crear cuenta. -->
+  <div class="login" id="guestScreen" style="display:none;">
+    <h1>Los recuerdos de mis viejos</h1>
+    <p class="sub" id="guestOwnerLine" style="margin-bottom: 6px;">Te invitaron a sumar una historia.</p>
+    <div class="login-field">
+      <label for="guestName">Tu nombre</label>
+      <input type="text" id="guestName" placeholder="¿Cómo te llamas?" autocomplete="given-name" maxlength="60">
+    </div>
+    <button id="guestStartBtn" type="button">Empezar</button>
+    <p class="error" id="guestError" role="alert"></p>
+    <p class="sub" style="margin-top:2px;">No hace falta crear cuenta ni clave — solo tu nombre.</p>
+  </div>
+
   <div id="appContent">
     <!-- Mismo patrón que app.html: invisible hasta que se navega con Tab. -->
     <a class="skip-link" href="#main-content">Saltar al contenido</a>
@@ -380,6 +396,11 @@
 (function () {
   const checkingScreen = document.getElementById('checkingScreen');
   const loginScreen = document.getElementById('loginScreen');
+  const guestScreen = document.getElementById('guestScreen');
+  const guestOwnerLine = document.getElementById('guestOwnerLine');
+  const guestName = document.getElementById('guestName');
+  const guestStartBtn = document.getElementById('guestStartBtn');
+  const guestError = document.getElementById('guestError');
   const appContent = document.getElementById('appContent');
   const loginUser = document.getElementById('loginUser');
   const loginPass = document.getElementById('loginPass');
@@ -389,11 +410,15 @@
   const logoutBtn = document.getElementById('logoutBtn');
   const whoami = document.getElementById('whoami');
   const ownerName = document.getElementById('ownerName');
+  const dangerZone = document.querySelector('.danger-zone');
 
   // Si venimos de "colaborar con otra historia" (botón en app.html), la URL
   // trae ?owner=<id> — todas las llamadas a la API de acá en adelante deben
   // avisar para cuál historia son, además de quién está logueado.
   const activeOwnerId = new URLSearchParams(window.location.search).get('owner');
+  // Entrada de invitado sin cuenta — llega con ?codigo=XXXXXXXX (link de
+  // WhatsApp compartido desde app.html, ver /api/guest-start).
+  const codigoInvitado = new URLSearchParams(window.location.search).get('codigo');
   function conOwner(path) {
     if (!activeOwnerId) return path;
     return path + (path.includes('?') ? '&' : '?') + 'owner=' + encodeURIComponent(activeOwnerId);
@@ -402,19 +427,69 @@
   function showApp(data) {
     checkingScreen.style.display = 'none';
     loginScreen.style.display = 'none';
+    guestScreen.style.display = 'none';
     appContent.style.display = 'flex';
-    whoami.textContent = data.username || '';
+    whoami.textContent = data.guestName || data.username || '';
     ownerName.textContent = data.ownerName || '';
+    // Un invitado sin cuenta no tiene nada que borrar — la ruta de borrar
+    // cuenta ya lo rechaza del lado del servidor, pero mostrar el botón
+    // igual sería confuso ("¿cuál cuenta?").
+    if (dangerZone) dangerZone.style.display = data.isGuest ? 'none' : '';
   }
 
   function showLogin() {
     checkingScreen.style.display = 'none';
     appContent.style.display = 'none';
+    guestScreen.style.display = 'none';
     loginScreen.style.display = 'flex';
     loginPass.value = '';
     ocultarClave();
     loginUser.focus();
   }
+
+  async function showGuestEntry() {
+    checkingScreen.style.display = 'none';
+    appContent.style.display = 'none';
+    loginScreen.style.display = 'none';
+    guestScreen.style.display = 'flex';
+    guestError.textContent = '';
+    try {
+      const resp = await fetch('/api/guest-code-info?codigo=' + encodeURIComponent(codigoInvitado));
+      const data = await resp.json();
+      guestOwnerLine.textContent = resp.ok
+        ? `Te invitaron a sumar una historia a la bitácora de ${data.ownerName}.`
+        : (data.error || 'Ese código no existe — revisa el link.');
+    } catch (e) {
+      guestOwnerLine.textContent = 'Hubo un problema para conectar.';
+    }
+    guestName.focus();
+  }
+
+  async function doGuestStart() {
+    const nombre = guestName.value.trim();
+    if (!nombre) return;
+    guestStartBtn.disabled = true;
+    guestError.textContent = '';
+    try {
+      const resp = await fetch('/api/guest-start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ codigo: codigoInvitado, name: nombre }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        guestError.textContent = data.error || 'No se pudo entrar con ese código.';
+        guestStartBtn.disabled = false;
+        return;
+      }
+      window.location.reload();
+    } catch (e) {
+      guestError.textContent = 'Hubo un problema para conectar.';
+      guestStartBtn.disabled = false;
+    }
+  }
+  guestStartBtn.addEventListener('click', doGuestStart);
+  guestName.addEventListener('keydown', (e) => { if (e.key === 'Enter') doGuestStart(); });
 
   function ocultarClave() {
     loginPass.type = 'password';
@@ -560,7 +635,7 @@
           const resp = await fetch('/api/collaboration-info?owner=' + encodeURIComponent(activeOwnerId));
           if (!resp.ok) { window.location.href = '/app.html'; return; }
           const info = await resp.json();
-          showApp({ username: data.username, ownerName: info.ownerName });
+          showApp({ username: data.username, ownerName: info.ownerName, isGuest: data.isGuest });
           cargarMisColaboraciones(activeOwnerId);
           iniciarAporte();
         } catch (e) {
@@ -575,7 +650,7 @@
       cargarMisColaboraciones(null, data.ownerName);
       iniciarAporte();
     })
-    .catch(() => showLogin());
+    .catch(() => { if (codigoInvitado) { showGuestEntry(); } else { showLogin(); } });
 
   // --- Aportar una historia: charla turno por turno con la IA ---
   const aporteMsg = document.getElementById('aporteMsg');

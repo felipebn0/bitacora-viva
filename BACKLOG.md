@@ -36,11 +36,13 @@ Cosas que se pidieron pero se decidió posponer, con suficiente detalle para ret
 
 **Para retomarlo:** definir qué significa "acceso especial" — ¿lo habilita el dueño de la bitácora por colaborador? ¿es automático después de cierto tiempo o cierta cantidad de aportes? Falta esa decisión de producto antes de tocar código.
 
-## 5. Colaborador invitado sin cuenta propia ("guest")
+## 5. ~~Colaborador invitado sin cuenta propia ("guest")~~ — hecho
 
 **Qué es:** hoy hace falta registrarse (usuario + clave) para poder colaborar con una historia. La idea es un modo más liviano: alguien recibe el código de invitación, entra sin crear cuenta, dice su nombre una sola vez, y aporta.
 
-**Nota:** el prompt de aportar (`buildAporteSystemPrompt`) ya tiene un caso contemplado para "colaborador guest" en el que sí haría falta preguntar el nombre (a diferencia del flujo actual, donde nunca se pregunta porque ya viene de la cuenta) — pero el flujo de entrada sin cuenta en sí no está construido.
+**Resuelto:** `/api/guest-code-info` + `/api/guest-start` (server.js) — sesión de invitado firmada igual que una sesión normal, sin fila en `users`. `app.html` genera un link de WhatsApp directo (`colaborar.html?codigo=...`) junto al código. `colaborar.html` muestra una pantalla liviana (solo nombre) en vez del login cuando llega con `?codigo=`. Cubierto por `test/guest.smoke.js`.
+
+**Pendiente relacionado:** migrar los archivos ya subidos con `access:'public'` de antes del arreglo de seguridad — ver ítem 9.
 
 ## 6. Mejorar automáticamente el parentesco que detecta el árbol
 
