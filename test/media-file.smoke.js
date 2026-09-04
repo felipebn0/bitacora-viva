@@ -1,7 +1,12 @@
 // Smoke test para GET /api/media-file — la única puerta de entrada para
-// reproducir audio/fotos/video ahora que se suben con access:'private' a
-// Vercel Blob (antes eran públicos: cualquiera con el link exacto podía
-// abrirlos sin sesión).
+// reproducir audio/fotos/video. La intención es que se suban con
+// access:'private' a Vercel Blob (cualquiera con el link exacto podía
+// abrirlos sin sesión si son públicos) — hoy están TEMPORALMENTE vueltos a
+// 'public' porque el store de Blob conectado no soporta 'private' todavía
+// (ver BACKLOG.md). Esta ruta sirve para los dos casos por diseño (con
+// respaldo a fetch() directo si get({access:'private'}) no encuentra el
+// archivo), así que estos tests siguen siendo válidos para cuando se
+// vuelva a activar 'private'.
 //
 // Cubre: requiere sesión, rechaza rutas mal formadas o con "..", el dueño
 // puede ver su propio archivo, una cuenta sin relación NO puede ver el

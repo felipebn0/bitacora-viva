@@ -997,18 +997,12 @@
   // archivo de audio ya existente que suban. Si este turno es solo la
   // respuesta a una aclaración de parentesco/año que faltaba, ese audio
   // corto NO se guarda — solo se transcribe para seguir la charla.
-  // DEBUG TEMPORAL (sacar después de diagnosticar el reporte de "no se
-  // pudo entender el audio"): guarda por qué falló de verdad, para
-  // mostrarlo en pantalla en vez de quedarnos solo con el mensaje genérico.
-  window.__ultimoDebugAudio = null;
-
   async function procesarAudio(blob, contentType) {
     // Ya arrancó a contar — no tiene sentido cambiar de quién es la
     // historia a mitad de camino.
     bloquearSelectorProtagonista(true);
 
     const esSoloAclaracion = esperandoAclaracion;
-    const debug = { blobSize: blob.size, blobType: blob.type };
 
     if (!esSoloAclaracion) {
       try {
@@ -1017,14 +1011,11 @@
           headers: { 'Content-Type': contentType },
           body: blob,
         });
-        debug.uploadStatus = upResp.status;
         if (upResp.ok) {
           const upData = await upResp.json();
           if (upData.url) audioUrlsLocal.push(upData.url);
-        } else {
-          debug.uploadError = await upResp.text().catch(() => '');
         }
-      } catch (e) { debug.uploadException = e.message; }
+      } catch (e) {}
     }
 
     let texto = '';
@@ -1034,17 +1025,12 @@
         headers: { 'Content-Type': contentType },
         body: blob,
       });
-      debug.transcribeStatus = trResp.status;
       if (trResp.ok) {
         const trData = await trResp.json();
         texto = (trData.text || '').trim();
-        debug.transcribeTextoVacio = !texto;
-      } else {
-        debug.transcribeError = await trResp.text().catch(() => '');
       }
-    } catch (e) { debug.transcribeException = e.message; }
+    } catch (e) {}
 
-    window.__ultimoDebugAudio = debug;
     if (!texto) return false;
     historyLocal.push({ role: 'user', content: texto });
     agregarBurbuja('q', texto);
@@ -1080,10 +1066,7 @@
     }
 
     const ok = await procesarAudio(blob, 'audio/webm');
-    // DEBUG TEMPORAL: el detalle real va pegado al mensaje de siempre, no
-    // en vez de él — sacar esta línea (dejar solo el mensaje normal) una
-    // vez diagnosticado.
-    recStatus.textContent = ok ? '' : 'No se pudo entender el audio. Intenta de nuevo. [debug: ' + JSON.stringify(window.__ultimoDebugAudio) + ']';
+    recStatus.textContent = ok ? '' : 'No se pudo entender el audio. Intenta de nuevo.';
     reset();
   }
 

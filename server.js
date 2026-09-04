@@ -2252,10 +2252,8 @@ app.post('/api/transcribe', requireAuth, rateLimit, express.raw({ type: '*/*', l
     });
 
     if (!resp.ok) {
-      const detalle = await resp.text().catch(() => '');
-      console.error('ElevenLabs STT error:', resp.status, detalle);
-      // DEBUG TEMPORAL — sacar "debug" de la respuesta una vez diagnosticado.
-      return res.status(502).json({ error: 'No se pudo transcribir el audio.', debug: `ElevenLabs ${resp.status}: ${detalle}`.slice(0, 300) });
+      console.error('ElevenLabs STT error:', resp.status, await resp.text());
+      return res.status(502).json({ error: 'No se pudo transcribir el audio.' });
     }
 
     const data = await resp.json();
@@ -2436,7 +2434,13 @@ app.post('/api/save-audio', requireAuth, bloquearColaborador, rateLimit, express
     if (!real) return res.status(400).json({ error: 'El archivo no parece ser un audio válido.' });
     const filename = `audio/${req.userId}/${safeSession}/${safeRole}-${safeIndex}.${real.ext}`;
 
-    const blob = await put(filename, req.body, { access: 'private', contentType: real.mime, addRandomSuffix: true });
+    // TEMPORAL: vuelto a 'public' — el store de Vercel Blob conectado en
+    // producción no está configurado para aceptar access:'private' todavía
+    // ("Cannot use private access on a public store"), así que con
+    // 'private' TODO upload fallaba con 500. Ver BACKLOG.md — hay que
+    // crear/migrar a un store con soporte de acceso privado y recién ahí
+    // volver a poner 'private' acá.
+    const blob = await put(filename, req.body, { access: 'public', contentType: real.mime, addRandomSuffix: true });
     res.json({ ok: true, file: blob.url });
   } catch (err) {
     console.error(err);
@@ -2478,13 +2482,12 @@ app.post('/api/contribute-audio', requireAuth, rateLimit, express.raw({ type: '*
     const real = await verificarArchivoReal(req.body, AUDIO_MIME_PERMITIDOS);
     if (!real) return res.status(400).json({ error: 'El archivo no parece ser un audio válido.' });
     const filename = `audio/aportes/${ownerId}/${Date.now()}.${real.ext}`;
-    const blob = await put(filename, req.body, { access: 'private', contentType: real.mime, addRandomSuffix: true });
+    // TEMPORAL: mismo motivo que /api/save-audio — ver comentario ahí.
+    const blob = await put(filename, req.body, { access: 'public', contentType: real.mime, addRandomSuffix: true });
     res.json({ ok: true, url: blob.url });
   } catch (err) {
     console.error(err);
-    // DEBUG TEMPORAL — sacar err.message de la respuesta una vez
-    // diagnosticado el reporte de "no se pudo guardar el audio".
-    res.status(500).json({ error: 'No se pudo guardar el audio.', debug: err.message });
+    res.status(500).json({ error: 'No se pudo guardar el audio.' });
   }
 });
 
@@ -2664,8 +2667,9 @@ app.post('/api/contribute-media', requireAuth, rateLimit, express.raw({ type: '*
     const cleanContributor = capitalizarNombre(String(contributor || '').trim().slice(0, 60)) || null;
     const cleanCaption = String(caption || '').trim().slice(0, 500) || null;
 
+    // TEMPORAL: mismo motivo que /api/save-audio — ver comentario ahí.
     const blob = await put(`media/${ownerId}/${type}-${Date.now()}.${real.ext}`, req.body, {
-      access: 'private',
+      access: 'public',
       contentType: real.mime,
       addRandomSuffix: true,
     });

@@ -60,11 +60,17 @@ Cosas que se pidieron pero se decidió posponer, con suficiente detalle para ret
 
 **Para retomarlo:** descomentar las dos líneas marcadas en `/api/login` cerca de `limitePorClave(\`login:...\`)`. Antes de reactivarlo, considerar un tiempo de espera más corto o un mensaje que aclare cuánto falta, para que no vuelva a pasar lo mismo.
 
-## 9. Migrar a privado el audio/fotos subidos ANTES de este arreglo
+## 9. Terminar de verdad la migración a Blob privado (hoy vuelto a público)
 
-**Qué es:** los audios y fotos/videos ahora se suben con `access:'private'` a Vercel Blob, y solo se pueden ver a través de `/api/media-file` (que confirma que la cuenta tenga permiso antes de servirlos) — ver server.js. Pero los archivos que ya estaban subidos ANTES de este cambio siguen marcados como públicos de verdad en Vercel Blob: quien tenga el link exacto de ANTES (una URL larga y aleatoria, no listada en ningún lado) todavía puede abrirlo directo, sin pasar por la app ni por ningún login. `/api/media-file` los sigue sirviendo igual (por compatibilidad, con un respaldo que hace `fetch()` directo si Blob no los encuentra como privados), pero eso no cierra la puerta vieja — solo agrega una nueva.
+**Qué pasó:** se subió `access:'private'` en los 3 uploads (audio/fotos) y en la lectura de `/api/media-file`, pero en producción esto rompía TODO upload (500: *"Vercel Blob: Cannot use private access on a public store. The store must be configured with private access."*). El store de Vercel Blob conectado a este proyecto es del tipo público de siempre — `access:'private'` por upload no alcanza, el STORE ENTERO tiene que estar configurado como privado. Se revirtieron los 3 `put()` a `access:'public'` para que guardar audio/fotos vuelva a funcionar mientras tanto — confirmado con un pago de un familiar real que fallaba con este mismo error.
 
-**Para retomarlo:** un script/endpoint temporal (protegido con SETUP_KEY, con "dry run" por defecto — mismo patrón ya usado antes en este proyecto) que recorra `story_log.audio_url`, `family_notes.audio_url`/`audio_urls` y `media.url`, baje cada archivo, lo vuelva a subir con `access:'private'`, actualice la fila con la nueva ruta, y borre la copia pública vieja. Hacerlo de a poco y con logs claros — son archivos reales de familias reales.
+**Para terminarlo bien:**
+1. En el dashboard de Vercel → Storage → el store de Blob de este proyecto → confirmar si tiene una opción para habilitar acceso privado, o si hace falta crear un store NUEVO con esa opción activada desde el principio (Vercel lo separa por tipo de store, no es un toggle en cualquiera).
+2. Si hace falta un store nuevo: actualizar `BLOB_READ_WRITE_TOKEN` en Vercel para que apunte a ese store nuevo.
+3. Recién ahí, volver a poner `access: 'private'` en los 3 `put()` de server.js (buscar "TEMPORAL: vuelto a 'public'" — quedaron marcados con un comentario para encontrarlos fácil).
+4. Los archivos que se suban MIENTRAS tanto (con este revert) quedan públicos de verdad — sumarlos a la migración pendiente de abajo cuando se haga.
+
+**Migración de los ya subidos (público → privado), una vez el store lo soporte:** un script/endpoint temporal (protegido con SETUP_KEY, con "dry run" por defecto — mismo patrón ya usado antes en este proyecto) que recorra `story_log.audio_url`, `family_notes.audio_url`/`audio_urls` y `media.url`, baje cada archivo, lo vuelva a subir con `access:'private'`, actualice la fila con la nueva ruta, y borre la copia pública vieja. Hacerlo de a poco y con logs claros — son archivos reales de familias reales.
 
 ## 11. Poner en marcha de verdad los pagos (Wava) y los recordatorios (correo)
 
