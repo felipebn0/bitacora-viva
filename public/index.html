@@ -351,6 +351,19 @@
       .nav-links{gap:14px}
     }
     @media(max-width:980px){
+      /* El fade-up al hacer scroll (.reveal, más arriba) arranca en
+         opacity:0 y depende de que el IntersectionObserver de más abajo
+         agregue ".show" — en mobile se vio (probado contra el sitio real,
+         no solo local) que el contenido puede quedar pintado casi
+         invisible después de esa transición, aunque el navegador ya
+         calcule opacity:1 por dentro — un desajuste entre lo que el CSS
+         dice y lo que la pantalla realmente termina mostrando. En
+         desktop no se reprodujo. Se corta la animación acá (contenido
+         visible directo, sin depender de scroll ni de JS) en vez de
+         perseguir la causa exacta del desajuste de pintado — es la
+         franja donde alguien reportó no entender bien la página, y este
+         efecto era solo decorativo, no aportaba nada al contenido. */
+      .reveal{opacity:1!important;transform:none!important;transition:none!important}
       .hero{padding-top:62px}
       .hero-grid,.problem-grid,.voice-grid,.privacy-box,.registro-box{grid-template-columns:1fr;gap:46px}
       .hero-copy{text-align:center}.hero-copy h1{margin-left:auto;margin-right:auto}.hero-copy p{margin-left:auto;margin-right:auto}.hero-actions,.trust-row{justify-content:center}.eyebrow{justify-content:center}.hero-device-wrap{min-height:560px}
@@ -556,18 +569,18 @@
         <div class="section-head center reveal">
           <div class="eyebrow" style="justify-content:center">Una historia de todos</div>
           <h2>Esta historia la construimos entre todos.</h2>
-          <p>No hace falta que una sola persona cuente todo. Comparte tu código de familia y cualquiera puede sumar recuerdos — sin ver ni tocar tus charlas.</p>
+          <p>No hace falta que una sola persona cuente todo. Manda tu código de familia por WhatsApp y cualquiera puede sumar recuerdos — sin ver ni tocar tus charlas.</p>
         </div>
         <div class="family-cards reveal">
           <div class="family-card">
-            <div style="font-size:1.8rem;margin-bottom:10px">🔑</div>
-            <b style="display:block;margin-bottom:4px">Un código para tu familia</b>
-            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Cada bitácora tiene un código único para compartir con quien quieras.</p>
+            <div style="font-size:1.8rem;margin-bottom:10px">📲</div>
+            <b style="display:block;margin-bottom:4px">Un link, directo por WhatsApp</b>
+            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Cada bitácora tiene su propio código — lo mandás con un toque, listo para compartir con quien quieras.</p>
           </div>
           <div class="family-card">
             <div style="font-size:1.8rem;margin-bottom:10px">🎙️</div>
-            <b style="display:block;margin-bottom:4px">Cuentan con su propia voz</b>
-            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Una entrevistadora los va guiando en una charla corta — sin formularios, sin llenar campos.</p>
+            <b style="display:block;margin-bottom:4px">Entran y hablan, sin crear cuenta</b>
+            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Tocan el link, dicen su nombre una vez, y una entrevistadora los va guiando — sin correo, sin clave, sin formularios.</p>
           </div>
           <div class="family-card">
             <div style="font-size:1.8rem;margin-bottom:10px">🔒</div>
