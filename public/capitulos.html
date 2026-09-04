@@ -198,7 +198,9 @@
           if (typeof u === 'string' && /^https?:\/\//.test(u)) {
             const audio = document.createElement('audio');
             audio.controls = true;
-            audio.src = u;
+            // Acceso privado en Blob — /api/media-file confirma el permiso
+            // antes de traerlo (ver server.js).
+            audio.src = '/api/media-file?u=' + encodeURIComponent(u);
             item.appendChild(audio);
           }
         });

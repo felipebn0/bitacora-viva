@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
-    "test": "node test/smoke.js && node test/next.smoke.js && node test/shutdown.smoke.js && node test/account-actions.smoke.js && node test/export.smoke.js",
+    "test": "node test/smoke.js && node test/next.smoke.js && node test/shutdown.smoke.js && node test/account-actions.smoke.js && node test/export.smoke.js && node test/media-file.smoke.js",
     "test:responsive": "node test/responsive.playwright.js",
     "eval:conversacion": "node test/eval-conversacion.js"
   },

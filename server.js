@@ -5,8 +5,9 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const Anthropic = require('@anthropic-ai/sdk');
 const { neon } = require('@neondatabase/serverless');
-const { put, del } = require('@vercel/blob');
+const { put, del, get } = require('@vercel/blob');
 const archiver = require('archiver');
+const { Readable } = require('stream');
 
 const app = express();
 app.set('trust proxy', 1); // detrás del proxy de Vercel: para que req.ip y req.secure sean correctos
@@ -2070,6 +2071,88 @@ app.post('/api/speak', requireAuth, rateLimit, async (req, res) => {
   }
 });
 
+// Audio y fotos/videos se suben con access:'private' (ver los put() de acá
+// abajo) — Vercel exige autenticación para leerlos, así que el navegador ya
+// no puede pedirlos con una simple URL directa. /api/media-file es el único
+// camino para reproducirlos: recibe la ruta guardada en la base (puede ser
+// la URL completa que devolvió put(), o ya el pathname — get() acepta las
+// dos formas), confirma que quien pide el archivo tiene acceso a ESA
+// bitácora puntual, y recién ahí lo trae de Blob y lo manda.
+//
+// El dueño de cada archivo queda codificado en su propia ruta (siempre
+// arrancan con "audio/<ownerId>/…", "audio/aportes/<ownerId>/…" o
+// "media/<ownerId>/…" — ver los 3 put() más abajo), así que no hace falta
+// una consulta aparte a la base para saber de quién es: se lee directo del
+// nombre del archivo, y después se valida con el mismo criterio de
+// resolveProfileUserId (dueño, cuenta colaboradora fija, o colaboración
+// aceptada) — nunca confiando en un parámetro que mande el pedido.
+function datosDelArchivoDeBlob(valorGuardado) {
+  try {
+    let pathname = String(valorGuardado || '');
+    if (/^https?:\/\//i.test(pathname)) {
+      pathname = new URL(pathname).pathname.replace(/^\/+/, '');
+    }
+    const partes = pathname.split('/');
+    let ownerId = null;
+    if (partes[0] === 'audio' && partes[1] === 'aportes') ownerId = parseInt(partes[2], 10) || null;
+    else if (partes[0] === 'audio' || partes[0] === 'media') ownerId = parseInt(partes[1], 10) || null;
+    if (!ownerId) return null;
+    return { pathname, ownerId };
+  } catch (err) {
+    return null;
+  }
+}
+
+async function estaAutorizadoParaVerArchivo(req, ownerId) {
+  if (req.profileUserId === ownerId) return true; // dueño, o cuenta colaboradora fija de esa familia
+  await ensureSchema();
+  const collab = await sql`SELECT 1 FROM collaborations WHERE collaborator_user_id = ${req.userId} AND owner_user_id = ${ownerId}`;
+  return collab.length > 0;
+}
+
+app.get('/api/media-file', requireAuth, async (req, res) => {
+  try {
+    const valorGuardado = typeof req.query.u === 'string' ? req.query.u : '';
+    const datos = valorGuardado && !valorGuardado.includes('..') ? datosDelArchivoDeBlob(valorGuardado) : null;
+    if (!datos) return res.status(400).json({ error: 'Archivo inválido.' });
+
+    const autorizado = await estaAutorizadoParaVerArchivo(req, datos.ownerId);
+    if (!autorizado) return res.status(403).json({ error: 'No tienes acceso a ese archivo.' });
+
+    let resultado;
+    try {
+      resultado = await get(datos.pathname, { access: 'private' });
+    } catch (err) {
+      resultado = null;
+    }
+    if (!resultado || !resultado.stream) {
+      // Respaldo para archivos subidos ANTES de este cambio, que todavía
+      // están marcados como públicos en Blob — se sirven igual mientras se
+      // termina de migrar el storage viejo (ver BACKLOG.md).
+      try {
+        const url = /^https?:\/\//i.test(valorGuardado) ? valorGuardado : null;
+        if (!url) return res.status(404).json({ error: 'No se encontró el archivo.' });
+        const externo = await fetch(url);
+        if (!externo.ok || !externo.body) return res.status(404).json({ error: 'No se encontró el archivo.' });
+        res.set('Content-Type', externo.headers.get('content-type') || 'application/octet-stream');
+        res.set('Cache-Control', 'private, no-store');
+        Readable.fromWeb(externo.body).pipe(res);
+        return;
+      } catch (err) {
+        console.error('No se pudo servir el archivo (respaldo público):', err);
+        return res.status(404).json({ error: 'No se encontró el archivo.' });
+      }
+    }
+    res.set('Content-Type', resultado.blob.contentType || 'application/octet-stream');
+    res.set('Cache-Control', 'private, no-store');
+    Readable.fromWeb(resultado.stream).pipe(res);
+  } catch (err) {
+    console.error(err);
+    if (!res.headersSent) res.status(500).json({ error: 'No se pudo cargar el archivo.' });
+    else res.destroy();
+  }
+});
+
 // Mismo ajuste que en /api/transcribe: 4mb en vez de 20mb, para que sea
 // esta ruta la que rechace con un mensaje claro un audio muy largo, en vez
 // de que lo rechace la plataforma con un error genérico.
@@ -2091,7 +2174,7 @@ app.post('/api/save-audio', requireAuth, bloquearColaborador, rateLimit, express
     if (!real) return res.status(400).json({ error: 'El archivo no parece ser un audio válido.' });
     const filename = `audio/${req.userId}/${safeSession}/${safeRole}-${safeIndex}.${real.ext}`;
 
-    const blob = await put(filename, req.body, { access: 'public', contentType: real.mime, addRandomSuffix: true });
+    const blob = await put(filename, req.body, { access: 'private', contentType: real.mime, addRandomSuffix: true });
     res.json({ ok: true, file: blob.url });
   } catch (err) {
     console.error(err);
@@ -2133,7 +2216,7 @@ app.post('/api/contribute-audio', requireAuth, rateLimit, express.raw({ type: '*
     const real = await verificarArchivoReal(req.body, AUDIO_MIME_PERMITIDOS);
     if (!real) return res.status(400).json({ error: 'El archivo no parece ser un audio válido.' });
     const filename = `audio/aportes/${ownerId}/${Date.now()}.${real.ext}`;
-    const blob = await put(filename, req.body, { access: 'public', contentType: real.mime, addRandomSuffix: true });
+    const blob = await put(filename, req.body, { access: 'private', contentType: real.mime, addRandomSuffix: true });
     res.json({ ok: true, url: blob.url });
   } catch (err) {
     console.error(err);
@@ -2311,7 +2394,7 @@ app.post('/api/contribute-media', requireAuth, rateLimit, express.raw({ type: '*
     const cleanCaption = String(caption || '').trim().slice(0, 500) || null;
 
     const blob = await put(`media/${ownerId}/${type}-${Date.now()}.${real.ext}`, req.body, {
-      access: 'public',
+      access: 'private',
       contentType: real.mime,
       addRandomSuffix: true,
     });
@@ -2400,7 +2483,20 @@ app.get('/api/export', requireAuth, bloquearColaborador, rateLimit, async (req, 
     ]);
 
     const perfil = perfilRows[0] || {};
-    const aportes = aportesRaw.map((a) => ({ ...a, audio_urls: parseJsonArray(a.audio_urls) }));
+    // Los audios/fotos/videos se guardan con acceso privado en Blob (ver
+    // /api/media-file más arriba) — un link directo a Blob ya no sirve para
+    // nada fuera de la app. En su lugar, el export lleva un link a la propia
+    // app que sí sabe autenticar el pedido; solo funciona mientras la
+    // persona siga con sesión iniciada, no como un link público para
+    // siempre (por eso el aviso en el LEEME de abajo).
+    const linkArchivo = (valor) => (valor ? `${req.protocol}://${req.get('host')}/api/media-file?u=${encodeURIComponent(valor)}` : null);
+    const historiasConLink = historias.map((h) => ({ ...h, audio_url: linkArchivo(h.audio_url) }));
+    const aportes = aportesRaw.map((a) => ({
+      ...a,
+      audio_url: linkArchivo(a.audio_url),
+      audio_urls: parseJsonArray(a.audio_urls).map(linkArchivo),
+    }));
+    const mediaConLink = media.map((m) => ({ ...m, url: linkArchivo(m.url) }));
     const miembros = miembrosRaw.map((m) => ({ ...m, padres: parseJsonArray(m.padres) }));
     const capitulos = capitulosRaw.map((c) => ({ ...c, story_ids: parseJsonArray(c.story_ids) }));
 
@@ -2422,7 +2518,7 @@ Exportado el ${fechaExport}.
 
 Este .zip tiene una copia de todo el TEXTO guardado en tu bitácora: historias, aportes de la familia, árbol genealógico, capítulos y resumen — en formato JSON (se puede abrir con cualquier editor de texto) y en historia-completa.txt (para leer de corrido, como un libro).
 
-Los audios y fotos/videos NO están incluidos como archivos acá adentro — cada uno tiene un link directo en el JSON correspondiente (historias.json, aportes_familiares.json, fotos_y_videos.json). A diferencia del texto de este .zip, esos links dependen de que el servicio de almacenamiento (Vercel Blob) los siga sirviendo — si querés conservar los audios/fotos en sí, te recomendamos descargarlos desde esos links mientras la cuenta esté activa.
+Los audios y fotos/videos NO están incluidos como archivos acá adentro — cada uno tiene un link en el JSON correspondiente (historias.json, aportes_familiares.json, fotos_y_videos.json) que abre el archivo real. A diferencia del texto de este .zip, esos links solo funcionan mientras tengas la sesión iniciada en la app (son privados, no públicos) — si querés conservar los audios/fotos en sí, te recomendamos descargarlos desde esos links mientras la cuenta esté activa, no guardar el link para más adelante.
 `;
     archive.append(readme, { name: 'LEEME.txt' });
     archive.append(
@@ -2439,10 +2535,10 @@ Los audios y fotos/videos NO están incluidos como archivos acá adentro — cad
       ),
       { name: 'perfil.json' }
     );
-    archive.append(JSON.stringify(historias, null, 2), { name: 'historias.json' });
+    archive.append(JSON.stringify(historiasConLink, null, 2), { name: 'historias.json' });
     archive.append((resumenRows[0] && resumenRows[0].texto) || '', { name: 'resumen.txt' });
     archive.append(JSON.stringify(aportes, null, 2), { name: 'aportes_familiares.json' });
-    archive.append(JSON.stringify(media, null, 2), { name: 'fotos_y_videos.json' });
+    archive.append(JSON.stringify(mediaConLink, null, 2), { name: 'fotos_y_videos.json' });
     archive.append(JSON.stringify({ personas: miembros, linea_de_tiempo: eventos }, null, 2), { name: 'arbol_genealogico.json' });
     archive.append(JSON.stringify(capitulos, null, 2), { name: 'capitulos.json' });
 

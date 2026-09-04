@@ -58,4 +58,10 @@ Cosas que se pidieron pero se decidió posponer, con suficiente detalle para ret
 
 **Para retomarlo:** descomentar las dos líneas marcadas en `/api/login` cerca de `limitePorClave(\`login:...\`)`. Antes de reactivarlo, considerar un tiempo de espera más corto o un mensaje que aclare cuánto falta, para que no vuelva a pasar lo mismo.
 
-## 9. (de acá para abajo, agregar nuevas ideas que vayan surgiendo)
+## 9. Migrar a privado el audio/fotos subidos ANTES de este arreglo
+
+**Qué es:** los audios y fotos/videos ahora se suben con `access:'private'` a Vercel Blob, y solo se pueden ver a través de `/api/media-file` (que confirma que la cuenta tenga permiso antes de servirlos) — ver server.js. Pero los archivos que ya estaban subidos ANTES de este cambio siguen marcados como públicos de verdad en Vercel Blob: quien tenga el link exacto de ANTES (una URL larga y aleatoria, no listada en ningún lado) todavía puede abrirlo directo, sin pasar por la app ni por ningún login. `/api/media-file` los sigue sirviendo igual (por compatibilidad, con un respaldo que hace `fetch()` directo si Blob no los encuentra como privados), pero eso no cierra la puerta vieja — solo agrega una nueva.
+
+**Para retomarlo:** un script/endpoint temporal (protegido con SETUP_KEY, con "dry run" por defecto — mismo patrón ya usado antes en este proyecto) que recorra `story_log.audio_url`, `family_notes.audio_url`/`audio_urls` y `media.url`, baje cada archivo, lo vuelva a subir con `access:'private'`, actualice la fila con la nueva ruta, y borre la copia pública vieja. Hacerlo de a poco y con logs claros — son archivos reales de familias reales.
+
+## 10. (de acá para abajo, agregar nuevas ideas que vayan surgiendo)

@@ -135,7 +135,10 @@
         if (typeof s.audio_url === 'string' && /^https?:\/\//.test(s.audio_url)) {
           const audio = document.createElement('audio');
           audio.controls = true;
-          audio.src = s.audio_url;
+          // El audio se guarda con acceso privado en Blob — /api/media-file
+          // es quien de verdad lo trae, después de confirmar que esta
+          // sesión tiene permiso de verlo (ver server.js).
+          audio.src = '/api/media-file?u=' + encodeURIComponent(s.audio_url);
           div.appendChild(audio);
         } else {
           const em = document.createElement('em');
