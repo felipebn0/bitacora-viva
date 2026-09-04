@@ -643,6 +643,42 @@
         }
         return;
       }
+
+      // Llegó con el link de invitado (?codigo=, ver app.html) pero YA
+      // tiene alguna sesión en este navegador — antes esto se ignoraba
+      // por completo y la mandaba a /app.html sin usar el código para
+      // nada. Ahora: si esa sesión ya es de invitado (de OTRA bitácora,
+      // ver /api/guest-start), arranca una sesión de invitado nueva para
+      // ESTE código, reusando el mismo nombre sin volver a pedirlo. Si es
+      // una cuenta real (dueña o colaboradora fija), se suma como
+      // colaboradora de esta bitácora con el mismo mecanismo de
+      // "colaborar con otra historia" — nunca la ignora.
+      if (codigoInvitado) {
+        try {
+          if (data.isGuest) {
+            const resp = await fetch('/api/guest-start', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ codigo: codigoInvitado, name: data.guestName || '' }),
+            });
+            if (!resp.ok) { showGuestEntry(); return; }
+            window.location.reload();
+            return;
+          }
+          const resp = await fetch('/api/join-collaboration', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: codigoInvitado }),
+          });
+          const info = await resp.json();
+          if (!resp.ok) { window.location.href = '/app.html'; return; }
+          history.replaceState(null, '', location.pathname);
+          showApp({ username: data.username, ownerName: info.ownerName, isGuest: false });
+          cargarMisColaboraciones(info.ownerId);
+          iniciarAporte();
+        } catch (e) {
+          window.location.href = '/app.html';
+        }
+        return;
+      }
+
       // Esta página es solo para cuentas colaboradoras — si es una cuenta
       // dueña normal, la mandamos a la app completa.
       if (!data.isCollaborator) { window.location.href = '/app.html'; return; }
