@@ -2206,6 +2206,50 @@ async function estaAutorizadoParaVerArchivo(req, ownerId) {
   return collab.length > 0;
 }
 
+// Mismo criterio que /api/media-file (intenta Blob privado, con respaldo a
+// un fetch directo para lo que quedó público de antes del arreglo de
+// seguridad) pero devuelve los bytes enteros en memoria en vez de un
+// stream hacia una respuesta HTTP — lo usa /api/export para meter el
+// archivo real adentro del .zip. Nunca tira: si algo falla, devuelve null
+// y quien llama decide qué hacer (acá, dejar el link como respaldo).
+async function bytesDeArchivoPrivado(valorGuardado) {
+  const datos = valorGuardado && !String(valorGuardado).includes('..') ? datosDelArchivoDeBlob(valorGuardado) : null;
+  if (!datos) return null;
+  try {
+    const resultado = await get(datos.pathname, { access: 'private' });
+    if (resultado && resultado.stream) {
+      const buffer = Buffer.from(await new Response(resultado.stream).arrayBuffer());
+      return { buffer, contentType: resultado.blob.contentType || 'application/octet-stream' };
+    }
+  } catch (err) {
+    // sigue al respaldo de abajo
+  }
+  try {
+    const url = /^https?:\/\//i.test(valorGuardado) ? valorGuardado : null;
+    if (!url) return null;
+    const externo = await fetch(url);
+    if (!externo.ok || !externo.body) return null;
+    const buffer = Buffer.from(await externo.arrayBuffer());
+    return { buffer, contentType: externo.headers.get('content-type') || 'application/octet-stream' };
+  } catch (err) {
+    return null;
+  }
+}
+
+// A partir del content-type real (no del nombre original, que no se
+// guarda) — cubre los formatos que ya acepta AUDIO_MIME_PERMITIDOS/
+// MEDIA_MIME_PERMITIDOS más los genéricos por si acaso.
+function extensionDesdeContentType(contentType) {
+  const mapa = {
+    'audio/webm': 'webm', 'video/webm': 'webm', 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3',
+    'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/wave': 'wav', 'audio/ogg': 'ogg',
+    'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'video/mp4': 'mp4', 'audio/aac': 'aac',
+    'audio/flac': 'flac', 'audio/amr': 'amr', 'image/jpeg': 'jpg', 'image/png': 'png',
+    'image/gif': 'gif', 'image/webp': 'webp', 'image/heic': 'heic', 'video/quicktime': 'mov',
+  };
+  return mapa[String(contentType || '').toLowerCase()] || 'bin';
+}
+
 app.get('/api/media-file', requireAuth, async (req, res) => {
   try {
     const valorGuardado = typeof req.query.u === 'string' ? req.query.u : '';
@@ -2569,13 +2613,45 @@ app.get('/api/story-log', requireAuth, bloquearColaborador, async (req, res) => 
 // simplemente para guardarla en su propia computadora.
 //
 // Incluye todo el TEXTO tal cual está guardado (historias, aportes, árbol,
-// capítulos, resumen). Los audios y fotos/videos NO se descargan ni se
-// empaquetan acá adentro — son archivos en Vercel Blob que en conjunto
-// pueden pesar bastante, y bajarlos todos dentro de este mismo pedido HTTP
-// arriesgaría pasarse del tiempo de ejecución de la función serverless. En
-// su lugar, el export lleva el link directo a cada uno, con una nota
-// explicando que esos links (a diferencia del texto) dependen de que Vercel
-// Blob los siga sirviendo.
+// capítulos, resumen) MÁS los audios/fotos/videos reales, hasta un
+// presupuesto total de tamaño (EXPORT_MEDIA_BUDGET_BYTES): bajarlos todos
+// sin límite arriesgaría pasarse del tiempo de ejecución de la función
+// serverless en una bitácora con mucho material. Lo que entra en el
+// presupuesto se suma al .zip como archivo real (audios/, fotos/, videos/);
+// lo que no entra (o falla al traerlo) se queda como antes, con un link
+// autenticado en el JSON correspondiente — nunca se pierde la referencia,
+// en el peor caso queda como link en vez de archivo.
+const EXPORT_MEDIA_BUDGET_BYTES = 25 * 1024 * 1024; // ~25MB reales adentro del zip
+
+// Trae varios archivos de Blob con algo de paralelismo (más rápido que uno
+// por uno) pero sin desbocarse — CONCURRENCIA a la vez, y corta apenas se
+// agota el presupuesto de tamaño total, sin arrancar fetches que ya sabemos
+// que van a sobrar.
+async function embeberArchivosEnZip(archive, items, presupuestoInicial) {
+  const CONCURRENCIA = 4;
+  let presupuesto = presupuestoInicial;
+  let cola = items.slice();
+  let embebidos = 0;
+  while (cola.length && presupuesto > 0) {
+    const lote = cola.slice(0, CONCURRENCIA);
+    cola = cola.slice(CONCURRENCIA);
+    const resultados = await Promise.all(
+      lote.map(async (item) => {
+        const datos = await bytesDeArchivoPrivado(item.valorGuardado);
+        return { item, datos };
+      })
+    );
+    for (const { item, datos } of resultados) {
+      if (!datos || datos.buffer.length > presupuesto) continue; // no entra: se queda como link, nomás
+      const ext = extensionDesdeContentType(datos.contentType);
+      archive.append(datos.buffer, { name: `${item.carpeta}/${item.nombreBase}.${ext}` });
+      presupuesto -= datos.buffer.length;
+      embebidos++;
+    }
+  }
+  return embebidos;
+}
+
 app.get('/api/export', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
   try {
     await ensureSchema();
@@ -2583,10 +2659,10 @@ app.get('/api/export', requireAuth, bloquearColaborador, rateLimit, async (req, 
 
     const [perfilRows, historias, resumenRows, aportesRaw, media, miembrosRaw, eventos, capitulosRaw] = await Promise.all([
       sql`SELECT name, username, email, fecha_nacimiento, created_at FROM users WHERE id = ${userId}`,
-      sql`SELECT texto, audio_url, created_at FROM story_log WHERE user_id = ${userId} ORDER BY created_at ASC`,
+      sql`SELECT id, texto, audio_url, created_at FROM story_log WHERE user_id = ${userId} ORDER BY created_at ASC`,
       sql`SELECT texto FROM resumen WHERE user_id = ${userId}`,
-      sql`SELECT contributor, parentesco, protagonista, texto, audio_url, audio_urls, created_at FROM family_notes WHERE user_id = ${userId} ORDER BY created_at ASC`,
-      sql`SELECT type, url, caption, contributor, created_at FROM media WHERE user_id = ${userId} ORDER BY created_at ASC`,
+      sql`SELECT id, contributor, parentesco, protagonista, texto, audio_url, audio_urls, created_at FROM family_notes WHERE user_id = ${userId} ORDER BY created_at ASC`,
+      sql`SELECT id, type, url, caption, contributor, created_at FROM media WHERE user_id = ${userId} ORDER BY created_at ASC`,
       sql`SELECT nombre, relacion, detalles, padres, created_at FROM family_members WHERE user_id = ${userId} ORDER BY id ASC`,
       sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${userId} ORDER BY anio NULLS LAST, id ASC`,
       sql`SELECT title, theme, generated_text, story_ids, created_at FROM chapters WHERE user_id = ${userId} ORDER BY created_at ASC`,
@@ -2598,7 +2674,8 @@ app.get('/api/export', requireAuth, bloquearColaborador, rateLimit, async (req, 
     // nada fuera de la app. En su lugar, el export lleva un link a la propia
     // app que sí sabe autenticar el pedido; solo funciona mientras la
     // persona siga con sesión iniciada, no como un link público para
-    // siempre (por eso el aviso en el LEEME de abajo).
+    // siempre (por eso el aviso en el LEEME de abajo). Es el respaldo para
+    // lo que no haya entrado en el presupuesto de tamaño como archivo real.
     const linkArchivo = (valor) => (valor ? `${req.protocol}://${req.get('host')}/api/media-file?u=${encodeURIComponent(valor)}` : null);
     const historiasConLink = historias.map((h) => ({ ...h, audio_url: linkArchivo(h.audio_url) }));
     const aportes = aportesRaw.map((a) => ({
@@ -2623,12 +2700,31 @@ app.get('/api/export', requireAuth, bloquearColaborador, rateLimit, async (req, 
     });
     archive.pipe(res);
 
+    // Arma la lista de archivos reales a intentar embeber, ANTES del
+    // README (para poder contar cuántos entraron de verdad y decirlo ahí).
+    const itemsAEmbeber = [];
+    historias.forEach((h) => { if (h.audio_url) itemsAEmbeber.push({ valorGuardado: h.audio_url, carpeta: 'audios', nombreBase: `historia-${h.id}` }); });
+    aportesRaw.forEach((a) => {
+      if (a.audio_url) itemsAEmbeber.push({ valorGuardado: a.audio_url, carpeta: 'audios', nombreBase: `aporte-${a.id}` });
+      parseJsonArray(a.audio_urls).forEach((u, i) => { if (u) itemsAEmbeber.push({ valorGuardado: u, carpeta: 'audios', nombreBase: `aporte-${a.id}-${i + 1}` }); });
+    });
+    media.forEach((m) => { if (m.url) itemsAEmbeber.push({ valorGuardado: m.url, carpeta: m.type === 'video' ? 'videos' : 'fotos', nombreBase: `${m.type}-${m.id}` }); });
+
+    const totalArchivos = itemsAEmbeber.length;
+    const embebidos = totalArchivos ? await embeberArchivosEnZip(archive, itemsAEmbeber, EXPORT_MEDIA_BUDGET_BYTES) : 0;
+
+    const parrafoMedia = totalArchivos === 0
+      ? 'Esta bitácora todavía no tiene audios ni fotos/videos guardados.'
+      : embebidos === totalArchivos
+      ? `Los ${totalArchivos} audios/fotos/videos de tu bitácora están incluidos como archivos reales en las carpetas audios/, fotos/ y videos/ de este mismo .zip — no dependen de nada más para abrirse.`
+      : `De ${totalArchivos} audios/fotos/videos, ${embebidos} quedaron incluidos como archivos reales (carpetas audios/, fotos/, videos/) y ${totalArchivos - embebidos} quedaron como link en el JSON correspondiente (historias.json, aportes_familiares.json, fotos_y_videos.json) — no entraron en el límite de tamaño de un solo export, o hubo un problema puntual al traerlos. Esos links solo funcionan mientras tengas la sesión iniciada en la app; si te importa conservarlos, pedí el export de nuevo más adelante (por ejemplo, después de borrar audios que ya no necesites) o descargalos a mano desde el link mientras la cuenta esté activa.`;
+
     const readme = `Bitácora de ${capitalizarNombre(perfil.name || perfil.username || '')}
 Exportado el ${fechaExport}.
 
 Este .zip tiene una copia de todo el TEXTO guardado en tu bitácora: historias, aportes de la familia, árbol genealógico, capítulos y resumen — en formato JSON (se puede abrir con cualquier editor de texto) y en historia-completa.txt (para leer de corrido, como un libro).
 
-Los audios y fotos/videos NO están incluidos como archivos acá adentro — cada uno tiene un link en el JSON correspondiente (historias.json, aportes_familiares.json, fotos_y_videos.json) que abre el archivo real. A diferencia del texto de este .zip, esos links solo funcionan mientras tengas la sesión iniciada en la app (son privados, no públicos) — si querés conservar los audios/fotos en sí, te recomendamos descargarlos desde esos links mientras la cuenta esté activa, no guardar el link para más adelante.
+${parrafoMedia}
 `;
     archive.append(readme, { name: 'LEEME.txt' });
     archive.append(

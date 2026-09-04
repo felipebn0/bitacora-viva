@@ -38,16 +38,23 @@ const users = {
   },
 };
 
+// EMBEDDABLE_PATHNAME es "real" para el get() de Blob mockeado más abajo
+// (se puede embeber de verdad en el .zip); la URL de la foto es legado
+// (no matchea ningún patrón audio/<id>/... o media/<id>/...) — se queda
+// como link, para probar los dos caminos (embebido y respaldo con link).
+const EMBEDDABLE_PATHNAME = 'audio/1/sesion1/user-0-real.webm';
+const EMBEDDABLE_CONTENT = Buffer.from('contenido-de-audio-real-de-A');
+
 const storyLog = {
-  1: [{ texto: 'Historia secreta de la cuenta A sobre su infancia en Manizales.', audio_url: null, created_at: '2024-02-01T00:00:00Z' }],
-  2: [{ texto: 'Historia de la cuenta B que NUNCA debería aparecer en el export de A.', audio_url: null, created_at: '2024-02-01T00:00:00Z' }],
+  1: [{ id: 10, texto: 'Historia secreta de la cuenta A sobre su infancia en Manizales.', audio_url: EMBEDDABLE_PATHNAME, created_at: '2024-02-01T00:00:00Z' }],
+  2: [{ id: 20, texto: 'Historia de la cuenta B que NUNCA debería aparecer en el export de A.', audio_url: null, created_at: '2024-02-01T00:00:00Z' }],
 };
 const resumenes = { 1: 'Resumen de A.', 2: 'Resumen de B.' };
 const familyNotes = {
-  1: [{ contributor: 'María', parentesco: 'hija', protagonista: null, texto: 'Aporte sobre A.', audio_url: null, audio_urls: null, created_at: '2024-02-02T00:00:00Z' }],
+  1: [{ id: 100, contributor: 'María', parentesco: 'hija', protagonista: null, texto: 'Aporte sobre A.', audio_url: null, audio_urls: null, created_at: '2024-02-02T00:00:00Z' }],
   2: [],
 };
-const mediaRows = { 1: [{ type: 'foto', url: 'https://x.blob.vercel-storage.com/foto-a.jpg', caption: 'Cumpleaños', contributor: 'María', created_at: '2024-02-03T00:00:00Z' }], 2: [] };
+const mediaRows = { 1: [{ id: 200, type: 'foto', url: 'https://x.blob.vercel-storage.com/foto-a.jpg', caption: 'Cumpleaños', contributor: 'María', created_at: '2024-02-03T00:00:00Z' }], 2: [] };
 const familyMembers = { 1: [{ nombre: 'Papá de A', relacion: 'padre', detalles: null, padres: null, created_at: '2024-01-05T00:00:00Z' }], 2: [] };
 const timelineEvents = { 1: [{ descripcion: 'Se mudó a Bogotá', anio: 1975, edad_aprox: 20, categoria: 'mudanza' }], 2: [] };
 const chapters = { 1: [{ title: 'La infancia', theme: 'infancia', generated_text: 'Texto del capítulo de A.', story_ids: '[1]', created_at: '2024-02-05T00:00:00Z' }], 2: [] };
@@ -70,16 +77,16 @@ function fakeSql(strings, ...values) {
     const u = users[values[0]];
     return Promise.resolve(u ? [{ name: u.name, username: u.username, email: u.email, fecha_nacimiento: u.fecha_nacimiento, created_at: u.created_at }] : []);
   }
-  if (text.includes('SELECT texto, audio_url, created_at FROM story_log')) {
+  if (text.includes('SELECT id, texto, audio_url, created_at FROM story_log')) {
     return Promise.resolve(storyLog[values[0]] || []);
   }
   if (text.includes('SELECT texto FROM resumen')) {
     return Promise.resolve(resumenes[values[0]] ? [{ texto: resumenes[values[0]] }] : []);
   }
-  if (text.includes('SELECT contributor, parentesco, protagonista, texto, audio_url, audio_urls, created_at FROM family_notes')) {
+  if (text.includes('SELECT id, contributor, parentesco, protagonista, texto, audio_url, audio_urls, created_at FROM family_notes')) {
     return Promise.resolve(familyNotes[values[0]] || []);
   }
-  if (text.includes('SELECT type, url, caption, contributor, created_at FROM media')) {
+  if (text.includes('SELECT id, type, url, caption, contributor, created_at FROM media')) {
     return Promise.resolve(mediaRows[values[0]] || []);
   }
   if (text.includes('SELECT nombre, relacion, detalles, padres, created_at FROM family_members')) {
@@ -100,10 +107,27 @@ require.cache[require.resolve('@neondatabase/serverless')] = {
   id: require.resolve('@neondatabase/serverless'), filename: require.resolve('@neondatabase/serverless'), loaded: true,
   exports: { neon: () => fakeSql },
 };
+function streamDesdeBuffer(buf) {
+  return new ReadableStream({
+    start(controller) { controller.enqueue(new Uint8Array(buf)); controller.close(); },
+  });
+}
 require.cache[require.resolve('@vercel/blob')] = {
   id: require.resolve('@vercel/blob'), filename: require.resolve('@vercel/blob'), loaded: true,
-  exports: { put: async () => ({ url: 'https://fake.public.blob.vercel-storage.com/x' }), del: async () => {} },
+  exports: {
+    put: async () => ({ url: 'https://fake.public.blob.vercel-storage.com/x' }),
+    del: async () => {},
+    get: async (pathname) => {
+      if (pathname !== EMBEDDABLE_PATHNAME) return null; // todo lo demás queda como legado/no encontrado -> respaldo a link
+      return { stream: streamDesdeBuffer(EMBEDDABLE_CONTENT), blob: { contentType: 'audio/webm', size: EMBEDDABLE_CONTENT.length } };
+    },
+  },
 };
+// Nada en este test debería necesitar una red real — cualquier fetch()
+// (el respaldo de archivos "legado" que no se puedan traer de Blob) se
+// corta acá mismo en vez de salir a internet, para que el test sea rápido
+// y determinístico.
+global.fetch = async () => ({ ok: false });
 require.cache[require.resolve('@anthropic-ai/sdk')] = {
   id: require.resolve('@anthropic-ai/sdk'), filename: require.resolve('@anthropic-ai/sdk'), loaded: true,
   exports: class FakeAnthropic { constructor() {} },
@@ -205,6 +229,18 @@ async function main() {
 
   const capitulosJson = JSON.parse(leerArchivo('capitulos.json'));
   check('export: capitulos.json tiene el capítulo de A', capitulosJson.some((c) => c.title === 'La infancia'));
+
+  // --- Archivos reales adentro del .zip (no solo links) ---
+  check('export: el audio embebible SÍ quedó como archivo real en audios/', listado.includes('audios/historia-10.webm'));
+  const audioReal = leerArchivo('audios/historia-10.webm');
+  check('export: el contenido del audio embebido es el real (no vacío ni corrupto)', audioReal === EMBEDDABLE_CONTENT.toString());
+
+  const leeme = leerArchivo('LEEME.txt');
+  check('export: el LEEME avisa que algunos quedaron como archivo real y otros como link', leeme.includes('quedaron incluidos como archivos reales') && leeme.includes('quedaron como link'));
+
+  const mediaJson = JSON.parse(leerArchivo('fotos_y_videos.json'));
+  check('export: la foto "legado" (no matchea el patrón de Blob) se queda como link, no se rompe el export', typeof mediaJson[0].url === 'string' && mediaJson[0].url.includes('/api/media-file?u='));
+  check('export: esa foto legado NO se agregó como archivo real (no se pudo traer)', !listado.includes('fotos/foto-200.jpg') && !listado.includes('fotos/foto-200.bin'));
 
   limpiar();
   server.close();
