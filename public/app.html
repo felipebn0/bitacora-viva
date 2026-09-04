@@ -836,6 +836,21 @@
       });
       history.replaceState(null, '', location.pathname + location.search);
     }
+    // Vuelta desde el checkout de Wava (o del modo de prueba, ver
+    // iniciarCheckout) — ?pago=ok/cancelado/error. Sin esto, la vuelta no
+    // mostraba ningún aviso: quedaba la app de siempre, sin decir si
+    // funcionó.
+    const params = new URLSearchParams(location.search);
+    const pago = params.get('pago');
+    if (pago) {
+      const mensajes = { ok: '✓ Pago confirmado — tu plan ya está activo.', cancelado: 'Pago cancelado — no se cobró nada.', error: 'Hubo un problema con el pago. Intenta de nuevo.' };
+      requestAnimationFrame(() => {
+        if (!userMenuPanel.classList.contains('visible')) userMenuBtn.click();
+        document.querySelector('[aria-controls="umSecPlan"]').click(); // dispara cargarEstadoPlan() solo, ver más abajo
+        umPlanMsg.textContent = mensajes[pago] || '';
+      });
+      history.replaceState(null, '', location.pathname + location.hash);
+    }
   }
 
   function showLogin() {
@@ -1120,6 +1135,14 @@
       });
       const data = await resp.json();
       if (!resp.ok) { umPlanMsg.textContent = data.error || 'No se pudo iniciar el pago.'; return; }
+      if (data.dummy) {
+        // Todavía no está conectada la cuenta real de Wava (BACKLOG.md
+        // #11) — esto simula el pago para poder probar el resto del
+        // flujo. El plan ya quedó activo, sin cobrar nada de verdad.
+        umPlanMsg.textContent = '(Modo de prueba: los pagos reales todavía no están conectados) Plan activado. Actualizando…';
+        setTimeout(() => { window.location.href = data.link; }, 1500);
+        return;
+      }
       window.location.href = data.link;
     } catch (e) {
       umPlanMsg.textContent = 'No se pudo conectar. Intenta de nuevo.';
@@ -1138,6 +1161,12 @@
       const resp = await fetch('/api/billing/gift-checkout', { method: 'POST' });
       const data = await resp.json();
       if (!resp.ok) { umPlanMsg.textContent = data.error || 'No se pudo iniciar el pago.'; return; }
+      if (data.dummy) {
+        // Sin Wava conectada todavía: acá ya está el código, sin pasar por
+        // ningún link externo ni esperar un correo.
+        umPlanMsg.textContent = `(Modo de prueba) Código de regalo: ${data.code} — cánjealo desde la cuenta que va a narrar (Cuenta → Plan → Canjear un regalo).`;
+        return;
+      }
       window.location.href = data.link;
     } catch (e) {
       umPlanMsg.textContent = 'No se pudo conectar. Intenta de nuevo.';

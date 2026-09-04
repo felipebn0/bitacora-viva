@@ -3434,6 +3434,35 @@ const PLANES = {
 const WAVA_MERCHANT_KEY = process.env.WAVA_MERCHANT_KEY;
 const WAVA_WEBHOOK_SECRET = process.env.WAVA_WEBHOOK_SECRET;
 const WAVA_API_BASE = process.env.WAVA_API_BASE || 'https://api.wava.co/v1';
+// Mientras no haya WAVA_MERCHANT_KEY configurada, /api/billing/checkout y
+// /api/billing/gift-checkout simulan el pago en vez de devolver 501 — para
+// poder probar todo el flujo (plan activo, código de regalo, canje) sin
+// depender de la cuenta real de Wava todavía. Apenas se configure la clave
+// de verdad (BACKLOG.md #11), esto se apaga solo: no es un interruptor que
+// haya que acordarse de sacar.
+const PAGOS_DUMMY = !WAVA_MERCHANT_KEY;
+
+async function generarCodigoDeRegaloUnico() {
+  let code;
+  for (let intento = 0; intento < 5; intento++) {
+    code = randomInviteCode();
+    const choca = await sql`SELECT 1 FROM gift_redemptions WHERE code = ${code}`;
+    if (!choca.length) break;
+  }
+  return code;
+}
+
+async function avisarCodigoDeRegaloPorCorreo(boughtByUserId, code) {
+  try {
+    const compradorRows = await sql`SELECT email, name, username FROM users WHERE id = ${boughtByUserId}`;
+    const comprador = compradorRows[0];
+    if (comprador && comprador.email) {
+      await enviarCorreo({ to: comprador.email, subject: '¡Tu regalo está listo! 🎁', html: plantillaRegaloListo(capitalizarNombre(comprador.name || comprador.username) || 'hola', code) });
+    }
+  } catch (err) {
+    console.error('No se pudo avisar por correo el código de regalo (el pago y el código ya quedaron guardados igual):', err);
+  }
+}
 
 app.get('/api/billing/plans', (req, res) => {
   res.json({ planes: PLANES, pagosConfigurados: !!WAVA_MERCHANT_KEY });
@@ -3455,7 +3484,6 @@ app.get('/api/billing/status', requireAuth, bloquearColaborador, async (req, res
 // webhook confirme el pago — nunca se activa acá, del lado del cliente.
 app.post('/api/billing/checkout', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
   try {
-    if (!WAVA_MERCHANT_KEY) return res.status(501).json({ error: 'Los pagos todavía no están configurados.' });
     const planId = String(req.body.planId || '');
     const plan = PLANES[planId];
     if (!plan) return res.status(400).json({ error: 'Plan inválido.' });
@@ -3466,28 +3494,33 @@ app.post('/api/billing/checkout', requireAuth, bloquearColaborador, rateLimit, a
     await ensureSchema();
     const orderKey = `sub-${req.userId}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
     const base = `${req.protocol}://${req.get('host')}`;
-    const wavaResp = await fetch(`${WAVA_API_BASE}/links`, {
-      method: 'POST',
-      headers: { 'merchant-key': WAVA_MERCHANT_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        amount: monto,
-        description: `${plan.nombre} (${periodo === 'monthly' ? 'mensual' : 'anual'}) — Los recuerdos de mis viejos`,
-        currency: 'COP',
-        order_key: orderKey,
-        redirect_link: `${base}/app.html?pago=ok`,
-        redirect_link_cancel: `${base}/app.html?pago=cancelado`,
-        redirect_link_failure: `${base}/app.html?pago=error`,
-      }),
-      signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
-    });
-    if (!wavaResp.ok) {
-      console.error('Wava rechazó la creación del link:', wavaResp.status, await wavaResp.text().catch(() => ''));
-      return res.status(502).json({ error: 'No se pudo generar el link de pago.' });
+
+    let link;
+    let hash = null;
+    if (!PAGOS_DUMMY) {
+      const wavaResp = await fetch(`${WAVA_API_BASE}/links`, {
+        method: 'POST',
+        headers: { 'merchant-key': WAVA_MERCHANT_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: monto,
+          description: `${plan.nombre} (${periodo === 'monthly' ? 'mensual' : 'anual'}) — Los recuerdos de mis viejos`,
+          currency: 'COP',
+          order_key: orderKey,
+          redirect_link: `${base}/app.html?pago=ok`,
+          redirect_link_cancel: `${base}/app.html?pago=cancelado`,
+          redirect_link_failure: `${base}/app.html?pago=error`,
+        }),
+        signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+      });
+      if (!wavaResp.ok) {
+        console.error('Wava rechazó la creación del link:', wavaResp.status, await wavaResp.text().catch(() => ''));
+        return res.status(502).json({ error: 'No se pudo generar el link de pago.' });
+      }
+      const wavaData = await wavaResp.json();
+      link = wavaData.result && wavaData.result.link;
+      hash = wavaData.result && wavaData.result.hash;
+      if (!link) return res.status(502).json({ error: 'No se pudo generar el link de pago.' });
     }
-    const wavaData = await wavaResp.json();
-    const link = wavaData.result && wavaData.result.link;
-    const hash = wavaData.result && wavaData.result.hash;
-    if (!link) return res.status(502).json({ error: 'No se pudo generar el link de pago.' });
 
     const subRows = await sql`SELECT id FROM subscriptions WHERE user_id = ${req.userId}`;
     let subscriptionId;
@@ -3497,6 +3530,18 @@ app.post('/api/billing/checkout', requireAuth, bloquearColaborador, rateLimit, a
     } else {
       const inserted = await sql`INSERT INTO subscriptions (user_id, plan_id, periodo, status) VALUES (${req.userId}, ${planId}, ${periodo}, 'trialing') RETURNING id`;
       subscriptionId = inserted[0].id;
+    }
+
+    if (PAGOS_DUMMY) {
+      // Sin Wava configurada todavía: se simula el pago de una — el plan
+      // queda activo YA, sin pasar por ningún checkout externo ni webhook.
+      link = `${base}/app.html?pago=ok`;
+      const intervalo = periodo === 'monthly' ? '1 month' : '1 year';
+      await sql.transaction([
+        sql`INSERT INTO billing_orders (subscription_id, user_id, order_key, wava_hash, wava_link, concepto, monto_cop, status, plan_id) VALUES (${subscriptionId}, ${req.userId}, ${orderKey}, NULL, ${link}, ${plan.nombre + ' (' + periodo + ', simulado)'}, ${monto}, 'paid', ${planId})`,
+        sql`UPDATE subscriptions SET status = 'active', current_period_end = now() + ${intervalo}::interval, grace_until = NULL, updated_at = now() WHERE id = ${subscriptionId}`,
+      ]);
+      return res.json({ ok: true, link, dummy: true });
     }
 
     await sql`
@@ -3520,13 +3565,30 @@ app.post('/api/billing/checkout', requireAuth, bloquearColaborador, rateLimit, a
 // quien lo reciba, sea cual sea esa cuenta — ver /api/billing/redeem-gift.
 app.post('/api/billing/gift-checkout', requireAuth, rateLimit, async (req, res) => {
   try {
-    if (!WAVA_MERCHANT_KEY) return res.status(501).json({ error: 'Los pagos todavía no están configurados.' });
     const plan = PLANES.regalo;
     const monto = plan.precioAnual;
 
     await ensureSchema();
     const orderKey = `gift-${req.userId}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
     const base = `${req.protocol}://${req.get('host')}`;
+
+    if (PAGOS_DUMMY) {
+      // Sin Wava configurada: se simula el pago y se genera el código de
+      // una — no hay link externo al que mandar, así que el código se
+      // devuelve directo en la respuesta (además de intentar el correo,
+      // por si ya está Resend configurado aparte).
+      const link = `${base}/app.html?regalo=ok`;
+      const [orden] = await sql`
+        INSERT INTO billing_orders (subscription_id, user_id, order_key, wava_hash, wava_link, concepto, monto_cop, status, plan_id)
+        VALUES (NULL, ${req.userId}, ${orderKey}, NULL, ${link}, ${plan.nombre + ' (simulado)'}, ${monto}, 'paid', 'regalo')
+        RETURNING id
+      `;
+      const code = await generarCodigoDeRegaloUnico();
+      await sql`INSERT INTO gift_redemptions (code, billing_order_id, bought_by_user_id, plan_id, meses) VALUES (${code}, ${orden.id}, ${req.userId}, 'regalo', 12)`;
+      await avisarCodigoDeRegaloPorCorreo(req.userId, code);
+      return res.json({ ok: true, link, dummy: true, code });
+    }
+
     const wavaResp = await fetch(`${WAVA_API_BASE}/links`, {
       method: 'POST',
       headers: { 'merchant-key': WAVA_MERCHANT_KEY, 'Content-Type': 'application/json' },
@@ -3642,25 +3704,12 @@ app.post('/api/webhooks/wava', express.raw({ type: '*/*', limit: '256kb' }), asy
     // de eso, se genera el código de canje y se le avisa por correo a
     // quien compró.
     if (!orden.subscription_id && orden.plan_id === 'regalo') {
-      let code;
-      for (let intento = 0; intento < 5; intento++) {
-        code = randomInviteCode();
-        const choca = await sql`SELECT 1 FROM gift_redemptions WHERE code = ${code}`;
-        if (!choca.length) break;
-      }
+      const code = await generarCodigoDeRegaloUnico();
       await sql.transaction([
         sql`UPDATE billing_orders SET status = 'paid', paid_at = now(), raw_webhook = ${JSON.stringify(evento)}::jsonb WHERE id = ${orden.id}`,
         sql`INSERT INTO gift_redemptions (code, billing_order_id, bought_by_user_id, plan_id, meses) VALUES (${code}, ${orden.id}, ${orden.user_id}, 'regalo', 12)`,
       ]);
-      try {
-        const compradorRows = await sql`SELECT email, name, username FROM users WHERE id = ${orden.user_id}`;
-        const comprador = compradorRows[0];
-        if (comprador && comprador.email) {
-          await enviarCorreo({ to: comprador.email, subject: '¡Tu regalo está listo! 🎁', html: plantillaRegaloListo(capitalizarNombre(comprador.name || comprador.username) || 'hola', code) });
-        }
-      } catch (err) {
-        console.error('No se pudo avisar por correo el código de regalo (el pago y el código ya quedaron guardados igual):', err);
-      }
+      await avisarCodigoDeRegaloPorCorreo(orden.user_id, code);
       return res.status(200).json({ ok: true });
     }
 
