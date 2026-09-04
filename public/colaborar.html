@@ -227,17 +227,6 @@
     align-self: center; display: none;
   }
 
-  .quien-historia { display: flex; flex-direction: column; gap: 8px; }
-  .quien-historia-row { display: flex; gap: 18px; }
-  .quien-historia-row label { display: flex; align-items: center; gap: 6px; font-size: 0.92rem; cursor: pointer; }
-  /* font-size:1rem (antes 0.92rem = 14.72px): por debajo de 16px, iOS
-     Safari hace zoom automático al tocar el campo — mismo motivo en
-     .write-row input, más abajo. */
-  .quien-historia input[type="text"] {
-    border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 12px;
-    font-family: var(--font-body); background: #fff; color: var(--ink); font-size: 1rem;
-  }
-
   .logout-row { text-align: center; margin-top: 8px; }
   /* "Borrar mi cuenta" es la única acción irreversible acá — antes se veía
      como un link subrayado más, sin distinguirse de "cerrar sesión". */
@@ -339,15 +328,6 @@
 
     <div class="aportes">
       <h2>Aportar una historia</h2>
-
-      <div class="quien-historia" id="quienHistoria">
-        <p class="sub" style="text-align:left;">¿De quién es esta historia?</p>
-        <div class="quien-historia-row">
-          <label><input type="radio" name="quienHistoria" value="propia" checked> Mía</label>
-          <label><input type="radio" name="quienHistoria" value="otra"> De otra persona</label>
-        </div>
-        <input type="text" id="protagonistaInput" placeholder="¿De quién es esta historia?" aria-label="¿De quién es esta historia?" style="display:none;">
-      </div>
 
       <!-- role="log" aria-relevant="additions text": es una charla que va
            creciendo con cada turno — el lector de pantalla debe anunciar
@@ -733,25 +713,6 @@
   let charlaTerminada = false;
   let esperandoAclaracion = false; // true justo después de que la IA pidió parentesco/año que faltaban
 
-  // --- ¿De quién es esta historia? ---
-  const protagonistaInput = document.getElementById('protagonistaInput');
-  const quienRadios = document.querySelectorAll('input[name="quienHistoria"]');
-  quienRadios.forEach((r) => {
-    r.addEventListener('change', () => {
-      const esOtra = document.querySelector('input[name="quienHistoria"]:checked').value === 'otra';
-      protagonistaInput.style.display = esOtra ? '' : 'none';
-      if (!esOtra) protagonistaInput.value = '';
-    });
-  });
-  function protagonistaActual() {
-    const esOtra = document.querySelector('input[name="quienHistoria"]:checked').value === 'otra';
-    return esOtra ? protagonistaInput.value.trim() : '';
-  }
-  function bloquearSelectorProtagonista(bloquear) {
-    quienRadios.forEach((r) => { r.disabled = bloquear; });
-    protagonistaInput.disabled = bloquear;
-  }
-
   function agregarBurbuja(kind, text) {
     const div = document.createElement('div');
     div.className = 'aporte-bubble ' + kind;
@@ -792,10 +753,6 @@
     writeToggleColab.style.display = '';
     if (!micNoDisponible) mostrarEscribirColab(false);
     writeInputColab.value = '';
-    bloquearSelectorProtagonista(false);
-    document.querySelector('input[name="quienHistoria"][value="propia"]').checked = true;
-    protagonistaInput.style.display = 'none';
-    protagonistaInput.value = '';
   }
 
   // Igual que en la charla principal (app.html): antes, una sesión vencida
@@ -813,7 +770,7 @@
       const resp = await fetch(conOwner('/api/contribute-chat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ history: historyLocal, audioUrls: audioUrlsLocal, protagonista: protagonistaActual() }),
+        body: JSON.stringify({ history: historyLocal, audioUrls: audioUrlsLocal }),
       });
       const data = await resp.json();
       thinking.remove();
@@ -879,7 +836,6 @@
   async function enviarTextoEscrito() {
     const texto = writeInputColab.value.trim();
     if (!texto || charlaTerminada) return;
-    bloquearSelectorProtagonista(true);
     writeInputColab.value = '';
     mostrarEscribirColab(false);
     historyLocal.push({ role: 'user', content: texto });
@@ -1008,10 +964,6 @@
   // respuesta a una aclaración de parentesco/año que faltaba, ese audio
   // corto NO se guarda — solo se transcribe para seguir la charla.
   async function procesarAudio(blob, contentType) {
-    // Ya arrancó a contar — no tiene sentido cambiar de quién es la
-    // historia a mitad de camino.
-    bloquearSelectorProtagonista(true);
-
     const esSoloAclaracion = esperandoAclaracion;
 
     if (!esSoloAclaracion) {
