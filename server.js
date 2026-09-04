@@ -388,6 +388,10 @@ function ensureSchema() {
         story_ids TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`,
+      // En qué persona narrativa se armó esta tanda de capítulos — se
+      // elige al generar (ver /api/chapters/generate), no se puede
+      // cambiar capítulo por capítulo.
+      sql`ALTER TABLE chapters ADD COLUMN IF NOT EXISTS persona TEXT NOT NULL DEFAULT 'tercera'`,
       // story_ids se guarda como JSON (no array nativo de Postgres): el
       // driver de Neon por HTTP no bindea bien arrays de JS, mismo motivo
       // por el que "padres" de family_members también es TEXT con JSON.
@@ -2947,9 +2951,12 @@ async function classifyStoriesByTheme(stories) {
   return toolUse.input.grupos.slice(0, 12); // tope defensivo de temas por corrida
 }
 
-async function writeChapterFromStories(theme, stories) {
+async function writeChapterFromStories(theme, stories, persona) {
   const fuente = stories.map((s) => `- ${s.texto}`).join('\n\n');
-  const prompt = `Estas son transcripciones textuales de historias que esta persona contó sobre el tema "${theme}":${envolverDatoNoConfiable('historias', fuente)}\n\nArma un capítulo narrativo corto (2 a 4 párrafos), narrado en tercera persona, con un tono cálido de libro de memorias familiares, que hilvane estas historias. USA SOLO lo que está en las transcripciones de arriba — nunca inventes ni completes fechas, nombres, lugares o eventos que no estén ahí. Si falta contexto para que un párrafo fluya elegante, prefiere una frase más simple pero fiel a lo dicho, antes que una elegante pero inventada. Ponle también un título corto al capítulo. Usa la herramienta para responder.`;
+  const indicacionPersona = persona === 'primera'
+    ? 'narrado en PRIMERA persona ("yo", "mi", "me"), como si la propia persona estuviera contando su historia directamente'
+    : 'narrado en tercera persona, como un libro de memorias que cuenta sobre ella';
+  const prompt = `Estas son transcripciones textuales de historias que esta persona contó sobre el tema "${theme}":${envolverDatoNoConfiable('historias', fuente)}\n\nArma un capítulo narrativo corto (2 a 4 párrafos), ${indicacionPersona}, con un tono cálido de libro de memorias familiares, que hilvane estas historias. USA SOLO lo que está en las transcripciones de arriba — nunca inventes ni completes fechas, nombres, lugares o eventos que no estén ahí. Si falta contexto para que un párrafo fluya elegante, prefiere una frase más simple pero fiel a lo dicho, antes que una elegante pero inventada. Ponle también un título corto al capítulo. Usa la herramienta para responder.`;
 
   const response = await anthropic.messages.create({
     model: MODEL,
@@ -2972,6 +2979,7 @@ async function writeChapterFromStories(theme, stories) {
 // capítulos anteriores (igual que el árbol: más simple que ir haciendo diff).
 app.post('/api/chapters/generate', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
   try {
+    const persona = req.body.persona === 'primera' ? 'primera' : 'tercera';
     await ensureSchema();
     const stories = await sql`SELECT id, texto, created_at FROM story_log WHERE user_id = ${req.userId} ORDER BY created_at ASC`;
     if (!stories.length) {
@@ -2989,7 +2997,7 @@ app.post('/api/chapters/generate', requireAuth, bloquearColaborador, rateLimit, 
       if (!g || !g.theme) continue;
       const ids = Array.isArray(g.story_ids) ? g.story_ids.filter((id) => byId.has(id)) : [];
       if (!ids.length) continue;
-      const capitulo = await writeChapterFromStories(g.theme, ids.map((id) => byId.get(id)));
+      const capitulo = await writeChapterFromStories(g.theme, ids.map((id) => byId.get(id)), persona);
       if (!capitulo) continue;
       nuevos.push({ theme: String(g.theme).slice(0, 120), ids, ...capitulo });
     }
@@ -3001,9 +3009,9 @@ app.post('/api/chapters/generate', requireAuth, bloquearColaborador, rateLimit, 
     await sql`DELETE FROM chapters WHERE user_id = ${req.userId}`;
     const guardados = [];
     for (const c of nuevos) {
-      const row = await sql`INSERT INTO chapters (user_id, title, theme, generated_text, story_ids) VALUES (
-        ${req.userId}, ${c.title}, ${c.theme}, ${c.generated_text}, ${JSON.stringify(c.ids)}
-      ) RETURNING id, title, theme, generated_text, story_ids, created_at`;
+      const row = await sql`INSERT INTO chapters (user_id, title, theme, generated_text, story_ids, persona) VALUES (
+        ${req.userId}, ${c.title}, ${c.theme}, ${c.generated_text}, ${JSON.stringify(c.ids)}, ${persona}
+      ) RETURNING id, title, theme, generated_text, story_ids, persona, created_at`;
       guardados.push({ ...row[0], story_ids: parseJsonArray(row[0].story_ids) });
     }
 
@@ -3017,8 +3025,17 @@ app.post('/api/chapters/generate', requireAuth, bloquearColaborador, rateLimit, 
 app.get('/api/chapters', requireAuth, bloquearColaborador, async (req, res) => {
   try {
     await ensureSchema();
-    const rows = await sql`SELECT id, title, theme, generated_text, story_ids, created_at FROM chapters WHERE user_id = ${req.userId} ORDER BY id`;
-    const chapters = rows.map((c) => ({ ...c, story_ids: parseJsonArray(c.story_ids) }));
+    const rows = await sql`SELECT id, title, theme, generated_text, story_ids, persona, created_at FROM chapters WHERE user_id = ${req.userId} ORDER BY id`;
+    // Cada capítulo viene de una o más historias de story_log (story_ids) —
+    // las que tengan audio guardado se mandan acá para poder escucharlas
+    // junto al capítulo, no solo leerlo.
+    const audioRows = await sql`SELECT id, audio_url FROM story_log WHERE user_id = ${req.userId} AND audio_url IS NOT NULL`;
+    const audioPorId = new Map(audioRows.map((r) => [r.id, r.audio_url]));
+    const chapters = rows.map((c) => {
+      const storyIds = parseJsonArray(c.story_ids);
+      const audios = storyIds.map((id) => audioPorId.get(id)).filter(Boolean);
+      return { ...c, story_ids: storyIds, audios };
+    });
     res.json({ chapters });
   } catch (err) {
     console.error(err);

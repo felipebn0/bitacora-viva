@@ -53,6 +53,11 @@
   .wrap { max-width: 720px; margin: 0 auto; }
 
   .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+  #personaSelect {
+    border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 12px;
+    font-family: var(--font-body); font-size: 0.95rem; background: #fff; color: var(--ink);
+    min-height: 44px;
+  }
   button.generar {
     border: none; background: var(--gold-deep); color: #FBF6EA; border-radius: 10px;
     padding: 12px 20px; font-weight: 700; font-size: 0.95rem; cursor: pointer; font-family: var(--font-body);
@@ -136,6 +141,11 @@
     </div>
 
     <div class="toolbar">
+      <label class="sub" for="personaSelect" style="margin:0;">Narrado en</label>
+      <select id="personaSelect" aria-label="Persona narrativa de los capítulos">
+        <option value="tercera">tercera persona ("ella contó...")</option>
+        <option value="primera">primera persona ("yo conté...")</option>
+      </select>
       <button class="generar" id="generarBtn" type="button">Generar capítulos</button>
       <!-- role="status" aria-live: acá se anuncia "Generando…" y, cuando
          termina, el resultado — sin esto no había forma de saber que
@@ -159,6 +169,7 @@
   const listaStatus = document.getElementById('listaStatus');
   const status = document.getElementById('status');
   const generarBtn = document.getElementById('generarBtn');
+  const personaSelect = document.getElementById('personaSelect');
   const aportesSection = document.getElementById('aportesSection');
   const aportesLista = document.getElementById('aportesLista');
   const aportesListaStatus = document.getElementById('aportesListaStatus');
@@ -239,6 +250,20 @@
       textDiv.className = 'text';
       textDiv.textContent = c.generated_text;
       div.appendChild(textDiv);
+      // Los audios de las historias que arman este capítulo — para
+      // escuchar la voz real, no solo leer el resumen que armó la IA.
+      (c.audios || []).forEach((url) => {
+        if (typeof url !== 'string' || !/^https?:\/\//.test(url)) return;
+        const audio = document.createElement('audio');
+        audio.controls = true;
+        audio.style.display = 'block';
+        audio.style.marginTop = '10px';
+        audio.style.width = '100%';
+        // Acceso privado en Blob — /api/media-file confirma el permiso
+        // antes de traerlo (ver server.js).
+        audio.src = '/api/media-file?u=' + encodeURIComponent(url);
+        div.appendChild(audio);
+      });
       const metaP = document.createElement('p');
       metaP.className = 'meta';
       metaP.textContent = `Armado a partir de ${(c.story_ids || []).length} historia(s)${fecha ? ' · ' + fecha : ''}`;
@@ -328,7 +353,11 @@
     generarBtn.disabled = true;
     status.textContent = 'Generando… puede tardar un rato, no cierres esta pestaña.';
     try {
-      const resp = await fetch('/api/chapters/generate', { method: 'POST' });
+      const resp = await fetch('/api/chapters/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ persona: personaSelect.value }),
+      });
       const data = await resp.json();
       if (!resp.ok) {
         status.textContent = mensajeDeError(resp, data, 'No se pudieron generar los capítulos.');
