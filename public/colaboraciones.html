@@ -47,6 +47,14 @@
     border-bottom: 1px solid var(--gold-deep); display: inline-flex; align-items: center;
     min-height: 44px; padding: 10px 4px; margin-top: -6px;
   }
+  /* Antes, si la carga fallaba, la única salida era recargar la página
+     entera a mano. */
+  .retry-btn {
+    color: var(--gold-deep); font-size: 0.9rem; font-weight: 700; text-decoration: none;
+    border: 1px solid var(--gold-deep); border-radius: 8px; background: none; cursor: pointer;
+    font-family: var(--font-body); display: inline-flex; align-items: center; justify-content: center;
+    min-height: 44px; padding: 8px 14px; margin-top: 4px;
+  }
   /* Solo para lectores de pantalla — ver el comentario junto a
      #colaboradoresStatus más abajo. */
   .sr-only {
@@ -122,118 +130,146 @@
     return (data && data.error) || fallback;
   }
 
-  async function cargarColaboradores() {
+  // Separado en "pedir" (async, solo trae los datos) y "pintar" (sync, ya
+  // con los datos en mano) para poder pedir las dos cosas EN PARALELO y
+  // recién decidir el CTA de "Invitar familiares" cuando las dos
+  // respuestas ya están — así no se repite el mismo CTA dos veces sin
+  // pagar el viaje extra al servidor que costaba encadenarlas.
+  async function pedirColaboradores() {
     try {
       const resp = await fetch('/api/tree/colaboradores');
       const data = await resp.json().catch(() => ({}));
-      if (!resp.ok) {
-        const msg = mensajeDeError(resp, data, 'No se pudo cargar quiénes colaboraron.');
-        colaboradoresStatus.textContent = msg;
-        colaboradoresLista.innerHTML = '<p class="empty">' + msg + '</p>';
-        return;
-      }
-      const colaboradores = data.colaboradores || [];
-      if (!colaboradores.length) {
-        colaboradoresStatus.textContent = 'Todavía nadie ha colaborado.';
-        colaboradoresLista.innerHTML = '<p class="empty">Todavía nadie ha colaborado.</p><a class="empty-cta" href="/app.html#inviteToggle">Invitar familiares →</a>';
-        return true; // vacío — ver cargarAportes(), evita repetir el mismo CTA dos veces
-      }
-      colaboradoresStatus.textContent = colaboradores.length === 1 ? 'Se cargó 1 colaborador.' : `Se cargaron ${colaboradores.length} colaboradores.`;
-      const grid = document.createElement('div');
-      grid.className = 'colab-grid';
-      colaboradores.forEach((c) => {
-        const card = document.createElement('div');
-        card.className = 'colab-card';
-        const avatar = document.createElement('div');
-        avatar.className = 'colab-avatar';
-        avatar.textContent = (c.nombre || '?').trim().charAt(0).toUpperCase();
-        card.appendChild(avatar);
-        const nombre = document.createElement('p');
-        nombre.className = 'nombre';
-        nombre.textContent = c.nombre || 'Familiar';
-        card.appendChild(nombre);
-        if (c.parentesco) {
-          const parentesco = document.createElement('p');
-          parentesco.className = 'parentesco';
-          parentesco.textContent = c.parentesco;
-          card.appendChild(parentesco);
-        }
-        const count = document.createElement('p');
-        count.className = 'count';
-        count.textContent = c.historias === 1 ? '1 historia aportada' : `${c.historias} historias aportadas`;
-        card.appendChild(count);
-        grid.appendChild(card);
-      });
-      colaboradoresLista.innerHTML = '';
-      colaboradoresLista.appendChild(grid);
+      if (!resp.ok) return { error: mensajeDeError(resp, data, 'No se pudo cargar quiénes colaboraron.') };
+      return { colaboradores: data.colaboradores || [] };
     } catch (e) {
-      colaboradoresStatus.textContent = 'No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.';
-      colaboradoresLista.innerHTML = '<p class="empty">No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.</p>';
+      return { error: 'No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.' };
     }
   }
 
-  async function cargarAportes(colaboradoresVacios) {
+  async function pedirAportes() {
     try {
       const resp = await fetch('/api/contributions');
       const data = await resp.json().catch(() => ({}));
-      if (!resp.ok) {
-        const msg = mensajeDeError(resp, data, 'No se pudieron cargar los aportes.');
-        aportesStatus.textContent = msg;
-        aportesLista.innerHTML = '<p class="empty">' + msg + '</p>';
-        return;
-      }
-      const notes = data.notes || [];
-      if (!notes.length) {
-        // Si arriba (colaboradores) también está vacío, esa sección ya
-        // muestra "Invitar familiares →" — repetirlo acá es el mismo CTA
-        // dos veces en la misma pantalla, sin agregar nada nuevo.
-        aportesStatus.textContent = 'Todavía no hay historias aportadas por la familia.';
-        aportesLista.innerHTML = colaboradoresVacios
-          ? '<p class="empty">Todavía no hay historias aportadas por la familia.</p>'
-          : '<p class="empty">Todavía no hay historias aportadas por la familia.</p><a class="empty-cta" href="/app.html#inviteToggle">Invitar familiares →</a>';
-        return;
-      }
-      aportesStatus.textContent = notes.length === 1 ? 'Se cargó 1 aporte.' : `Se cargaron ${notes.length} aportes.`;
-      aportesLista.innerHTML = '';
-      notes.forEach((n) => {
-        const item = document.createElement('div');
-        item.className = 'aporte-item';
-        const quien = n.contributor ? n.contributor + (n.parentesco ? ` (${n.parentesco})` : '') : 'Familia';
-        const etiqueta = n.protagonista ? `Historia de ${n.protagonista} — compartida por ${quien}` : quien;
-        const urls = (n.audio_urls && n.audio_urls.length) ? n.audio_urls : (n.audio_url ? [n.audio_url] : []);
-        const quienP = document.createElement('p');
-        quienP.className = 'quien';
-        quienP.textContent = etiqueta;
-        item.appendChild(quienP);
-        const textoDiv = document.createElement('div');
-        textoDiv.className = 'texto';
-        textoDiv.textContent = n.texto;
-        item.appendChild(textoDiv);
-        urls.forEach((u) => {
-          if (typeof u === 'string' && /^https?:\/\//.test(u)) {
-            const audio = document.createElement('audio');
-            audio.controls = true;
-            audio.src = u;
-            item.appendChild(audio);
-          }
-        });
-        aportesLista.appendChild(item);
-      });
+      if (!resp.ok) return { error: mensajeDeError(resp, data, 'No se pudieron cargar los aportes.') };
+      return { notes: data.notes || [] };
     } catch (e) {
-      aportesStatus.textContent = 'No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.';
-      aportesLista.innerHTML = '<p class="empty">No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.</p>';
+      return { error: 'No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.' };
     }
   }
 
-  // Antes las dos llamadas salían en paralelo (más rápido, pero con las
-  // dos vacías a la vez no había forma de saber, desde acá, que "aportes"
-  // no debía repetir el CTA de "colaboradores"). Encadenarlas es un viaje
-  // extra al servidor en el caso más común, pero esta pantalla no es
-  // sensible a esa demora.
-  (async () => {
-    const colaboradoresVacios = await cargarColaboradores();
-    await cargarAportes(colaboradoresVacios);
-  })();
+  // Reintentar vuelve a pedir LAS DOS secciones (no solo la que falló): si
+  // solo se reintentara la que tuvo el error, "aportes" podría quedar con
+  // un colaboradoresVacios viejo de la carga anterior.
+  function agregarBotonReintentar(container) {
+    const retryBtn = document.createElement('button');
+    retryBtn.className = 'retry-btn';
+    retryBtn.type = 'button';
+    retryBtn.textContent = 'Reintentar';
+    retryBtn.addEventListener('click', cargarTodo);
+    container.appendChild(retryBtn);
+  }
+
+  // Devuelve true cuando la sección quedó realmente vacía (sin
+  // colaboradores) — no cuando hubo un error, ver cómo se usa más abajo.
+  function pintarColaboradores(resultado) {
+    if (resultado.error) {
+      colaboradoresStatus.textContent = resultado.error;
+      colaboradoresLista.innerHTML = '<p class="empty">' + resultado.error + '</p>';
+      agregarBotonReintentar(colaboradoresLista);
+      return false;
+    }
+    const colaboradores = resultado.colaboradores;
+    if (!colaboradores.length) {
+      colaboradoresStatus.textContent = 'Todavía nadie ha colaborado.';
+      colaboradoresLista.innerHTML = '<p class="empty">Todavía nadie ha colaborado.</p><a class="empty-cta" href="/app.html#inviteToggle">Invitar familiares →</a>';
+      return true; // vacío — ver pintarAportes(), evita repetir el mismo CTA dos veces
+    }
+    colaboradoresStatus.textContent = colaboradores.length === 1 ? 'Se cargó 1 colaborador.' : `Se cargaron ${colaboradores.length} colaboradores.`;
+    const grid = document.createElement('div');
+    grid.className = 'colab-grid';
+    colaboradores.forEach((c) => {
+      const card = document.createElement('div');
+      card.className = 'colab-card';
+      const avatar = document.createElement('div');
+      avatar.className = 'colab-avatar';
+      avatar.textContent = (c.nombre || '?').trim().charAt(0).toUpperCase();
+      card.appendChild(avatar);
+      const nombre = document.createElement('p');
+      nombre.className = 'nombre';
+      nombre.textContent = c.nombre || 'Familiar';
+      card.appendChild(nombre);
+      if (c.parentesco) {
+        const parentesco = document.createElement('p');
+        parentesco.className = 'parentesco';
+        parentesco.textContent = c.parentesco;
+        card.appendChild(parentesco);
+      }
+      const count = document.createElement('p');
+      count.className = 'count';
+      count.textContent = c.historias === 1 ? '1 historia aportada' : `${c.historias} historias aportadas`;
+      card.appendChild(count);
+      grid.appendChild(card);
+    });
+    colaboradoresLista.innerHTML = '';
+    colaboradoresLista.appendChild(grid);
+    return false;
+  }
+
+  function pintarAportes(resultado, colaboradoresVacios) {
+    if (resultado.error) {
+      aportesStatus.textContent = resultado.error;
+      aportesLista.innerHTML = '<p class="empty">' + resultado.error + '</p>';
+      agregarBotonReintentar(aportesLista);
+      return;
+    }
+    const notes = resultado.notes;
+    if (!notes.length) {
+      // Si arriba (colaboradores) también está vacío, esa sección ya
+      // muestra "Invitar familiares →" — repetirlo acá es el mismo CTA
+      // dos veces en la misma pantalla, sin agregar nada nuevo.
+      aportesStatus.textContent = 'Todavía no hay historias aportadas por la familia.';
+      aportesLista.innerHTML = colaboradoresVacios
+        ? '<p class="empty">Todavía no hay historias aportadas por la familia.</p>'
+        : '<p class="empty">Todavía no hay historias aportadas por la familia.</p><a class="empty-cta" href="/app.html#inviteToggle">Invitar familiares →</a>';
+      return;
+    }
+    aportesStatus.textContent = notes.length === 1 ? 'Se cargó 1 aporte.' : `Se cargaron ${notes.length} aportes.`;
+    aportesLista.innerHTML = '';
+    notes.forEach((n) => {
+      const item = document.createElement('div');
+      item.className = 'aporte-item';
+      const quien = n.contributor ? n.contributor + (n.parentesco ? ` (${n.parentesco})` : '') : 'Familia';
+      const etiqueta = n.protagonista ? `Historia de ${n.protagonista} — compartida por ${quien}` : quien;
+      const urls = (n.audio_urls && n.audio_urls.length) ? n.audio_urls : (n.audio_url ? [n.audio_url] : []);
+      const quienP = document.createElement('p');
+      quienP.className = 'quien';
+      quienP.textContent = etiqueta;
+      item.appendChild(quienP);
+      const textoDiv = document.createElement('div');
+      textoDiv.className = 'texto';
+      textoDiv.textContent = n.texto;
+      item.appendChild(textoDiv);
+      urls.forEach((u) => {
+        if (typeof u === 'string' && /^https?:\/\//.test(u)) {
+          const audio = document.createElement('audio');
+          audio.controls = true;
+          audio.src = u;
+          item.appendChild(audio);
+        }
+      });
+      aportesLista.appendChild(item);
+    });
+  }
+
+  async function cargarTodo() {
+    colaboradoresLista.innerHTML = '<p class="empty">Cargando…</p>';
+    aportesLista.innerHTML = '<p class="empty">Cargando…</p>';
+    const [colabResultado, aportesResultado] = await Promise.all([pedirColaboradores(), pedirAportes()]);
+    const colaboradoresVacios = pintarColaboradores(colabResultado);
+    pintarAportes(aportesResultado, colaboradoresVacios);
+  }
+
+  cargarTodo();
 })();
 </script>
 </body>

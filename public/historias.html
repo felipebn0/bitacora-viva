@@ -52,6 +52,14 @@
     border-bottom: 1px solid var(--gold-deep); display: inline-flex; align-items: center;
     min-height: 44px; padding: 10px 4px; margin-top: -6px;
   }
+  /* Antes, si la carga fallaba (red, servidor, sesión vencida), la única
+     salida era recargar la página entera a mano. */
+  .retry-btn {
+    color: var(--gold-deep); font-size: 0.9rem; font-weight: 700; text-decoration: none;
+    border: 1px solid var(--gold-deep); border-radius: 8px; background: none; cursor: pointer;
+    font-family: var(--font-body); display: inline-flex; align-items: center; justify-content: center;
+    min-height: 44px; padding: 8px 14px; margin-top: 4px;
+  }
 
   .item {
     background: #FBF6EA; border: 1px solid #E7DFCC; border-radius: 14px;
@@ -86,14 +94,30 @@
     return (data && data.error) || fallback;
   }
 
+  // Antes un error acá (red caída, servidor, sesión vencida) dejaba a la
+  // persona sin más salida que recargar la página entera a mano.
+  function mostrarErrorConReintento(msg) {
+    storyLogStatus.textContent = msg;
+    storyLogLista.innerHTML = '';
+    const p = document.createElement('p');
+    p.className = 'empty';
+    p.textContent = msg;
+    storyLogLista.appendChild(p);
+    const retryBtn = document.createElement('button');
+    retryBtn.className = 'retry-btn';
+    retryBtn.type = 'button';
+    retryBtn.textContent = 'Reintentar';
+    retryBtn.addEventListener('click', cargarStoryLog);
+    storyLogLista.appendChild(retryBtn);
+  }
+
   async function cargarStoryLog() {
+    storyLogLista.innerHTML = '<p class="empty">Cargando…</p>';
     try {
       const resp = await fetch('/api/story-log');
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) {
-        const msg = mensajeDeError(resp, data, 'No se pudieron cargar las historias.');
-        storyLogStatus.textContent = msg;
-        storyLogLista.innerHTML = '<p class="empty">' + msg + '</p>';
+        mostrarErrorConReintento(mensajeDeError(resp, data, 'No se pudieron cargar las historias.'));
         return;
       }
       const stories = data.stories || [];
@@ -128,8 +152,7 @@
         storyLogLista.appendChild(div);
       });
     } catch (e) {
-      storyLogStatus.textContent = 'No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.';
-      storyLogLista.innerHTML = '<p class="empty">No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.</p>';
+      mostrarErrorConReintento('No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.');
     }
   }
 

@@ -140,7 +140,19 @@
   .orb[data-state="paused"] { background: radial-gradient(circle at 35% 30%, #7D7050, #706551); }
   .orb[data-state="paused"]::before { animation: none; opacity: 0.3; }
   .state-label { font-size: 0.9rem; color: var(--ink-soft); min-height: 1.3em; }
-  .write-toggle { background: none; border: none; color: var(--moss); text-decoration: underline; cursor: pointer; font-family: var(--font-body); }
+  /* min-height/min-width:44px: la zona de toque mínima recomendada — este
+     link de texto quedaba en ~19px de alto, apenas el tamaño de la letra.
+     inline-flex + align-items la agranda sin cambiar cómo se ve el texto. */
+  .write-toggle {
+    background: none; border: none; color: var(--moss); text-decoration: underline;
+    cursor: pointer; font-family: var(--font-body);
+    /* Sin font-size explícito, el navegador usaba el tamaño por defecto de
+       los <button> (13,33px fijos) — no escalaba con A-/A+ como el resto
+       de la letra de la página. */
+    font-size: 0.85rem;
+    display: inline-flex; align-items: center; justify-content: center;
+    min-height: 44px; min-width: 44px; box-sizing: border-box;
+  }
   .end-toggle { color: #a33; font-size: 0.85rem; }
   .write-row { display: none; gap: 8px; width: 100%; max-width: 280px; }
   .write-row.visible { display: flex; }
@@ -285,11 +297,14 @@
      clave, copia, zona de riesgo) todas abiertas a la vez — se veía todo
      amontonado de una. Cada sección ahora es un acordeón: un botón con el
      nombre nada más, y el contenido se abre solo al tocarlo. */
+  /* min-height:44px: quedaba en ~41px de alto pese al padding — no llegaba
+     a la zona de toque mínima recomendada. */
   .user-menu-panel .um-section-toggle {
     display: flex; align-items: center; justify-content: space-between; width: 100%;
     background: none; border: none; border-top: 1px solid #E7DFCC;
     padding: 12px 2px; margin: 4px 0 0; font-family: var(--font-body);
     font-size: 0.9rem; color: var(--ink); font-weight: 700; text-align: left; cursor: pointer;
+    min-height: 44px; box-sizing: border-box;
   }
   .user-menu-panel .um-section-toggle:first-of-type { border-top: none; margin-top: 0; }
   .user-menu-panel .um-section-toggle-warn { color: #a33; }
@@ -311,10 +326,14 @@
     width: 100%; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 10px;
     font-family: var(--font-body); background: #fff; color: var(--ink); font-size: 1rem; margin-bottom: 8px;
   }
+  /* min-height:44px + flex (en vez de block): quedaba en ~35px de alto —
+     el texto centrado horizontal ya estaba, pero faltaba alto real. */
   .user-menu-panel .um-btn {
-    display: block; box-sizing: border-box; text-align: center; text-decoration: none;
+    display: flex; align-items: center; justify-content: center; box-sizing: border-box;
+    text-align: center; text-decoration: none;
     width: 100%; border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px;
     padding: 9px; font-weight: 700; cursor: pointer; font-family: var(--font-body); font-size: 0.88rem;
+    min-height: 44px;
   }
   .user-menu-panel .um-btn:disabled { opacity: 0.6; cursor: default; }
   .user-menu-panel .um-fontsize-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
@@ -586,7 +605,7 @@
            <input type="date" id="umProfileBirthdate" aria-label="Tu fecha de nacimiento">
            <p class="um-hint">Para que la entrevistadora entienda mejor el contexto de tu edad al charlar — es opcional.</p>
            <button class="um-btn" id="umProfileSaveBtn" type="button">Guardar perfil</button>
-           <p class="um-msg" id="umProfileMsg"></p>
+           <p class="um-msg" id="umProfileMsg" role="status" aria-live="polite" aria-atomic="true"></p>
          </div>
 
          <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecClave">Cambiar clave <span class="um-chevron" aria-hidden="true">›</span></button>
@@ -594,7 +613,7 @@
            <input type="password" id="umCurrentPassword" placeholder="Clave actual" autocomplete="current-password" aria-label="Clave actual">
            <input type="password" id="umNewPassword" placeholder="Clave nueva" autocomplete="new-password" aria-label="Clave nueva">
            <button class="um-btn" id="umChangePasswordBtn" type="button">Cambiar clave</button>
-           <p class="um-msg" id="umPasswordMsg"></p>
+           <p class="um-msg" id="umPasswordMsg" role="status" aria-live="polite" aria-atomic="true"></p>
          </div>
 
          <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecCopia">Tu copia <span class="um-chevron" aria-hidden="true">›</span></button>
@@ -613,13 +632,13 @@
              <div id="umResetRow" style="display:none; margin-top:8px;">
                <input type="password" id="umResetPassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para reiniciar la bitácora">
                <button class="um-btn um-danger" id="umResetConfirm" type="button">Reiniciar bitácora</button>
-               <p class="um-msg um-error" id="umResetError"></p>
+               <p class="um-msg um-error" id="umResetError" role="alert"></p>
              </div>
              <button class="um-btn um-plain um-warn" id="umDeleteToggle" type="button">⚠️ Borrar mi cuenta permanentemente</button>
              <div id="umDeleteRow" style="display:none; margin-top:8px;">
                <input type="password" id="umDeletePassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para borrar la cuenta">
                <button class="um-btn um-danger" id="umDeleteConfirm" type="button">Borrar cuenta</button>
-               <p class="um-msg um-error" id="umDeleteError"></p>
+               <p class="um-msg um-error" id="umDeleteError" role="alert"></p>
              </div>
            </div>
          </div>
@@ -632,7 +651,7 @@
         contenido de <main>, más abajo. -->
    <nav class="topbar" aria-label="Secciones de tu bitácora">
      <div class="icon-nav-item">
-       <button class="icon-btn" id="joinCollabBtn" type="button" title="Colaborar con otra historia" aria-label="Colaborar con otra historia">🤝</button>
+       <button class="icon-btn" id="joinCollabBtn" type="button" title="Colaborar con otra historia" aria-label="Colaborar con otra historia" aria-expanded="false" aria-controls="joinCollabPanel">🤝</button>
        <span class="icon-label" aria-hidden="true">Colaborar</span>
      </div>
      <div class="icon-nav-item">
@@ -666,7 +685,7 @@
        <input type="text" id="joinCollabCode" placeholder="Ej: B46NWEC7" maxlength="8" aria-label="Código de invitación">
        <button id="joinCollabSubmit" type="button">Entrar</button>
      </div>
-     <p class="msg" id="joinCollabMsg"></p>
+     <p class="msg" id="joinCollabMsg" role="alert"></p>
    </div>
    <div class="main-layout">
     <div class="device-col">
@@ -705,7 +724,7 @@
    </div>
 
     <div class="logout-row">
-      <button class="invite-cta" id="inviteToggle" type="button">Invitar familiares a colaborar</button>
+      <button class="invite-cta" id="inviteToggle" type="button" aria-expanded="false" aria-controls="inviteRow">Invitar familiares a colaborar</button>
       <div id="inviteRow" style="display:none; margin-top: 10px;">
         <p class="sub" style="max-width: 340px; margin: 0 auto 8px;">Comparte este código con familiares — crean su propia cuenta y pueden aportar historias, sin ver ni tocar tus charlas.</p>
         <p style="font-family: var(--font-display); font-size: 1.4rem; font-weight: 700; letter-spacing: 0.1em; margin: 0 0 4px;" id="inviteCode">…</p>
@@ -859,18 +878,55 @@
   function ajustarAltoCuenta() {
     if (!userMenuPanel.classList.contains('visible')) return;
     const top = userMenuPanel.getBoundingClientRect().top;
-    userMenuPanel.style.maxHeight = Math.max(120, window.innerHeight - top - 12) + 'px';
+    const vv = window.visualViewport;
+    // visualViewport.height es el alto REAL visible — a diferencia de
+    // window.innerHeight, descuenta el teclado virtual del celular cuando
+    // está abierto. getBoundingClientRect() mide contra el viewport de
+    // layout (no se mueve con el teclado), así que hay que restarle
+    // offsetTop para ubicar el panel en el mismo sistema de coordenadas
+    // que visualViewport.height antes de restar uno del otro.
+    const altoDisponible = vv ? vv.height : window.innerHeight;
+    const topAjustado = vv ? top - vv.offsetTop : top;
+    userMenuPanel.style.maxHeight = Math.max(120, altoDisponible - topAjustado - 12) + 'px';
+  }
+  // Única función que cierra el panel — Escape, click afuera y el propio
+  // botón (para el caso "ya estaba abierto") pasan todos por acá, así
+  // aria-expanded nunca queda desincronizado con lo que se ve.
+  function cerrarCuenta() {
+    if (!userMenuPanel.classList.contains('visible')) return;
+    userMenuPanel.classList.remove('visible');
+    userMenuBtn.setAttribute('aria-expanded', 'false');
   }
   userMenuBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    const abierto = userMenuPanel.classList.toggle('visible');
-    userMenuBtn.setAttribute('aria-expanded', String(abierto));
-    if (abierto) ajustarAltoCuenta();
+    const abrir = !userMenuPanel.classList.contains('visible');
+    if (abrir) {
+      userMenuPanel.classList.add('visible');
+      userMenuBtn.setAttribute('aria-expanded', 'true');
+      ajustarAltoCuenta();
+    } else {
+      cerrarCuenta();
+    }
   });
   document.addEventListener('click', (e) => {
     if (!userMenuPanel.contains(e.target) && e.target !== userMenuBtn) {
-      userMenuPanel.classList.remove('visible');
-      userMenuBtn.setAttribute('aria-expanded', 'false');
+      const estabaAbierto = userMenuPanel.classList.contains('visible');
+      cerrarCuenta();
+      // Si el click aterrizó en otro elemento enfocable, ese ya tiene el
+      // foco antes de llegar acá — no se lo robamos. Si aterrizó en algo
+      // sin foco (el fondo, texto suelto), el foco se pierde del todo, así
+      // que se lo devolvemos al botón para no dejar a quien navega con
+      // teclado sin ningún punto de partida.
+      if (estabaAbierto && document.activeElement === document.body) userMenuBtn.focus();
+    }
+  });
+  // Antes Escape no hacía nada acá — el panel seguía abierto con
+  // aria-expanded="true" aunque visualmente nadie lo notara si el foco ya
+  // se había movido a otro lado.
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && userMenuPanel.classList.contains('visible')) {
+      cerrarCuenta();
+      userMenuBtn.focus();
     }
   });
   window.addEventListener('resize', ajustarAltoCuenta);
@@ -1133,8 +1189,13 @@
   let inviteLoaded = false;
   inviteToggle.addEventListener('click', async () => {
     const visible = inviteRow.style.display !== 'none';
-    if (visible) { inviteRow.style.display = 'none'; return; }
+    if (visible) {
+      inviteRow.style.display = 'none';
+      inviteToggle.setAttribute('aria-expanded', 'false');
+      return;
+    }
     inviteRow.style.display = 'block';
+    inviteToggle.setAttribute('aria-expanded', 'true');
     if (inviteLoaded) return;
     try {
       const resp = await fetch('/api/invite-code');
@@ -1177,6 +1238,7 @@
   joinCollabBtn.addEventListener('click', () => {
     const visible = joinCollabPanel.style.display !== 'none';
     joinCollabPanel.style.display = visible ? 'none' : 'block';
+    joinCollabBtn.setAttribute('aria-expanded', String(!visible));
     if (!visible) joinCollabCode.focus();
   });
 

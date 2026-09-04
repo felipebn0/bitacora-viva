@@ -101,6 +101,14 @@
     justify-content: center; min-height: 44px; padding: 10px 4px; width: fit-content;
     margin: 4px auto 0;
   }
+  /* Antes, si la carga fallaba, la única salida era recargar la página
+     entera a mano. */
+  .retry-btn {
+    color: var(--gold-deep); font-size: 0.9rem; font-weight: 700; text-decoration: none;
+    border: 1px solid var(--gold-deep); border-radius: 8px; background: none; cursor: pointer;
+    font-family: var(--font-body); display: flex; align-items: center; justify-content: center;
+    min-height: 44px; padding: 8px 14px; width: fit-content; margin: 8px auto 0;
+  }
 
   .tree-graphic { position: relative; display: flex; flex-direction: column; gap: 52px; padding: 10px; width: max-content; min-width: 100%; }
   .tree-row { display: flex; flex-wrap: nowrap; justify-content: center; gap: 26px; position: relative; z-index: 1; width: max-content; margin: 0 auto; }
@@ -798,6 +806,13 @@
   // "padres" (para saber los nombres exactos disponibles para conectar).
   let nombresConocidos = [];
 
+  // Últimas personas que se cargaron del servidor — se guardan para poder
+  // volver a dibujar el árbol en un resize (cambia cuánto entra por fila,
+  // la escala, las líneas) SIN pedirle los datos al servidor de nuevo cada
+  // vez, ver alRedimensionar() más abajo. null mientras no hubo una carga
+  // exitosa todavía (sesión vencida, error de red, etc.).
+  let ultimasPersonas = null;
+
   // Corregir a mano el nombre, el parentesco, o de quién es hijo/a alguien
   // — para cuando la IA lo entendió mal (un nombre mal escrito, un
   // parentesco equivocado, o alguien que quedó conectado a la persona
@@ -849,13 +864,26 @@
       const data = await resp.json();
       const people = (data.people || []).filter((p) => !esNovio(p.relacion));
       nombresConocidos = people.map((p) => p.nombre);
+      ultimasPersonas = people;
       renderTree(people);
       if (!arbolVisto) {
         arbolVisto = true;
         fetch('/api/tree/mark-seen', { method: 'POST' }).catch(() => {});
       }
     } catch (e) {
-      wrap.innerHTML = '<p class="msg">No se pudo cargar el árbol. Intenta de nuevo más tarde.</p>';
+      // Antes esto dejaba a la persona sin más salida que recargar la
+      // página entera a mano.
+      wrap.innerHTML = '';
+      const p = document.createElement('p');
+      p.className = 'msg';
+      p.textContent = 'No se pudo cargar el árbol. Intenta de nuevo más tarde.';
+      wrap.appendChild(p);
+      const retryBtn = document.createElement('button');
+      retryBtn.className = 'retry-btn';
+      retryBtn.type = 'button';
+      retryBtn.textContent = 'Reintentar';
+      retryBtn.addEventListener('click', cargar);
+      wrap.appendChild(retryBtn);
       if (scrollHint) scrollHint.classList.remove('visible');
       if (wrapOuter) wrapOuter.classList.remove('is-scrollable');
     }
@@ -922,9 +950,27 @@
     rebuildBtn.textContent = '🔄 reconstruir árbol';
   });
 
+  // Antes cada evento "resize" volvía a llamar a cargar() entero — pedía
+  // /api/tree de nuevo, aunque los datos no habían cambiado, solo el
+  // ancho/alto disponible. Un resize real (redimensionar la ventana, girar
+  // el celular) puede disparar muchísimos eventos seguidos; en el celular,
+  // que aparezca/desaparezca la barra de direcciones del navegador cuenta
+  // como resize también. Acá solo se vuelve a dibujar con los datos que ya
+  // están (renderTree ya recalcula escala/líneas solo), con un debounce
+  // para no hacerlo en cada pixel intermedio — y solo si hubo una carga
+  // exitosa antes (si no, no hay nada que volver a dibujar).
+  let resizeTimeoutId = null;
+  function alRedimensionar() {
+    if (resizeTimeoutId) clearTimeout(resizeTimeoutId);
+    resizeTimeoutId = setTimeout(() => {
+      resizeTimeoutId = null;
+      if (ultimasPersonas) renderTree(ultimasPersonas);
+    }, 200);
+  }
+
   cargar();
   cargarColaboradores();
-  window.addEventListener('resize', cargar);
+  window.addEventListener('resize', alRedimensionar);
 })();
 </script>
 </body>

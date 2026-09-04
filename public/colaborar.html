@@ -149,9 +149,12 @@
   .collab-switch { width: 100%; max-width: 440px; margin: 0 0 18px; text-align: center; }
   .collab-switch .sub { margin-bottom: 6px; }
   .collab-switch-list { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  /* min-height:44px: quedaba en ~31px de alto — zona de toque chica para
+     algo que se usa para saltar entre las bitácoras a las que se colabora. */
   .collab-switch-list a {
-    display: inline-block; padding: 6px 14px; border-radius: 20px; font-size: 0.85rem;
+    display: inline-flex; align-items: center; padding: 6px 14px; border-radius: 20px; font-size: 0.85rem;
     text-decoration: none; color: var(--ink); background: #FBF6EA; border: 1px solid #E7DFCC;
+    min-height: 44px; box-sizing: border-box;
   }
   .collab-switch-list a.active { background: var(--gold-deep); color: #FBF6EA; border-color: var(--gold-deep); font-weight: 700; }
 
@@ -239,7 +242,15 @@
   /* "Borrar mi cuenta" es la única acción irreversible acá — antes se veía
      como un link subrayado más, sin distinguirse de "cerrar sesión". */
   .danger-zone { margin-top: 18px; padding-top: 14px; border-top: 1px solid #E7DFCC; }
-  .write-toggle { background: none; border: none; color: var(--moss); text-decoration: underline; cursor: pointer; font-family: var(--font-body); font-size: 0.9rem; }
+  /* min-height/min-width:44px: subir audio (35px), escribir (18px), cerrar
+     sesión (20px) y borrar cuenta (21px) quedaban por debajo de la zona de
+     toque mínima recomendada — mismo arreglo que en app.html. */
+  .write-toggle {
+    background: none; border: none; color: var(--moss); text-decoration: underline;
+    cursor: pointer; font-family: var(--font-body); font-size: 0.9rem;
+    display: inline-flex; align-items: center; justify-content: center;
+    min-height: 44px; min-width: 44px; box-sizing: border-box;
+  }
   .end-toggle { color: #a33; }
   .write-row { display: none; gap: 8px; width: 100%; max-width: 280px; }
   .write-row.visible { display: flex; }
@@ -270,7 +281,7 @@
       </div>
     </div>
     <button id="loginBtn" type="button">Entrar</button>
-    <p class="error" id="loginError"></p>
+    <p class="error" id="loginError" role="alert"></p>
     <p class="sub" style="margin-top:2px;">¿No tienes cuenta? <a href="/?modo=colaborar#registro" style="color:var(--gold-deep);">Crea una</a>.</p>
   </div>
 
@@ -322,7 +333,10 @@
         <input type="text" id="protagonistaInput" placeholder="¿De quién es esta historia?" aria-label="¿De quién es esta historia?" style="display:none;">
       </div>
 
-      <div class="aporte-chat" id="aporteChat"></div>
+      <!-- role="log" aria-relevant="additions text": es una charla que va
+           creciendo con cada turno — el lector de pantalla debe anunciar
+           solo lo nuevo que se agrega, no releer toda la charla cada vez. -->
+      <div class="aporte-chat" id="aporteChat" role="log" aria-relevant="additions text"></div>
 
       <div class="orb-zone">
         <button class="orb" id="orb" data-state="idle" type="button" aria-label="Presiona para grabar tu historia">Presiona<br>para hablar</button>
@@ -332,7 +346,7 @@
         <div class="state-label" id="recStatus" role="status" aria-live="polite" aria-atomic="true"></div>
         <button class="write-toggle" id="subirAudioBtn" type="button">o sube una nota de voz que ya tengas</button>
         <input type="file" id="subirAudioInput" accept="audio/*" style="display:none;">
-        <button class="write-toggle" id="writeToggleColab" type="button">o prefiero escribir mi historia</button>
+        <button class="write-toggle" id="writeToggleColab" type="button" aria-expanded="false" aria-controls="writeRowColab">o prefiero escribir mi historia</button>
         <div class="write-row" id="writeRowColab" style="margin: 0 auto;">
           <input type="text" id="writeInputColab" placeholder="Escribe tu historia…" aria-label="Escribir historia">
           <button id="writeSendColab" type="button">Enviar</button>
@@ -341,7 +355,7 @@
 
       <button class="otra-historia-btn" id="otraHistoriaBtn" type="button">Contar otra historia</button>
 
-      <p class="msg" id="aporteMsg"></p>
+      <p class="msg" id="aporteMsg" role="status" aria-live="polite" aria-atomic="true"></p>
 
       <hr>
 
@@ -351,7 +365,7 @@
     <div class="logout-row">
       <button class="write-toggle" id="logoutBtn" type="button">cerrar sesión (<span id="whoami"></span>)</button>
       <div class="danger-zone">
-        <button class="write-toggle end-toggle" id="deleteAccountToggle" type="button">⚠️ borrar mi cuenta permanentemente</button>
+        <button class="write-toggle end-toggle" id="deleteAccountToggle" type="button" aria-expanded="false" aria-controls="deleteAccountRow">⚠️ borrar mi cuenta permanentemente</button>
         <div class="write-row" id="deleteAccountRow" style="margin: 10px auto 0;">
           <input type="password" id="deleteAccountPassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para borrar la cuenta">
           <button id="deleteAccountConfirm" type="button" style="background:#a33;">borrar</button>
@@ -461,9 +475,10 @@
   const deleteAccountError = document.getElementById('deleteAccountError');
 
   deleteAccountToggle.addEventListener('click', () => {
-    deleteAccountRow.classList.toggle('visible');
+    const abierto = deleteAccountRow.classList.toggle('visible');
+    deleteAccountToggle.setAttribute('aria-expanded', String(abierto));
     deleteAccountError.textContent = '';
-    if (deleteAccountRow.classList.contains('visible')) deleteAccountPassword.focus();
+    if (abierto) deleteAccountPassword.focus();
   });
 
   async function borrarCuenta() {
@@ -515,7 +530,13 @@
         const esActiva = ownerIdActivo
           ? String(h.ownerId) === String(ownerIdActivo)
           : h.ownerName === nombreActivoFallback;
-        if (esActiva) a.classList.add('active');
+        if (esActiva) {
+          a.classList.add('active');
+          // El estado visual (clase .active) ya existía — sin esto, a
+          // quien usa lector de pantalla no le llega cuál de las bitácoras
+          // es la que está viendo ahora mismo.
+          a.setAttribute('aria-current', 'page');
+        }
         collabSwitchList.appendChild(a);
       });
       collabSwitch.style.display = 'block';
@@ -567,6 +588,14 @@
   const writeRowColab = document.getElementById('writeRowColab');
   const writeInputColab = document.getElementById('writeInputColab');
   const writeSendColab = document.getElementById('writeSendColab');
+  // El cuadro para escribir se muestra/esconde desde varios lugares (el
+  // botón, un error de micrófono, terminar la charla) — no solo desde su
+  // propio botón. Este helper mantiene aria-expanded sincronizado sin
+  // importar desde dónde se dispare.
+  function mostrarEscribirColab(mostrar) {
+    writeRowColab.classList.toggle('visible', mostrar);
+    writeToggleColab.setAttribute('aria-expanded', String(mostrar));
+  }
   // Si el navegador directamente no puede grabar, el fallback de texto
   // queda siempre visible — "resetChat" (que corre cada vez que arranca
   // una historia nueva) no debe volver a esconderlo en ese caso.
@@ -634,7 +663,7 @@
     orb.style.display = '';
     document.getElementById('subirAudioBtn').style.display = '';
     writeToggleColab.style.display = '';
-    if (!micNoDisponible) writeRowColab.classList.remove('visible');
+    if (!micNoDisponible) mostrarEscribirColab(false);
     writeInputColab.value = '';
     bloquearSelectorProtagonista(false);
     document.querySelector('input[name="quienHistoria"][value="propia"]').checked = true;
@@ -674,7 +703,7 @@
         orb.style.display = 'none';
         document.getElementById('subirAudioBtn').style.display = 'none';
         writeToggleColab.style.display = 'none';
-        writeRowColab.classList.remove('visible');
+        mostrarEscribirColab(false);
         recStatus.textContent = '';
         aporteMsg.classList.toggle('error', !data.saved);
         aporteMsg.textContent = data.saved ? '✓ Historia guardada. Gracias.' : '⚠️ La charla terminó, pero hubo un problema para guardarla.';
@@ -715,8 +744,9 @@
   // puede escribir la historia en vez de decirla en voz alta (igual que
   // "prefiero escribir" en la charla principal de app.html).
   writeToggleColab.addEventListener('click', () => {
-    writeRowColab.classList.toggle('visible');
-    if (writeRowColab.classList.contains('visible')) writeInputColab.focus();
+    const abierto = !writeRowColab.classList.contains('visible');
+    mostrarEscribirColab(abierto);
+    if (abierto) writeInputColab.focus();
   });
 
   async function enviarTextoEscrito() {
@@ -724,7 +754,7 @@
     if (!texto || charlaTerminada) return;
     bloquearSelectorProtagonista(true);
     writeInputColab.value = '';
-    writeRowColab.classList.remove('visible');
+    mostrarEscribirColab(false);
     historyLocal.push({ role: 'user', content: texto });
     agregarBurbuja('q', texto);
     await enviarTurno();
@@ -816,7 +846,7 @@
       mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
       recStatus.textContent = mensajeErrorMicrofono(e);
-      writeRowColab.classList.add('visible');
+      mostrarEscribirColab(true);
       writeInputColab.focus();
       return;
     }
@@ -932,7 +962,7 @@
     orb.disabled = true;
     orb.title = 'Este navegador no permite grabar audio.';
     recStatus.textContent = 'Este navegador no permite grabar audio — puedes escribir tu historia en su lugar.';
-    writeRowColab.classList.add('visible');
+    mostrarEscribirColab(true);
   }
 
   // --- Subir una nota de voz que ya tengas guardada ---
