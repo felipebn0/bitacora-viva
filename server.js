@@ -319,6 +319,13 @@ function ensureSchema() {
       // una historia que tenía guardada (ver /api/contribute-chat). NULL
       // significa "es la historia del propio colaborador".
       sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS protagonista TEXT`,
+      // true mientras el colaborador todavía está contando la historia (se
+      // va guardando turno a turno, ver /api/contribute-chat) — pasa a false
+      // recién cuando dice que no tiene nada más que agregar y se limpia el
+      // texto. Evita que una historia a mitad de contar se le mencione al
+      // dueño de la bitácora o se use como "historia ya aportada" en otro
+      // lado mientras todavía se está escribiendo.
+      sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS en_progreso BOOLEAN NOT NULL DEFAULT false`,
       sql`CREATE INDEX IF NOT EXISTS idx_family_notes_user ON family_notes(user_id)`,
 
       // Un usuario dueño de su propia bitácora también puede sumarse como
@@ -1624,7 +1631,7 @@ async function loadMemorySummary(userId) {
 // después de validar que la respuesta de Anthropic sirve.
 async function loadFamilyContext(userId) {
   await ensureSchema();
-  const notes = await sql`SELECT contributor, parentesco, texto FROM family_notes WHERE user_id = ${userId} ORDER BY created_at DESC LIMIT 20`;
+  const notes = await sql`SELECT contributor, parentesco, texto FROM family_notes WHERE user_id = ${userId} AND en_progreso = false ORDER BY created_at DESC LIMIT 20`;
   const pending = await sql`SELECT id, type, caption, contributor FROM media WHERE user_id = ${userId} AND discussed = false ORDER BY created_at ASC LIMIT 1`;
   const perfil = await sql`SELECT fecha_nacimiento FROM users WHERE id = ${userId}`;
 
@@ -2542,7 +2549,47 @@ const APORTE_EXTRACT_TOOL = [{
   },
 }];
 
-async function finalizarAporte(ownerId, fullHistory, audioUrls, contributedByUserId, colaboradorNombre, protagonista) {
+// Guarda (o actualiza) lo que el colaborador ya contó ANTES de que termine
+// la charla — así, si se cae la conexión o abandona a mitad de camino, lo
+// que ya narró no se pierde. Es texto crudo, sin pulir todavía (eso lo hace
+// finalizarAporte con la IA recién al final) — con "en_progreso = true" para
+// que no se le mencione al dueño de la bitácora ni se use en otro lado hasta
+// que esté completa. Devuelve el id de la fila (nuevo o el mismo que ya
+// tenía) para que el siguiente turno actualice esa misma fila en vez de
+// crear una nueva.
+async function guardarBorradorAporte(ownerId, draftId, historyHastaAhora, audioUrls, contributedByUserId, colaboradorNombre, protagonista) {
+  try {
+    const texto = historyHastaAhora
+      .filter((m) => m.role === 'user' && !/^\(.*\)$/.test(m.content.trim()) && m.content.trim())
+      .map((m) => m.content.trim())
+      .join('\n\n')
+      .slice(0, 4000);
+    if (!texto) return draftId;
+
+    const cleanContributor = capitalizarNombre(String(colaboradorNombre || '').trim().slice(0, 60)) || null;
+    const cleanProtagonista = (protagonista && protagonista !== colaboradorNombre)
+      ? capitalizarNombre(String(protagonista).trim().slice(0, 60)) || null
+      : null;
+    const audioUrlsLimpias = Array.isArray(audioUrls)
+      ? audioUrls.map((u) => urlHttpValida(u)).filter(Boolean).slice(0, 10)
+      : [];
+    const audioUrlsJson = audioUrlsLimpias.length ? JSON.stringify(audioUrlsLimpias) : null;
+    const texfinal = capitalizarInicio(texto);
+
+    await ensureSchema();
+    if (draftId) {
+      await sql`UPDATE family_notes SET texto = ${texfinal}, audio_urls = ${audioUrlsJson}, protagonista = ${cleanProtagonista} WHERE id = ${draftId} AND user_id = ${ownerId} AND en_progreso = true`;
+      return draftId;
+    }
+    const rows = await sql`INSERT INTO family_notes (user_id, contributor, texto, audio_urls, contributed_by, protagonista, en_progreso) VALUES (${ownerId}, ${cleanContributor}, ${texfinal}, ${audioUrlsJson}, ${contributedByUserId}, ${cleanProtagonista}, true) RETURNING id`;
+    return (rows[0] && rows[0].id) || draftId;
+  } catch (err) {
+    console.error('No se pudo guardar el borrador del aporte:', err);
+    return draftId;
+  }
+}
+
+async function finalizarAporte(ownerId, draftId, fullHistory, audioUrls, contributedByUserId, colaboradorNombre, protagonista) {
   try {
     const transcript = fullHistory
       .filter((m) => !/^\(.*\)$/.test(m.content.trim())) // sin los avisos internos entre paréntesis
@@ -2572,6 +2619,11 @@ async function finalizarAporte(ownerId, fullHistory, audioUrls, contributedByUse
       : null;
 
     await ensureSchema();
+    if (draftId) {
+      const actualizada = await sql`UPDATE family_notes SET contributor = ${cleanContributor}, parentesco = ${cleanParentesco}, texto = ${texto}, audio_urls = ${audioUrlsJson}, protagonista = ${cleanProtagonista}, en_progreso = false WHERE id = ${draftId} AND user_id = ${ownerId} RETURNING id`;
+      if (actualizada.length) return true;
+      // El borrador no existía (nunca se llegó a guardar, o algo raro pasó) — no perder el aporte.
+    }
     await sql`INSERT INTO family_notes (user_id, contributor, parentesco, texto, audio_urls, contributed_by, protagonista) VALUES (${ownerId}, ${cleanContributor}, ${cleanParentesco}, ${texto}, ${audioUrlsJson}, ${contributedByUserId}, ${cleanProtagonista})`;
     return true;
   } catch (err) {
@@ -2639,13 +2691,23 @@ app.post('/api/contribute-chat', requireAuth, rateLimit, async (req, res) => {
     const needsBasicInfo = !done && text.includes('[FALTA_DATO]');
     text = text.replace('[FIN]', '').replace('[FALTA_DATO]', '').trim();
 
+    // El borrador que se venía guardando turno a turno (ver
+    // guardarBorradorAporte) — si ya existía, seguimos actualizando la
+    // MISMA fila en vez de crear una nueva cada vez.
+    let draftId = Number.isInteger(req.body.draftId) ? req.body.draftId : null;
+    const audioUrls = Array.isArray(req.body.audioUrls) ? req.body.audioUrls : [];
+
     let saved = false;
     if (done) {
-      const audioUrls = Array.isArray(req.body.audioUrls) ? req.body.audioUrls : [];
-      saved = await finalizarAporte(ownerId, messages.concat([{ role: 'assistant', content: text }]), audioUrls, req.userId, colaboradorNombre, protagonista);
+      saved = await finalizarAporte(ownerId, draftId, messages.concat([{ role: 'assistant', content: text }]), audioUrls, req.userId, colaboradorNombre, protagonista);
+    } else if (history.length) {
+      // Ya contó algo — lo guardamos ahora mismo, no hace falta esperar a
+      // que termine toda la charla (y las preguntas de aclaración) para que
+      // quede a salvo.
+      draftId = await guardarBorradorAporte(ownerId, draftId, messages, audioUrls, req.userId, colaboradorNombre, protagonista);
     }
 
-    res.json({ message: text, done, saved, needsBasicInfo });
+    res.json({ message: text, done, saved, needsBasicInfo, draftId });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo continuar la charla.' });

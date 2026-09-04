@@ -712,6 +712,10 @@
   let audioUrlsLocal = [];
   let charlaTerminada = false;
   let esperandoAclaracion = false; // true justo después de que la IA pidió parentesco/año que faltaban
+  // Id de la fila en family_notes que se va actualizando turno a turno
+  // mientras se cuenta la historia (ver guardarBorradorAporte en el
+  // servidor) — null hasta que el primer turno la crea.
+  let draftIdLocal = null;
 
   function agregarBurbuja(kind, text) {
     const div = document.createElement('div');
@@ -744,6 +748,7 @@
     audioUrlsLocal = [];
     charlaTerminada = false;
     esperandoAclaracion = false;
+    draftIdLocal = null;
     aporteChat.innerHTML = '';
     aporteMsg.textContent = '';
     aporteMsg.classList.remove('error');
@@ -770,7 +775,7 @@
       const resp = await fetch(conOwner('/api/contribute-chat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ history: historyLocal, audioUrls: audioUrlsLocal }),
+        body: JSON.stringify({ history: historyLocal, audioUrls: audioUrlsLocal, draftId: draftIdLocal }),
       });
       const data = await resp.json();
       thinking.remove();
@@ -778,6 +783,7 @@
         agregarBurbuja('a', mensajeDeErrorDeTurno(resp, data));
         return;
       }
+      if (data.draftId) draftIdLocal = data.draftId;
       historyLocal.push({ role: 'assistant', content: data.message });
       agregarBurbuja('a', data.message);
       esperandoAclaracion = !!data.needsBasicInfo;
