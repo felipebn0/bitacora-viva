@@ -446,6 +446,16 @@
   }
   .join-collab-row button:disabled { opacity: 0.6; cursor: default; }
   .join-collab-panel .msg { font-size: 0.85rem; min-height: 1.2em; color: var(--moss); margin: 8px 0 0; }
+  .join-collab-existentes { margin-top: 16px; padding-top: 14px; border-top: 1px solid #E7DFCC; }
+  .join-collab-existentes .sub { margin-bottom: 8px; }
+  .join-collab-lista { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  /* min-height:44px: zona de toque cómoda para algo que se usa para entrar
+     directo a una bitácora en la que ya se colabora. */
+  .join-collab-lista a {
+    display: inline-flex; align-items: center; padding: 6px 14px; border-radius: 20px; font-size: 0.85rem;
+    text-decoration: none; color: var(--ink); background: #fff; border: 1px solid #E7DFCC;
+    min-height: 44px; box-sizing: border-box;
+  }
   .login {
     width: min(340px, 100%);
     background: #FBF6EA;
@@ -720,6 +730,10 @@
        <button id="joinCollabSubmit" type="button">Entrar</button>
      </div>
      <p class="msg" id="joinCollabMsg" role="alert"></p>
+     <div class="join-collab-existentes" id="joinCollabExistentes" style="display:none;">
+       <p class="sub">Ya colaboras con:</p>
+       <div class="join-collab-lista" id="joinCollabLista"></div>
+     </div>
    </div>
    <div class="main-layout">
     <div class="device-col">
@@ -1433,12 +1447,37 @@
   const joinCollabCode = document.getElementById('joinCollabCode');
   const joinCollabSubmit = document.getElementById('joinCollabSubmit');
   const joinCollabMsg = document.getElementById('joinCollabMsg');
+  const joinCollabExistentes = document.getElementById('joinCollabExistentes');
+  const joinCollabLista = document.getElementById('joinCollabLista');
+
+  // Bitácoras en las que ya se colabora — para entrar directo sin tener
+  // que volver a pedir el código cada vez que se abre este panel.
+  async function cargarMisColaboracionesEnPanel() {
+    try {
+      const resp = await fetch('/api/my-collaborations');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const historias = data.historias || [];
+      if (!historias.length) { joinCollabExistentes.style.display = 'none'; return; }
+      joinCollabLista.innerHTML = '';
+      historias.forEach((h) => {
+        const a = document.createElement('a');
+        a.href = '/colaborar.html?owner=' + h.ownerId;
+        a.textContent = h.ownerName;
+        joinCollabLista.appendChild(a);
+      });
+      joinCollabExistentes.style.display = 'block';
+    } catch (e) {}
+  }
 
   joinCollabBtn.addEventListener('click', () => {
     const visible = joinCollabPanel.style.display !== 'none';
     joinCollabPanel.style.display = visible ? 'none' : 'block';
     joinCollabBtn.setAttribute('aria-expanded', String(!visible));
-    if (!visible) joinCollabCode.focus();
+    if (!visible) {
+      joinCollabCode.focus();
+      cargarMisColaboracionesEnPanel();
+    }
   });
 
   async function unirseAColaboracion() {
