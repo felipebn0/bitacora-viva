@@ -66,4 +66,15 @@ Cosas que se pidieron pero se decidió posponer, con suficiente detalle para ret
 
 **Para retomarlo:** un script/endpoint temporal (protegido con SETUP_KEY, con "dry run" por defecto — mismo patrón ya usado antes en este proyecto) que recorra `story_log.audio_url`, `family_notes.audio_url`/`audio_urls` y `media.url`, baje cada archivo, lo vuelva a subir con `access:'private'`, actualice la fila con la nueva ruta, y borre la copia pública vieja. Hacerlo de a poco y con logs claros — son archivos reales de familias reales.
 
-## 10. (de acá para abajo, agregar nuevas ideas que vayan surgiendo)
+## 11. Poner en marcha de verdad los pagos (Wava) y los recordatorios (correo)
+
+**Qué es:** la infraestructura completa ya está construida y con tests (`/api/billing/*`, `/api/webhooks/wava`, `/api/cron/*`, `/api/notification-preferences`, `/api/magic-login`, tablas `subscriptions`/`billing_orders`/`notification_preferences`/`reminder_deliveries`) — pero no está conectada a nada real todavía. Sin las variables de entorno de abajo, `/api/billing/checkout` responde 501 y los recordatorios simplemente no se mandan — no rompe nada, solo no hace nada.
+
+**Para ponerlo en marcha:**
+1. Crear cuenta en Wava (app.dev.wava.co para pruebas primero) y sacar el `merchant-key` desde Settings → Integrations → API.
+2. Configurar el webhook en el dashboard de Wava apuntando a `https://bitacora-viva.vercel.app/api/webhooks/wava`, y copiar el secreto que da ahí.
+3. Crear cuenta en Resend (o el proveedor de correo que se prefiera — el código solo usa su API REST directa, se puede cambiar `enviarCorreo()` en `server.js` por otro proveedor sin tocar el resto) y sacar su API key.
+4. Agregar en Vercel (Settings → Environment Variables), **nunca por acá**: `WAVA_MERCHANT_KEY`, `WAVA_WEBHOOK_SECRET`, `WAVA_API_BASE` (usar `https://api.dev.wava.co/v1` mientras se prueba, `https://api.wava.co/v1` en real), `RESEND_API_KEY`, `RESEND_FROM`, `CRON_SECRET` (cualquier string largo al azar, propio, no el de Wava).
+5. Probar un pago de punta a punta contra el sandbox de Wava (`Test Data` en su documentación) antes de pasar a `WAVA_API_BASE` de producción.
+6. Pendiente de la propia recomendación de seguridad de Wava: además de verificar la firma del webhook (ya hecho), confirmar el pago llamando `GET /v1/orders/{orderId}` antes de darlo por bueno — no se agregó todavía por no tener credenciales reales contra las cuales probarlo.
+7. Los crons (`/api/cron/reminders` y `/api/cron/billing`) ya están declarados en `vercel.json` — arrancan solos apenas se despliegue con un plan de Vercel que incluya Cron Jobs.

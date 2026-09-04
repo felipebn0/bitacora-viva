@@ -622,6 +622,31 @@
            <p class="um-hint">Un archivo .zip con todas tus historias, aportes de la familia, árbol genealógico y capítulos — para que tengas tu propia copia, aparte de esta app.</p>
          </div>
 
+         <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecPlan">Plan <span class="um-chevron" aria-hidden="true">›</span></button>
+         <div class="um-section-body" id="umSecPlan" hidden>
+           <p class="um-msg" id="umPlanEstado">Cargando…</p>
+           <div id="umPlanOpciones" style="display:none">
+             <button class="um-btn" id="umPlanPersonalBtn" type="button">Legado personal — $399.000/año</button>
+             <button class="um-btn" id="umPlanFamiliarBtn" type="button">Legado familiar — $649.000/año</button>
+             <p class="um-hint">Te lleva a una página de pago segura de Wava — tarjeta, Nequi, Daviplata o Bre-B.</p>
+           </div>
+           <p class="um-msg" id="umPlanMsg" role="status" aria-live="polite" aria-atomic="true"></p>
+         </div>
+
+         <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecRecordatorios">Recordatorios <span class="um-chevron" aria-hidden="true">›</span></button>
+         <div class="um-section-body" id="umSecRecordatorios" hidden>
+           <label class="um-hint" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+             <input type="checkbox" id="umRecordatoriosActivos"> Avisarme por correo si hace un tiempo que no charlamos
+           </label>
+           <select id="umRecordatoriosFrecuencia" aria-label="Cada cuánto avisar">
+             <option value="7">Cada semana</option>
+             <option value="14">Cada 2 semanas</option>
+             <option value="30">Cada mes</option>
+           </select>
+           <button class="um-btn" id="umRecordatoriosGuardar" type="button">Guardar</button>
+           <p class="um-msg" id="umRecordatoriosMsg" role="status" aria-live="polite" aria-atomic="true"></p>
+         </div>
+
          <hr>
          <button class="um-btn um-plain" id="umLogoutBtn" type="button">Cerrar sesión</button>
 
@@ -1051,6 +1076,80 @@
     try { await fetch('/api/logout', { method: 'POST' }); } catch (e) {}
     window.location.href = '/';
   });
+
+  // --- Plan y pagos ---
+  const umPlanEstado = document.getElementById('umPlanEstado');
+  const umPlanOpciones = document.getElementById('umPlanOpciones');
+  const umPlanMsg = document.getElementById('umPlanMsg');
+  const NOMBRE_ESTADO_PLAN = {
+    trialing: 'En prueba', active: 'Al día', past_due: 'Pago pendiente — hay unos días de gracia',
+    grace_period: 'Pago pendiente — hay unos días de gracia', read_only: 'Vencido — solo lectura hasta que renueves', canceled: 'Cancelado', none: 'Sin plan pago todavía',
+  };
+  let umPlanCargado = false;
+  async function cargarEstadoPlan() {
+    if (umPlanCargado) return;
+    umPlanCargado = true;
+    try {
+      const resp = await fetch('/api/billing/status');
+      const data = await resp.json();
+      if (!data.status || data.status === 'none') {
+        umPlanEstado.textContent = 'Todavía usás la bitácora gratis — elegí un plan cuando quieras.';
+      } else {
+        const vence = data.current_period_end ? new Date(data.current_period_end).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' }) : null;
+        umPlanEstado.textContent = `${NOMBRE_ESTADO_PLAN[data.status] || data.status}${vence ? ' · vence el ' + vence : ''}`;
+      }
+      umPlanOpciones.style.display = 'block';
+    } catch (e) {
+      umPlanEstado.textContent = 'No se pudo cargar el estado del plan.';
+    }
+  }
+  async function iniciarCheckout(planId) {
+    umPlanMsg.textContent = 'Generando el link de pago…';
+    try {
+      const resp = await fetch('/api/billing/checkout', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ planId, periodo: 'annual' }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) { umPlanMsg.textContent = data.error || 'No se pudo iniciar el pago.'; return; }
+      window.location.href = data.link;
+    } catch (e) {
+      umPlanMsg.textContent = 'No se pudo conectar. Intenta de nuevo.';
+    }
+  }
+  document.getElementById('umPlanPersonalBtn').addEventListener('click', () => iniciarCheckout('legado_personal'));
+  document.getElementById('umPlanFamiliarBtn').addEventListener('click', () => iniciarCheckout('legado_familiar'));
+
+  // --- Recordatorios ---
+  const umRecordatoriosActivos = document.getElementById('umRecordatoriosActivos');
+  const umRecordatoriosFrecuencia = document.getElementById('umRecordatoriosFrecuencia');
+  const umRecordatoriosMsg = document.getElementById('umRecordatoriosMsg');
+  let umRecordatoriosCargados = false;
+  async function cargarRecordatorios() {
+    if (umRecordatoriosCargados) return;
+    umRecordatoriosCargados = true;
+    try {
+      const resp = await fetch('/api/notification-preferences');
+      const data = await resp.json();
+      umRecordatoriosActivos.checked = data.recordatorios_activos !== false;
+      umRecordatoriosFrecuencia.value = String(data.frecuencia_dias || 14);
+    } catch (e) {}
+  }
+  document.getElementById('umRecordatoriosGuardar').addEventListener('click', async () => {
+    umRecordatoriosMsg.textContent = '';
+    try {
+      const resp = await fetch('/api/notification-preferences', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recordatorios_activos: umRecordatoriosActivos.checked, frecuencia_dias: parseInt(umRecordatoriosFrecuencia.value, 10) }),
+      });
+      umRecordatoriosMsg.textContent = resp.ok ? 'Guardado ✓' : 'No se pudo guardar.';
+    } catch (e) {
+      umRecordatoriosMsg.textContent = 'No se pudo conectar.';
+    }
+  });
+  // Se cargan recién al abrir cada sección (mismo criterio que el resto del
+  // acordeón: nada de pedidos de más antes de que hagan falta).
+  document.querySelector('[aria-controls="umSecPlan"]').addEventListener('click', cargarEstadoPlan);
+  document.querySelector('[aria-controls="umSecRecordatorios"]').addEventListener('click', cargarRecordatorios);
 
   const umCurrentPassword = document.getElementById('umCurrentPassword');
   const umNewPassword = document.getElementById('umNewPassword');

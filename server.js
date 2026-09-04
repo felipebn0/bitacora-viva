@@ -445,6 +445,76 @@ function ensureSchema() {
         creado_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         ultimo_intento_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`,
+
+      // --- Suscripciones y cobros (Wava) --------------------------------
+      // Una fila por cuenta dueña que alguna vez empezó a pagar (o está en
+      // prueba). status sigue la máquina de estados acordada:
+      // trialing -> active -> past_due -> grace_period -> read_only, con
+      // cancel_at_period_end aparte (no es un estado, es una bandera: la
+      // cuenta sigue activa hasta el fin del período ya pagado). Wava no
+      // tiene cobro recurrente nativo (confirmado contra su documentación):
+      // cada período se resuelve con un billing_order nuevo — ver más abajo.
+      sql`CREATE TABLE IF NOT EXISTS subscriptions (
+        id SERIAL PRIMARY KEY,
+        user_id INT NOT NULL REFERENCES users(id),
+        plan_id TEXT NOT NULL,
+        periodo TEXT NOT NULL DEFAULT 'annual',
+        status TEXT NOT NULL DEFAULT 'trialing',
+        current_period_end TIMESTAMPTZ,
+        grace_until TIMESTAMPTZ,
+        cancel_at_period_end BOOLEAN NOT NULL DEFAULT false,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_subscriptions_user ON subscriptions(user_id)`,
+
+      // Un pedido de cobro concreto contra Wava — uno por cada intento de
+      // pago (la primera suscripción, cada renovación, un paquete
+      // adicional). order_key es lo que se manda como idempotencia a Wava
+      // (POST /links) y es lo que después llega de vuelta en el webhook
+      // para encontrar esta fila — nunca se confía en el monto/estado que
+      // mande el webhook sin cruzarlo contra esta fila primero.
+      sql`CREATE TABLE IF NOT EXISTS billing_orders (
+        id SERIAL PRIMARY KEY,
+        subscription_id INT REFERENCES subscriptions(id),
+        user_id INT NOT NULL REFERENCES users(id),
+        order_key TEXT NOT NULL UNIQUE,
+        wava_hash TEXT,
+        wava_link TEXT,
+        concepto TEXT NOT NULL,
+        monto_cop INT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        raw_webhook JSONB,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        paid_at TIMESTAMPTZ
+      )`,
+      sql`CREATE INDEX IF NOT EXISTS idx_billing_orders_user ON billing_orders(user_id)`,
+      sql`CREATE INDEX IF NOT EXISTS idx_billing_orders_subscription ON billing_orders(subscription_id)`,
+
+      // --- Activación recurrente (recordatorios por correo) -------------
+      // Preferencia de cada cuenta dueña sobre si/cuándo recibir un
+      // recordatorio para seguir contando su historia. Una fila por
+      // usuario, se crea sola con los valores por defecto la primera vez
+      // que hace falta (ver cargarPreferenciaNotificacion).
+      sql`CREATE TABLE IF NOT EXISTS notification_preferences (
+        user_id INT PRIMARY KEY REFERENCES users(id),
+        recordatorios_activos BOOLEAN NOT NULL DEFAULT true,
+        frecuencia_dias INT NOT NULL DEFAULT 14,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+
+      // Un registro por cada correo de recordatorio que se manda — evita
+      // mandar dos veces el mismo día si el cron corre más de una vez, y
+      // deja rastro de qué se mandó y cuándo para poder revisar después.
+      sql`CREATE TABLE IF NOT EXISTS reminder_deliveries (
+        id SERIAL PRIMARY KEY,
+        user_id INT NOT NULL REFERENCES users(id),
+        tipo TEXT NOT NULL DEFAULT 'recordatorio',
+        enviado_ok BOOLEAN NOT NULL DEFAULT true,
+        detalle TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      sql`CREATE INDEX IF NOT EXISTS idx_reminder_deliveries_user_fecha ON reminder_deliveries(user_id, created_at)`,
     ]).catch((err) => {
       // Si la transacción falla, no dejamos una promesa rota memoizada para
       // siempre — el próximo intento (esta misma instancia tibia, no hace
@@ -617,6 +687,29 @@ function bloquearColaborador(req, res, next) {
     return res.status(403).json({ error: 'Esta función no está disponible para cuentas colaboradoras.' });
   }
   next();
+}
+
+// Solo para /api/next (agregar charlas nuevas) — una cuenta SIN fila en
+// subscriptions (nadie pagó nunca, el caso de hoy para todas las cuentas
+// existentes) pasa de largo sin ninguna restricción: el cobro es opt-in,
+// nunca retroactivo. Solo bloquea a quien de verdad tiene una suscripción
+// vencida hace rato (read_only, ver /api/cron/billing). Ver/exportar lo ya
+// guardado sigue funcionando siempre — nunca se pierde nada por no pagar.
+// Fallar ABIERTO a propósito si esta consulta falla: un problema transitorio
+// de la base nunca debería ser lo que le impide a alguien contar su
+// historia.
+async function bloquearSiReadOnly(req, res, next) {
+  try {
+    await ensureSchema();
+    const rows = await sql`SELECT status FROM subscriptions WHERE user_id = ${req.profileUserId}`;
+    if (rows.length && rows[0].status === 'read_only') {
+      return res.status(402).json({ error: 'Tu suscripción está vencida — podés seguir leyendo y exportando tu bitácora, pero para grabar historias nuevas hace falta renovar desde el menú de Cuenta.' });
+    }
+    next();
+  } catch (err) {
+    console.error('No se pudo verificar el estado de la suscripción (se deja pasar):', err);
+    next();
+  }
 }
 
 // Resuelve para qué bitácora debería trabajar esta request. Si viene un
@@ -1890,7 +1983,7 @@ async function dejarUnaSolaPregunta(texto) {
   return final;
 }
 
-app.post('/api/next', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
+app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiReadOnly, rateLimit, async (req, res) => {
   try {
     const history = Array.isArray(req.body.history) ? req.body.history.slice(0, 60) : [];
     for (const m of history) {
@@ -3128,6 +3221,407 @@ app.post('/api/save', requireAuth, bloquearColaborador, rateLimit, async (req, r
   } catch (err) {
     console.error(err);
     if (!res.headersSent) res.status(500).json({ error: 'No se pudo guardar la charla.' });
+  }
+});
+
+// ============================================================
+// ACTIVACIÓN RECURRENTE (recordatorios por correo) y PAGOS (Wava)
+// ============================================================
+//
+// Los dos comparten una misma pieza: no hay forma de "cobrar solo" ni de
+// "recordar solo" sin un canal de salida — acá ese canal es correo, vía
+// Resend (RESEND_API_KEY). Nada de esto manda nada real sin esa variable
+// configurada; sin ella, las rutas devuelven 501 en vez de fallar en
+// silencio o a medias.
+//
+// Wava (wava.co) no tiene cobro recurrente nativo (confirmado contra su
+// propia documentación en docs.wava.co) — el "cobro recurrente" acá es
+// nuestro: un cron manda un correo con un link de pago nuevo antes de que
+// venza cada período, y otro cron mueve la suscripción por los estados
+// (trialing -> active -> past_due -> grace_period -> read_only) según se
+// pague o no a tiempo. Ver BACKLOG.md para lo que falta antes de ir a
+// producción de verdad con esto (credenciales propias, sandbox, etc).
+
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const RESEND_FROM = process.env.RESEND_FROM || 'Los recuerdos de mis viejos <onboarding@resend.dev>';
+
+async function enviarCorreo({ to, subject, html }) {
+  if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY no está configurada.');
+  const resp = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: RESEND_FROM, to: [to], subject, html }),
+    signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+  });
+  if (!resp.ok) {
+    const texto = await resp.text().catch(() => '');
+    throw new Error(`Resend respondió ${resp.status}: ${texto}`);
+  }
+  return resp.json();
+}
+
+// --- Login mágico (un solo click, sin clave) --------------------------
+// Mismo signSession/verifySession que ya usa el login normal — un mismo
+// mecanismo, dos formas de llegar a la sesión. A diferencia de la cookie
+// de sesión normal (30 días), este link vence en MAGIC_LOGIN_MAX_AGE
+// (30 minutos): viaja por correo, que puede quedar dando vueltas en una
+// bandeja de entrada mucho más tiempo que eso.
+const MAGIC_LOGIN_MAX_AGE = 30 * 60 * 1000;
+
+function crearLinkMagico(req, userId, next) {
+  const token = signSession({ magic: true, userId });
+  const base = `${req.protocol}://${req.get('host')}`;
+  return `${base}/api/magic-login?token=${encodeURIComponent(token)}&next=${encodeURIComponent(next || '/app.html')}`;
+}
+
+app.get('/api/magic-login', rateLimit, async (req, res) => {
+  try {
+    const token = typeof req.query.token === 'string' ? req.query.token : '';
+    const next = typeof req.query.next === 'string' && req.query.next.startsWith('/') && !req.query.next.startsWith('//') ? req.query.next : '/app.html';
+    const payload = verifySession(token);
+    if (!payload || !payload.magic || !payload.userId || Date.now() - payload.iat > MAGIC_LOGIN_MAX_AGE) {
+      return res.redirect(302, '/app.html?magic=vencido');
+    }
+    await ensureSchema();
+    const rows = await sql`SELECT username, token_version FROM users WHERE id = ${payload.userId}`;
+    if (!rows.length) return res.redirect(302, '/app.html?magic=invalido');
+    setSessionCookie(req, res, { userId: payload.userId, username: rows[0].username, tokenVersion: rows[0].token_version });
+    res.redirect(302, next);
+  } catch (err) {
+    console.error(err);
+    res.redirect(302, '/app.html?magic=error');
+  }
+});
+
+// --- Preferencias de recordatorio --------------------------------------
+app.get('/api/notification-preferences', requireAuth, bloquearColaborador, async (req, res) => {
+  try {
+    await ensureSchema();
+    const rows = await sql`SELECT recordatorios_activos, frecuencia_dias FROM notification_preferences WHERE user_id = ${req.userId}`;
+    res.json(rows[0] || { recordatorios_activos: true, frecuencia_dias: 14 });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo cargar la preferencia.' });
+  }
+});
+
+app.post('/api/notification-preferences', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
+  try {
+    const activos = req.body.recordatorios_activos !== false;
+    const frecuencia = [7, 14, 30].includes(parseInt(req.body.frecuencia_dias, 10)) ? parseInt(req.body.frecuencia_dias, 10) : 14;
+    await ensureSchema();
+    await sql`
+      INSERT INTO notification_preferences (user_id, recordatorios_activos, frecuencia_dias, updated_at)
+      VALUES (${req.userId}, ${activos}, ${frecuencia}, now())
+      ON CONFLICT (user_id) DO UPDATE SET recordatorios_activos = ${activos}, frecuencia_dias = ${frecuencia}, updated_at = now()
+    `;
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo guardar la preferencia.' });
+  }
+});
+
+function plantillaRecordatorio(nombre, link) {
+  return `<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;color:#2B241C">
+    <h1 style="font-size:1.3rem">Hola, ${nombre} 👋</h1>
+    <p>Hace un tiempo que no charlamos — tu bitácora sigue esperando la próxima historia.</p>
+    <p><a href="${link}" style="display:inline-block;background:#8F5A20;color:#FBF6EA;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:bold">Seguir contando →</a></p>
+    <p style="color:#706551;font-size:.85rem">Este link te lleva directo a tu cuenta, sin pedirte la clave, y vence en 30 minutos por seguridad. Si no querés seguir recibiendo estos correos, podés apagarlos desde el menú de Cuenta.</p>
+  </div>`;
+}
+
+// Disparado por Vercel Cron (ver vercel.json) — protegido con CRON_SECRET,
+// el mismo valor que Vercel manda solo en el header Authorization cuando
+// el cron está configurado. Sin CRON_SECRET configurado, esta ruta se
+// niega a correr (fallar cerrado: mejor no mandar nada a que cualquiera
+// que encuentre la URL pueda disparar correos masivos).
+app.get('/api/cron/reminders', async (req, res) => {
+  try {
+    if (!process.env.CRON_SECRET || req.headers['authorization'] !== `Bearer ${process.env.CRON_SECRET}`) {
+      return res.status(401).json({ error: 'No autorizado.' });
+    }
+    if (!RESEND_API_KEY) return res.status(501).json({ error: 'RESEND_API_KEY no está configurada — no se manda nada.' });
+
+    await ensureSchema();
+    const candidatos = await sql`
+      SELECT u.id, u.email, u.name, u.username, u.created_at,
+        (SELECT MAX(fecha) FROM sessions s WHERE s.user_id = u.id) AS ultima_charla,
+        (SELECT MAX(created_at) FROM reminder_deliveries rd WHERE rd.user_id = u.id AND rd.tipo = 'recordatorio') AS ultimo_recordatorio,
+        COALESCE(np.recordatorios_activos, true) AS recordatorios_activos,
+        COALESCE(np.frecuencia_dias, 14) AS frecuencia_dias
+      FROM users u
+      LEFT JOIN notification_preferences np ON np.user_id = u.id
+      WHERE u.owner_user_id IS NULL AND u.email IS NOT NULL
+    `;
+    const AHORA = Date.now();
+    const DIA_MS = 24 * 60 * 60 * 1000;
+    let enviados = 0;
+    for (const c of candidatos) {
+      if (!c.recordatorios_activos) continue;
+      const ultimaActividad = c.ultima_charla ? new Date(c.ultima_charla).getTime() : new Date(c.created_at).getTime();
+      const diasSinCharla = (AHORA - ultimaActividad) / DIA_MS;
+      const diasDesdeRecordatorio = c.ultimo_recordatorio ? (AHORA - new Date(c.ultimo_recordatorio).getTime()) / DIA_MS : Infinity;
+      if (diasSinCharla < c.frecuencia_dias || diasDesdeRecordatorio < c.frecuencia_dias) continue;
+
+      const nombre = capitalizarNombre(c.name || c.username) || 'de nuevo';
+      try {
+        await enviarCorreo({ to: c.email, subject: 'Un recuerdo más para tu bitácora', html: plantillaRecordatorio(nombre, crearLinkMagico(req, c.id)) });
+        await sql`INSERT INTO reminder_deliveries (user_id, tipo, enviado_ok) VALUES (${c.id}, 'recordatorio', true)`;
+        enviados++;
+      } catch (err) {
+        console.error(`No se pudo mandar el recordatorio a ${c.email}:`, err);
+        await sql`INSERT INTO reminder_deliveries (user_id, tipo, enviado_ok, detalle) VALUES (${c.id}, 'recordatorio', false, ${String((err && err.message) || err).slice(0, 500)})`;
+      }
+    }
+    res.json({ ok: true, evaluados: candidatos.length, enviados });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo correr el recordatorio.' });
+  }
+});
+
+// --- Pagos (Wava) --------------------------------------------------------
+// Planes fijos en código (no en una tabla) — son 3 y cambian poco; si
+// alguna vez hace falta editarlos sin desplegar, ahí sí vale la pena
+// pasarlos a una tabla. Precios ya acordados en el plan de rentabilidad.
+const PLANES = {
+  legado_personal: { nombre: 'Legado personal', precioMensual: 44900, precioAnual: 399000, narradoresMax: 1 },
+  legado_familiar: { nombre: 'Legado familiar', precioMensual: 74900, precioAnual: 649000, narradoresMax: 3 },
+  regalo: { nombre: 'Regalo — 12 meses', precioAnual: 449000, narradoresMax: 1 },
+};
+
+const WAVA_MERCHANT_KEY = process.env.WAVA_MERCHANT_KEY;
+const WAVA_WEBHOOK_SECRET = process.env.WAVA_WEBHOOK_SECRET;
+const WAVA_API_BASE = process.env.WAVA_API_BASE || 'https://api.wava.co/v1';
+
+app.get('/api/billing/plans', (req, res) => {
+  res.json({ planes: PLANES, pagosConfigurados: !!WAVA_MERCHANT_KEY });
+});
+
+app.get('/api/billing/status', requireAuth, bloquearColaborador, async (req, res) => {
+  try {
+    await ensureSchema();
+    const rows = await sql`SELECT plan_id, periodo, status, current_period_end, cancel_at_period_end FROM subscriptions WHERE user_id = ${req.userId}`;
+    res.json(rows[0] || { plan_id: null, status: 'none' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo cargar el estado de la suscripción.' });
+  }
+});
+
+// Crea el link de pago (checkout alojado por Wava) para arrancar o renovar
+// una suscripción. La suscripción en sí queda "pending" hasta que el
+// webhook confirme el pago — nunca se activa acá, del lado del cliente.
+app.post('/api/billing/checkout', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
+  try {
+    if (!WAVA_MERCHANT_KEY) return res.status(501).json({ error: 'Los pagos todavía no están configurados.' });
+    const planId = String(req.body.planId || '');
+    const plan = PLANES[planId];
+    if (!plan) return res.status(400).json({ error: 'Plan inválido.' });
+    const periodo = req.body.periodo === 'monthly' && plan.precioMensual ? 'monthly' : 'annual';
+    const monto = periodo === 'monthly' ? plan.precioMensual : plan.precioAnual;
+    if (!monto) return res.status(400).json({ error: 'Ese plan no tiene ese período disponible.' });
+
+    await ensureSchema();
+    const orderKey = `sub-${req.userId}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+    const base = `${req.protocol}://${req.get('host')}`;
+    const wavaResp = await fetch(`${WAVA_API_BASE}/links`, {
+      method: 'POST',
+      headers: { 'merchant-key': WAVA_MERCHANT_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        amount: monto,
+        description: `${plan.nombre} (${periodo === 'monthly' ? 'mensual' : 'anual'}) — Los recuerdos de mis viejos`,
+        currency: 'COP',
+        order_key: orderKey,
+        redirect_link: `${base}/app.html?pago=ok`,
+        redirect_link_cancel: `${base}/app.html?pago=cancelado`,
+        redirect_link_failure: `${base}/app.html?pago=error`,
+      }),
+      signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+    });
+    if (!wavaResp.ok) {
+      console.error('Wava rechazó la creación del link:', wavaResp.status, await wavaResp.text().catch(() => ''));
+      return res.status(502).json({ error: 'No se pudo generar el link de pago.' });
+    }
+    const wavaData = await wavaResp.json();
+    const link = wavaData.result && wavaData.result.link;
+    const hash = wavaData.result && wavaData.result.hash;
+    if (!link) return res.status(502).json({ error: 'No se pudo generar el link de pago.' });
+
+    const subRows = await sql`SELECT id FROM subscriptions WHERE user_id = ${req.userId}`;
+    let subscriptionId;
+    if (subRows.length) {
+      subscriptionId = subRows[0].id;
+      await sql`UPDATE subscriptions SET plan_id = ${planId}, periodo = ${periodo}, updated_at = now() WHERE id = ${subscriptionId}`;
+    } else {
+      const inserted = await sql`INSERT INTO subscriptions (user_id, plan_id, periodo, status) VALUES (${req.userId}, ${planId}, ${periodo}, 'trialing') RETURNING id`;
+      subscriptionId = inserted[0].id;
+    }
+
+    await sql`
+      INSERT INTO billing_orders (subscription_id, user_id, order_key, wava_hash, wava_link, concepto, monto_cop, status)
+      VALUES (${subscriptionId}, ${req.userId}, ${orderKey}, ${hash || null}, ${link}, ${plan.nombre + ' (' + periodo + ')'}, ${monto}, 'pending')
+    `;
+
+    res.json({ ok: true, link });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo iniciar el pago.' });
+  }
+});
+
+// Wava llama acá cuando cambia el estado de una orden/link. express.raw
+// (no express.json): la firma se calcula sobre los bytes CRUDOS del body
+// tal como los mandó Wava — parsearlo primero y volver a serializarlo
+// podría no dar el mismo string y romper la verificación.
+app.post('/api/webhooks/wava', express.raw({ type: '*/*', limit: '256kb' }), async (req, res) => {
+  try {
+    if (!WAVA_WEBHOOK_SECRET) {
+      console.error('Llegó un webhook de Wava pero WAVA_WEBHOOK_SECRET no está configurado — se ignora.');
+      return res.status(501).end();
+    }
+    const firma = req.headers['x-wava-signature'];
+    if (!firma || typeof firma !== 'string' || !/^[0-9a-f]+$/i.test(firma)) return res.status(400).end();
+    const cuerpoRaw = Buffer.isBuffer(req.body) ? req.body : Buffer.from('');
+    const esperada = crypto.createHmac('sha256', WAVA_WEBHOOK_SECRET).update(cuerpoRaw).digest('hex');
+    const firmaBuf = Buffer.from(firma, 'hex');
+    const esperadaBuf = Buffer.from(esperada, 'hex');
+    if (firmaBuf.length !== esperadaBuf.length || !crypto.timingSafeEqual(firmaBuf, esperadaBuf)) {
+      console.error('Webhook de Wava con firma inválida — se descarta.');
+      return res.status(401).end();
+    }
+
+    let evento;
+    try { evento = JSON.parse(cuerpoRaw.toString('utf8')); } catch (e) { return res.status(400).end(); }
+
+    const orderKey = evento.id_external || evento.order_key || null;
+    if (!orderKey) return res.status(200).json({ ok: true }); // evento sin nada que podamos ubicar — no es un error nuestro
+
+    await ensureSchema();
+    const filas = await sql`SELECT id, subscription_id, status FROM billing_orders WHERE order_key = ${orderKey}`;
+    if (!filas.length) {
+      console.error('Webhook de Wava para un order_key que no existe acá:', orderKey);
+      return res.status(200).json({ ok: true });
+    }
+    const orden = filas[0];
+    if (orden.status === 'paid') return res.status(200).json({ ok: true }); // ya procesado — idempotente, Wava puede reintentar el mismo evento
+
+    const estadoWava = String(evento.status || '').toLowerCase();
+    const pagoConfirmado = ['paid', 'approved', 'success', 'completed'].includes(estadoWava);
+    if (!pagoConfirmado) {
+      await sql`UPDATE billing_orders SET status = ${estadoWava || 'unknown'}, raw_webhook = ${JSON.stringify(evento)}::jsonb WHERE id = ${orden.id}`;
+      return res.status(200).json({ ok: true });
+    }
+
+    const subRows = orden.subscription_id ? await sql`SELECT periodo FROM subscriptions WHERE id = ${orden.subscription_id}` : [];
+    const periodo = subRows[0] ? subRows[0].periodo : 'annual';
+    const intervalo = periodo === 'monthly' ? '1 month' : '1 year';
+
+    await sql.transaction([
+      sql`UPDATE billing_orders SET status = 'paid', paid_at = now(), raw_webhook = ${JSON.stringify(evento)}::jsonb WHERE id = ${orden.id}`,
+      sql`UPDATE subscriptions SET status = 'active', current_period_end = now() + ${intervalo}::interval, grace_until = NULL, updated_at = now() WHERE id = ${orden.subscription_id}`,
+    ]);
+    res.status(200).json({ ok: true });
+  } catch (err) {
+    console.error('Error procesando webhook de Wava:', err);
+    res.status(500).json({ error: 'No se pudo procesar el webhook.' });
+  }
+});
+
+function plantillaRenovacion(nombre, plan, link) {
+  return `<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;color:#2B241C">
+    <h1 style="font-size:1.3rem">Hola, ${nombre} 👋</h1>
+    <p>Tu plan <strong>${plan.nombre}</strong> está por renovarse. Cuando quieras, pagá acá para seguir sin cortes:</p>
+    <p><a href="${link}" style="display:inline-block;background:#5B6B45;color:#FBF6EA;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:bold">Renovar ahora →</a></p>
+    <p style="color:#706551;font-size:.85rem">Si ya renovaste, ignorá este correo. Mientras tanto tu bitácora sigue disponible en modo lectura — nada se borra por no pagar a tiempo.</p>
+  </div>`;
+}
+
+// Disparado por Vercel Cron — mueve cada suscripción por sus estados y
+// manda el link de renovación por correo antes de que venza (Wava no
+// reintenta cobros solo, así que el aviso previo es lo que reemplaza a un
+// "reintento automático"). Mismo CRON_SECRET que /api/cron/reminders.
+app.get('/api/cron/billing', async (req, res) => {
+  try {
+    if (!process.env.CRON_SECRET || req.headers['authorization'] !== `Bearer ${process.env.CRON_SECRET}`) {
+      return res.status(401).json({ error: 'No autorizado.' });
+    }
+    await ensureSchema();
+
+    // 1) Avisar ANTES de vencer (5 días de anticipación) — una sola vez por
+    // período, así que se corta si ya se mandó un aviso de renovación
+    // desde el último pago.
+    const porVencer = await sql`
+      SELECT s.id AS subscription_id, s.user_id, s.plan_id, s.periodo, u.email, u.name, u.username,
+        (SELECT MAX(created_at) FROM reminder_deliveries rd WHERE rd.user_id = s.user_id AND rd.tipo = 'renovacion') AS ultimo_aviso
+      FROM subscriptions s JOIN users u ON u.id = s.user_id
+      WHERE s.status = 'active' AND s.cancel_at_period_end = false AND u.email IS NOT NULL
+        AND s.current_period_end IS NOT NULL
+        AND s.current_period_end <= now() + INTERVAL '5 days' AND s.current_period_end > now()
+    `;
+    let avisosEnviados = 0;
+    for (const s of porVencer) {
+      // Si ya se avisó DESPUÉS del último pago (paid_at), no se repite.
+      const ultimaOrdenPagada = await sql`SELECT paid_at FROM billing_orders WHERE subscription_id = ${s.subscription_id} AND status = 'paid' ORDER BY paid_at DESC LIMIT 1`;
+      const desde = (ultimaOrdenPagada[0] && ultimaOrdenPagada[0].paid_at) || null;
+      if (s.ultimo_aviso && (!desde || new Date(s.ultimo_aviso) > new Date(desde))) continue;
+      if (!RESEND_API_KEY) continue;
+
+      const plan = PLANES[s.plan_id];
+      if (!plan) continue;
+      try {
+        const orderKey = `renov-${s.user_id}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+        const base = `${req.protocol}://${req.get('host')}`;
+        const monto = s.periodo === 'monthly' ? plan.precioMensual : plan.precioAnual;
+        const wavaResp = WAVA_MERCHANT_KEY
+          ? await fetch(`${WAVA_API_BASE}/links`, {
+              method: 'POST',
+              headers: { 'merchant-key': WAVA_MERCHANT_KEY, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ amount: monto, description: `Renovación ${plan.nombre} — Los recuerdos de mis viejos`, currency: 'COP', order_key: orderKey, redirect_link: `${base}/app.html?pago=ok` }),
+              signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+            })
+          : null;
+        const wavaData = wavaResp && wavaResp.ok ? await wavaResp.json() : null;
+        const link = wavaData && wavaData.result && wavaData.result.link;
+        if (link) {
+          await sql`INSERT INTO billing_orders (subscription_id, user_id, order_key, wava_hash, wava_link, concepto, monto_cop, status) VALUES (${s.subscription_id}, ${s.user_id}, ${orderKey}, ${wavaData.result.hash || null}, ${link}, ${'Renovación ' + plan.nombre}, ${monto}, 'pending')`;
+        }
+        const nombre = capitalizarNombre(s.name || s.username) || 'de nuevo';
+        await enviarCorreo({ to: s.email, subject: `Tu plan ${plan.nombre} está por renovarse`, html: plantillaRenovacion(nombre, plan, link || crearLinkMagico(req, s.user_id)) });
+        await sql`INSERT INTO reminder_deliveries (user_id, tipo, enviado_ok) VALUES (${s.user_id}, 'renovacion', true)`;
+        avisosEnviados++;
+      } catch (err) {
+        console.error(`No se pudo avisar la renovación a user_id=${s.user_id}:`, err);
+        await sql`INSERT INTO reminder_deliveries (user_id, tipo, enviado_ok, detalle) VALUES (${s.user_id}, 'renovacion', false, ${String((err && err.message) || err).slice(0, 500)})`;
+      }
+    }
+
+    // 2) Vencidas sin pagar -> past_due, con 7 días de gracia.
+    const vencidas = await sql`
+      UPDATE subscriptions SET status = 'past_due', grace_until = now() + INTERVAL '7 days', updated_at = now()
+      WHERE status = 'active' AND cancel_at_period_end = false AND current_period_end IS NOT NULL AND current_period_end <= now()
+      RETURNING id
+    `;
+    // 2b) Canceladas al final del período (el usuario ya había pedido no renovar).
+    const canceladas = await sql`
+      UPDATE subscriptions SET status = 'canceled', updated_at = now()
+      WHERE status = 'active' AND cancel_at_period_end = true AND current_period_end IS NOT NULL AND current_period_end <= now()
+      RETURNING id
+    `;
+
+    // 3) Se acabó la gracia sin pagar -> read_only (se queda ahí; nada se
+    // borra, ver la promesa comercial ya definida en el plan de precios).
+    const sinGracia = await sql`
+      UPDATE subscriptions SET status = 'read_only', updated_at = now()
+      WHERE status = 'past_due' AND grace_until IS NOT NULL AND grace_until <= now()
+      RETURNING id
+    `;
+
+    res.json({ ok: true, avisosEnviados, pasaronAPastDue: vencidas.length, canceladas: canceladas.length, pasaronAReadOnly: sinGracia.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo correr el ciclo de facturación.' });
   }
 });
 
