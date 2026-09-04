@@ -482,7 +482,11 @@
         guestStartBtn.disabled = false;
         return;
       }
-      window.location.reload();
+      // Sacar el ?codigo= ANTES de recargar — si no, la próxima carga
+      // volvía a ver el mismo código, con la sesión de invitado ya
+      // creada, y entraba en un loop de recargas sin fin (ver el bug
+      // reportado: "demasiados pedidos").
+      window.location.href = location.pathname;
     } catch (e) {
       guestError.textContent = 'Hubo un problema para conectar.';
       guestStartBtn.disabled = false;
@@ -661,7 +665,9 @@
               body: JSON.stringify({ codigo: codigoInvitado, name: data.guestName || '' }),
             });
             if (!resp.ok) { showGuestEntry(); return; }
-            window.location.reload();
+            // Mismo motivo que en doGuestStart(): sacar el ?codigo= antes
+            // de recargar, si no queda en loop.
+            window.location.href = location.pathname;
             return;
           }
           const resp = await fetch('/api/join-collaboration', {
