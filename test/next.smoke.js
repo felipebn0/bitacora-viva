@@ -252,6 +252,7 @@ async function main() {
   check('turno normal: done=false', normalBody.done === false);
   check('turno normal: un solo llamado (una sola pregunta, no dispara segunda pasada)', capturedCalls.length === 1);
   check('turno normal: mensaje tal cual (sin marcadores)', !normalBody.message.includes('[FIN]') && !normalBody.message.includes('[PAUSA]'));
+  check('turno normal: el system va con cache_control ephemeral (prompt caching)', capturedCalls[0].system[0].cache_control && capturedCalls[0].system[0].cache_control.type === 'ephemeral');
 
   // --- 3) Cierre con [FIN] ---------------------------------------------------
   resetAnthropicMock();
@@ -400,7 +401,7 @@ async function main() {
   pushAnthropicResponse('Qué lindo, ¿quién más estaba en esa foto del cumpleaños?');
   const conMedia = await nextForUser(server, cookie, { history: historial, mode: 'historia' });
   check('media pendiente -> 200', conMedia.status === 200);
-  check('media pendiente: el contexto incluye la descripción', capturedCalls[0].system.includes('Cumpleaños de 15'));
+  check('media pendiente: el contexto incluye la descripción', capturedCalls[0].system[0].text.includes('Cumpleaños de 15'));
   check('media pendiente: se marcó como discutida', mediaMarkedDiscussed.includes(77));
 
   // --- 11d) Si Anthropic falla, la media pendiente NO se marca como discutida --

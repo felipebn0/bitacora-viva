@@ -1854,11 +1854,20 @@ app.post('/api/next', requireAuth, bloquearColaborador, rateLimit, async (req, r
         familia.text;
     }
 
+    // Prompt caching: este system (~13.000 tokens de SYSTEM_PROMPT/ARBOL_SYSTEM_PROMPT
+    // más el contexto familiar/memoria de esta cuenta) es idéntico turno a turno
+    // dentro de la MISMA charla — nada acá cambia hasta que la persona termina y
+    // arranca una charla nueva. Sin este cache_control, Anthropic cobra el precio
+    // completo de entrada por ese bloque en cada uno de los turnos de la charla.
+    // Con él, solo el primer turno paga la tarifa de "escritura" del caché; el
+    // resto de los turnos de esa misma charla lo leen a una décima parte del
+    // precio normal. "ephemeral" = vence solo a los 5 minutos de inactividad, que
+    // es más que el tiempo típico entre turnos de una charla en curso.
     const response = await anthropic.messages.create(
       {
         model: MODEL,
         max_tokens: 300,
-        system,
+        system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
         messages,
       },
       { timeout: PROVIDER_TIMEOUT_MS }
