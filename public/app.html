@@ -628,9 +628,18 @@
            <div id="umPlanOpciones" style="display:none">
              <button class="um-btn" id="umPlanPersonalBtn" type="button">Legado personal — $399.000/año</button>
              <button class="um-btn" id="umPlanFamiliarBtn" type="button">Legado familiar — $649.000/año</button>
+             <button class="um-btn um-plain" id="umPlanRegalarBtn" type="button">🎁 Comprar un regalo para otra persona — $449.000</button>
              <p class="um-hint">Te lleva a una página de pago segura de Wava — tarjeta, Nequi, Daviplata o Bre-B.</p>
            </div>
            <p class="um-msg" id="umPlanMsg" role="status" aria-live="polite" aria-atomic="true"></p>
+
+           <hr>
+           <p class="um-hint">¿Te regalaron una bitácora? Canjeá el código acá — se activa en TU cuenta, no en la de quien te lo regaló.</p>
+           <div class="um-fontsize-row">
+             <input type="text" id="umRegaloCodigo" placeholder="Código de regalo" maxlength="8" style="text-transform:uppercase;" aria-label="Código de regalo">
+             <button class="um-btn" id="umRegaloCanjearBtn" type="button">Canjear</button>
+           </div>
+           <p class="um-msg" id="umRegaloMsg" role="status" aria-live="polite" aria-atomic="true"></p>
          </div>
 
          <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecRecordatorios">Recordatorios <span class="um-chevron" aria-hidden="true">›</span></button>
@@ -1118,6 +1127,43 @@
   }
   document.getElementById('umPlanPersonalBtn').addEventListener('click', () => iniciarCheckout('legado_personal'));
   document.getElementById('umPlanFamiliarBtn').addEventListener('click', () => iniciarCheckout('legado_familiar'));
+
+  // Regalo: quien compra acá no tiene por qué ser quien narra — el link de
+  // pago es el mismo, pero el código que llega después por correo se
+  // canjea desde CUALQUIER cuenta (ver umRegaloCanjearBtn más abajo), no
+  // necesariamente esta.
+  document.getElementById('umPlanRegalarBtn').addEventListener('click', async () => {
+    umPlanMsg.textContent = 'Generando el link de pago…';
+    try {
+      const resp = await fetch('/api/billing/gift-checkout', { method: 'POST' });
+      const data = await resp.json();
+      if (!resp.ok) { umPlanMsg.textContent = data.error || 'No se pudo iniciar el pago.'; return; }
+      window.location.href = data.link;
+    } catch (e) {
+      umPlanMsg.textContent = 'No se pudo conectar. Intenta de nuevo.';
+    }
+  });
+
+  const umRegaloCodigo = document.getElementById('umRegaloCodigo');
+  const umRegaloMsg = document.getElementById('umRegaloMsg');
+  document.getElementById('umRegaloCanjearBtn').addEventListener('click', async () => {
+    const code = umRegaloCodigo.value.trim();
+    if (!code) return;
+    umRegaloMsg.textContent = '';
+    try {
+      const resp = await fetch('/api/billing/redeem-gift', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) { umRegaloMsg.textContent = data.error || 'No se pudo canjear el código.'; return; }
+      umRegaloMsg.textContent = '¡Listo! Tu plan ya está activo. 🎉';
+      umRegaloCodigo.value = '';
+      umPlanCargado = false; // para que la próxima vez que se abra la sección se vea el estado nuevo
+      cargarEstadoPlan();
+    } catch (e) {
+      umRegaloMsg.textContent = 'No se pudo conectar. Intenta de nuevo.';
+    }
+  });
 
   // --- Recordatorios ---
   const umRecordatoriosActivos = document.getElementById('umRecordatoriosActivos');

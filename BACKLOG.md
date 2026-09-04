@@ -68,7 +68,7 @@ Cosas que se pidieron pero se decidió posponer, con suficiente detalle para ret
 
 ## 11. Poner en marcha de verdad los pagos (Wava) y los recordatorios (correo)
 
-**Qué es:** la infraestructura completa ya está construida y con tests (`/api/billing/*`, `/api/webhooks/wava`, `/api/cron/*`, `/api/notification-preferences`, `/api/magic-login`, tablas `subscriptions`/`billing_orders`/`notification_preferences`/`reminder_deliveries`) — pero no está conectada a nada real todavía. Sin las variables de entorno de abajo, `/api/billing/checkout` responde 501 y los recordatorios simplemente no se mandan — no rompe nada, solo no hace nada.
+**Qué es:** la infraestructura completa ya está construida y con tests (`/api/billing/*` incluyendo el regalo con comprador y narrador en cuentas distintas, `/api/webhooks/wava`, `/api/cron/*`, `/api/notification-preferences`, `/api/magic-login`, tablas `subscriptions`/`billing_orders`/`notification_preferences`/`reminder_deliveries`/`gift_redemptions`) — pero no está conectada a nada real todavía. Sin las variables de entorno de abajo, `/api/billing/checkout` (y `/api/billing/gift-checkout`) responde 501 y los recordatorios simplemente no se mandan — no rompe nada, solo no hace nada.
 
 **Para ponerlo en marcha:**
 1. Crear cuenta en Wava (app.dev.wava.co para pruebas primero) y sacar el `merchant-key` desde Settings → Integrations → API.

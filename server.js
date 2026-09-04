@@ -490,6 +490,29 @@ function ensureSchema() {
       )`,
       sql`CREATE INDEX IF NOT EXISTS idx_billing_orders_user ON billing_orders(user_id)`,
       sql`CREATE INDEX IF NOT EXISTS idx_billing_orders_subscription ON billing_orders(subscription_id)`,
+      // subscription_id queda NULL en una orden de REGALO — quien paga no
+      // es necesariamente quien narra (P0.5 de la auditoría), así que el
+      // pago todavía no sabe a qué bitácora va a parar. plan_id es lo que
+      // el webhook usa para reconocer ese caso y generar el código de
+      // canje en vez de extender una suscripción que no existe.
+      sql`ALTER TABLE billing_orders ADD COLUMN IF NOT EXISTS plan_id TEXT`,
+
+      // --- Regalo: comprador y narrador son cuentas distintas -----------
+      // Una fila por cada regalo comprado. redeemed_by_user_id queda NULL
+      // hasta que alguien lo canjea — recién ahí se sabe a qué bitácora
+      // pertenece. bought_by_user_id es quien pagó, no quien narra.
+      sql`CREATE TABLE IF NOT EXISTS gift_redemptions (
+        id SERIAL PRIMARY KEY,
+        code TEXT UNIQUE NOT NULL,
+        billing_order_id INT NOT NULL REFERENCES billing_orders(id),
+        bought_by_user_id INT NOT NULL REFERENCES users(id),
+        plan_id TEXT NOT NULL,
+        meses INT NOT NULL DEFAULT 12,
+        redeemed_by_user_id INT REFERENCES users(id),
+        redeemed_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      sql`CREATE INDEX IF NOT EXISTS idx_gift_redemptions_bought_by ON gift_redemptions(bought_by_user_id)`,
 
       // --- Activación recurrente (recordatorios por correo) -------------
       // Preferencia de cada cuenta dueña sobre si/cuándo recibir un
@@ -3460,14 +3483,97 @@ app.post('/api/billing/checkout', requireAuth, bloquearColaborador, rateLimit, a
     }
 
     await sql`
-      INSERT INTO billing_orders (subscription_id, user_id, order_key, wava_hash, wava_link, concepto, monto_cop, status)
-      VALUES (${subscriptionId}, ${req.userId}, ${orderKey}, ${hash || null}, ${link}, ${plan.nombre + ' (' + periodo + ')'}, ${monto}, 'pending')
+      INSERT INTO billing_orders (subscription_id, user_id, order_key, wava_hash, wava_link, concepto, monto_cop, status, plan_id)
+      VALUES (${subscriptionId}, ${req.userId}, ${orderKey}, ${hash || null}, ${link}, ${plan.nombre + ' (' + periodo + ')'}, ${monto}, 'pending', ${planId})
     `;
 
     res.json({ ok: true, link });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo iniciar el pago.' });
+  }
+});
+
+// Comprar un Regalo para OTRA bitácora (P0.5: quien paga no tiene por qué
+// ser quien narra). A diferencia del checkout de arriba, esta orden NO
+// queda atada a ninguna suscripción todavía — subscription_id queda NULL
+// a propósito. Recién cuando el webhook confirma el pago se genera un
+// código de canje (ver gift_redemptions) y se le avisa por correo a quien
+// compró; ese código es lo que después activa el plan en la cuenta de
+// quien lo reciba, sea cual sea esa cuenta — ver /api/billing/redeem-gift.
+app.post('/api/billing/gift-checkout', requireAuth, rateLimit, async (req, res) => {
+  try {
+    if (!WAVA_MERCHANT_KEY) return res.status(501).json({ error: 'Los pagos todavía no están configurados.' });
+    const plan = PLANES.regalo;
+    const monto = plan.precioAnual;
+
+    await ensureSchema();
+    const orderKey = `gift-${req.userId}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+    const base = `${req.protocol}://${req.get('host')}`;
+    const wavaResp = await fetch(`${WAVA_API_BASE}/links`, {
+      method: 'POST',
+      headers: { 'merchant-key': WAVA_MERCHANT_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        amount: monto,
+        description: `${plan.nombre} — Los recuerdos de mis viejos`,
+        currency: 'COP',
+        order_key: orderKey,
+        redirect_link: `${base}/app.html?regalo=ok`,
+        redirect_link_cancel: `${base}/app.html?regalo=cancelado`,
+        redirect_link_failure: `${base}/app.html?regalo=error`,
+      }),
+      signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+    });
+    if (!wavaResp.ok) {
+      console.error('Wava rechazó la creación del link de regalo:', wavaResp.status, await wavaResp.text().catch(() => ''));
+      return res.status(502).json({ error: 'No se pudo generar el link de pago.' });
+    }
+    const wavaData = await wavaResp.json();
+    const link = wavaData.result && wavaData.result.link;
+    const hash = wavaData.result && wavaData.result.hash;
+    if (!link) return res.status(502).json({ error: 'No se pudo generar el link de pago.' });
+
+    await sql`
+      INSERT INTO billing_orders (subscription_id, user_id, order_key, wava_hash, wava_link, concepto, monto_cop, status, plan_id)
+      VALUES (NULL, ${req.userId}, ${orderKey}, ${hash || null}, ${link}, ${plan.nombre}, ${monto}, 'pending', 'regalo')
+    `;
+
+    res.json({ ok: true, link });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo iniciar el pago del regalo.' });
+  }
+});
+
+// Canjear un código de regalo — lo hace la cuenta que va a NARRAR (dueña,
+// nunca colaboradora), sea la misma persona que lo compró o no. Los 12
+// meses arrancan desde este momento, no desde la compra (así lo describe
+// el plan de precios: "empiezan cuando el destinatario activa el
+// regalo") — por eso el vencimiento no se toca hasta acá, ni en el
+// checkout ni en el webhook de pago.
+app.post('/api/billing/redeem-gift', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
+  try {
+    const code = String(req.body.code || '').trim().toUpperCase();
+    if (!code) return res.status(400).json({ error: 'Falta el código.' });
+
+    await ensureSchema();
+    const rows = await sql`SELECT id, plan_id, redeemed_by_user_id FROM gift_redemptions WHERE code = ${code}`;
+    if (!rows.length) return res.status(404).json({ error: 'Ese código de regalo no existe.' });
+    const regalo = rows[0];
+    if (regalo.redeemed_by_user_id) return res.status(400).json({ error: 'Ese código ya se usó.' });
+
+    const subRows = await sql`SELECT id FROM subscriptions WHERE user_id = ${req.userId}`;
+    if (subRows.length) {
+      await sql`UPDATE subscriptions SET plan_id = ${regalo.plan_id}, status = 'active', current_period_end = now() + INTERVAL '12 months', cancel_at_period_end = true, grace_until = NULL, updated_at = now() WHERE id = ${subRows[0].id}`;
+    } else {
+      await sql`INSERT INTO subscriptions (user_id, plan_id, periodo, status, current_period_end, cancel_at_period_end) VALUES (${req.userId}, ${regalo.plan_id}, 'annual', 'active', now() + INTERVAL '12 months', true)`;
+    }
+    await sql`UPDATE gift_redemptions SET redeemed_by_user_id = ${req.userId}, redeemed_at = now() WHERE id = ${regalo.id}`;
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo canjear el código.' });
   }
 });
 
@@ -3499,7 +3605,7 @@ app.post('/api/webhooks/wava', express.raw({ type: '*/*', limit: '256kb' }), asy
     if (!orderKey) return res.status(200).json({ ok: true }); // evento sin nada que podamos ubicar — no es un error nuestro
 
     await ensureSchema();
-    const filas = await sql`SELECT id, subscription_id, status FROM billing_orders WHERE order_key = ${orderKey}`;
+    const filas = await sql`SELECT id, subscription_id, status, plan_id, user_id FROM billing_orders WHERE order_key = ${orderKey}`;
     if (!filas.length) {
       console.error('Webhook de Wava para un order_key que no existe acá:', orderKey);
       return res.status(200).json({ ok: true });
@@ -3511,6 +3617,33 @@ app.post('/api/webhooks/wava', express.raw({ type: '*/*', limit: '256kb' }), asy
     const pagoConfirmado = ['paid', 'approved', 'success', 'completed'].includes(estadoWava);
     if (!pagoConfirmado) {
       await sql`UPDATE billing_orders SET status = ${estadoWava || 'unknown'}, raw_webhook = ${JSON.stringify(evento)}::jsonb WHERE id = ${orden.id}`;
+      return res.status(200).json({ ok: true });
+    }
+
+    // Regalo: no hay suscripción que extender (quien pagó no es
+    // necesariamente quien narra, ver /api/billing/gift-checkout) — en vez
+    // de eso, se genera el código de canje y se le avisa por correo a
+    // quien compró.
+    if (!orden.subscription_id && orden.plan_id === 'regalo') {
+      let code;
+      for (let intento = 0; intento < 5; intento++) {
+        code = randomInviteCode();
+        const choca = await sql`SELECT 1 FROM gift_redemptions WHERE code = ${code}`;
+        if (!choca.length) break;
+      }
+      await sql.transaction([
+        sql`UPDATE billing_orders SET status = 'paid', paid_at = now(), raw_webhook = ${JSON.stringify(evento)}::jsonb WHERE id = ${orden.id}`,
+        sql`INSERT INTO gift_redemptions (code, billing_order_id, bought_by_user_id, plan_id, meses) VALUES (${code}, ${orden.id}, ${orden.user_id}, 'regalo', 12)`,
+      ]);
+      try {
+        const compradorRows = await sql`SELECT email, name, username FROM users WHERE id = ${orden.user_id}`;
+        const comprador = compradorRows[0];
+        if (comprador && comprador.email) {
+          await enviarCorreo({ to: comprador.email, subject: '¡Tu regalo está listo! 🎁', html: plantillaRegaloListo(capitalizarNombre(comprador.name || comprador.username) || 'hola', code) });
+        }
+      } catch (err) {
+        console.error('No se pudo avisar por correo el código de regalo (el pago y el código ya quedaron guardados igual):', err);
+      }
       return res.status(200).json({ ok: true });
     }
 
@@ -3528,6 +3661,15 @@ app.post('/api/webhooks/wava', express.raw({ type: '*/*', limit: '256kb' }), asy
     res.status(500).json({ error: 'No se pudo procesar el webhook.' });
   }
 });
+
+function plantillaRegaloListo(nombre, code) {
+  return `<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;color:#2B241C">
+    <h1 style="font-size:1.3rem">¡Gracias, ${nombre}! 🎁</h1>
+    <p>Tu regalo ya está pago. Este es el código para que la persona que lo va a recibir lo active desde su cuenta (Cuenta → Plan → Canjear un regalo):</p>
+    <p style="font-family:monospace;font-size:1.6rem;font-weight:bold;letter-spacing:0.1em;text-align:center;background:#F5EFE2;padding:14px;border-radius:10px">${code}</p>
+    <p style="color:#706551;font-size:.85rem">Los 12 meses empiezan a contar recién cuando lo canjeen, no desde hoy — se lo podés mandar cuando quieras, no vence por tu lado.</p>
+  </div>`;
+}
 
 function plantillaRenovacion(nombre, plan, link) {
   return `<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;color:#2B241C">
