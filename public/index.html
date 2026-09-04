@@ -232,6 +232,11 @@
     .bubble.a{align-self:flex-end;background:var(--bubble)}
     .audio-card{margin-top:auto;border:1px solid var(--line);border-radius:18px;padding:16px;display:flex;align-items:center;gap:13px;background:#FBF6EA}
     .play{width:44px;height:44px;border:0;border-radius:50%;background:var(--moss);color:white;cursor:pointer}
+    /* Sin flex-shrink:0, en pantallas angostas .audio-card lo achicaba junto
+       con el resto de la fila (medido: ~30px de ancho en vez de 44) — el
+       ancho/alto fijos de .play no alcanzan solos si el flex item puede
+       encogerse. .voice-wave .play ya tenía esto; acá faltaba. */
+    .audio-card .play{flex:0 0 auto}
     .wave{flex:1;height:32px;background:repeating-linear-gradient(90deg,var(--gold) 0 2px,transparent 2px 7px);mask:linear-gradient(180deg,transparent 0%,#000 22%,#000 78%,transparent 100%);opacity:.55}
     .story-side{padding:34px;background:#FCF8EF}
     .story-side h3{font-size:1.5rem;margin:0 0 18px}
@@ -281,7 +286,8 @@
     .signup-card h3{font-size:1.85rem;margin:0 0 6px}
     .signup-card > p{margin:0 0 24px;color:var(--ink-soft);font-size:.94rem}
     .signup-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px;background:var(--paper-2,#F5EFE2);border-radius:12px;padding:4px}
-    .signup-tab{border:none;background:none;border-radius:9px;padding:12px 10px;font-family:inherit;font-size:.86rem;font-weight:700;color:var(--ink-soft);cursor:pointer;line-height:1.25}
+    /* min-height:44px: quedaba en ~41px pese al padding. */
+    .signup-tab{border:none;background:none;border-radius:9px;padding:12px 10px;font-family:inherit;font-size:.86rem;font-weight:700;color:var(--ink-soft);cursor:pointer;line-height:1.25;display:flex;align-items:center;justify-content:center;min-height:44px;box-sizing:border-box}
     .signup-tab.active{background:#fff;color:var(--ink);box-shadow:0 4px 12px -4px rgba(0,0,0,.18)}
     .signup-form{display:grid;grid-template-columns:1fr 1fr;gap:16px}
     .field{display:flex;flex-direction:column;gap:7px;min-width:0}

@@ -28,6 +28,16 @@
   /* Antes ningún link/botón mostraba nada al enfocar con teclado.
      :focus-visible solo aparece al navegar con Tab, no al hacer clic. */
   :focus-visible { outline: 3px solid var(--gold-deep); outline-offset: 2px; }
+  /* Link "saltar al contenido" — mismo patrón que app.html/index.html:
+     invisible y afuera del flujo normal, solo aparece al navegar con Tab. */
+  .skip-link {
+    position: absolute; top: -100px; left: 12px; z-index: 100;
+    background: var(--moss); color: #fffaf0; padding: 12px 18px;
+    border-radius: 10px; text-decoration: none; font-weight: 700;
+    transition: top .15s ease;
+  }
+  .skip-link:focus { top: 12px; }
+  main:focus { outline: none; }
   body {
     margin: 0;
     min-height: 100vh;
@@ -53,8 +63,13 @@
   }
   @media (prefers-reduced-motion: reduce) {
     /* El selector "*" solo no alcanza a la animación del ::before del
-       orbe (los pseudo-elementos no quedan incluidos en "*" a secas). */
-    *, *::before, *::after { animation-duration: 0.001ms !important; }
+       orbe (los pseudo-elementos no quedan incluidos en "*" a secas).
+       "animation-duration:0.001ms" (lo que había antes) no cumple lo que
+       pide "reducir movimiento": una animación en loop infinito sigue en
+       loop infinito nomás que a 0.001ms por vuelta, y las transiciones
+       quedaban sin tocar. "none" saca la animación/transición de la
+       ecuación directamente, igual que ya hace la landing. */
+    *, *::before, *::after { animation: none !important; transition: none !important; }
   }
   h1 { font-family: var(--font-display); font-size: 1.5rem; margin: 0 0 4px; text-align: center; }
   p.sub { color: var(--ink-soft); font-size: 0.92rem; margin: 0; text-align: center; }
@@ -73,18 +88,49 @@
     gap: 14px;
     margin-top: 60px;
   }
+  /* Mismo componente de login que app.html (label visible + Mostrar/Ocultar
+     clave) — antes este login solo tenía placeholders, sin esas ayudas,
+     aunque es la misma app para quien colabora. */
+  .login-field { display: flex; flex-direction: column; gap: 5px; }
+  .login-field label { font-size: 0.85rem; font-weight: 700; color: var(--ink-soft); }
   .login input {
     border: 1px solid #E7DFCC; border-radius: 10px; padding: 12px 14px;
     font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink);
+    width: 100%; box-sizing: border-box;
   }
+  .login-pass-row { display: flex; gap: 8px; }
+  .login-pass-row input { flex: 1; min-width: 0; }
   .login button {
     border: none; background: var(--gold-deep); color: #FBF6EA; border-radius: 10px;
     padding: 12px; font-weight: 700; font-size: 1rem; cursor: pointer; font-family: var(--font-body);
   }
   .login button:disabled { opacity: 0.6; cursor: default; }
+  /* Va DESPUÉS de ".login button" a propósito, para pisar ese estilo (mismo
+     ancho/alto que "Entrar") con uno más chico — igual que en app.html. */
+  .login-pass-row button {
+    border: 1px solid #E7DFCC; background: #fff; color: var(--ink); border-radius: 10px;
+    padding: 0 14px; font-weight: 700; font-size: 0.85rem; cursor: pointer;
+    font-family: var(--font-body); min-height: 44px; min-width: 44px; flex: 0 0 auto;
+  }
   .error { color: #a33; font-size: 0.85rem; min-height: 1.2em; text-align: center; }
 
   #appContent { display: none; flex-direction: column; align-items: center; width: 100%; }
+  /* Mismo bug que en app.html: .login (más abajo) pone display:flex por
+     defecto, así que sin esto el login se alcanza a ver un instante en
+     cada recarga real de la página, aunque ya haya sesión — recién cuando
+     responde el fetch('/api/me') de abajo, showApp() lo cambia a
+     appContent. #loginScreen (id) le gana en especificidad a .login
+     (clase) y lo mantiene oculto hasta entonces. */
+  #loginScreen { display: none; }
+  /* #checkingScreen: visible desde el primer frame (a diferencia de login
+     y app) mientras se espera fetch('/api/me') — sin esto la página
+     quedaba en blanco ese rato, lo que en red lenta se puede confundir
+     con un fallo. Mismo mensaje siempre, no revela si hay sesión o no. */
+  #checkingScreen {
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    padding: 40px 20px; color: var(--ink-soft); font-size: 0.9rem;
+  }
+  #checkingScreen img { width: 40px; height: 40px; opacity: 0.7; }
   header { max-width: 440px; width: 100%; text-align: center; margin-bottom: 20px; }
   .owner-name { font-family: var(--font-display); font-size: 1.7rem; font-weight: 700; color: var(--gold-deep); margin: 6px 0 2px; }
 
@@ -103,9 +149,12 @@
   .collab-switch { width: 100%; max-width: 440px; margin: 0 0 18px; text-align: center; }
   .collab-switch .sub { margin-bottom: 6px; }
   .collab-switch-list { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  /* min-height:44px: quedaba en ~31px de alto — zona de toque chica para
+     algo que se usa para saltar entre las bitácoras a las que se colabora. */
   .collab-switch-list a {
-    display: inline-block; padding: 6px 14px; border-radius: 20px; font-size: 0.85rem;
+    display: inline-flex; align-items: center; padding: 6px 14px; border-radius: 20px; font-size: 0.85rem;
     text-decoration: none; color: var(--ink); background: #FBF6EA; border: 1px solid #E7DFCC;
+    min-height: 44px; box-sizing: border-box;
   }
   .collab-switch-list a.active { background: var(--gold-deep); color: #FBF6EA; border-color: var(--gold-deep); font-weight: 700; }
 
@@ -181,36 +230,69 @@
   .quien-historia { display: flex; flex-direction: column; gap: 8px; }
   .quien-historia-row { display: flex; gap: 18px; }
   .quien-historia-row label { display: flex; align-items: center; gap: 6px; font-size: 0.92rem; cursor: pointer; }
+  /* font-size:1rem (antes 0.92rem = 14.72px): por debajo de 16px, iOS
+     Safari hace zoom automático al tocar el campo — mismo motivo en
+     .write-row input, más abajo. */
   .quien-historia input[type="text"] {
     border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 12px;
-    font-family: var(--font-body); background: #fff; color: var(--ink); font-size: 0.92rem;
+    font-family: var(--font-body); background: #fff; color: var(--ink); font-size: 1rem;
   }
 
   .logout-row { text-align: center; margin-top: 8px; }
   /* "Borrar mi cuenta" es la única acción irreversible acá — antes se veía
      como un link subrayado más, sin distinguirse de "cerrar sesión". */
   .danger-zone { margin-top: 18px; padding-top: 14px; border-top: 1px solid #E7DFCC; }
-  .write-toggle { background: none; border: none; color: var(--moss); text-decoration: underline; cursor: pointer; font-family: var(--font-body); font-size: 0.9rem; }
+  /* min-height/min-width:44px: subir audio (35px), escribir (18px), cerrar
+     sesión (20px) y borrar cuenta (21px) quedaban por debajo de la zona de
+     toque mínima recomendada — mismo arreglo que en app.html. */
+  .write-toggle {
+    background: none; border: none; color: var(--moss); text-decoration: underline;
+    cursor: pointer; font-family: var(--font-body); font-size: 0.9rem;
+    display: inline-flex; align-items: center; justify-content: center;
+    min-height: 44px; min-width: 44px; box-sizing: border-box;
+  }
   .end-toggle { color: #a33; }
   .write-row { display: none; gap: 8px; width: 100%; max-width: 280px; }
   .write-row.visible { display: flex; }
-  .write-row input { flex: 1; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 12px; font-family: var(--font-body); background: #fff; color: var(--ink); }
+  /* font-size:1rem: sin esto, este campo (respuesta escrita durante el
+     aporte, y "confirma tu clave" al borrar la cuenta, que reusa esta
+     misma clase) disparaba el zoom automático de iOS Safari al tocarlo. */
+  .write-row input { flex: 1; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 12px; font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink); }
   .write-row button { border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px; padding: 0 14px; font-weight: 700; cursor: pointer; }
 </style>
 </head>
 <body>
+  <div id="checkingScreen" role="status" aria-live="polite">
+    <img src="/images/logo-icon.png" alt="">
+    <span>Comprobando tu sesión…</span>
+  </div>
   <div class="login" id="loginScreen">
     <h1>Los recuerdos de mis viejos</h1>
     <p class="sub" style="margin-bottom: 6px;">Inicia sesión para aportar historias.</p>
-    <input type="text" id="loginUser" placeholder="Correo" autocomplete="username" aria-label="Correo">
-    <input type="password" id="loginPass" placeholder="Clave" autocomplete="current-password" aria-label="Clave">
+    <div class="login-field">
+      <label for="loginUser">Correo o usuario</label>
+      <input type="text" id="loginUser" placeholder="Correo o usuario" autocomplete="username">
+    </div>
+    <div class="login-field">
+      <label for="loginPass">Clave</label>
+      <div class="login-pass-row">
+        <input type="password" id="loginPass" placeholder="Clave" autocomplete="current-password">
+        <button type="button" id="loginPassToggle" aria-pressed="false" aria-label="Mostrar la clave">Mostrar</button>
+      </div>
+    </div>
     <button id="loginBtn" type="button">Entrar</button>
-    <p class="error" id="loginError"></p>
+    <p class="error" id="loginError" role="alert"></p>
     <p class="sub" style="margin-top:2px;">¿No tienes cuenta? <a href="/?modo=colaborar#registro" style="color:var(--gold-deep);">Crea una</a>.</p>
   </div>
 
   <div id="appContent">
-    <div class="topbar" id="ownTopbar" style="display:none;">
+    <!-- Mismo patrón que app.html: invisible hasta que se navega con Tab. -->
+    <a class="skip-link" href="#main-content">Saltar al contenido</a>
+    <!-- <nav>, no <div>: son enlaces a otras secciones de la propia
+         bitácora (cuando quien colabora está viendo la suya) — mismo
+         criterio que el topbar de app.html, esté visible o no en este
+         momento. -->
+    <nav class="topbar" id="ownTopbar" aria-label="Tu bitácora" style="display:none;">
       <div class="icon-nav-item">
         <a class="icon-btn" href="/app.html" title="Volver a mi historia" aria-label="Volver a mi historia">↩️</a>
         <span class="icon-label" aria-hidden="true">Volver</span>
@@ -223,7 +305,7 @@
         <a class="icon-btn" href="/capitulos.html" title="Mi libro de la historia" aria-label="Mi libro de la historia">📖</a>
         <span class="icon-label" aria-hidden="true">Libro</span>
       </div>
-    </div>
+    </nav>
 
     <header>
       <h1>Aportar a la bitácora</h1>
@@ -231,6 +313,9 @@
       <p class="sub">Cuenta una historia — la entrevistadora te va guiando.</p>
     </header>
 
+    <!-- <main>: el resto del contenido autenticado — antes no estaba en
+         ningún landmark, igual que le pasaba a app.html. -->
+    <main id="main-content" tabindex="-1">
     <div class="collab-switch" id="collabSwitch" style="display:none;">
       <p class="sub">Tus colaboraciones:</p>
       <div class="collab-switch-list" id="collabSwitchList"></div>
@@ -248,14 +333,20 @@
         <input type="text" id="protagonistaInput" placeholder="¿De quién es esta historia?" aria-label="¿De quién es esta historia?" style="display:none;">
       </div>
 
-      <div class="aporte-chat" id="aporteChat"></div>
+      <!-- role="log" aria-relevant="additions text": es una charla que va
+           creciendo con cada turno — el lector de pantalla debe anunciar
+           solo lo nuevo que se agrega, no releer toda la charla cada vez. -->
+      <div class="aporte-chat" id="aporteChat" role="log" aria-relevant="additions text"></div>
 
       <div class="orb-zone">
         <button class="orb" id="orb" data-state="idle" type="button" aria-label="Presiona para grabar tu historia">Presiona<br>para hablar</button>
-        <div class="state-label" id="recStatus"></div>
+        <!-- role="status" aria-live="polite" aria-atomic="true": mismo
+             motivo que #stateLabel en app.html — el texto cambia solo
+             (grabando/procesando/errores) y se reemplaza entero cada vez. -->
+        <div class="state-label" id="recStatus" role="status" aria-live="polite" aria-atomic="true"></div>
         <button class="write-toggle" id="subirAudioBtn" type="button">o sube una nota de voz que ya tengas</button>
         <input type="file" id="subirAudioInput" accept="audio/*" style="display:none;">
-        <button class="write-toggle" id="writeToggleColab" type="button">o prefiero escribir mi historia</button>
+        <button class="write-toggle" id="writeToggleColab" type="button" aria-expanded="false" aria-controls="writeRowColab">o prefiero escribir mi historia</button>
         <div class="write-row" id="writeRowColab" style="margin: 0 auto;">
           <input type="text" id="writeInputColab" placeholder="Escribe tu historia…" aria-label="Escribir historia">
           <button id="writeSendColab" type="button">Enviar</button>
@@ -264,7 +355,7 @@
 
       <button class="otra-historia-btn" id="otraHistoriaBtn" type="button">Contar otra historia</button>
 
-      <p class="msg" id="aporteMsg"></p>
+      <p class="msg" id="aporteMsg" role="status" aria-live="polite" aria-atomic="true"></p>
 
       <hr>
 
@@ -274,7 +365,7 @@
     <div class="logout-row">
       <button class="write-toggle" id="logoutBtn" type="button">cerrar sesión (<span id="whoami"></span>)</button>
       <div class="danger-zone">
-        <button class="write-toggle end-toggle" id="deleteAccountToggle" type="button">⚠️ borrar mi cuenta permanentemente</button>
+        <button class="write-toggle end-toggle" id="deleteAccountToggle" type="button" aria-expanded="false" aria-controls="deleteAccountRow">⚠️ borrar mi cuenta permanentemente</button>
         <div class="write-row" id="deleteAccountRow" style="margin: 10px auto 0;">
           <input type="password" id="deleteAccountPassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para borrar la cuenta">
           <button id="deleteAccountConfirm" type="button" style="background:#a33;">borrar</button>
@@ -282,14 +373,17 @@
         <p class="error" id="deleteAccountError"></p>
       </div>
     </div>
+    </main>
   </div>
 
 <script>
 (function () {
+  const checkingScreen = document.getElementById('checkingScreen');
   const loginScreen = document.getElementById('loginScreen');
   const appContent = document.getElementById('appContent');
   const loginUser = document.getElementById('loginUser');
   const loginPass = document.getElementById('loginPass');
+  const loginPassToggle = document.getElementById('loginPassToggle');
   const loginBtn = document.getElementById('loginBtn');
   const loginError = document.getElementById('loginError');
   const logoutBtn = document.getElementById('logoutBtn');
@@ -306,6 +400,7 @@
   }
 
   function showApp(data) {
+    checkingScreen.style.display = 'none';
     loginScreen.style.display = 'none';
     appContent.style.display = 'flex';
     whoami.textContent = data.username || '';
@@ -313,11 +408,28 @@
   }
 
   function showLogin() {
+    checkingScreen.style.display = 'none';
     appContent.style.display = 'none';
     loginScreen.style.display = 'flex';
     loginPass.value = '';
+    ocultarClave();
     loginUser.focus();
   }
+
+  function ocultarClave() {
+    loginPass.type = 'password';
+    loginPassToggle.textContent = 'Mostrar';
+    loginPassToggle.setAttribute('aria-pressed', 'false');
+    loginPassToggle.setAttribute('aria-label', 'Mostrar la clave');
+  }
+  loginPassToggle.addEventListener('click', () => {
+    const oculta = loginPass.type === 'password';
+    loginPass.type = oculta ? 'text' : 'password';
+    loginPassToggle.textContent = oculta ? 'Ocultar' : 'Mostrar';
+    loginPassToggle.setAttribute('aria-pressed', String(oculta));
+    loginPassToggle.setAttribute('aria-label', oculta ? 'Ocultar la clave' : 'Mostrar la clave');
+    loginPass.focus();
+  });
 
   async function doLogin() {
     const username = loginUser.value.trim();
@@ -363,9 +475,10 @@
   const deleteAccountError = document.getElementById('deleteAccountError');
 
   deleteAccountToggle.addEventListener('click', () => {
-    deleteAccountRow.classList.toggle('visible');
+    const abierto = deleteAccountRow.classList.toggle('visible');
+    deleteAccountToggle.setAttribute('aria-expanded', String(abierto));
     deleteAccountError.textContent = '';
-    if (deleteAccountRow.classList.contains('visible')) deleteAccountPassword.focus();
+    if (abierto) deleteAccountPassword.focus();
   });
 
   async function borrarCuenta() {
@@ -417,7 +530,13 @@
         const esActiva = ownerIdActivo
           ? String(h.ownerId) === String(ownerIdActivo)
           : h.ownerName === nombreActivoFallback;
-        if (esActiva) a.classList.add('active');
+        if (esActiva) {
+          a.classList.add('active');
+          // El estado visual (clase .active) ya existía — sin esto, a
+          // quien usa lector de pantalla no le llega cuál de las bitácoras
+          // es la que está viendo ahora mismo.
+          a.setAttribute('aria-current', 'page');
+        }
         collabSwitchList.appendChild(a);
       });
       collabSwitch.style.display = 'block';
@@ -469,6 +588,14 @@
   const writeRowColab = document.getElementById('writeRowColab');
   const writeInputColab = document.getElementById('writeInputColab');
   const writeSendColab = document.getElementById('writeSendColab');
+  // El cuadro para escribir se muestra/esconde desde varios lugares (el
+  // botón, un error de micrófono, terminar la charla) — no solo desde su
+  // propio botón. Este helper mantiene aria-expanded sincronizado sin
+  // importar desde dónde se dispare.
+  function mostrarEscribirColab(mostrar) {
+    writeRowColab.classList.toggle('visible', mostrar);
+    writeToggleColab.setAttribute('aria-expanded', String(mostrar));
+  }
   // Si el navegador directamente no puede grabar, el fallback de texto
   // queda siempre visible — "resetChat" (que corre cada vez que arranca
   // una historia nueva) no debe volver a esconderlo en ese caso.
@@ -502,6 +629,17 @@
     const div = document.createElement('div');
     div.className = 'aporte-bubble ' + kind;
     div.textContent = text;
+    // El saludo inicial de la IA (iniciarAporte(), ver más abajo) agrega la
+    // primera burbuja solo, apenas carga la página — antes de que la
+    // persona haya hecho nada. Si en ESE momento se hace scroll, se pierde
+    // algo sutil: Chrome usa la posición de scroll como pista de por dónde
+    // arrancar la navegación por teclado mientras nada tiene foco todavía,
+    // así que quien presiona Tab justo después de cargar la página (para
+    // saltar directo al contenido, el motivo de tener el skip-link) puede
+    // terminar más abajo de lo esperado, salteándoselo — comprobado
+    // reproduciendo el caso con Playwright. No hace falta de todos modos:
+    // con un solo mensaje corto la página entera ya entra en la pantalla.
+    const esPrimeraBurbuja = aporteChat.children.length === 0;
     aporteChat.appendChild(div);
     // scrollIntoView (a diferencia de fijar aporteChat.scrollTop a mano)
     // encuentra solo el ancestro que de verdad scrollea: en desktop es
@@ -509,7 +647,7 @@
     // celular — donde .aporte-chat ya no tiene scroll propio, ver Bloque 21
     // — es la página entera. Así el último mensaje queda visible en ambos
     // casos sin tener que distinguir de cuál de los dos se trata acá.
-    div.scrollIntoView({ block: 'end' });
+    if (!esPrimeraBurbuja) div.scrollIntoView({ block: 'end' });
     return div;
   }
 
@@ -525,7 +663,7 @@
     orb.style.display = '';
     document.getElementById('subirAudioBtn').style.display = '';
     writeToggleColab.style.display = '';
-    if (!micNoDisponible) writeRowColab.classList.remove('visible');
+    if (!micNoDisponible) mostrarEscribirColab(false);
     writeInputColab.value = '';
     bloquearSelectorProtagonista(false);
     document.querySelector('input[name="quienHistoria"][value="propia"]').checked = true;
@@ -565,7 +703,7 @@
         orb.style.display = 'none';
         document.getElementById('subirAudioBtn').style.display = 'none';
         writeToggleColab.style.display = 'none';
-        writeRowColab.classList.remove('visible');
+        mostrarEscribirColab(false);
         recStatus.textContent = '';
         aporteMsg.classList.toggle('error', !data.saved);
         aporteMsg.textContent = data.saved ? '✓ Historia guardada. Gracias.' : '⚠️ La charla terminó, pero hubo un problema para guardarla.';
@@ -606,8 +744,9 @@
   // puede escribir la historia en vez de decirla en voz alta (igual que
   // "prefiero escribir" en la charla principal de app.html).
   writeToggleColab.addEventListener('click', () => {
-    writeRowColab.classList.toggle('visible');
-    if (writeRowColab.classList.contains('visible')) writeInputColab.focus();
+    const abierto = !writeRowColab.classList.contains('visible');
+    mostrarEscribirColab(abierto);
+    if (abierto) writeInputColab.focus();
   });
 
   async function enviarTextoEscrito() {
@@ -615,7 +754,7 @@
     if (!texto || charlaTerminada) return;
     bloquearSelectorProtagonista(true);
     writeInputColab.value = '';
-    writeRowColab.classList.remove('visible');
+    mostrarEscribirColab(false);
     historyLocal.push({ role: 'user', content: texto });
     agregarBurbuja('q', texto);
     await enviarTurno();
@@ -632,7 +771,10 @@
   // Igual que en la charla principal: no hace falta presionar de nuevo
   // para "cortar" — mientras haya voz seguimos grabando, y recién cuando
   // pasan unos segundos de silencio se corta y se manda solo.
-  const SILENCE_MS = 2000;
+  // Antes eran 2000ms — mismo motivo que en app.html: quien está
+  // recordando una historia puede pausar más de 2 segundos sin haber
+  // terminado. 4000ms como punto de partida conservador.
+  const SILENCE_MS = 4000;
   const VAD_THRESHOLD = 0.02;
   let audioContext = null;
   let analyser = null;
@@ -704,7 +846,7 @@
       mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
       recStatus.textContent = mensajeErrorMicrofono(e);
-      writeRowColab.classList.add('visible');
+      mostrarEscribirColab(true);
       writeInputColab.focus();
       return;
     }
@@ -820,7 +962,7 @@
     orb.disabled = true;
     orb.title = 'Este navegador no permite grabar audio.';
     recStatus.textContent = 'Este navegador no permite grabar audio — puedes escribir tu historia en su lugar.';
-    writeRowColab.classList.add('visible');
+    mostrarEscribirColab(true);
   }
 
   // --- Subir una nota de voz que ya tengas guardada ---

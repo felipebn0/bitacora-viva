@@ -29,6 +29,21 @@
      los <input> tenían :focus). :focus-visible solo aparece al navegar con
      Tab, no al hacer clic con mouse/dedo. */
   :focus-visible { outline: 3px solid var(--gold-deep); outline-offset: 2px; }
+  /* Link "saltar al contenido" — mismo patrón que la landing (index.html):
+     invisible y afuera del flujo normal, solo aparece al navegar con Tab
+     (primer elemento enfocable de la página), para no pasar por el saludo
+     y los 5 íconos del nav cada vez. */
+  .skip-link {
+    position: absolute; top: -100px; left: 12px; z-index: 100;
+    background: var(--moss); color: #fffaf0; padding: 12px 18px;
+    border-radius: 10px; text-decoration: none; font-weight: 700;
+    transition: top .15s ease;
+  }
+  .skip-link:focus { top: 12px; }
+  /* Sin esto, al saltar acá quedaba un anillo de foco rodeando TODO
+     el contenido de <main> — el salto ya se nota por dónde arranca a leer
+     un lector de pantalla / el scroll, no hace falta remarcarlo. */
+  main:focus { outline: none; }
   body {
     margin: 0;
     min-height: 100vh;
@@ -59,7 +74,14 @@
        encontrado al probar el mismo arreglo en colaborar.html: la
        animación de "respirar" seguía a toda velocidad con "reducir
        movimiento" activado a pesar de esta regla. */
-    *, *::before, *::after { animation-duration: 0.001ms !important; }
+    /* "animation-duration: 0.001ms" (lo que había antes) no cumple lo que
+       pide "reducir movimiento": una animación con loop infinito sigue
+       en loop infinito, solo que carreras de 0.001ms en 0.001ms — sigue
+       corriendo (y puede verse como un parpadeo), además de que no tocaba
+       las transiciones en absoluto. "none" saca la animación/transición
+       de la ecuación directamente, igual que ya hace la landing
+       (public/index.html) con esta misma media query. */
+    *, *::before, *::after { animation: none !important; transition: none !important; }
   }
   .device {
     width: min(440px, 100%);
@@ -118,11 +140,28 @@
   .orb[data-state="paused"] { background: radial-gradient(circle at 35% 30%, #7D7050, #706551); }
   .orb[data-state="paused"]::before { animation: none; opacity: 0.3; }
   .state-label { font-size: 0.9rem; color: var(--ink-soft); min-height: 1.3em; }
-  .write-toggle { background: none; border: none; color: var(--moss); text-decoration: underline; cursor: pointer; font-family: var(--font-body); }
+  /* min-height/min-width:44px: la zona de toque mínima recomendada — este
+     link de texto quedaba en ~19px de alto, apenas el tamaño de la letra.
+     inline-flex + align-items la agranda sin cambiar cómo se ve el texto. */
+  .write-toggle {
+    background: none; border: none; color: var(--moss); text-decoration: underline;
+    cursor: pointer; font-family: var(--font-body);
+    /* Sin font-size explícito, el navegador usaba el tamaño por defecto de
+       los <button> (13,33px fijos) — no escalaba con A-/A+ como el resto
+       de la letra de la página. */
+    font-size: 0.85rem;
+    display: inline-flex; align-items: center; justify-content: center;
+    min-height: 44px; min-width: 44px; box-sizing: border-box;
+  }
   .end-toggle { color: #a33; font-size: 0.85rem; }
   .write-row { display: none; gap: 8px; width: 100%; max-width: 280px; }
   .write-row.visible { display: flex; }
-  .write-row input, .write-row select { flex: 1; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 12px; font-family: var(--font-body); background: #fff; color: var(--ink); }
+  /* font-size:1rem (16px): sin un font-size explícito, el <input> toma el
+     tamaño chico por defecto del navegador — y en iOS Safari, cualquier
+     campo de texto con menos de 16px hace zoom automático al tocarlo (para
+     "ayudar" a leer), corriendo todo el layout hasta que se saca el zoom a
+     mano. Mismo motivo en los demás input/select de este archivo. */
+  .write-row input, .write-row select { flex: 1; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 12px; font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink); }
   .write-row button { border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px; padding: 0 14px; font-weight: 700; cursor: pointer; }
   .error { color: #a33; font-size: 0.85rem; }
   /* Antes era un link chico igual que "copiar código" o "prefiero
@@ -144,6 +183,27 @@
   .invite-cta:hover { background: #4a5738; }
 
   #appContent { display: none; flex-direction: column; align-items: center; }
+  /* .login (más abajo) pone display:flex por defecto, así que sin esto el
+     login se ve un instante SIEMPRE al cargar esta página — incluso ya
+     logueado, cada vez que se navega acá con un link normal (por ejemplo
+     "volver a la bitácora" desde historias/aportes/árbol/libro), porque es
+     una recarga real de la página: entra a mostrar el login por defecto y
+     recién cuando responde el fetch('/api/me') de abajo, si hay sesión,
+     showApp() lo cambia a appContent. #loginScreen (id) le gana en
+     especificidad a .login (clase) y lo mantiene oculto hasta que ese
+     fetch resuelve — ni el login ni la app se ven de más. */
+  #loginScreen { display: none; }
+  /* #checkingScreen: se ve DESDE el primer frame (a diferencia de login y
+     app, que arrancan ocultos) y es lo único visible mientras se espera la
+     respuesta de fetch('/api/me'). Sin esto la página quedaba en blanco
+     ese rato — con red lenta se puede confundir con que algo se rompió.
+     No dice si hay sesión o no (mismo mensaje siempre), para no filtrar
+     esa información antes de que el servidor confirme. */
+  #checkingScreen {
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    padding: 40px 20px; color: var(--ink-soft); font-size: 0.9rem;
+  }
+  #checkingScreen img { width: 40px; height: 40px; opacity: 0.7; }
 
   .main-layout { display: flex; flex-direction: column; align-items: center; }
   .device-col { display: flex; flex-direction: column; align-items: center; width: 100%; }
@@ -162,7 +222,7 @@
   .greeting-bar {
     width: 100%;
     max-width: 900px;
-    margin: 0 auto 14px;
+    margin: 0 auto 8px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -192,7 +252,14 @@
     margin-bottom: 2px;
   }
   .greeting-bar .greeting-text .greeting-name {
-    display: block;
+    /* Antes iba en su propia línea, debajo de "Un gusto tenerte de
+       vuelta" — con letra grande (140%) esas dos líneas más la marca de
+       arriba dejaban el saludo ocupando casi la mitad de la pantalla en
+       celulares chicos, antes de que empiece el contenido. Ahora es
+       "Hola, {nombre}" en una sola línea (que puede envolver como
+       cualquier texto si el nombre es largo, pero ya no suma una línea
+       fija de más), sin cambiar el tamaño de letra.  */
+    display: inline;
     font-family: var(--font-display);
     font-size: 1.7rem;
     font-weight: 700;
@@ -213,6 +280,15 @@
     padding: 16px;
     z-index: 20;
     text-align: left;
+    /* Las secciones (Perfil, Tamaño de letra, cambiar clave, etc.) no son
+       exclusivas — se puede tener más de una abierta a la vez. Con letra
+       agrandada y varias abiertas, el panel entero podía terminar más alto
+       que la pantalla (overflow-y:visible de fábrica no ponía ningún
+       límite). max-height + scroll interno: el panel nunca crece más que
+       el viewport, y lo de abajo (cerrar sesión, borrar cuenta) sigue
+       siendo alcanzable con scroll en vez de quedar cortado sin aviso. */
+    max-height: calc(100dvh - 90px);
+    overflow-y: auto;
   }
   .user-menu-panel.visible { display: block; }
   .user-menu-panel .um-username { color: var(--ink-soft); font-size: 0.85rem; margin: 0 0 14px; word-break: break-all; }
@@ -221,11 +297,14 @@
      clave, copia, zona de riesgo) todas abiertas a la vez — se veía todo
      amontonado de una. Cada sección ahora es un acordeón: un botón con el
      nombre nada más, y el contenido se abre solo al tocarlo. */
+  /* min-height:44px: quedaba en ~41px de alto pese al padding — no llegaba
+     a la zona de toque mínima recomendada. */
   .user-menu-panel .um-section-toggle {
     display: flex; align-items: center; justify-content: space-between; width: 100%;
     background: none; border: none; border-top: 1px solid #E7DFCC;
     padding: 12px 2px; margin: 4px 0 0; font-family: var(--font-body);
     font-size: 0.9rem; color: var(--ink); font-weight: 700; text-align: left; cursor: pointer;
+    min-height: 44px; box-sizing: border-box;
   }
   .user-menu-panel .um-section-toggle:first-of-type { border-top: none; margin-top: 0; }
   .user-menu-panel .um-section-toggle-warn { color: #a33; }
@@ -239,14 +318,22 @@
      acá abajo, envuelto en varias líneas si hace falta. */
   .user-menu-panel .um-value-full { font-size: 0.875rem; color: var(--ink-soft); margin: -5px 0 8px; overflow-wrap: anywhere; }
   .user-menu-panel .um-hint { font-size: 0.78rem; color: var(--ink-soft); margin: -4px 0 8px; }
+  /* font-size:1rem (antes 0.88rem = 14.08px): por debajo de 16px, iOS
+     Safari hace zoom automático al enfocar el campo (nombre, correo,
+     fecha de nacimiento, cambio de clave, confirmar clave para
+     reiniciar/borrar la cuenta — todos pasan por esta regla). */
   .user-menu-panel input, .user-menu-panel select {
     width: 100%; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 10px;
-    font-family: var(--font-body); background: #fff; color: var(--ink); font-size: 0.88rem; margin-bottom: 8px;
+    font-family: var(--font-body); background: #fff; color: var(--ink); font-size: 1rem; margin-bottom: 8px;
   }
+  /* min-height:44px + flex (en vez de block): quedaba en ~35px de alto —
+     el texto centrado horizontal ya estaba, pero faltaba alto real. */
   .user-menu-panel .um-btn {
-    display: block; box-sizing: border-box; text-align: center; text-decoration: none;
+    display: flex; align-items: center; justify-content: center; box-sizing: border-box;
+    text-align: center; text-decoration: none;
     width: 100%; border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px;
     padding: 9px; font-weight: 700; cursor: pointer; font-family: var(--font-body); font-size: 0.88rem;
+    min-height: 44px;
   }
   .user-menu-panel .um-btn:disabled { opacity: 0.6; cursor: default; }
   .user-menu-panel .um-fontsize-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
@@ -263,7 +350,7 @@
   .topbar {
     width: 100%;
     max-width: 460px;
-    margin: 0 auto 18px;
+    margin: 0 auto 10px;
     display: flex;
     justify-content: center;
     flex-wrap: wrap;
@@ -316,8 +403,13 @@
      nada más en esas pantallas, lo suficiente para que todo entre en una
      fila y el nombre quede en dos líneas como mucho. */
   @media (max-width: 400px) {
-    .topbar { gap: 8px; }
+    /* column-gap para separar los íconos entre sí (evita toques
+       accidentales al vecino, sobre todo con letra agrandada) se deja
+       igual; row-gap (el espacio entre la fila de arriba y la de abajo)
+       se achica un poco — ahí no hay riesgo de tocar el ícono equivocado. */
+    .topbar { row-gap: 6px; column-gap: 8px; }
     .icon-btn { width: 48px; height: 48px; font-size: 1.4rem; }
+    .icon-nav-item { gap: 2px; }
     /* Antes la etiqueta bajaba a 0.7rem (~11px) acá para que las 5 entren
        en una sola fila — muy chico para el público de esta app. Se deja
        en el mismo 0.875rem que el resto, y en vez de forzar una fila se
@@ -341,9 +433,12 @@
     border: 1px solid #E7DFCC; border-radius: 16px; padding: 16px 20px; text-align: center;
   }
   .join-collab-row { display: flex; gap: 8px; margin-top: 8px; }
+  /* font-size:1rem: sin esto, el campo de código de invitación disparaba
+     el zoom automático de iOS Safari al tocarlo (ver comentario junto a
+     .write-row input más arriba). */
   .join-collab-row input {
     flex: 1; border: 1px solid #E7DFCC; border-radius: 10px; padding: 10px 12px;
-    font-family: var(--font-body); background: #fff; color: var(--ink); text-transform: uppercase;
+    font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink); text-transform: uppercase;
   }
   .join-collab-row button {
     border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px;
@@ -432,6 +527,10 @@
 </style>
 </head>
 <body>
+  <div id="checkingScreen" role="status" aria-live="polite">
+    <img src="/images/logo-icon.png" alt="">
+    <span>Comprobando tu sesión…</span>
+  </div>
   <div class="login" id="loginScreen">
     <div class="login-fontsize-row" role="group" aria-label="Tamaño de letra">
       <button type="button" id="loginFontDecBtn" aria-label="Achicar la letra">A-</button>
@@ -457,9 +556,14 @@
   </div>
 
   <div id="appContent">
+   <!-- Mismo patrón que la landing (public/index.html): invisible hasta que
+        se navega con Tab, para no obligar a pasar por el saludo y los 5
+        íconos del nav cada vez que se entra a la página con lector de
+        pantalla o teclado. -->
+   <a class="skip-link" href="#main-content">Saltar al contenido</a>
    <div class="greeting-bar">
      <img class="brand-logo" src="/images/logo-icon.png" alt="Los recuerdos de mis viejos">
-     <h1 class="greeting-text"><span class="brand-tag">Los recuerdos de mis viejos</span>Un gusto tenerte de vuelta<span class="greeting-name" id="greetingName"></span></h1>
+     <h1 class="greeting-text"><span class="brand-tag">Los recuerdos de mis viejos</span>Hola, <span class="greeting-name" id="greetingName"></span></h1>
      <div class="user-menu">
        <div class="icon-nav-item">
          <button class="icon-btn" id="userMenuBtn" type="button" title="Mi cuenta" aria-label="Mi cuenta" aria-expanded="false" aria-controls="userMenuPanel">👤</button>
@@ -486,15 +590,22 @@
 
          <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecPerfil">Perfil <span class="um-chevron" aria-hidden="true">›</span></button>
          <div class="um-section-body" id="umSecPerfil" hidden>
-           <input type="text" id="umProfileName" placeholder="Tu nombre" maxlength="100" aria-label="Tu nombre">
+           <!-- <label> visible en vez de solo placeholder+aria-label —
+                mismo motivo que en el login (ver .login-field): el
+                placeholder desaparece en cuanto se escribe algo, así que
+                para alguien que se distrae a mitad de editar no queda
+                ninguna pista visible de cuál campo es cuál. -->
+           <label class="um-field-label" for="umProfileName">Tu nombre</label>
+           <input type="text" id="umProfileName" placeholder="Tu nombre" maxlength="100">
            <p class="um-value-full" id="umProfileNameFull" hidden></p>
-           <input type="email" id="umProfileEmail" placeholder="Tu correo" maxlength="200" autocomplete="email" aria-label="Tu correo">
+           <label class="um-field-label" for="umProfileEmail">Tu correo</label>
+           <input type="email" id="umProfileEmail" placeholder="Tu correo" maxlength="200" autocomplete="email">
            <p class="um-value-full" id="umProfileEmailFull" hidden></p>
            <label class="um-field-label" for="umProfileBirthdate">Fecha de nacimiento</label>
            <input type="date" id="umProfileBirthdate" aria-label="Tu fecha de nacimiento">
            <p class="um-hint">Para que la entrevistadora entienda mejor el contexto de tu edad al charlar — es opcional.</p>
            <button class="um-btn" id="umProfileSaveBtn" type="button">Guardar perfil</button>
-           <p class="um-msg" id="umProfileMsg"></p>
+           <p class="um-msg" id="umProfileMsg" role="status" aria-live="polite" aria-atomic="true"></p>
          </div>
 
          <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecClave">Cambiar clave <span class="um-chevron" aria-hidden="true">›</span></button>
@@ -502,7 +613,7 @@
            <input type="password" id="umCurrentPassword" placeholder="Clave actual" autocomplete="current-password" aria-label="Clave actual">
            <input type="password" id="umNewPassword" placeholder="Clave nueva" autocomplete="new-password" aria-label="Clave nueva">
            <button class="um-btn" id="umChangePasswordBtn" type="button">Cambiar clave</button>
-           <p class="um-msg" id="umPasswordMsg"></p>
+           <p class="um-msg" id="umPasswordMsg" role="status" aria-live="polite" aria-atomic="true"></p>
          </div>
 
          <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecCopia">Tu copia <span class="um-chevron" aria-hidden="true">›</span></button>
@@ -521,22 +632,26 @@
              <div id="umResetRow" style="display:none; margin-top:8px;">
                <input type="password" id="umResetPassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para reiniciar la bitácora">
                <button class="um-btn um-danger" id="umResetConfirm" type="button">Reiniciar bitácora</button>
-               <p class="um-msg um-error" id="umResetError"></p>
+               <p class="um-msg um-error" id="umResetError" role="alert"></p>
              </div>
              <button class="um-btn um-plain um-warn" id="umDeleteToggle" type="button">⚠️ Borrar mi cuenta permanentemente</button>
              <div id="umDeleteRow" style="display:none; margin-top:8px;">
                <input type="password" id="umDeletePassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para borrar la cuenta">
                <button class="um-btn um-danger" id="umDeleteConfirm" type="button">Borrar cuenta</button>
-               <p class="um-msg um-error" id="umDeleteError"></p>
+               <p class="um-msg um-error" id="umDeleteError" role="alert"></p>
              </div>
            </div>
          </div>
        </div>
      </div>
    </div>
-   <div class="topbar">
+   <!-- <nav>, no <div>: son los enlaces a las otras secciones de la
+        bitácora — sin esto un lector de pantalla no puede saltar
+        directamente a la navegación (o saltearla) como hace con el
+        contenido de <main>, más abajo. -->
+   <nav class="topbar" aria-label="Secciones de tu bitácora">
      <div class="icon-nav-item">
-       <button class="icon-btn" id="joinCollabBtn" type="button" title="Colaborar con otra historia" aria-label="Colaborar con otra historia">🤝</button>
+       <button class="icon-btn" id="joinCollabBtn" type="button" title="Colaborar con otra historia" aria-label="Colaborar con otra historia" aria-expanded="false" aria-controls="joinCollabPanel">🤝</button>
        <span class="icon-label" aria-hidden="true">Colaborar</span>
      </div>
      <div class="icon-nav-item">
@@ -558,14 +673,19 @@
        <a class="icon-btn" href="/capitulos.html" title="Libro de la historia" aria-label="Libro de la historia">📖</a>
        <span class="icon-label" aria-hidden="true">Libro</span>
      </div>
-   </div>
+   </nav>
+   <!-- <main>: antes el contenido central (la charla con el orbe, y todo lo
+        de acá abajo) no estaba en ningún landmark — visualmente funciona
+        igual, pero un lector de pantalla no tiene forma de saltar directo
+        a "lo importante" sin pasar por el resto. -->
+   <main id="main-content" tabindex="-1">
    <div class="join-collab-panel" id="joinCollabPanel" style="display:none;">
      <p class="sub">Quiero colaborar con otra historia — ingresa el código que te compartieron.</p>
      <div class="join-collab-row">
        <input type="text" id="joinCollabCode" placeholder="Ej: B46NWEC7" maxlength="8" aria-label="Código de invitación">
        <button id="joinCollabSubmit" type="button">Entrar</button>
      </div>
-     <p class="msg" id="joinCollabMsg"></p>
+     <p class="msg" id="joinCollabMsg" role="alert"></p>
    </div>
    <div class="main-layout">
     <div class="device-col">
@@ -579,7 +699,13 @@
           <button class="orb" id="orb" data-state="idle" aria-label="Presionar para comenzar la charla">
             <span id="orbLabel">Presiona<br>para hablar</span>
           </button>
-          <div class="state-label" id="stateLabel"></div>
+          <!-- role="status" aria-live="polite" aria-atomic="true": este texto
+               cambia solo (Escuchando…/Transcribiendo…/pausa/errores) sin que
+               la persona toque nada — sin esto, alguien con lector de
+               pantalla no se entera de que el estado cambió. aria-atomic
+               porque el texto se REEMPLAZA entero cada vez (no se agrega),
+               así que conviene anunciarlo completo y no solo la diferencia. -->
+          <div class="state-label" id="stateLabel" role="status" aria-live="polite" aria-atomic="true"></div>
           <button class="write-toggle end-toggle" id="endBtn" type="button" style="display:none;">terminar la charla</button>
           <button class="write-toggle" id="treeModeBtn" type="button">armar árbol genealógico</button>
           <!-- Oculto a pedido: el botón manual "prefiero escribir" ya no se
@@ -598,7 +724,7 @@
    </div>
 
     <div class="logout-row">
-      <button class="invite-cta" id="inviteToggle" type="button">Invitar familiares a colaborar</button>
+      <button class="invite-cta" id="inviteToggle" type="button" aria-expanded="false" aria-controls="inviteRow">Invitar familiares a colaborar</button>
       <div id="inviteRow" style="display:none; margin-top: 10px;">
         <p class="sub" style="max-width: 340px; margin: 0 auto 8px;">Comparte este código con familiares — crean su propia cuenta y pueden aportar historias, sin ver ni tocar tus charlas.</p>
         <p style="font-family: var(--font-display); font-size: 1.4rem; font-weight: 700; letter-spacing: 0.1em; margin: 0 0 4px;" id="inviteCode">…</p>
@@ -606,10 +732,12 @@
         <button class="write-toggle" id="inviteRegenBtn" type="button">generar código nuevo</button>
       </div>
     </div>
+   </main>
   </div>
 
 <script>
 (function () {
+  const checkingScreen = document.getElementById('checkingScreen');
   const loginScreen = document.getElementById('loginScreen');
   const appContent = document.getElementById('appContent');
   const loginUser = document.getElementById('loginUser');
@@ -649,6 +777,7 @@
   umProfileEmail.addEventListener('input', () => mostrarCompletoSiNoCabe(umProfileEmail, umProfileEmailFull));
 
   function showApp(username, name, email, fechaNacimiento) {
+    checkingScreen.style.display = 'none';
     loginScreen.style.display = 'none';
     appContent.style.display = 'flex';
     const displayName = name || username || '';
@@ -662,9 +791,20 @@
     umProfileEmail.value = email || '';
     umProfileBirthdate.value = fechaNacimiento || '';
     ajustarCamposDePerfil();
+    if (location.hash === '#inviteToggle') {
+      // Llegó acá con un enlace directo a "invitar familiares" (por ejemplo
+      // desde el estado vacío de Aportes) — abrimos el código de una en vez
+      // de dejar que tenga que encontrarlo y tocarlo de nuevo.
+      requestAnimationFrame(() => {
+        inviteToggle.scrollIntoView({ block: 'center' });
+        inviteToggle.click();
+      });
+      history.replaceState(null, '', location.pathname + location.search);
+    }
   }
 
   function showLogin() {
+    checkingScreen.style.display = 'none';
     appContent.style.display = 'none';
     loginScreen.style.display = 'flex';
     loginPass.value = '';
@@ -726,17 +866,74 @@
   // más abajo en la pantalla, ahora agrupado en un solo lugar. ---
   const userMenuBtn = document.getElementById('userMenuBtn');
   const userMenuPanel = document.getElementById('userMenuPanel');
+  // El límite fijo en CSS (calc(100dvh - 90px)) asume que el panel siempre
+  // arranca casi pegado al borde superior. En pantallas chicas con letra
+  // agrandada el botón puede quedar más abajo, así que el espacio real
+  // disponible es menor. Se recalcula con la posición real del panel —
+  // pero no solo al abrir: cambiar el tamaño de letra (con Cuenta ya
+  // abierta) o el alto visible de la pantalla (rotar el celular, que
+  // aparezca el teclado, que se esconda la barra de direcciones) también
+  // puede volver viejo un cálculo hecho antes. No hace nada si el panel
+  // está cerrado.
+  function ajustarAltoCuenta() {
+    if (!userMenuPanel.classList.contains('visible')) return;
+    const top = userMenuPanel.getBoundingClientRect().top;
+    const vv = window.visualViewport;
+    // visualViewport.height es el alto REAL visible — a diferencia de
+    // window.innerHeight, descuenta el teclado virtual del celular cuando
+    // está abierto. getBoundingClientRect() mide contra el viewport de
+    // layout (no se mueve con el teclado), así que hay que restarle
+    // offsetTop para ubicar el panel en el mismo sistema de coordenadas
+    // que visualViewport.height antes de restar uno del otro.
+    const altoDisponible = vv ? vv.height : window.innerHeight;
+    const topAjustado = vv ? top - vv.offsetTop : top;
+    userMenuPanel.style.maxHeight = Math.max(120, altoDisponible - topAjustado - 12) + 'px';
+  }
+  // Única función que cierra el panel — Escape, click afuera y el propio
+  // botón (para el caso "ya estaba abierto") pasan todos por acá, así
+  // aria-expanded nunca queda desincronizado con lo que se ve.
+  function cerrarCuenta() {
+    if (!userMenuPanel.classList.contains('visible')) return;
+    userMenuPanel.classList.remove('visible');
+    userMenuBtn.setAttribute('aria-expanded', 'false');
+  }
   userMenuBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    const abierto = userMenuPanel.classList.toggle('visible');
-    userMenuBtn.setAttribute('aria-expanded', String(abierto));
+    const abrir = !userMenuPanel.classList.contains('visible');
+    if (abrir) {
+      userMenuPanel.classList.add('visible');
+      userMenuBtn.setAttribute('aria-expanded', 'true');
+      ajustarAltoCuenta();
+    } else {
+      cerrarCuenta();
+    }
   });
   document.addEventListener('click', (e) => {
     if (!userMenuPanel.contains(e.target) && e.target !== userMenuBtn) {
-      userMenuPanel.classList.remove('visible');
-      userMenuBtn.setAttribute('aria-expanded', 'false');
+      const estabaAbierto = userMenuPanel.classList.contains('visible');
+      cerrarCuenta();
+      // Si el click aterrizó en otro elemento enfocable, ese ya tiene el
+      // foco antes de llegar acá — no se lo robamos. Si aterrizó en algo
+      // sin foco (el fondo, texto suelto), el foco se pierde del todo, así
+      // que se lo devolvemos al botón para no dejar a quien navega con
+      // teclado sin ningún punto de partida.
+      if (estabaAbierto && document.activeElement === document.body) userMenuBtn.focus();
     }
   });
+  // Antes Escape no hacía nada acá — el panel seguía abierto con
+  // aria-expanded="true" aunque visualmente nadie lo notara si el foco ya
+  // se había movido a otro lado.
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && userMenuPanel.classList.contains('visible')) {
+      cerrarCuenta();
+      userMenuBtn.focus();
+    }
+  });
+  window.addEventListener('resize', ajustarAltoCuenta);
+  // visualViewport (no todos los navegadores lo tienen) avisa cambios de
+  // alto visible que "resize" a veces no dispara solo — sobre todo el
+  // teclado virtual abriéndose/cerrándose en el celular.
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', ajustarAltoCuenta);
 
   // Acordeón: cada sección de Cuenta arranca cerrada y se abre solo al
   // tocar su título — antes se veían las 6 secciones de una, amontonadas.
@@ -784,11 +981,13 @@
       window.bitacoraFontSize.decrease();
       actualizarBotonesFuente();
       ajustarCamposDePerfil();
+      ajustarAltoCuenta(); // la letra más chica/grande cambia cuánto mide el panel
     });
     umFontIncBtn.addEventListener('click', () => {
       window.bitacoraFontSize.increase();
       actualizarBotonesFuente();
       ajustarCamposDePerfil();
+      ajustarAltoCuenta();
     });
     loginFontDecBtn.addEventListener('click', () => {
       window.bitacoraFontSize.decrease();
@@ -990,8 +1189,13 @@
   let inviteLoaded = false;
   inviteToggle.addEventListener('click', async () => {
     const visible = inviteRow.style.display !== 'none';
-    if (visible) { inviteRow.style.display = 'none'; return; }
+    if (visible) {
+      inviteRow.style.display = 'none';
+      inviteToggle.setAttribute('aria-expanded', 'false');
+      return;
+    }
     inviteRow.style.display = 'block';
+    inviteToggle.setAttribute('aria-expanded', 'true');
     if (inviteLoaded) return;
     try {
       const resp = await fetch('/api/invite-code');
@@ -1034,6 +1238,7 @@
   joinCollabBtn.addEventListener('click', () => {
     const visible = joinCollabPanel.style.display !== 'none';
     joinCollabPanel.style.display = visible ? 'none' : 'block';
+    joinCollabBtn.setAttribute('aria-expanded', String(!visible));
     if (!visible) joinCollabCode.focus();
   });
 
@@ -1408,7 +1613,11 @@
   // navegador, que Safari/iPad no soportan): mientras haya sonido, seguimos
   // escuchando; recién cuando pasan SILENCE_MS sin volumen, cerramos la
   // grabación y la mandamos al servidor para transcribirla.
-  const SILENCE_MS = 2000; // pausa tolerada antes de dar la respuesta por terminada
+  // Antes eran 2000ms — para este público (recordando fechas, nombres,
+  // eventos) es fácil hacer una pausa más larga sin haber terminado de
+  // responder, y el corte prematuro contradice la idea de una charla
+  // paciente. 4000ms como punto de partida conservador.
+  const SILENCE_MS = 4000; // pausa tolerada antes de dar la respuesta por terminada
   const VAD_THRESHOLD = 0.02; // umbral de volumen para considerar que hay voz
   let audioContext = null;
   let analyser = null;
@@ -1773,7 +1982,12 @@
   const BUTTON_KEY = 'Enter';
   document.addEventListener('keydown', (e) => {
     const tag = (e.target && e.target.tagName) || '';
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON') return; // no pisar el Enter de los cuadros de texto ni de un botón con foco
+    // "A" se suma acá encontrado al agregar el link "saltar al contenido":
+    // sin esto, el Enter de alguien navegando con teclado hasta CUALQUIER
+    // link enfocado (el skip-link, o los del nav de arriba — Aportes,
+    // Historias, Árbol, Libro) quedaba secuestrado por este listener y
+    // disparaba el orbe en vez de dejar que el link navegue.
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || tag === 'A') return; // no pisar el Enter de los cuadros de texto, un botón o un link con foco
     if (e.key === BUTTON_KEY) {
       e.preventDefault();
       handleOrbPress();
