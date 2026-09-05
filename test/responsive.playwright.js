@@ -297,7 +297,31 @@ async function checkLanding(browser, base, w, scale, screenshotDir) {
     const compactoAlBajar = await page.evaluate(() => document.querySelector('nav').classList.contains('is-compact'));
     const alturaCompacta = await page.evaluate(() => document.querySelector('nav').getBoundingClientRect().height);
     check(compactoAlBajar, `${label}: al bajar, el header pasa a modo compacto`);
-    check(alturaCompacta < alturaArriba, `${label}: el header compacto mide menos que el normal (normal=${Math.round(alturaArriba)}px, compacto=${Math.round(alturaCompacta)}px)`);
+    check(alturaCompacta <= alturaArriba, `${label}: el header compacto nunca mide más que el normal (normal=${Math.round(alturaArriba)}px, compacto=${Math.round(alturaCompacta)}px)`);
+
+    // Por debajo de 1220px, compacto sigue escondiendo el nombre y los
+    // links informativos para entrar en una fila (comportamiento de
+    // siempre, sin cambios). De 1220px para arriba (auditoría UX
+    // 2026-09-06: "mantendría la marca y enlaces en pantallas amplias"),
+    // esconderlos no hacía falta — ahí quedan siempre visibles en
+    // compacto, así que en vez de pedir que compacto sea más bajo (a
+    // 120-140% de letra el header YA necesita 2 filas en estado normal, y
+    // eso no cambia por estar compacto: no hay altura que ganar sin
+    // esconder algo), lo que hay que garantizar es que siga mostrando el
+    // nombre y los links de verdad.
+    if (w >= 1220) {
+      const visibleEnCompacto = await page.evaluate(() => {
+        const nav = document.querySelector('nav');
+        const esVisible = (el) => !!el && el.offsetParent !== null && getComputedStyle(el).display !== 'none';
+        const brandSpan = nav.querySelector('.brand span');
+        const infoLinks = Array.from(nav.querySelectorAll('.nav-links a:not(.nav-cta):not(.nav-login)'));
+        return { brand: esVisible(brandSpan), links: infoLinks.length > 0 && infoLinks.every(esVisible) };
+      });
+      check(visibleEnCompacto.brand, `${label}: en modo compacto (>=1220px) el nombre de la marca sigue visible`);
+      check(visibleEnCompacto.links, `${label}: en modo compacto (>=1220px) los links informativos del nav siguen visibles`);
+    } else {
+      check(alturaCompacta < alturaArriba, `${label}: el header compacto mide menos que el normal (normal=${Math.round(alturaArriba)}px, compacto=${Math.round(alturaCompacta)}px)`);
+    }
 
     await irA(0);
     await page.waitForTimeout(250);

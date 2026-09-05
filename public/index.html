@@ -129,6 +129,19 @@
     @media(min-width:641px){
       nav.is-compact .nav-inner{min-height:56px}
       nav.is-compact .brand-mark{width:28px;height:28px}
+    }
+    /* Esconder el nombre, los links informativos y el "100%/120%" en modo
+       compacto solo hace falta entre 641 y 1219px (con letra agrandada, a
+       768px ni sacando los otros links entraba todo en una sola fila —
+       ver el detalle en cada regla de abajo). De 1220px para arriba, en
+       reposo (SIN compactar) ya entra el header completo sin problema
+       (ver @media(max-width:1220px) más abajo, que es la que esconde los
+       links secundarios en el header normal) — auditoría UX 2026-09-06:
+       antes esta regla no tenía techo, así que a 1440px+ scrollear
+       escondía la marca y los links igual, sin ninguna necesidad real de
+       espacio. Ahí arriba, compacto ahora solo achica el ícono y el alto
+       (ver arriba), sin esconder nada más. */
+    @media(min-width:641px) and (max-width:1219px){
       /* El nombre completo de la marca (visible siempre por arriba de
          640px) es lo que más ancho ocupa de todo el header — a 768px con
          letra agrandada, ni sacando los otros links entraba en una sola
@@ -579,56 +592,6 @@
       </div>
     </section>
 
-    <!-- "Próximamente" antes vivía justo antes del CTA final, después de
-         "Preguntas" y del formulario de registro — una auditoría de UX
-         marcó que una landing larga con esta sección tan tarde diluía la
-         conversión: alguien que ya está por registrarse vuelve a leer
-         "esto todavía no existe" justo antes de decidirse. Cerca de "Cómo
-         funciona" tiene más sentido: es donde se cuenta qué hace la app
-         HOY, así que decir qué se viene después queda como continuación
-         natural de esa misma idea, lejos del momento de decisión. -->
-    <section id="proximamente">
-      <div class="wrap">
-        <div class="section-head center reveal">
-          <div class="eyebrow" style="justify-content:center">Lo que viene</div>
-          <h2>Próximamente</h2>
-          <p>Seguimos construyendo la bitácora. Esto es lo que se viene.</p>
-        </div>
-        <div class="soon-cards reveal">
-          <div class="soon-card">
-            <span class="soon-badge">Próximamente</span>
-            <div style="font-size:1.8rem;margin-bottom:10px">📷</div>
-            <b style="display:block;margin-bottom:4px">Fotos y videos</b>
-            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Súbelos para que cuenten, en sus propias palabras, cómo vivieron esas fechas.</p>
-          </div>
-          <div class="soon-card">
-            <span class="soon-badge">Próximamente</span>
-            <div style="font-size:1.8rem;margin-bottom:10px">🍲</div>
-            <b style="display:block;margin-bottom:4px">Recetas</b>
-            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Para que esa "receta de la abuela" perdure, contada con su propia voz.</p>
-          </div>
-          <div class="soon-card">
-            <span class="soon-badge">Próximamente</span>
-            <div style="font-size:1.8rem;margin-bottom:10px">🙏</div>
-            <b style="display:block;margin-bottom:4px">Oraciones</b>
-            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Las que solían recitar, para que las escuches y las recites junto a ellos.</p>
-          </div>
-          <div class="soon-card">
-            <span class="soon-badge">Próximamente</span>
-            <div style="font-size:1.8rem;margin-bottom:10px">🎵</div>
-            <b style="display:block;margin-bottom:4px">Memorias musicales</b>
-            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Un archivo con la música de su vida, para que también la puedan disfrutar, no solo conversar.</p>
-          </div>
-          <div class="soon-card">
-            <span class="soon-badge">Próximamente</span>
-            <div style="font-size:1.8rem;margin-bottom:10px">🎙️</div>
-            <b style="display:block;margin-bottom:4px">Historias ya grabadas</b>
-            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Sube audios de historias que ya se contaron antes, para guardarlas también.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
     <section class="product" id="producto">
       <div class="wrap">
         <div class="section-head center reveal">
@@ -700,6 +663,56 @@
             <div style="font-size:1.8rem;margin-bottom:10px">🤝</div>
             <b style="display:block;margin-bottom:4px">Puedes tener la tuya y ayudar en otras</b>
             <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Tu propia bitácora y, con un código, colaborar en la historia de alguien más — sin cerrar sesión ni crear otra cuenta.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- "Próximamente" vivió antes justo antes del CTA final (diluía la
+         conversión: alguien por registrarse volvía a leer "esto todavía
+         no existe" justo antes de decidirse), y después justo después de
+         "Cómo funciona" — pero ahí seguía quedando ANTES de mostrar
+         producto/voz/familia, es decir antes de mostrar lo que la app YA
+         hace hoy (auditoría UX 2026-09-06). Acá, después de esas tres,
+         sigue lejos del CTA final (quedan privacidad y preguntas en el
+         medio) pero ya viene después de haber mostrado lo que existe. -->
+    <section id="proximamente">
+      <div class="wrap">
+        <div class="section-head center reveal">
+          <div class="eyebrow" style="justify-content:center">Lo que viene</div>
+          <h2>Próximamente</h2>
+          <p>Seguimos construyendo la bitácora. Esto es lo que se viene.</p>
+        </div>
+        <div class="soon-cards reveal">
+          <div class="soon-card">
+            <span class="soon-badge">Próximamente</span>
+            <div style="font-size:1.8rem;margin-bottom:10px">📷</div>
+            <b style="display:block;margin-bottom:4px">Fotos y videos</b>
+            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Súbelos para que cuenten, en sus propias palabras, cómo vivieron esas fechas.</p>
+          </div>
+          <div class="soon-card">
+            <span class="soon-badge">Próximamente</span>
+            <div style="font-size:1.8rem;margin-bottom:10px">🍲</div>
+            <b style="display:block;margin-bottom:4px">Recetas</b>
+            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Para que esa "receta de la abuela" perdure, contada con su propia voz.</p>
+          </div>
+          <div class="soon-card">
+            <span class="soon-badge">Próximamente</span>
+            <div style="font-size:1.8rem;margin-bottom:10px">🙏</div>
+            <b style="display:block;margin-bottom:4px">Oraciones</b>
+            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Las que solían recitar, para que las escuches y las recites junto a ellos.</p>
+          </div>
+          <div class="soon-card">
+            <span class="soon-badge">Próximamente</span>
+            <div style="font-size:1.8rem;margin-bottom:10px">🎵</div>
+            <b style="display:block;margin-bottom:4px">Memorias musicales</b>
+            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Un archivo con la música de su vida, para que también la puedan disfrutar, no solo conversar.</p>
+          </div>
+          <div class="soon-card">
+            <span class="soon-badge">Próximamente</span>
+            <div style="font-size:1.8rem;margin-bottom:10px">🎙️</div>
+            <b style="display:block;margin-bottom:4px">Historias ya grabadas</b>
+            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Sube audios de historias que ya se contaron antes, para guardarlas también.</p>
           </div>
         </div>
       </div>
