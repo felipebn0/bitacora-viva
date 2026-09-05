@@ -9,6 +9,41 @@ const { put, del, get } = require('@vercel/blob');
 const archiver = require('archiver');
 const { Readable } = require('stream');
 
+// Observabilidad (Sentry): hasta ahora, si algo fallaba en producción nos
+// enterábamos solo si alguien nos escribía o si alguien iba a mirar los
+// logs de Vercel a mano — no había ninguna alerta. Queda apagado por
+// completo (Sentry ni se inicializa) si no existe SENTRY_DSN en las
+// variables de entorno, así que no rompe nada mientras esa cuenta no esté
+// creada — ver claude/links.md para el paso pendiente (crear la cuenta
+// gratis en sentry.io y cargar el DSN en Vercel).
+//
+// En vez de salir a buscar cada "res.status(500)" del archivo (son
+// decenas) para agregarle un aviso a Sentry uno por uno, se engancha una
+// sola vez en console.error: prácticamente todos los catch de este
+// archivo ya hacían "console.error(err)" antes de responder con el 500,
+// así que interceptarlo acá reenvía automáticamente TODO error ya
+// registrado hoy (y cualquiera que se agregue después) sin tocar ninguna
+// ruta.
+let Sentry = null;
+if (process.env.SENTRY_DSN) {
+  Sentry = require('@sentry/node');
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.VERCEL_ENV || process.env.NODE_ENV || 'development',
+    tracesSampleRate: 0, // solo errores por ahora, no performance tracing (no hace falta y consume la cuota gratis más rápido)
+  });
+  const consoleErrorOriginal = console.error.bind(console);
+  console.error = (...args) => {
+    consoleErrorOriginal(...args);
+    const err = args.find((a) => a instanceof Error);
+    if (err) {
+      Sentry.captureException(err);
+    } else {
+      Sentry.captureMessage(args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' '), 'error');
+    }
+  };
+}
+
 const app = express();
 app.set('trust proxy', 1); // detrás del proxy de Vercel: para que req.ip y req.secure sean correctos
 
@@ -4030,19 +4065,27 @@ let server = null;
 // distinto de cero para que el supervisor de procesos reinicie desde cero.
 let apagandoPorErrorFatal = false;
 function apagarPorErrorFatal(tipo, err) {
-  console.error(`${tipo} — cerrando el proceso:`, err);
+  console.error(`${tipo} — cerrando el proceso:`, err); // ya reenvía a Sentry solo, si está configurado (ver arriba)
   if (apagandoPorErrorFatal) return; // ya se está apagando, no dupliques el intento
   apagandoPorErrorFatal = true;
+  // Sentry.captureException ya se disparó desde el console.error de
+  // arriba, pero es un envío en segundo plano — sin esperar un momento a
+  // que salga, el process.exit() de acá abajo puede matar el proceso
+  // antes de que la request HTTP a Sentry siquiera se mande, y ese error
+  // fatal (justo el más importante de todos) nunca llegaría a verse.
+  const salir = () => process.exit(1);
+  const salirLuegoDeAvisar = Sentry ? () => Sentry.flush(2000).catch(() => {}).then(salir) : salir;
   if (server) {
-    server.close(() => process.exit(1));
+    server.close(salirLuegoDeAvisar);
     // Si alguna conexión quedara colgada y server.close() nunca terminara
     // de cerrar sola, este timeout fuerza la salida igual — 3 segundos
-    // sobra para lo que esta app tarda en responder cualquier pedido.
-    setTimeout(() => process.exit(1), 3000).unref();
+    // sobra para lo que esta app tarda en responder cualquier pedido (más
+    // los hasta 2s de margen para el flush de Sentry de arriba).
+    setTimeout(salir, 5000).unref();
   } else {
     // Corriendo como función serverless (Vercel): no hay un server propio
     // que cerrar, esta invocación puntual simplemente termina.
-    process.exit(1);
+    salirLuegoDeAvisar();
   }
 }
 process.on('uncaughtException', (err) => apagarPorErrorFatal('Error no capturado', err));

@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
-    "test": "node test/smoke.js && node test/next.smoke.js && node test/shutdown.smoke.js && node test/account-actions.smoke.js && node test/export.smoke.js && node test/media-file.smoke.js && node test/guest.smoke.js && node test/billing.smoke.js && node test/billing-dummy.smoke.js && node test/chapters.smoke.js && node test/contribute-draft.smoke.js && node test/arbol-rebuild.smoke.js && node test/signup.smoke.js",
+    "test": "node test/smoke.js && node test/next.smoke.js && node test/shutdown.smoke.js && node test/account-actions.smoke.js && node test/export.smoke.js && node test/media-file.smoke.js && node test/guest.smoke.js && node test/billing.smoke.js && node test/billing-dummy.smoke.js && node test/chapters.smoke.js && node test/contribute-draft.smoke.js && node test/arbol-rebuild.smoke.js && node test/signup.smoke.js && node test/sentry.smoke.js",
     "test:responsive": "node test/responsive.playwright.js",
     "test:pause-resume": "node test/pause-resume.playwright.js",
     "test:arbol": "node test/arbol-conexiones.playwright.js",
@@ -19,6 +19,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
     "@neondatabase/serverless": "^1.1.0",
+    "@sentry/node": "^10.73.0",
     "@vercel/blob": "^2.8.0",
     "archiver": "^7.0.1",
     "bcryptjs": "^3.0.3",
