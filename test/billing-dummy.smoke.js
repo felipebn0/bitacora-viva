@@ -96,10 +96,17 @@ function fakeSql(strings, ...values) {
     return Promise.resolve(u ? [{ email: u.email, name: u.name, username: u.username }] : []);
   }
 
-  // --- redeem-gift ---
-  if (text.includes('SELECT id, plan_id, redeemed_by_user_id FROM gift_redemptions WHERE code')) {
+  // --- redeem-gift: claim atómico (P1 de seguridad, 2026-09-05) ---
+  if (text.includes('UPDATE gift_redemptions') && text.includes('redeemed_by_user_id = ') && text.includes('IS NULL')) {
+    const [userId, code] = values;
+    const g = giftRedemptions[code];
+    if (!g || g.redeemed_by_user_id) return Promise.resolve([]);
+    g.redeemed_by_user_id = userId;
+    return Promise.resolve([{ id: g.code, plan_id: g.plan_id }]);
+  }
+  if (text.includes('SELECT redeemed_by_user_id FROM gift_redemptions WHERE code')) {
     const g = giftRedemptions[values[0]];
-    return Promise.resolve(g ? [{ id: g.code, plan_id: g.plan_id, redeemed_by_user_id: g.redeemed_by_user_id }] : []);
+    return Promise.resolve(g ? [{ redeemed_by_user_id: g.redeemed_by_user_id }] : []);
   }
   if (text.includes("cancel_at_period_end = true") && text.includes('UPDATE subscriptions')) {
     const [planId, subId] = values;
@@ -111,12 +118,6 @@ function fakeSql(strings, ...values) {
     const [userId, planId] = values;
     const id = nextSubId++;
     subscriptions[userId] = { id, user_id: userId, plan_id: planId, status: 'active', cancel_at_period_end: true };
-    return Promise.resolve([]);
-  }
-  if (text.includes('UPDATE gift_redemptions SET redeemed_by_user_id')) {
-    const [userId, giftId] = values;
-    const g = Object.values(giftRedemptions).find((x) => x.code === giftId);
-    if (g) g.redeemed_by_user_id = userId;
     return Promise.resolve([]);
   }
   if (text.includes('SELECT plan_id, periodo, status, current_period_end, cancel_at_period_end FROM subscriptions WHERE user_id')) {

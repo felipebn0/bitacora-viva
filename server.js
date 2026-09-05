@@ -170,6 +170,12 @@ async function rateLimit(req, res, next) {
     }
 
     if (count > RATE_LIMIT_MAX) {
+      // Segundos que faltan para que arranque la ventana siguiente (las
+      // ventanas son de RATE_LIMIT_WINDOW_MS de ancho, ancladas a
+      // Date.now() / RATE_LIMIT_WINDOW_MS): así quien llama sabe cuánto
+      // esperar en vez de reintentar a ciegas apenas le devuelven un 429.
+      const segundos = Math.max(1, Math.ceil(((windowStart + 1) * RATE_LIMIT_WINDOW_MS - Date.now()) / 1000));
+      res.setHeader('Retry-After', String(segundos));
       return res.status(429).json({ error: 'Demasiados pedidos, espera un momento.' });
     }
     next();
@@ -190,6 +196,9 @@ async function rateLimit(req, res, next) {
 // contra UNA cuenta puntual repartiendo los intentos entre IPs distintas
 // (el límite por IP no frena eso, porque nunca ve muchos pedidos desde el
 // mismo lugar).
+// Devuelve { permitido, retryAfterSegundos } en vez de solo true/false: así
+// quien llama puede mandar el header Retry-After en el 429, en vez de que
+// quien reintenta tenga que adivinar cuánto esperar.
 async function limitePorClave(clave, windowMs, max) {
   await ensureSchema();
   const windowStart = Math.floor(Date.now() / windowMs);
@@ -202,7 +211,8 @@ async function limitePorClave(clave, windowMs, max) {
     RETURNING count
   `;
   const count = (rows[0] && rows[0].count) || 1;
-  return count <= max;
+  const retryAfterSegundos = Math.max(1, Math.ceil(((windowStart + 1) * windowMs - Date.now()) / 1000));
+  return { permitido: count <= max, retryAfterSegundos };
 }
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -696,8 +706,16 @@ async function requireAuth(req, res, next) {
   if (session.guest) {
     try {
       await ensureSchema();
-      const rows = await sql`SELECT id FROM users WHERE id = ${session.ownerId} AND owner_user_id IS NULL`;
+      const rows = await sql`SELECT id, invite_code FROM users WHERE id = ${session.ownerId} AND owner_user_id IS NULL`;
       if (!rows.length) return res.status(401).json({ error: 'No autenticado.' });
+      // El código quedó firmado adentro del token en /api/guest-start — si
+      // el dueño lo rotó desde entonces (/api/invite-code/regenerate), esta
+      // sesión de invitado tiene que caer acá, no seguir viva hasta que
+      // expire sola a los 30 días. Sesiones firmadas antes de este cambio
+      // no traen "code" (queda undefined) y por diseño también se cortan:
+      // es preferible pedirles que vuelvan a entrar con el código a dejar
+      // pasar una sesión vieja que no se puede verificar contra nada.
+      if (session.code !== rows[0].invite_code) return res.status(401).json({ error: 'Ese código ya no es válido — pídele uno nuevo a quien te invitó.' });
     } catch (err) {
       console.error('No se pudo validar la sesión de invitado:', err);
       return res.status(401).json({ error: 'No se pudo validar la sesión, intenta de nuevo.' });
@@ -1162,6 +1180,18 @@ function randomInviteCode() {
   return code;
 }
 
+// bcrypt corta en silencio cualquier byte después del 72 — no tira error,
+// simplemente lo ignora. Sin este chequeo, alguien puede escribir una clave
+// de 200 caracteres pensando que es "más segura" y en los hechos bcrypt
+// solo está mirando los primeros 72 bytes; peor, dos claves distintas que
+// coincidan en esos primeros 72 bytes hashean exactamente igual. Se mide en
+// BYTES (Buffer.byteLength), no en .length: con tildes o "ñ" un carácter
+// puede ocupar 2 bytes en UTF-8 aunque cuente como 1 en .length, así que
+// medir por .length dejaría pasar claves que en bytes sí superan el límite.
+function claveDemasiadoLarga(password) {
+  return Buffer.byteLength(String(password || ''), 'utf8') > 72;
+}
+
 async function asignarNuevoInviteCode(userId) {
   let code;
   for (let intento = 0; intento < 5; intento++) {
@@ -1300,7 +1330,15 @@ app.post('/api/guest-start', rateLimit, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Ese código no existe.' });
     const owner = rows[0];
 
-    const token = signSession({ guest: true, ownerId: owner.id, guestName: cleanName });
+    // El código va DENTRO del token firmado (no solo se usa para encontrar
+    // al dueño y después olvidarse de él) para que rotar el código
+    // (/api/invite-code/regenerate) sí corte el acceso de quien ya entró
+    // como invitado con el código viejo — antes requireAuth solo chequeaba
+    // que la cuenta dueña siguiera existiendo, nunca que el código con el
+    // que se entró siguiera siendo el vigente, así que una sesión de
+    // invitado de hasta 30 días sobrevivía intacta a la rotación pensada
+    // justo para cortarle el acceso a quien tiene un código que se filtró.
+    const token = signSession({ guest: true, ownerId: owner.id, guestName: cleanName, code: cleanCode });
     const secure = cookieEsSegura(req) ? '; Secure' : '';
     res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${token}; Max-Age=${SESSION_MAX_AGE}; Path=/; HttpOnly; SameSite=Lax${secure}`);
     res.json({ ok: true, ownerName: capitalizarNombre(owner.name || owner.username) });
@@ -1373,6 +1411,9 @@ app.post('/api/register', rateLimit, async (req, res) => {
     if (!username || !password || String(password).length < 6) {
       return res.status(400).json({ error: 'Usuario y clave (mínimo 6 caracteres) son obligatorios.' });
     }
+    if (claveDemasiadoLarga(password)) {
+      return res.status(400).json({ error: 'La clave es demasiado larga (máximo 72 caracteres).' });
+    }
     const cleanUsername = String(username).trim().toLowerCase().slice(0, 50);
     if (!/^[a-z0-9_-]+$/.test(cleanUsername)) {
       return res.status(400).json({ error: 'El usuario solo puede tener letras, números, "-" y "_".' });
@@ -1405,6 +1446,9 @@ app.post('/api/signup', rateLimit, async (req, res) => {
     }
     if (!password || String(password).length < 6) {
       return res.status(400).json({ error: 'La clave debe tener al menos 6 caracteres.' });
+    }
+    if (claveDemasiadoLarga(password)) {
+      return res.status(400).json({ error: 'La clave es demasiado larga (máximo 72 caracteres).' });
     }
     await ensureSchema();
     const existing = await sql`SELECT id FROM users WHERE email = ${cleanEmail} OR username = ${cleanEmail}`;
@@ -1455,8 +1499,8 @@ app.post('/api/login', rateLimit, async (req, res) => {
     // Límite por cuenta desactivado por ahora (ver BACKLOG.md para
     // reactivarlo). Queda el límite por IP (rateLimit, arriba en la
     // cadena de esta ruta).
-    // const permitido = await limitePorClave(`login:${cleanUsername}`, 15 * 60 * 1000, 10);
-    // if (!permitido) return res.status(429).json({ error: 'Demasiados intentos con esa cuenta, espera unos minutos.' });
+    // const { permitido, retryAfterSegundos } = await limitePorClave(`login:${cleanUsername}`, 15 * 60 * 1000, 10);
+    // if (!permitido) { res.setHeader('Retry-After', String(retryAfterSegundos)); return res.status(429).json({ error: 'Demasiados intentos con esa cuenta, espera unos minutos.' }); }
     await ensureSchema();
     const rows = await sql`SELECT id, username, password_hash, token_version FROM users WHERE username = ${cleanUsername}`;
     if (!rows.length) return res.status(401).json({ error: 'Usuario o clave incorrectos.' });
@@ -1647,12 +1691,16 @@ app.post('/api/change-password', requireAuth, rateLimit, async (req, res) => {
     // unifica al mismo mínimo, para que no haya una puerta más débil que
     // la otra para la misma cuenta.
     if (String(newPassword).length < 6) return res.status(400).json({ error: 'La clave nueva debe tener al menos 6 caracteres.' });
+    if (claveDemasiadoLarga(newPassword)) return res.status(400).json({ error: 'La clave es demasiado larga (máximo 72 caracteres).' });
 
     // Además del límite por IP, uno por cuenta: quien ya tiene una cookie
     // de sesión robada pero no la clave todavía podría intentar adivinar
     // currentPassword a fuerza bruta contra esta ruta.
-    const permitido = await limitePorClave(`pwchg:${req.userId}`, 15 * 60 * 1000, 10);
-    if (!permitido) return res.status(429).json({ error: 'Demasiados intentos, espera unos minutos.' });
+    const { permitido, retryAfterSegundos } = await limitePorClave(`pwchg:${req.userId}`, 15 * 60 * 1000, 10);
+    if (!permitido) {
+      res.setHeader('Retry-After', String(retryAfterSegundos));
+      return res.status(429).json({ error: 'Demasiados intentos, espera unos minutos.' });
+    }
 
     await ensureSchema();
     const rows = await sql`SELECT password_hash FROM users WHERE id = ${req.userId}`;
@@ -3833,10 +3881,41 @@ app.post('/api/billing/redeem-gift', requireAuth, bloquearColaborador, rateLimit
     if (!code) return res.status(400).json({ error: 'Falta el código.' });
 
     await ensureSchema();
-    const rows = await sql`SELECT id, plan_id, redeemed_by_user_id FROM gift_redemptions WHERE code = ${code}`;
-    if (!rows.length) return res.status(404).json({ error: 'Ese código de regalo no existe.' });
-    const regalo = rows[0];
-    if (regalo.redeemed_by_user_id) return res.status(400).json({ error: 'Ese código ya se usó.' });
+
+    // Antes esto era SELECT (¿está usado?) y recién más abajo, después de
+    // tocar subscriptions, un UPDATE aparte marcándolo usado — dos pedidos
+    // en simultáneo con el mismo código (dos pestañas, un doble tap, o
+    // alguien probando a propósito) podían pasar el SELECT los dos antes
+    // de que cualquiera llegara al UPDATE final, y las dos cuentas se
+    // llevaban los 12 meses con un solo código comprado una vez.
+    //
+    // Ahora el UPDATE que marca "usado" va PRIMERO y solo, con el filtro
+    // adentro mismo del WHERE (no en un SELECT previo): de dos pedidos
+    // simultáneos, el segundo que llegue ya encuentra redeemed_by_user_id
+    // distinto de NULL y no actualiza ninguna fila. Recién la request que
+    // sí ganó esa carrera sigue de largo y toca subscriptions.
+    //
+    // No va todo dentro de un sql.transaction() porque acá hace falta leer
+    // el resultado de esta consulta (¿vino una fila o no?) para decidir si
+    // seguir con la siguiente — y sql.transaction() de Neon manda todo junto
+    // como una transacción no interactiva, sin forma de mirar en el medio
+    // el resultado de una consulta anterior (ver el comentario en
+    // /api/reset-bitacora más arriba). Si el proceso se cayera justo entre
+    // este UPDATE y el de subscriptions, el peor caso es un código marcado
+    // como usado sin que se haya activado la suscripción — un estado raro
+    // pero arreglable a mano, mucho mejor que duplicar el regalo.
+    const claim = await sql`
+      UPDATE gift_redemptions
+      SET redeemed_by_user_id = ${req.userId}, redeemed_at = now()
+      WHERE code = ${code} AND redeemed_by_user_id IS NULL
+      RETURNING id, plan_id
+    `;
+    if (!claim.length) {
+      const rows = await sql`SELECT redeemed_by_user_id FROM gift_redemptions WHERE code = ${code}`;
+      if (!rows.length) return res.status(404).json({ error: 'Ese código de regalo no existe.' });
+      return res.status(400).json({ error: 'Ese código ya se usó.' });
+    }
+    const regalo = claim[0];
 
     const subRows = await sql`SELECT id FROM subscriptions WHERE user_id = ${req.userId}`;
     if (subRows.length) {
@@ -3844,7 +3923,6 @@ app.post('/api/billing/redeem-gift', requireAuth, bloquearColaborador, rateLimit
     } else {
       await sql`INSERT INTO subscriptions (user_id, plan_id, periodo, status, current_period_end, cancel_at_period_end) VALUES (${req.userId}, ${regalo.plan_id}, 'annual', 'active', now() + INTERVAL '12 months', true)`;
     }
-    await sql`UPDATE gift_redemptions SET redeemed_by_user_id = ${req.userId}, redeemed_at = now() WHERE id = ${regalo.id}`;
 
     res.json({ ok: true });
   } catch (err) {

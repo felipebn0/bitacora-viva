@@ -115,15 +115,23 @@ function fakeSql(strings, ...values) {
     giftRedemptions[code] = { code, billing_order_id: billingOrderId, bought_by_user_id: boughtByUserId, plan_id: 'regalo', meses: 12, redeemed_by_user_id: null, redeemed_at: null };
     return Promise.resolve([]);
   }
-  if (text.includes('SELECT id, plan_id, redeemed_by_user_id FROM gift_redemptions WHERE code')) {
-    const g = giftRedemptions[values[0]];
-    return Promise.resolve(g ? [{ id: g.code, plan_id: g.plan_id, redeemed_by_user_id: g.redeemed_by_user_id }] : []);
+  // El claim atómico (arregla la carrera de dos canjes simultáneos con el
+  // mismo código, P1 de seguridad 2026-09-05): un solo UPDATE con el
+  // filtro "redeemed_by_user_id IS NULL" adentro del WHERE, en vez del
+  // viejo SELECT-para-chequear + UPDATE-para-marcar por separado.
+  if (text.includes('UPDATE gift_redemptions') && text.includes('redeemed_by_user_id = ') && text.includes('IS NULL')) {
+    const [userId, code] = values;
+    const g = giftRedemptions[code];
+    if (!g || g.redeemed_by_user_id) return Promise.resolve([]);
+    g.redeemed_by_user_id = userId;
+    g.redeemed_at = new Date().toISOString();
+    return Promise.resolve([{ id: g.code, plan_id: g.plan_id }]);
   }
-  if (text.includes('UPDATE gift_redemptions SET redeemed_by_user_id')) {
-    const [userId, giftId] = values;
-    const g = Object.values(giftRedemptions).find((x) => x.code === giftId);
-    if (g) { g.redeemed_by_user_id = userId; g.redeemed_at = new Date().toISOString(); }
-    return Promise.resolve([]);
+  // Solo se usa para armar el mensaje de error cuando el claim de arriba
+  // no encontró fila (código inexistente vs. ya usado).
+  if (text.includes('SELECT redeemed_by_user_id FROM gift_redemptions WHERE code')) {
+    const g = giftRedemptions[values[0]];
+    return Promise.resolve(g ? [{ redeemed_by_user_id: g.redeemed_by_user_id }] : []);
   }
   if (text.includes('SELECT email, name, username FROM users WHERE id')) {
     const u = users[values[0]];

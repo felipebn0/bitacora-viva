@@ -40,10 +40,13 @@ function fakeSql(strings, ...values) {
     return Promise.resolve(u ? [{ owner_user_id: u.owner_user_id, token_version: u.token_version }] : []);
   }
   // requireAuth valida que la sesión de invitado siga apuntando a una
-  // cuenta dueña real.
-  if (text.includes('SELECT id FROM users WHERE id') && text.includes('owner_user_id IS NULL')) {
+  // cuenta dueña real Y que el código con el que entró siga siendo el
+  // vigente (ver /api/invite-code/regenerate) — antes solo se chequeaba lo
+  // primero, así que rotar el código no cortaba sesiones de invitado ya
+  // activas.
+  if (text.includes('SELECT id, invite_code FROM users WHERE id') && text.includes('owner_user_id IS NULL')) {
     const u = users[values[0]];
-    return Promise.resolve(u && !u.owner_user_id ? [{ id: u.id }] : []);
+    return Promise.resolve(u && !u.owner_user_id ? [{ id: u.id, invite_code: u.invite_code }] : []);
   }
   if (text.includes('SELECT id, name, username FROM users WHERE invite_code') && text.includes('owner_user_id IS NULL')) {
     const u = Object.values(users).find((x) => x.invite_code === values[0]);
