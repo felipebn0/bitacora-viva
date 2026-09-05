@@ -1558,6 +1558,7 @@
   let audioChunks = [];
   let recordingStartedAt = null;
   let lastRecordingDurationMs = 0;
+  let lastRecordingMimeType = 'audio/webm';
   // No todo lo que se graba vale la pena guardarlo como audio (ocupa mucho
   // más que el texto en Vercel Blob) — solo si la respuesta ya califica
   // como "historia destacada" (mismo umbral que usa el backend para
@@ -1620,6 +1621,12 @@
       } catch (e) {
         mediaRecorder = new MediaRecorder(mediaStream); // por si el navegador no soporta la opción
       }
+      // Safari (iPhone/iPad) no soporta WebM: graba en MP4/AAC y lo dice en
+      // mediaRecorder.mimeType. Etiquetar el Blob como "audio/webm" a pesar
+      // de eso no rompe la subida (el servidor detecta el tipo real por los
+      // bytes, no por esta etiqueta), pero sí puede confundir la reproducción
+      // local en el propio navegador — mejor guardar el tipo real que reportó.
+      lastRecordingMimeType = (mediaRecorder && mediaRecorder.mimeType) || 'audio/webm';
       mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
       mediaRecorder.start();
       recordingStartedAt = Date.now();
@@ -1654,7 +1661,7 @@
       if (!mediaRecorder || mediaRecorder.state === 'inactive') { resolve(null); return; }
       mediaRecorder.onstop = () => {
         lastRecordingDurationMs = recordingStartedAt ? Date.now() - recordingStartedAt : 0;
-        resolve(new Blob(audioChunks, { type: 'audio/webm' }));
+        resolve(new Blob(audioChunks, { type: lastRecordingMimeType || 'audio/webm' }));
       };
       mediaRecorder.stop();
     });
@@ -2140,7 +2147,7 @@
       const esHistoriaRelevante = text.trim().length >= HISTORIA_MIN_CHARS;
       const duroBastante = lastRecordingDurationMs >= AUDIO_MIN_DURATION_MS;
       if (esHistoriaRelevante || duroBastante) {
-        const file = await uploadAudio(audioBlob, 'user', myTurn, 'audio/webm');
+        const file = await uploadAudio(audioBlob, 'user', myTurn, audioBlob.type || 'audio/webm');
         if (file) logEntry.audioFile = file;
       }
       // Si no calificó, el audio del navegador se descarta solo (nunca se

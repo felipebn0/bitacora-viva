@@ -80,18 +80,40 @@ require.cache[require.resolve('@neondatabase/serverless')] = {
   id: require.resolve('@neondatabase/serverless'), filename: require.resolve('@neondatabase/serverless'), loaded: true,
   exports: { neon: () => fakeSql },
 };
+// Recorta AUDIO_CONTENIDO según un header Range tipo "bytes=A-B", igual que
+// haría el store real — usado para probar que /api/media-file relaya
+// 206/Content-Range cuando el reproductor (Safari/iOS, en particular) lo pide.
+function recortarPorRange(buf, rangeHeader) {
+  if (!rangeHeader) return { slice: buf, range: null };
+  const m = /bytes=(\d*)-(\d*)/.exec(rangeHeader);
+  if (!m) return { slice: buf, range: null };
+  const total = buf.length;
+  let start = m[1] ? parseInt(m[1], 10) : 0;
+  let end = m[2] ? parseInt(m[2], 10) : total - 1;
+  if (Number.isNaN(start)) start = 0;
+  if (Number.isNaN(end) || end >= total) end = total - 1;
+  return { slice: buf.slice(start, end + 1), range: `bytes ${start}-${end}/${total}` };
+}
+
 require.cache[require.resolve('@vercel/blob')] = {
   id: require.resolve('@vercel/blob'), filename: require.resolve('@vercel/blob'), loaded: true,
   exports: {
     put: async () => ({ url: 'https://fake.public.blob.vercel-storage.com/x' }),
     del: async () => {},
-    get: async (pathname) => {
+    get: async (pathname, opts) => {
       if (pathname !== AUDIO_PATHNAME) return null; // ni el legado ni nada más "existe" para get()
+      const rangeHeader = opts && opts.headers && opts.headers.Range;
+      const { slice, range } = recortarPorRange(AUDIO_CONTENIDO, rangeHeader);
+      const headers = new Headers();
+      if (range) {
+        headers.set('content-range', range);
+        headers.set('content-length', String(slice.length));
+      }
       return {
         statusCode: 200,
-        stream: streamDesdeBuffer(AUDIO_CONTENIDO),
-        headers: new Headers(),
-        blob: { contentType: 'audio/webm', size: AUDIO_CONTENIDO.length },
+        stream: streamDesdeBuffer(slice),
+        headers,
+        blob: { contentType: 'audio/webm', size: slice.length },
       };
     },
   },
@@ -104,15 +126,22 @@ require.cache[require.resolve('@anthropic-ai/sdk')] = {
 // fetch de respaldo para el archivo "legado" — server.js lo usa cuando
 // get() no encuentra nada y el valor guardado es una URL http(s) completa.
 const fetchOriginal = global.fetch;
-global.fetch = async (url) => {
+global.fetch = async (url, opts) => {
   if (url === LEGACY_URL) {
+    const rangeHeader = opts && opts.headers && (opts.headers.Range || opts.headers.range);
+    const { slice, range } = recortarPorRange(LEGACY_CONTENIDO, rangeHeader);
+    const headersMap = {
+      'content-type': 'audio/webm',
+      ...(range ? { 'content-range': range, 'content-length': String(slice.length) } : {}),
+    };
     return {
       ok: true,
-      headers: { get: (k) => (k.toLowerCase() === 'content-type' ? 'audio/webm' : null) },
-      body: streamDesdeBuffer(LEGACY_CONTENIDO),
+      status: range ? 206 : 200,
+      headers: { get: (k) => headersMap[k.toLowerCase()] || null },
+      body: streamDesdeBuffer(slice),
     };
   }
-  return fetchOriginal(url);
+  return fetchOriginal(url, opts);
 };
 
 const app = require(serverPath);
@@ -185,6 +214,14 @@ function check(nombre, cond) {
     check('la dueña puede ver su propio archivo -> 200', comoDuena.status === 200);
     check('el contenido es el real', comoDuena.bodyBuffer.equals(AUDIO_CONTENIDO));
     check('Content-Type audio/webm', comoDuena.headers['content-type'] === 'audio/webm');
+    check('trae Accept-Ranges: bytes aun sin pedir Range (lo necesita Safari/iOS)', comoDuena.headers['accept-ranges'] === 'bytes');
+
+    // --- Pedido con header Range (lo que hace el <audio> de Safari/iOS antes
+    //     de reproducir) — sin esto, iOS falla con "Error" al reproducir. ---
+    const conRange = await request(server, { path: u(AUDIO_PATHNAME), headers: { Range: 'bytes=0-3' } }, cookieA);
+    check('con Range -> 206 Partial Content', conRange.status === 206);
+    check('Content-Range correcto', conRange.headers['content-range'] === `bytes 0-3/${AUDIO_CONTENIDO.length}`);
+    check('el cuerpo trae solo los 4 bytes pedidos', conRange.bodyBuffer.length === 4 && conRange.bodyBuffer.equals(AUDIO_CONTENIDO.slice(0, 4)));
 
     // --- Cuenta sin relación: NO puede verlo (el arreglo central) ---
     const comoAjena = await request(server, { path: u(AUDIO_PATHNAME) }, cookieB);
@@ -202,6 +239,13 @@ function check(nombre, cond) {
     const legado = await request(server, { path: u(LEGACY_URL) }, cookieA);
     check('archivo legado (get() vacío, URL pública real) se sirve por respaldo -> 200', legado.status === 200);
     check('el contenido del legado es el real', legado.bodyBuffer.equals(LEGACY_CONTENIDO));
+    check('el respaldo también trae Accept-Ranges: bytes', legado.headers['accept-ranges'] === 'bytes');
+
+    // --- El respaldo también debe soportar Range (mismo motivo: iOS Safari) ---
+    const legadoConRange = await request(server, { path: u(LEGACY_URL), headers: { Range: 'bytes=2-5' } }, cookieA);
+    check('respaldo con Range -> 206 Partial Content', legadoConRange.status === 206);
+    check('respaldo con Range: Content-Range correcto', legadoConRange.headers['content-range'] === `bytes 2-5/${LEGACY_CONTENIDO.length}`);
+    check('respaldo con Range: el cuerpo trae solo los 4 bytes pedidos', legadoConRange.bodyBuffer.equals(LEGACY_CONTENIDO.slice(2, 6)));
 
     // --- Un archivo legado de OTRA cuenta sigue sin poder verlo B ---
     const legadoAjeno = await request(server, { path: u(LEGACY_URL) }, cookieB);

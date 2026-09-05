@@ -2386,9 +2386,17 @@ app.get('/api/media-file', requireAuth, async (req, res) => {
     const autorizado = await estaAutorizadoParaVerArchivo(req, datos.ownerId);
     if (!autorizado) return res.status(403).json({ error: 'No tienes acceso a ese archivo.' });
 
+    // Safari en iOS exige que el <audio>/<video> reciba soporte de rangos
+    // (Accept-Ranges + 206 Partial Content) para reproducir el archivo —
+    // una respuesta 200 completa, aunque válida, hace que falle con "Error".
+    // Por eso reenviamos el header Range del cliente hacia el origen y
+    // relayamos el status/Content-Range que responda, en vez de servir
+    // siempre el archivo completo.
+    const rangeHeader = typeof req.headers.range === 'string' ? req.headers.range : undefined;
+
     let resultado;
     try {
-      resultado = await get(datos.pathname, { access: 'private' });
+      resultado = await get(datos.pathname, { access: 'private', headers: rangeHeader ? { Range: rangeHeader } : undefined });
     } catch (err) {
       resultado = null;
     }
@@ -2399,10 +2407,16 @@ app.get('/api/media-file', requireAuth, async (req, res) => {
       try {
         const url = /^https?:\/\//i.test(valorGuardado) ? valorGuardado : null;
         if (!url) return res.status(404).json({ error: 'No se encontró el archivo.' });
-        const externo = await fetch(url);
+        const externo = await fetch(url, rangeHeader ? { headers: { Range: rangeHeader } } : undefined);
         if (!externo.ok || !externo.body) return res.status(404).json({ error: 'No se encontró el archivo.' });
+        res.status(Number.isInteger(externo.status) ? externo.status : 200);
         res.set('Content-Type', externo.headers.get('content-type') || 'application/octet-stream');
         res.set('Cache-Control', 'private, no-store');
+        res.set('Accept-Ranges', 'bytes');
+        const contentRange = externo.headers.get('content-range');
+        if (contentRange) res.set('Content-Range', contentRange);
+        const contentLength = externo.headers.get('content-length');
+        if (contentLength) res.set('Content-Length', contentLength);
         Readable.fromWeb(externo.body).pipe(res);
         return;
       } catch (err) {
@@ -2412,6 +2426,15 @@ app.get('/api/media-file', requireAuth, async (req, res) => {
     }
     res.set('Content-Type', resultado.blob.contentType || 'application/octet-stream');
     res.set('Cache-Control', 'private, no-store');
+    res.set('Accept-Ranges', 'bytes');
+    const headersPrivado = resultado.headers && typeof resultado.headers.get === 'function' ? resultado.headers : null;
+    const contentRangePrivado = headersPrivado ? headersPrivado.get('content-range') : null;
+    if (contentRangePrivado) {
+      res.status(206);
+      res.set('Content-Range', contentRangePrivado);
+    }
+    const contentLengthPrivado = headersPrivado ? headersPrivado.get('content-length') : null;
+    if (contentLengthPrivado) res.set('Content-Length', contentLengthPrivado);
     Readable.fromWeb(resultado.stream).pipe(res);
   } catch (err) {
     console.error(err);

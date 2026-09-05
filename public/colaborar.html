@@ -855,6 +855,7 @@
   let mediaStream = null;
   let mediaRecorder = null;
   let audioChunks = [];
+  let lastRecordingMimeType = 'audio/webm';
   let grabando = false;
 
   // Igual que en la charla principal: no hace falta presionar de nuevo
@@ -945,6 +946,9 @@
     } catch (e) {
       mediaRecorder = new MediaRecorder(mediaStream);
     }
+    // Safari (iPhone/iPad) no soporta WebM y graba en MP4/AAC — guardamos el
+    // tipo real que reporta el navegador en vez de asumir siempre WebM.
+    lastRecordingMimeType = (mediaRecorder && mediaRecorder.mimeType) || 'audio/webm';
     mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
     mediaRecorder.start();
     grabando = true;
@@ -959,7 +963,7 @@
   function detenerGrabacionRaw() {
     return new Promise((resolve) => {
       if (!mediaRecorder || mediaRecorder.state === 'inactive') { resolve(null); return; }
-      mediaRecorder.onstop = () => resolve(new Blob(audioChunks, { type: 'audio/webm' }));
+      mediaRecorder.onstop = () => resolve(new Blob(audioChunks, { type: lastRecordingMimeType || 'audio/webm' }));
       mediaRecorder.stop();
     });
   }
@@ -1033,7 +1037,7 @@
       return;
     }
 
-    const ok = await procesarAudio(blob, 'audio/webm');
+    const ok = await procesarAudio(blob, blob.type || 'audio/webm');
     recStatus.textContent = ok ? '' : 'No se pudo entender el audio. Intenta de nuevo.';
     reset();
   }
