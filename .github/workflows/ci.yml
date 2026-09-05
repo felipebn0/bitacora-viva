@@ -96,6 +96,11 @@ jobs:
       - name: Pruebas de contexto fijo en colaborar.html (Playwright)
         run: npm run test:colaborar-sticky
 
+      # Login con campos vacíos: antes tocar "Entrar" sin usuario o sin
+      # clave no hacía nada (ni mensaje, ni foco) en app.html y colaborar.html.
+      - name: Pruebas de login con campos vacíos (Playwright)
+        run: npm run test:login-vacio
+
       - name: Subir capturas de las pruebas responsive
         if: always()
         uses: actions/upload-artifact@v4

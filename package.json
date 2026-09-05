@@ -15,6 +15,7 @@
     "test:a11y": "node test/accesibilidad.playwright.js",
     "test:landscape": "node test/landscape-safearea.playwright.js",
     "test:colaborar-sticky": "node test/colaborar-sticky.playwright.js",
+    "test:login-vacio": "node test/login-vacio.playwright.js",
     "eval:conversacion": "node test/eval-conversacion.js"
   },
   "dependencies": {

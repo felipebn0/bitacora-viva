@@ -561,7 +561,7 @@
       </div>
     </div>
     <button id="loginBtn" type="button">Entrar</button>
-    <p class="error" id="loginError"></p>
+    <p class="error" id="loginError" role="status" aria-live="polite" aria-atomic="true"></p>
     <p class="sub" style="margin-top:2px;">¿No tienes cuenta? <a href="/" style="color:var(--gold-deep);">Crea una</a>.</p>
   </div>
 
@@ -907,7 +907,21 @@
   async function doLogin() {
     const username = loginUser.value.trim();
     const password = loginPass.value;
-    if (!username || !password) return;
+    // Antes esto era "if (!username || !password) return;" — sin cuenta ni
+    // clave, tocar "Entrar" no hacía absolutamente nada: ni mensaje, ni
+    // foco, ni el botón cambiaba de estado. Para alguien peleando con un
+    // teclado chico o que tocó el botón equivocado, quedaba sin ninguna
+    // pista de qué pasó. Ahora se avisa cuál falta y se pone el foco ahí.
+    if (!username) {
+      loginError.textContent = 'Falta el usuario o correo.';
+      loginUser.focus();
+      return;
+    }
+    if (!password) {
+      loginError.textContent = 'Falta la clave.';
+      loginPass.focus();
+      return;
+    }
     loginBtn.disabled = true;
     loginError.textContent = '';
     try {
