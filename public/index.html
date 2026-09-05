@@ -108,7 +108,50 @@
        bajara a una línea nueva. Con white-space:nowrap en los links (ver
        abajo) más esto, ahora es la fila la que se envuelve — cada link se
        mantiene entero, en una sola línea. */
-    .nav-inner{min-height:76px; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:24px}
+    .nav-inner{min-height:76px; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:24px; transition:min-height .18s ease}
+    /* Cabecera compacta al hacer scroll (nav.is-compact, activada por JS
+       más abajo cuando se baja más de ~30px): en desktop/tablet, donde el
+       header normal (76px) es más alto de lo que hace falta para solo
+       identificar la marca mientras se lee el resto de la página, lo
+       achica a 56px — el ícono también se achica un poco, todo dentro del
+       mismo min-height:44px de zona táctil que ya tenía .brand (achicar
+       el ÍCONO no achica el LINK clickeable). En mobile (ver
+       @media(max-width:640px) más abajo) esto NO se aplica: ahí el header
+       ya está en el piso posible sin esconder ningún control ni bajar
+       ningún target de 44px (ver el ajuste de .nav-inner en esa media
+       query) — no hay margen para compactar más sin sacrificar alguna de
+       las dos cosas. */
+    @media(min-width:641px){
+      nav.is-compact .nav-inner{min-height:56px}
+      nav.is-compact .brand-mark{width:28px;height:28px}
+      /* El nombre completo de la marca (visible siempre por arriba de
+         640px) es lo que más ancho ocupa de todo el header — a 768px con
+         letra agrandada, ni sacando los otros links entraba en una sola
+         fila mientras el nombre completo seguía ahí. Mismo criterio que
+         ya se usa por debajo de 640px: solo el ícono alcanza para
+         identificar la marca una vez que ya se está leyendo el resto de
+         la página (con el nombre completo bien visible arriba, antes de
+         scrollear). */
+      nav.is-compact .brand span{display:none}
+      /* Con la letra agrandada (120-140%) + 768px, los 5 links completos
+         (los 3 de más arriba, más "Iniciar sesión"/"Crear cuenta") ya
+         necesitan 2 filas aunque se achique el ícono — reducir min-height
+         no sirve de nada si el contenido igual las fuerza. Compacto
+         esconde los 3 links secundarios (mismo criterio que ya se usa por
+         debajo de 1220px: "Iniciar sesión"/"Crear cuenta" son las dos
+         acciones reales, siguen siempre visibles) para que quepa en una
+         sola fila también acá. */
+      nav.is-compact .nav-links a:not(.nav-cta):not(.nav-login){display:none}
+      /* A 768px con la letra agrandada (120-140%), incluso sin los 3 links
+         de arriba, la marca + el control de letra + "Iniciar
+         sesión"/"Crear cuenta" todavía no entran en una sola fila — el
+         "100%"/"120%" del medio no es indispensable (las dos flechas
+         A-/A+ siguen ahí, con su mismo aria-label de siempre) y libera
+         el ancho que falta. Vuelve a aparecer apenas se sube de nuevo. */
+      nav.is-compact #navFontSizeValue{display:none}
+    }
+    .brand-mark{transition:width .18s ease,height .18s ease}
+    @media(prefers-reduced-motion:reduce){.nav-inner,.brand-mark{transition:none}}
     /* min-height/min-width:44px: en mobile el span del nombre se oculta
        (ver ".brand span{display:none}" más abajo) y queda solo el ícono de
        38x38px como zona táctil — por debajo del mínimo recomendado de
@@ -814,6 +857,33 @@
         document.documentElement.style.scrollPaddingTop = (nav.offsetHeight + 16) + 'px';
       };
       new ResizeObserver(actualizar).observe(nav);
+      actualizar();
+    })();
+
+    // Cabecera compacta al hacer scroll (ver nav.is-compact en el CSS de
+    // arriba): pasado un umbral chico de scroll, el nav sticky se achica
+    // un poco para dejar más lugar a lo que se está leyendo — y vuelve a
+    // su tamaño normal apenas se sube de nuevo cerca del principio. Solo
+    // tiene efecto visual en desktop/tablet (>640px) — en mobile el CSS
+    // de la media query ya lo deja sin cambios a propósito, no hay más
+    // margen para achicarlo sin bajar algún target de 44px.
+    // requestAnimationFrame en vez de leer/escribir en cada evento
+    // "scroll" tal cual: los scroll events pueden dispararse muchas veces
+    // por segundo, y sin esto se recalcularía clases de más sin necesidad.
+    (function () {
+      const nav = document.querySelector('nav');
+      if (!nav) return;
+      const UMBRAL = 30;
+      let programado = false;
+      function actualizar() {
+        programado = false;
+        nav.classList.toggle('is-compact', window.scrollY > UMBRAL);
+      }
+      window.addEventListener('scroll', () => {
+        if (programado) return;
+        programado = true;
+        requestAnimationFrame(actualizar);
+      }, { passive: true });
       actualizar();
     })();
 

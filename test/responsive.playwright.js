@@ -257,6 +257,37 @@ async function checkLanding(browser, base, w, scale, screenshotDir) {
     );
   }
 
+  // Cabecera compacta al hacer scroll: solo tiene efecto visual en
+  // desktop/tablet (>640px) — en mobile no hay margen para achicar más sin
+  // bajar algún target de 44px (ver checkNav de arriba), así que ahí el
+  // nav se queda igual a propósito y no hace falta probarlo.
+  if (w > 640) {
+    // La landing tiene "html{scroll-behavior:smooth}" — un scrollTo(x,y) de
+    // dos argumentos hereda esa animación, así que puede seguir en
+    // movimiento varios frames después de "terminar" el await. behavior:
+    // 'instant' lo salta del todo, para que la medición de acá abajo sea
+    // sobre la posición final, no a mitad de una animación.
+    const irA = (y) => page.evaluate((y) => window.scrollTo({ top: y, left: 0, behavior: 'instant' }), y);
+
+    // El check de "Ver cómo funciona" de arriba puede dejar la página
+    // scrolleada — sin volver a 0 acá, "alturaArriba" mediría el header ya
+    // en modo compacto, no el normal.
+    await irA(0);
+    await page.waitForTimeout(250);
+    const alturaArriba = await page.evaluate(() => document.querySelector('nav').getBoundingClientRect().height);
+    await irA(400);
+    await page.waitForTimeout(250);
+    const compactoAlBajar = await page.evaluate(() => document.querySelector('nav').classList.contains('is-compact'));
+    const alturaCompacta = await page.evaluate(() => document.querySelector('nav').getBoundingClientRect().height);
+    check(compactoAlBajar, `${label}: al bajar, el header pasa a modo compacto`);
+    check(alturaCompacta < alturaArriba, `${label}: el header compacto mide menos que el normal (normal=${Math.round(alturaArriba)}px, compacto=${Math.round(alturaCompacta)}px)`);
+
+    await irA(0);
+    await page.waitForTimeout(250);
+    const compactoArriba = await page.evaluate(() => document.querySelector('nav').classList.contains('is-compact'));
+    check(!compactoArriba, `${label}: al volver arriba, el header vuelve a su tamaño normal`);
+  }
+
   await page.screenshot({ path: path.join(screenshotDir, `landing-${w}-${scale}.png`) });
   await context.close();
 }
