@@ -14,6 +14,14 @@
 // /api/* se interceptan directamente con page.route(), y los archivos de
 // public/ se sirven con un servidor estático mínimo aparte.
 //
+// getUserMedia/MediaRecorder/AudioContext también se fakean por completo
+// (en vez de usar micrófono real con --use-fake-device-for-media-stream):
+// así el test no depende de permisos de micrófono ni del comportamiento
+// real de audio del Chromium de turno (que puede variar entre el navegador
+// fijo de este sandbox y el que instala Playwright en CI), y el tamaño del
+// audio "grabado" es siempre el mismo, sin esperar a que se junten bytes
+// de verdad.
+//
 //   node test/pause-resume.playwright.js   (o: npm run test:pause-resume)
 
 const path = require('path');
@@ -28,10 +36,7 @@ try {
 }
 
 function launchChromium() {
-  const args = ['--use-fake-device-for-media-stream'];
-  return chromium
-    .launch({ executablePath: '/opt/pw-browsers/chromium', args })
-    .catch(() => chromium.launch({ args }));
+  return chromium.launch({ executablePath: '/opt/pw-browsers/chromium' }).catch(() => chromium.launch());
 }
 
 function startStaticServer() {
@@ -60,15 +65,16 @@ function assert(cond, msg) {
 }
 
 async function setupPage(browser, { transcript }) {
-  const context = await browser.newContext({ permissions: ['microphone'] });
+  const context = await browser.newContext();
   const page = await context.newPage();
-  page.on('pageerror', (e) => console.error('  [pageerror]', e.message));
+  page.on('pageerror', (e) => console.error('  [pageerror]', e.message, e.stack || ''));
+  page.on('console', (msg) => { if (msg.type() === 'error') console.error('  [console.error]', msg.text()); });
 
-  // window.Audio real depende de decodificar bytes de audio de verdad y de
-  // la política de autoplay del navegador — nada de eso es lo que este
-  // test quiere validar. Un Audio fake que "termina" solo, rápido, hace
-  // que hablar la pregunta sea instantáneo y 100% determinístico.
   await page.addInitScript(() => {
+    // window.Audio real depende de decodificar bytes de audio de verdad y
+    // de la política de autoplay del navegador — nada de eso es lo que
+    // este test quiere validar. Un Audio fake que "termina" solo, rápido,
+    // hace que hablar la pregunta sea instantáneo y determinístico.
     class FakeAudio {
       constructor() {
         this._src = '';
@@ -87,6 +93,52 @@ async function setupPage(browser, { transcript }) {
       load() {}
     }
     window.Audio = FakeAudio;
+
+    // getUserMedia/MediaRecorder/AudioContext fakes: no hace falta
+    // micrófono real ni permisos para probar la lógica de pausar/seguir —
+    // solo hace falta que "grabar" produzca un Blob de un tamaño
+    // controlado (>= 800 bytes, el mínimo que pide pauseConversation()
+    // antes de intentar transcribir) apenas se llama a stop().
+    class FakeMediaStreamTrack {
+      stop() {}
+    }
+    class FakeMediaStream {
+      getTracks() { return [new FakeMediaStreamTrack()]; }
+    }
+    navigator.mediaDevices = navigator.mediaDevices || {};
+    navigator.mediaDevices.getUserMedia = async () => new FakeMediaStream();
+
+    class FakeMediaRecorder {
+      constructor(stream, opts) {
+        this.stream = stream;
+        this.state = 'inactive';
+        this.mimeType = 'audio/webm';
+        this.ondataavailable = null;
+        this.onstop = null;
+      }
+      start() { this.state = 'recording'; }
+      stop() {
+        this.state = 'inactive';
+        const blob = new Blob([new Uint8Array(2000)], { type: this.mimeType });
+        if (this.ondataavailable) this.ondataavailable({ data: blob });
+        if (this.onstop) this.onstop();
+      }
+    }
+    window.MediaRecorder = FakeMediaRecorder;
+
+    class FakeAnalyserNode {
+      constructor() { this.fftSize = 512; this.frequencyBinCount = 256; }
+      getByteTimeDomainData(arr) { arr.fill(128); } // 128 = silencio (rms 0): nunca dispara el auto-corte por silencio durante el test
+    }
+    class FakeAudioContext {
+      constructor() { this.state = 'running'; }
+      createMediaStreamSource() { return { connect() {} }; }
+      createAnalyser() { return new FakeAnalyserNode(); }
+      resume() {}
+      close() {}
+    }
+    window.AudioContext = FakeAudioContext;
+    window.webkitAudioContext = FakeAudioContext;
   });
 
   const callCounts = { next: 0 };
@@ -128,9 +180,7 @@ async function scenarioGuardaRespuestaParcial(browser, base) {
   await esperarEstado(page, 'listening');
   assert(callCounts.next === 1, 'primera pregunta pedida al arrancar la sesión');
 
-  await page.waitForTimeout(700); // deja que MediaRecorder junte algo de audio real antes de pausar
   await page.click('#orb'); // listening -> pauseConversation()
-
   await esperarEstado(page, 'paused');
 
   const respuestas = await page.$$eval('.bubble.a', (els) => els.map((e) => e.textContent));
@@ -157,8 +207,7 @@ async function scenarioSinNadaQueGuardar(browser, base) {
   await page.click('#orb');
   await esperarEstado(page, 'listening');
 
-  await page.waitForTimeout(700); // hay audio real de sobra, pero la transcripción vuelve vacía
-  await page.click('#orb'); // pausa
+  await page.click('#orb'); // pausa — hay audio "de sobra" (blob fake de 2000 bytes), pero la transcripción vuelve vacía
   await esperarEstado(page, 'paused');
 
   const respuestas = await page.$$eval('.bubble.a', (els) => els.map((e) => e.textContent));
@@ -179,6 +228,9 @@ async function scenarioSinNadaQueGuardar(browser, base) {
   try {
     await scenarioGuardaRespuestaParcial(browser, base);
     await scenarioSinNadaQueGuardar(browser, base);
+  } catch (err) {
+    failures++;
+    console.error('✗ error inesperado:', err && err.stack ? err.stack : err);
   } finally {
     await browser.close();
     server.close();
