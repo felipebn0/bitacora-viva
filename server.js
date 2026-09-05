@@ -1032,17 +1032,24 @@ function esHostDeNuestroBlob(hostname) {
   return hostname === BLOB_HOST_SUFFIX.slice(1) || hostname.endsWith(BLOB_HOST_SUFFIX);
 }
 
-// Valida que un string sea una URL http(s) real, alojada en nuestro propio
+// Valida que un string sea una URL https real, alojada en nuestro propio
 // storage de Vercel Blob, antes de guardarla — así no se puede meter
 // "javascript:", ni cualquier otro esquema, ni una URL externa arbitraria en
 // un campo que después se usa como src de un <audio> en el front (evita que
 // alguien registre audio_url apuntando a un sitio de terceros, por ejemplo
-// para exfiltrar datos vía el Referer o para spoofear contenido).
+// para exfiltrar datos vía el Referer o para spoofear contenido). También la
+// usa /api/media-file (ver más abajo) para el mismo chequeo del lado de
+// LECTURA — antes esa ruta solo miraba que empezara con "http(s)://" y
+// nunca validaba el host, así que cualquier cuenta logueada podía mandar
+// una URL a un host propio (o directamente a una IP interna) y el servidor
+// terminaba haciendo fetch() de ahí (SSRF). Solo https (antes también
+// aceptaba http de puro laxo, sin necesidad real: Blob siempre sirve por
+// https).
 function urlHttpValida(str) {
   if (typeof str !== 'string' || !str.trim()) return null;
   try {
     const u = new URL(str.trim());
-    if (!/^https?:$/.test(u.protocol)) return null;
+    if (u.protocol !== 'https:') return null;
     if (!esHostDeNuestroBlob(u.hostname)) return null;
     return u.toString();
   } catch (e) {
@@ -2504,9 +2511,16 @@ async function bytesDeArchivoPrivado(valorGuardado) {
     // sigue al respaldo de abajo
   }
   try {
-    const url = /^https?:\/\//i.test(valorGuardado) ? valorGuardado : null;
+    // urlHttpValida (no un simple /^https?:\/\//): exige https Y que el
+    // host sea nuestro propio storage de Vercel Blob — ver el comentario en
+    // su definición (más arriba) para el porqué (SSRF, P1 de seguridad
+    // 2026-09-05). redirect:'manual' + tratar cualquier respuesta 3xx como
+    // fallo: aunque el host ya está fijo a Blob, así una redirección nunca
+    // se sigue a ciegas hacia otro lado.
+    const url = urlHttpValida(valorGuardado);
     if (!url) return null;
-    const externo = await fetch(url);
+    const externo = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS) });
+    if (externo.status >= 300 && externo.status < 400) return null;
     if (!externo.ok || !externo.body) return null;
     const buffer = Buffer.from(await externo.arrayBuffer());
     return { buffer, contentType: externo.headers.get('content-type') || 'application/octet-stream' };
@@ -2556,10 +2570,26 @@ app.get('/api/media-file', requireAuth, async (req, res) => {
       // Respaldo para archivos subidos ANTES de este cambio, que todavía
       // están marcados como públicos en Blob — se sirven igual mientras se
       // termina de migrar el storage viejo (ver BACKLOG.md).
+      //
+      // urlHttpValida (no un simple /^https?:\/\//): exige https Y que el
+      // host sea nuestro propio storage de Vercel Blob — sin esto, este
+      // endpoint era un SSRF/proxy-abierto: `datos.ownerId` se deriva solo
+      // del PATH de la URL (ver datosDelArchivoDeBlob), así que cualquiera
+      // podía pasar su propio id en el path de una URL apuntando a
+      // cualquier host (P1 de seguridad 2026-09-05) y el server la
+      // reenviaba tal cual. redirect:'manual' + tratar cualquier 3xx como
+      // fallo: aunque el host ya está fijo a Blob, así una redirección
+      // nunca se sigue a ciegas hacia otro lado. Timeout igual que el
+      // resto de fetches salientes (PROVIDER_TIMEOUT_MS).
       try {
-        const url = /^https?:\/\//i.test(valorGuardado) ? valorGuardado : null;
+        const url = urlHttpValida(valorGuardado);
         if (!url) return res.status(404).json({ error: 'No se encontró el archivo.' });
-        const externo = await fetch(url, rangeHeader ? { headers: { Range: rangeHeader } } : undefined);
+        const externo = await fetch(url, {
+          ...(rangeHeader ? { headers: { Range: rangeHeader } } : null),
+          redirect: 'manual',
+          signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+        });
+        if (externo.status >= 300 && externo.status < 400) return res.status(404).json({ error: 'No se encontró el archivo.' });
         if (!externo.ok || !externo.body) return res.status(404).json({ error: 'No se encontró el archivo.' });
         res.status(Number.isInteger(externo.status) ? externo.status : 200);
         res.set('Content-Type', externo.headers.get('content-type') || 'application/octet-stream');
