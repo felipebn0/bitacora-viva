@@ -685,7 +685,8 @@
 
               <div class="field" id="familyCodeField" style="display:none;">
                 <label for="suCode">Código de familia</label>
-                <input id="suCode" name="inviteCode" type="text" placeholder="Ej: B46NWEC7" maxlength="8" style="text-transform:uppercase;">
+                <input id="suCode" name="inviteCode" type="text" placeholder="Ej: B46NWEC7" maxlength="8" pattern="[A-Za-z0-9]{8}" aria-describedby="suCodeError" style="text-transform:uppercase;">
+                <p class="field-error" id="suCodeError" role="alert" style="display:none;color:#B3261E;font-size:.85rem;margin:4px 0 0;"></p>
               </div>
               <p class="field-note" id="familyCodeNote" style="display:none;">Vas a poder aportar historias a esa bitácora, contando con tu propia voz — no vas a tener una bitácora propia.</p>
 
@@ -854,15 +855,38 @@
     const familyCodeField = document.getElementById('familyCodeField');
     const familyCodeNote = document.getElementById('familyCodeNote');
     const suCode = document.getElementById('suCode');
+    const suCodeError = document.getElementById('suCodeError');
+
+    // Se guarda aparte del estado visual de los tabs (que igual refleja lo
+    // mismo) para que el submit no tenga que releer clases/aria-pressed del
+    // DOM para saber en qué modo está — un solo lugar de verdad.
+    let modoColaborador = false;
+
+    // El <p> de error arranca con display:none inline (para no ocupar
+    // espacio cuando no hay nada que decir) — pero si solo se le cambia el
+    // textContent, nunca vuelve a mostrarse: queda con texto adentro pero
+    // invisible para todos, lectores de pantalla incluidos (display:none no
+    // se anuncia). Este helper es el único lugar que toca el mensaje, así
+    // que mostrar/ocultar quedan siempre sincronizados con el texto.
+    function mostrarErrorCodigo(mensaje) {
+      if (!suCodeError) return;
+      suCodeError.textContent = mensaje;
+      suCodeError.style.display = mensaje ? 'block' : 'none';
+    }
 
     function setSignupMode(esColaborador) {
+      modoColaborador = esColaborador;
       tabNueva.classList.toggle('active', !esColaborador);
       tabNueva.setAttribute('aria-pressed', String(!esColaborador));
       tabColaborar.classList.toggle('active', esColaborador);
       tabColaborar.setAttribute('aria-pressed', String(esColaborador));
       familyCodeField.style.display = esColaborador ? 'block' : 'none';
       familyCodeNote.style.display = esColaborador ? 'block' : 'none';
-      if (!esColaborador) suCode.value = '';
+      // required solo en modo colaborador: en "crear mi bitácora" el campo
+      // ni se ve, así que tampoco tiene sentido que bloquee el envío.
+      suCode.required = esColaborador;
+      if (!esColaborador) { suCode.value = ''; }
+      mostrarErrorCodigo('');
       signupTitle.textContent = esColaborador ? 'Únete a una familia' : 'Crea tu cuenta';
       signupSubtitle.textContent = esColaborador
         ? 'Nombre, correo, clave y el código que te compartieron.'
@@ -889,7 +913,27 @@
       const email = document.getElementById('suEmail').value.trim();
       const password = document.getElementById('suPass').value;
       const password2 = document.getElementById('suPass2').value;
-      const inviteCode = suCode.value.trim();
+      const inviteCode = suCode.value.trim().toUpperCase();
+
+      mostrarErrorCodigo('');
+
+      // Antes esto no se validaba en el navegador: si alguien elegía
+      // "Unirme con un código" y por lo que sea el campo quedaba vacío
+      // (lo borró, no lo tenía a mano todavía), el formulario se mandaba
+      // igual sin código — y del otro lado el servidor lo tomaba como una
+      // cuenta dueña nueva, sin avisar nada. Ahora se corta acá mismo, con
+      // un mensaje pegado al campo (no solo el globo nativo del navegador,
+      // que en letra chica es fácil de no ver) y el foco puesto ahí mismo.
+      if (modoColaborador && !inviteCode) {
+        mostrarErrorCodigo('Falta el código de familia — pídeselo a quien te invitó.');
+        suCode.focus();
+        return;
+      }
+      if (modoColaborador && !/^[A-Za-z0-9]{8}$/.test(inviteCode)) {
+        mostrarErrorCodigo('El código tiene 8 letras y números — revisa que esté completo.');
+        suCode.focus();
+        return;
+      }
 
       if (!signupForm.checkValidity()) {
         signupForm.reportValidity();
@@ -917,7 +961,7 @@
         const response = await fetch('/api/signup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, email, password, inviteCode })
+          body: JSON.stringify({ name, email, password, inviteCode, accountType: modoColaborador ? 'collaborator' : 'owner' })
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {

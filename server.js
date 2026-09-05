@@ -1361,7 +1361,7 @@ app.post('/api/register', rateLimit, async (req, res) => {
 // funcionando sin tocarlo.
 app.post('/api/signup', rateLimit, async (req, res) => {
   try {
-    const { name, email, password, inviteCode } = req.body || {};
+    const { name, email, password, inviteCode, accountType } = req.body || {};
     const cleanName = capitalizarNombre(String(name || '').trim().slice(0, 100));
     const cleanEmail = String(email || '').trim().toLowerCase().slice(0, 200);
     if (!cleanName) return res.status(400).json({ error: 'Falta el nombre.' });
@@ -1375,12 +1375,21 @@ app.post('/api/signup', rateLimit, async (req, res) => {
     const existing = await sql`SELECT id FROM users WHERE email = ${cleanEmail} OR username = ${cleanEmail}`;
     if (existing.length) return res.status(409).json({ error: 'Ya existe una cuenta con ese correo.' });
 
-    // Si viene un código de familia, esta cuenta es colaboradora de la
-    // cuenta dueña de ese código — no arma su propia bitácora, solo aporta
-    // historias y le pregunta a la de esa familia (ver bloquearColaborador).
+    // Antes, "¿es colaboradora?" se decidía solo mirando si vino un código
+    // no vacío — así que si alguien elegía "Unirme con un código" mismo
+    // pero el código quedaba vacío (por ejemplo, lo borró sin querer antes
+    // de mandar el formulario), el pedido llegaba sin código y esta ruta lo
+    // interpretaba como una cuenta DUEÑA nueva, con su propia bitácora
+    // vacía y sin ninguna relación con la familia a la que quería sumarse
+    // — sin ningún error, la cuenta se creaba igual. Ahora el modo lo
+    // decide el front explícitamente (accountType) y si eligió
+    // "collaborator", el código es obligatorio acá sí o sí, sin importar
+    // qué haya mandado o dejado de mandar el navegador.
+    const esColaborador = accountType === 'collaborator';
     let ownerUserId = null;
     const cleanCode = String(inviteCode || '').trim().toUpperCase();
-    if (cleanCode) {
+    if (esColaborador) {
+      if (!cleanCode) return res.status(400).json({ error: 'Falta el código de familia.' });
       const ownerRows = await sql`SELECT id FROM users WHERE invite_code = ${cleanCode}`;
       if (!ownerRows.length) return res.status(400).json({ error: 'Ese código de familia no existe.' });
       ownerUserId = ownerRows[0].id;
