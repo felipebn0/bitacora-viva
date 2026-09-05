@@ -100,6 +100,14 @@ app.use((req, res, next) => {
 // a vercel.json también — no hay forma de compartir el string entre los
 // dos archivos.
 const CSP_MODE_ENFORCE = false;
+// Ruta relativa (no una URL absoluta): report-uri la resuelve contra el
+// origen de la propia página, así que sirve igual para una página servida
+// por Express (/api/*) o por el build estático de Vercel (public/**) — el
+// mismo motivo por el que la política entera vive copiada en los dos
+// lugares (ver el comentario de arriba). Primer paso de la ruta hacia CSP
+// en enforce (reporte 2026-09-06): juntar violaciones reales antes de
+// extraer nada a ciegas.
+const CSP_REPORT_PATH = '/api/csp-report';
 const CSP_POLICY = [
   "default-src 'self'",
   "script-src 'self'",
@@ -112,6 +120,16 @@ const CSP_POLICY = [
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'none'",
+  // report-uri: mecanismo viejo pero el más compatible (lo sigue
+  // soportando todo navegador mayor, aunque esté "deprecado" a favor de
+  // report-to) — el navegador manda un POST directo a esta URL con cada
+  // violación, sin depender de que la Reporting API esté disponible.
+  // report-to: mecanismo nuevo (agrupa violaciones y las manda en lote,
+  // con reintentos) — necesita el header Reporting-Endpoints de abajo
+  // para saber a dónde mandarlas. Se mandan los dos para cubrir el navegador
+  // que sea; /api/csp-report (ver más abajo) entiende el formato de ambos.
+  `report-uri ${CSP_REPORT_PATH}`,
+  'report-to csp-endpoint',
 ].join('; ');
 
 // Cabeceras de seguridad estándar en cada respuesta — no cambian nada
@@ -123,10 +141,19 @@ app.use((req, res, next) => {
   res.setHeader('Permissions-Policy', 'microphone=(self)'); // el mic solo lo pide este sitio, nada externo
   res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains');
   res.setHeader(CSP_MODE_ENFORCE ? 'Content-Security-Policy' : 'Content-Security-Policy-Report-Only', CSP_POLICY);
+  // Le dice al navegador a dónde mandar los reportes agrupados del grupo
+  // "csp-endpoint" que usa el "report-to" de la política de arriba (ruta
+  // relativa: se resuelve contra el propio origen, igual que report-uri).
+  res.setHeader('Reporting-Endpoints', `csp-endpoint="${CSP_REPORT_PATH}"`);
   next();
 });
 
-app.use(express.json({ limit: '1mb' }));
+// 'application/csp-report' y 'application/reports+json' además del
+// 'application/json' de siempre: son los dos Content-Type que usa el
+// navegador para mandar los reportes de violación de CSP a /api/csp-report
+// (ver esa ruta más abajo) — sin sumarlos acá, express.json() los ignora
+// (por Content-Type distinto) y req.body llega vacío ahí.
+app.use(express.json({ limit: '1mb', type: ['application/json', 'application/csp-report', 'application/reports+json'] }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Las respuestas de /api/ pueden traer datos privados (historias, datos de
@@ -160,6 +187,13 @@ function origenPermitido(req) {
 
 app.use('/api', (req, res, next) => {
   if (!METODOS_MUTANTES.has(req.method)) return next();
+  // /api/csp-report (ver más abajo) lo llama el navegador solo, disparado
+  // por la propia política de CSP — no siempre manda un Origin/Referer
+  // usable en ese pedido en particular, y no hay sesión ni estado que
+  // proteger acá (no lee cookies, no cambia nada, solo loguea). En el
+  // peor caso alguien manda reportes falsos que ensucian el log — no algo
+  // que valga la pena bloquear con este chequeo.
+  if (req.originalUrl.startsWith('/api/csp-report')) return next();
   if (!origenPermitido(req)) {
     return res.status(403).json({ error: 'Solicitud rechazada: no se pudo verificar el origen.' });
   }
@@ -232,6 +266,49 @@ async function rateLimit(req, res, next) {
     next();
   }
 }
+
+// Recibe los reportes de violación de CSP que manda el navegador solo,
+// disparados por la propia política (Content-Security-Policy-Report-Only,
+// ver CSP_POLICY más arriba) — sin esto, una violación solo se veía en la
+// consola de quien tuviera las herramientas de desarrollador abiertas en
+// ESE momento, nadie del equipo se enteraba. Primer paso de la ruta hacia
+// CSP en enforce (reporte 2026-09-06): juntar datos reales de qué se
+// bloquearía en vez de ir a ciegas por lectura de código.
+//
+// El navegador manda el reporte con Content-Type application/csp-report
+// (report-uri, formato viejo: body {"csp-report": {...}}, snake-case) o
+// application/reports+json (report-to/Reporting API, formato nuevo: un
+// array de {type, body: {...}}, camelCase) — según qué soporte cada
+// navegador; se piden los dos en la política (ver más arriba) y acá se
+// entienden ambos formatos. Sin sesión ni estado que proteger (no lee
+// cookies, no cambia nada, solo loguea), así que queda afuera del chequeo
+// de Origin de las rutas mutantes (ver esa regla, más arriba) — el
+// navegador no siempre manda un Origin usable en este pedido en
+// particular.
+app.post(CSP_REPORT_PATH, rateLimit, (req, res) => {
+  try {
+    const body = req.body;
+    const reportes = Array.isArray(body)
+      ? body.filter((r) => r && r.type === 'csp-violation').map((r) => r.body || {})
+      : body && body['csp-report']
+        ? [body['csp-report']]
+        : [];
+    reportes.forEach((r) => {
+      console.error('[csp-report]', JSON.stringify({
+        directiva: r['effective-directive'] || r.effectiveDirective || null,
+        bloqueado: r['blocked-uri'] || r.blockedURL || null,
+        pagina: r['document-uri'] || r.documentURL || null,
+        linea: r['line-number'] ?? r.lineNumber ?? null,
+        modo: r.disposition || null,
+      }));
+    });
+  } catch (err) {
+    console.error('No se pudo procesar un reporte de CSP:', err);
+  }
+  // 204: el navegador no hace nada con el cuerpo de la respuesta, y no
+  // hace falta darle ningún dato de vuelta.
+  res.status(204).end();
+});
 
 // Igual que rateLimit, pero por una clave elegida por quien llama (no la
 // IP) — reutiliza la misma tabla rate_limits con un prefijo en la clave

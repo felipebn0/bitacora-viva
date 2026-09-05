@@ -12,7 +12,8 @@
         "X-Frame-Options": "DENY",
         "Referrer-Policy": "strict-origin-when-cross-origin",
         "Permissions-Policy": "microphone=(self)",
-        "Content-Security-Policy-Report-Only": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://*.blob.vercel-storage.com; media-src 'self' https://*.blob.vercel-storage.com; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+        "Content-Security-Policy-Report-Only": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://*.blob.vercel-storage.com; media-src 'self' https://*.blob.vercel-storage.com; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; report-uri /api/csp-report; report-to csp-endpoint",
+        "Reporting-Endpoints": "csp-endpoint=\"/api/csp-report\""
       },
       "continue": true
     },
