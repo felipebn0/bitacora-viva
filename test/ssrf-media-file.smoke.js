@@ -23,6 +23,12 @@
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'ci-smoke-secret';
 process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgres://fake:fake@localhost/fake';
 process.env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || 'fake';
+// Igual que en test/media-file.smoke.js: si la máquina tiene un
+// BLOB_READ_WRITE_TOKEN real en su .env, server.js pinearía el host EXACTO
+// a ESE store real (ver BLOB_HOST_EXACTO ahí) en vez del sufijo genérico
+// que usa el host de prueba de este archivo (fake.public.blob.vercel-
+// storage.com), y el caso "legítimo" de abajo se rechazaría por error.
+process.env.BLOB_READ_WRITE_TOKEN = '';
 
 const path = require('path');
 const http = require('http');

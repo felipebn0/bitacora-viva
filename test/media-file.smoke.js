@@ -17,6 +17,17 @@
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'ci-smoke-secret';
 process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgres://fake:fake@localhost/fake';
 process.env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || 'fake';
+// BLOB_READ_WRITE_TOKEN se lee una sola vez al cargar server.js (arma
+// BLOB_STORE_ID/BLOB_HOST_EXACTO como constantes de arranque, ver el
+// comentario ahí) — si la máquina donde corre este test tiene un token
+// real en su .env (para "npm run dev"), pinearía el host exacto a ESE
+// store real en vez del host de prueba de este archivo, y el respaldo de
+// "archivo legado" de más abajo se rechazaría por error. Lo dejamos vacío
+// (no "delete": dotenv no pisa una variable que YA está presente, aunque
+// esté vacía) para que este test sea determinista sin importar en qué
+// máquina corra (el pineo del host exacto en sí se cubre aparte en
+// test/blob-host-exacto.smoke.js, con un token de prueba controlado).
+process.env.BLOB_READ_WRITE_TOKEN = '';
 
 const path = require('path');
 const http = require('http');
