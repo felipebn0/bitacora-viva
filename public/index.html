@@ -52,6 +52,11 @@
        leer un lector de pantalla / el scroll, no hace falta remarcarlo. */
     main:focus{outline:none}
     html{scroll-behavior:smooth}
+    /* Quien pidió menos movimiento a nivel sistema operativo probablemente
+       tampoco quiere que la página salte con una animación de scroll al
+       tocar "Ver cómo funciona" — mismo criterio que ya se usa para las
+       transiciones de la cabecera compacta (ver nav.is-compact más abajo). */
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
     /* Red de seguridad: con letra grande (140%) en celulares muy angostos
        (320-375px) aparecía un desborde horizontal chico (unos px) que no
        vino de ningún elemento en particular que se pudiera acotar — probé

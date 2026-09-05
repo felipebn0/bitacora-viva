@@ -218,14 +218,31 @@ async function checkNav(page, label, w, scale) {
   // pueden necesitar una fila extra — igual sirve para agarrar si alguien
   // vuelve a agregar padding/filas de más sin querer.
   if (w <= 390) {
-    const limite = scale >= 140 ? 200 : 130;
+    // 180 (antes 200): medido hoy, el peor caso real es 165px (320px/140%)
+    // — 200 dejaba pasar hasta casi duplicar los 123px originales que
+    // motivaron todo este arreglo antes de que el guard se diera cuenta.
+    // 180 sigue dando margen para el wrap legítimo a letra grande sin ser
+    // tan flojo como para no agarrar una regresión real.
+    const limite = scale >= 140 ? 180 : 130;
     check(info.navHeight <= limite, `${label}: el header no volvió a crecer sin control (alto=${Math.round(info.navHeight)}px, límite=${limite}px)`);
   }
 }
 
 async function checkLanding(browser, base, w, scale, screenshotDir) {
   const label = `landing ${w}px @ ${scale}%`;
-  const context = await browser.newContext({ viewport: { width: w, height: 900 } });
+  // reducedMotion:'reduce' en TODOS los contextos de este archivo (no solo
+  // acá): la CI reportó "element is not stable" al clickear "Ver cómo
+  // funciona" a 1440px/120%, con la cabecera compacta agregada hace poco
+  // como sospechosa — la transición de min-height en .nav-inner puede
+  // seguir animando justo cuando la prueba intenta clickear, sobre todo en
+  // una máquina más lenta que este sandbox (donde no se pudo reproducir).
+  // En vez de alargar los timeouts (parche fragile, sigue siendo una
+  // carrera), se apaga la animación de raíz: .nav-inner/.brand-mark ya
+  // respetaban prefers-reduced-motion, y html{scroll-behavior:smooth} ahora
+  // también (ver index.html). Con eso el timing deja de importar sin
+  // debilitar ningún chequeo — se sigue verificando el estado FINAL, no la
+  // animación en sí.
+  const context = await browser.newContext({ viewport: { width: w, height: 900 }, reducedMotion: 'reduce' });
   const page = await context.newPage();
   await page.goto(`${base}/`, { waitUntil: 'load' });
   await page.waitForTimeout(300);
@@ -294,7 +311,7 @@ async function checkLanding(browser, base, w, scale, screenshotDir) {
 
 async function checkLogin(browser, base, w, scale, screenshotDir) {
   const label = `login ${w}px @ ${scale}%`;
-  const context = await browser.newContext({ viewport: { width: w, height: 900 } });
+  const context = await browser.newContext({ viewport: { width: w, height: 900 }, reducedMotion: 'reduce' });
   const page = await context.newPage();
   await page.goto(`${base}/app.html`, { waitUntil: 'load' });
   await page.waitForSelector('#loginScreen', { state: 'visible' }).catch(() => {});
@@ -317,7 +334,7 @@ async function checkLogin(browser, base, w, scale, screenshotDir) {
 
 async function checkCuenta(browser, base, w, scale, sessionCookie, screenshotDir) {
   const label = `cuenta ${w}px @ ${scale}%`;
-  const context = await browser.newContext({ viewport: { width: w, height: 900 } });
+  const context = await browser.newContext({ viewport: { width: w, height: 900 }, reducedMotion: 'reduce' });
   await context.addCookies([{ name: sessionCookie.name, value: sessionCookie.value, url: base }]);
   const page = await context.newPage();
   await page.goto(`${base}/app.html`, { waitUntil: 'load' });
@@ -368,7 +385,7 @@ async function checkCuenta(browser, base, w, scale, sessionCookie, screenshotDir
 // (1440px), el mismo en el que se vio el problema original.
 async function checkColaborar(browser, server, base, screenshotDir) {
   const sessionCookieDueña = await loginAs(server, 'personadeprueba');
-  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
   await context.addCookies([{ name: sessionCookieDueña.name, value: sessionCookieDueña.value, url: base }]);
   const page = await context.newPage();
 
@@ -393,7 +410,7 @@ async function checkColaborar(browser, server, base, screenshotDir) {
   //     defecto: sigue sin topbar, pero conserva "cerrar sesión"/"borrar
   //     cuenta" porque no tiene otro lugar para eso. ---
   const sessionCookieColab = await loginAs(server, 'colabfija');
-  const context2 = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const context2 = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
   await context2.addCookies([{ name: sessionCookieColab.name, value: sessionCookieColab.value, url: base }]);
   const page2 = await context2.newPage();
   await page2.goto(`${base}/colaborar.html`, { waitUntil: 'load' });
