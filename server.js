@@ -32,20 +32,54 @@ if (process.env.SENTRY_DSN) {
     environment: process.env.VERCEL_ENV || process.env.NODE_ENV || 'development',
     tracesSampleRate: 0, // solo errores por ahora, no performance tracing (no hace falta y consume la cuota gratis más rápido)
   });
-  const consoleErrorOriginal = console.error.bind(console);
-  console.error = (...args) => {
-    consoleErrorOriginal(...args);
-    const err = args.find((a) => a instanceof Error);
-    if (err) {
-      Sentry.captureException(err);
-    } else {
-      Sentry.captureMessage(args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' '), 'error');
-    }
-  };
 }
 
+// Correlación de logs por pedido: un error a mitad de un pedido suele
+// disparar más de un console.error (ej.: falla Neon, y después falla el
+// intento de avisar por correo) — sin nada que los junte, hay que adivinar
+// por la hora si son del mismo pedido o no. AsyncLocalStorage guarda un id
+// generado al entrar a cada pedido (ver el middleware más abajo) y acá se
+// prefija a CUALQUIER console.error hecho durante ese pedido, sin tocar
+// ninguno de los ~60 call sites que ya existen en este archivo. El mismo id
+// se devuelve como header X-Request-Id, así que si alguien reporta un error
+// se le puede pedir ese id (F12 → Network → el pedido que falló → Response
+// Headers) y buscarlo tal cual en los logs de Vercel.
+const { AsyncLocalStorage } = require('async_hooks');
+const contextoDePedido = new AsyncLocalStorage();
+
+const consoleErrorOriginal = console.error.bind(console);
+console.error = (...args) => {
+  const store = contextoDePedido.getStore();
+  if (store && store.requestId) {
+    consoleErrorOriginal(`[req:${store.requestId}]`, ...args);
+  } else {
+    consoleErrorOriginal(...args);
+  }
+  if (Sentry) {
+    const err = args.find((a) => a instanceof Error);
+    const tags = store && store.requestId ? { request_id: store.requestId } : null;
+    if (err) {
+      Sentry.captureException(err, tags ? { tags } : undefined);
+    } else {
+      const texto = args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
+      Sentry.captureMessage(texto, tags ? { level: 'error', tags } : 'error');
+    }
+  }
+};
+
 const app = express();
+app.disable('x-powered-by'); // no hace falta anunciar "Express" a quien mire las cabeceras
 app.set('trust proxy', 1); // detrás del proxy de Vercel: para que req.ip y req.secure sean correctos
+
+// Tiene que ir antes que cualquier otro middleware: todo lo que corra
+// "dentro" de este pedido (el resto de los middlewares, la ruta que
+// responda, cualquier await en el medio) hereda el mismo contexto, así que
+// cualquier console.error de más abajo ya sale con el id de este pedido.
+app.use((req, res, next) => {
+  const requestId = crypto.randomUUID();
+  res.setHeader('X-Request-Id', requestId);
+  contextoDePedido.run({ requestId }, next);
+});
 
 // Política de seguridad de contenido "de destino": todavía NO se aplica de
 // verdad (ver CSP_MODE_ENFORCE más abajo) porque las páginas de public/
@@ -55,6 +89,16 @@ app.set('trust proxy', 1); // detrás del proxy de Vercel: para que req.ip y req
 // la pestaña Network → cualquier request → Response Headers) cada cosa que
 // violaría esta política — así se puede ver exactamente qué habría que
 // externalizar antes de activarla de verdad como Content-Security-Policy.
+//
+// OJO: este middleware solo corre para pedidos que llegan a Express — en
+// producción eso es nada más que /api/* (ver vercel.json: las páginas
+// estáticas de public/ se sirven directo desde el build estático de
+// Vercel, sin pasar por acá). Por eso vercel.json TAMBIÉN tiene esta misma
+// política, copiada a mano en su bloque "headers" de las rutas estáticas
+// (P1 de seguridad 2026-09-05: antes las páginas HTML reales no recibían
+// CSP en absoluto). Si se cambia CSP_POLICY acá, hay que copiar el cambio
+// a vercel.json también — no hay forma de compartir el string entre los
+// dos archivos.
 const CSP_MODE_ENFORCE = false;
 const CSP_POLICY = [
   "default-src 'self'",
