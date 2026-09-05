@@ -134,19 +134,22 @@
   header { max-width: 440px; width: 100%; text-align: center; margin-bottom: 20px; }
   .owner-name { font-family: var(--font-display); font-size: 1.7rem; font-weight: 700; color: var(--gold-deep); margin: 6px 0 2px; }
 
-  .topbar { width: 100%; max-width: 440px; display: flex; justify-content: flex-end; gap: 10px; margin-bottom: 10px; }
-  .icon-btn {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 44px; height: 44px; border-radius: 50%;
-    background: #FBF6EA; border: 1px solid #E7DFCC; font-size: 1.15rem;
-    text-decoration: none; cursor: pointer; box-shadow: 0 2px 6px -3px rgba(0,0,0,0.2);
+  /* Antes esto era una fila de 3 botones-ícono (Volver/Árbol/Libro) propia
+     de esta página — distinta del link "← volver a la bitácora" que usan
+     arbol.html/capitulos.html/colaboraciones.html/historias.html para lo
+     mismo. Ahora reusa exactamente ese mismo patrón (misma clase .volver)
+     para que "volver" se vea y se sienta igual en toda la app. */
+  .topbar { width: 100%; max-width: 440px; display: flex; justify-content: center; margin-bottom: 10px; }
+  a.volver {
+    color: var(--gold-deep); font-size: 0.9rem; text-decoration: none;
+    border-bottom: 1px solid var(--gold-deep); display: inline-flex; align-items: center;
+    min-height: 44px; padding: 10px 4px;
   }
-  /* En móvil no hay ":hover" — el title/aria-label ya existían, pero sin
-     texto visible el significado de cada ícono no siempre es inmediato. */
-  .icon-nav-item { display: inline-flex; flex-direction: column; align-items: center; gap: 3px; }
-  .icon-nav-item .icon-label { font-size: 0.72rem; color: var(--ink-soft); line-height: 1; white-space: nowrap; }
 
-  .collab-switch { width: 100%; max-width: 440px; margin: 0 0 18px; text-align: center; }
+  /* margin:auto (no solo "0 0 18px"): sin el auto horizontal, esta caja
+     quedaba pegada al borde izquierdo en pantallas anchas en vez de centrada
+     como el resto de la página (mismo motivo que .aportes, más abajo). */
+  .collab-switch { width: 100%; max-width: 440px; margin: 0 auto 18px; text-align: center; }
   .collab-switch .sub { margin-bottom: 6px; }
   .collab-switch-list { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
   /* min-height:44px: quedaba en ~31px de alto — zona de toque chica para
@@ -293,23 +296,14 @@
   <div id="appContent">
     <!-- Mismo patrón que app.html: invisible hasta que se navega con Tab. -->
     <a class="skip-link" href="#main-content">Saltar al contenido</a>
-    <!-- <nav>, no <div>: son enlaces a otras secciones de la propia
-         bitácora (cuando quien colabora está viendo la suya) — mismo
+    <!-- <nav>, no <div>: es un enlace a otra sección de la propia bitácora
+         (cuando quien colabora está viendo la de otra persona) — mismo
          criterio que el topbar de app.html, esté visible o no en este
-         momento. -->
+         momento. Un solo link "← volver a mi bitácora", igual que en
+         arbol.html/capitulos.html/colaboraciones.html/historias.html — antes
+         era una fila de 3 íconos que no existía en ninguna otra página. -->
     <nav class="topbar" id="ownTopbar" aria-label="Tu bitácora" style="display:none;">
-      <div class="icon-nav-item">
-        <a class="icon-btn" href="/app.html" title="Volver a mi historia" aria-label="Volver a mi historia">↩️</a>
-        <span class="icon-label" aria-hidden="true">Volver</span>
-      </div>
-      <div class="icon-nav-item">
-        <a class="icon-btn" href="/arbol.html" title="Mi árbol genealógico" aria-label="Mi árbol genealógico">🌳</a>
-        <span class="icon-label" aria-hidden="true">Árbol</span>
-      </div>
-      <div class="icon-nav-item">
-        <a class="icon-btn" href="/capitulos.html" title="Mi libro de la historia" aria-label="Mi libro de la historia">📖</a>
-        <span class="icon-label" aria-hidden="true">Libro</span>
-      </div>
+      <a class="volver" href="/app.html">← volver a mi bitácora</a>
     </nav>
 
     <header>
@@ -358,7 +352,12 @@
       <div class="lista" id="aportesLista"></div>
     </div>
 
-    <div class="logout-row">
+    <!-- Solo tiene sentido para quien usa esta página como su cuenta
+         (colaboradora 100%, sin bitácora propia) — quien ya tiene su propia
+         cuenta y solo está de visita aportando a otra historia (?owner=)
+         maneja su cuenta desde app.html, no acá (ver JS: se oculta con
+         id="logoutRow" cuando !isCollaborator). -->
+    <div class="logout-row" id="logoutRow">
       <button class="write-toggle" id="logoutBtn" type="button">cerrar sesión (<span id="whoami"></span>)</button>
       <div class="danger-zone">
         <button class="write-toggle end-toggle" id="deleteAccountToggle" type="button" aria-expanded="false" aria-controls="deleteAccountRow">⚠️ borrar mi cuenta permanentemente</button>
@@ -388,6 +387,7 @@
   const loginBtn = document.getElementById('loginBtn');
   const loginError = document.getElementById('loginError');
   const logoutBtn = document.getElementById('logoutBtn');
+  const logoutRow = document.getElementById('logoutRow');
   const whoami = document.getElementById('whoami');
   const ownerName = document.getElementById('ownerName');
   const dangerZone = document.querySelector('.danger-zone');
@@ -612,8 +612,15 @@
     .then(async (data) => {
       // Solo una cuenta que tiene su propia bitácora (no es 100%
       // colaboradora) puede "volver a su historia" — una cuenta 100%
-      // colaboradora no tiene árbol, capítulos ni charla propia.
-      if (!data.isCollaborator) ownTopbar.style.display = 'flex';
+      // colaboradora no tiene árbol, capítulos ni charla propia. Esa misma
+      // cuenta ya administra su sesión y su cuenta desde app.html, así que
+      // acá (de visita aportando a otra historia) no hace falta duplicar
+      // "cerrar sesión"/"borrar cuenta" — eso queda solo para quien usa
+      // esta página como su cuenta (colaboradora 100%, sin otro lugar).
+      if (!data.isCollaborator) {
+        ownTopbar.style.display = 'flex';
+        if (logoutRow) logoutRow.style.display = 'none';
+      }
 
       if (activeOwnerId) {
         // Se llegó acá con un código de otra historia (botón "colaborar con

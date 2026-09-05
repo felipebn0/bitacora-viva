@@ -644,7 +644,7 @@
            <p class="um-msg" id="umPlanMsg" role="status" aria-live="polite" aria-atomic="true"></p>
 
            <hr>
-           <p class="um-hint">¿Te regalaron una bitácora? Canjeá el código acá — se activa en TU cuenta, no en la de quien te lo regaló.</p>
+           <p class="um-hint">¿Te regalaron una bitácora? Canjea el código acá — se activa en TU cuenta, no en la de quien te lo regaló.</p>
            <div class="um-fontsize-row">
              <input type="text" id="umRegaloCodigo" placeholder="Código de regalo" maxlength="8" style="text-transform:uppercase;" aria-label="Código de regalo">
              <button class="um-btn" id="umRegaloCanjearBtn" type="button">Canjear</button>
@@ -1131,7 +1131,7 @@
       const resp = await fetch('/api/billing/status');
       const data = await resp.json();
       if (!data.status || data.status === 'none') {
-        umPlanEstado.textContent = 'Todavía usás la bitácora gratis — elegí un plan cuando quieras.';
+        umPlanEstado.textContent = 'Todavía usas la bitácora gratis — elige un plan cuando quieras.';
       } else {
         const vence = data.current_period_end ? new Date(data.current_period_end).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' }) : null;
         umPlanEstado.textContent = `${NOMBRE_ESTADO_PLAN[data.status] || data.status}${vence ? ' · vence el ' + vence : ''}`;
@@ -1391,7 +1391,7 @@
       return;
     }
     const link = `${location.origin}/colaborar.html?codigo=${encodeURIComponent(code)}`;
-    const mensaje = `Te invito a sumar una historia a nuestra bitácora familiar — entrá acá, no hace falta crear cuenta: ${link}`;
+    const mensaje = `Te invito a sumar una historia a nuestra bitácora familiar — entra acá, no hace falta crear cuenta: ${link}`;
     inviteWhatsappBtn.href = `https://wa.me/?text=${encodeURIComponent(mensaje)}`;
     inviteWhatsappBtn.style.display = 'inline-block';
   }

@@ -25,6 +25,11 @@
 //   - el menú de Cuenta (con sesión real): sin scroll horizontal, el
 //     correo se ve completo (en el cuadro o en el texto de abajo, nunca
 //     cortado sin avisar), el control A-/A+ mide 44px o más.
+// Aparte (una sola vez, no por cada ancho × escala — ver checkColaborar):
+//   - colaborar.html de visita en otra historia (?owner=): un solo link
+//     "← volver", sin "cerrar sesión"/"borrar cuenta", y "Tus
+//     colaboraciones" centrado — y la misma página, para una cuenta 100%
+//     colaboradora sin bitácora propia, sigue conservando esos dos.
 // Además guarda una captura de cada combinación en test-artifacts/responsive/
 // para poder revisarlas a simple vista (CI las sube como artifact).
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'ci-smoke-secret';
@@ -44,8 +49,20 @@ const users = {
     id: 1, username: 'personadeprueba', password_hash: PASSWORD_HASH, token_version: 0, owner_user_id: null,
     name: 'Persona de Prueba', email: 'persona.de.prueba@example.com', fecha_nacimiento: '1950-01-01',
   },
+  // Para checkColaborar() más abajo: 2 y 4 son dos historias distintas a
+  // las que la cuenta de prueba (1) colabora además de tener la suya
+  // propia — hace falta más de una para que se muestre el selector "Tus
+  // colaboraciones" (con una sola no tiene sentido, ver colaborar.html).
+  // 3 es una cuenta 100% colaboradora fija de 2, sin bitácora propia.
+  2: { id: 2, username: 'otrahistoria', password_hash: PASSWORD_HASH, token_version: 0, owner_user_id: null, name: 'Nicolás Vargas Galeano' },
+  3: { id: 3, username: 'colabfija', password_hash: PASSWORD_HASH, token_version: 0, owner_user_id: 2, name: 'Colab Fija' },
+  4: { id: 4, username: 'segundahistoria', password_hash: PASSWORD_HASH, token_version: 0, owner_user_id: null, name: 'Felipe' },
 };
-const byUsername = { personadeprueba: users[1] };
+const byUsername = { personadeprueba: users[1], otrahistoria: users[2], colabfija: users[3], segundahistoria: users[4] };
+const collaborationsRows = [
+  { collaborator_user_id: 1, owner_user_id: 2 },
+  { collaborator_user_id: 1, owner_user_id: 4 },
+];
 
 function fakeSql(strings, ...values) {
   const text = strings.join('?');
@@ -65,6 +82,21 @@ function fakeSql(strings, ...values) {
   }
   if (text.includes('SELECT tree_pending_names FROM users WHERE id')) {
     return Promise.resolve([{ tree_pending_names: null }]);
+  }
+  if (text.includes('SELECT name, username FROM users WHERE id')) {
+    const u = users[values[0]];
+    return Promise.resolve(u ? [{ name: u.name, username: u.username }] : []);
+  }
+  if (text.includes('SELECT 1 FROM collaborations')) {
+    const [collaboratorId, ownerId] = values;
+    const hit = collaborationsRows.some((c) => c.collaborator_user_id === collaboratorId && c.owner_user_id === ownerId);
+    return Promise.resolve(hit ? [{ '?column?': 1 }] : []);
+  }
+  if (text.includes('FROM collaborations c') && text.includes('c.collaborator_user_id')) {
+    const rows = collaborationsRows
+      .filter((c) => c.collaborator_user_id === values[0])
+      .map((c) => ({ owner_id: c.owner_user_id, name: users[c.owner_user_id].name, username: users[c.owner_user_id].username }));
+    return Promise.resolve(rows);
   }
   return Promise.resolve([]);
 }
@@ -117,8 +149,12 @@ function request(server, opts) {
 }
 
 async function login(server) {
-  const resp = await request(server, { path: '/api/login', method: 'POST', body: { username: 'personadeprueba', password: 'claveDePrueba123' } });
-  if (resp.status !== 200) throw new Error(`No se pudo loguear la cuenta de prueba: ${resp.status} ${resp.body}`);
+  return loginAs(server, 'personadeprueba');
+}
+
+async function loginAs(server, username) {
+  const resp = await request(server, { path: '/api/login', method: 'POST', body: { username, password: 'claveDePrueba123' } });
+  if (resp.status !== 200) throw new Error(`No se pudo loguear "${username}": ${resp.status} ${resp.body}`);
   const raw = resp.headers['set-cookie'][0].split(';')[0]; // "bv_session=TOKEN"
   const idx = raw.indexOf('=');
   return { name: raw.slice(0, idx), value: raw.slice(idx + 1) };
@@ -276,6 +312,56 @@ async function checkCuenta(browser, base, w, scale, sessionCookie, screenshotDir
   await context.close();
 }
 
+// Nace del mismo reporte que la corrección del audio en iPhone: la página
+// de "aportar a otra historia" (colaborar.html?owner=X) tenía su propia fila
+// de 3 íconos (distinta del link "← volver a la bitácora" que usan
+// arbol.html/capitulos.html/colaboraciones.html/historias.html), mostraba
+// "cerrar sesión"/"borrar cuenta" aunque quien la usa ya administra su
+// cuenta desde app.html, y "Tus colaboraciones" quedaba pegado al borde
+// izquierdo en vez de centrado. Solo corre una vez (no por cada ancho ×
+// escala, a diferencia de las de arriba) porque es un chequeo de estructura
+// y no de layout responsive — igual se corre en un ancho de escritorio
+// (1440px), el mismo en el que se vio el problema original.
+async function checkColaborar(browser, server, base, screenshotDir) {
+  const sessionCookieDueña = await loginAs(server, 'personadeprueba');
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await context.addCookies([{ name: sessionCookieDueña.name, value: sessionCookieDueña.value, url: base }]);
+  const page = await context.newPage();
+
+  // --- Cuenta dueña (con su propia bitácora) de visita en otra historia ---
+  await page.goto(`${base}/colaborar.html?owner=2`, { waitUntil: 'load' });
+  await page.waitForSelector('#appContent', { state: 'visible' }).catch(() => {});
+  await page.waitForTimeout(300);
+
+  const topbarHTML = await page.locator('#ownTopbar').innerHTML().catch(() => '');
+  check(/class="volver"/.test(topbarHTML) && !/icon-btn/.test(topbarHTML), 'colaborar (owner=): el topbar tiene un solo link "← volver", no la fila de 3 íconos de antes');
+  const logoutRowVisible = await page.locator('#logoutRow').isVisible().catch(() => true);
+  check(!logoutRowVisible, 'colaborar (owner=): NO muestra "cerrar sesión"/"borrar cuenta" (eso se maneja desde app.html)');
+  const collabBox = await page.locator('#collabSwitch').boundingBox();
+  check(
+    !!collabBox && Math.abs(collabBox.x - (1440 - (collabBox.x + collabBox.width))) < 30,
+    `colaborar (owner=): "Tus colaboraciones" queda centrado, no pegado al borde izquierdo (${collabBox ? `leftGap=${Math.round(collabBox.x)} rightGap=${Math.round(1440 - (collabBox.x + collabBox.width))}` : 'no se encontró la caja'})`
+  );
+  await page.screenshot({ path: path.join(screenshotDir, 'colaborar-owner-1440.png') });
+  await context.close();
+
+  // --- Cuenta 100% colaboradora (sin bitácora propia) en su vista por
+  //     defecto: sigue sin topbar, pero conserva "cerrar sesión"/"borrar
+  //     cuenta" porque no tiene otro lugar para eso. ---
+  const sessionCookieColab = await loginAs(server, 'colabfija');
+  const context2 = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await context2.addCookies([{ name: sessionCookieColab.name, value: sessionCookieColab.value, url: base }]);
+  const page2 = await context2.newPage();
+  await page2.goto(`${base}/colaborar.html`, { waitUntil: 'load' });
+  await page2.waitForSelector('#appContent', { state: 'visible' }).catch(() => {});
+  await page2.waitForTimeout(300);
+
+  check(!(await page2.locator('#ownTopbar').isVisible().catch(() => false)), 'colaborar (cuenta 100% colaboradora): sigue sin topbar de "volver" (no tiene otra bitácora)');
+  check(await page2.locator('#logoutRow').isVisible().catch(() => false), 'colaborar (cuenta 100% colaboradora): SÍ conserva "cerrar sesión"/"borrar cuenta"');
+  await page2.screenshot({ path: path.join(screenshotDir, 'colaborar-propia-1440.png') });
+  await context2.close();
+}
+
 async function main() {
   const server = app.listen(0);
   await new Promise((r) => server.once('listening', r));
@@ -296,6 +382,7 @@ async function main() {
       await checkCuenta(browser, base, w, scale, sessionCookie, screenshotDir);
     }
   }
+  await checkColaborar(browser, server, base, screenshotDir);
 
   await browser.close();
   server.close();

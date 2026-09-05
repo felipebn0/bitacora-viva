@@ -737,7 +737,7 @@ async function bloquearSiReadOnly(req, res, next) {
     await ensureSchema();
     const rows = await sql`SELECT status FROM subscriptions WHERE user_id = ${req.profileUserId}`;
     if (rows.length && rows[0].status === 'read_only') {
-      return res.status(402).json({ error: 'Tu suscripción está vencida — podés seguir leyendo y exportando tu bitácora, pero para grabar historias nuevas hace falta renovar desde el menú de Cuenta.' });
+      return res.status(402).json({ error: 'Tu suscripción está vencida — puedes seguir leyendo y exportando tu bitácora, pero para grabar historias nuevas hace falta renovar desde el menú de Cuenta.' });
     }
     next();
   } catch (err) {
@@ -2930,7 +2930,7 @@ app.get('/api/export', requireAuth, bloquearColaborador, rateLimit, async (req, 
       ? 'Esta bitácora todavía no tiene audios ni fotos/videos guardados.'
       : embebidos === totalArchivos
       ? `Los ${totalArchivos} audios/fotos/videos de tu bitácora están incluidos como archivos reales en las carpetas audios/, fotos/ y videos/ de este mismo .zip — no dependen de nada más para abrirse.`
-      : `De ${totalArchivos} audios/fotos/videos, ${embebidos} quedaron incluidos como archivos reales (carpetas audios/, fotos/, videos/) y ${totalArchivos - embebidos} quedaron como link en el JSON correspondiente (historias.json, aportes_familiares.json, fotos_y_videos.json) — no entraron en el límite de tamaño de un solo export, o hubo un problema puntual al traerlos. Esos links solo funcionan mientras tengas la sesión iniciada en la app; si te importa conservarlos, pedí el export de nuevo más adelante (por ejemplo, después de borrar audios que ya no necesites) o descargalos a mano desde el link mientras la cuenta esté activa.`;
+      : `De ${totalArchivos} audios/fotos/videos, ${embebidos} quedaron incluidos como archivos reales (carpetas audios/, fotos/, videos/) y ${totalArchivos - embebidos} quedaron como link en el JSON correspondiente (historias.json, aportes_familiares.json, fotos_y_videos.json) — no entraron en el límite de tamaño de un solo export, o hubo un problema puntual al traerlos. Esos links solo funcionan mientras tengas la sesión iniciada en la app; si te importa conservarlos, pide el export de nuevo más adelante (por ejemplo, después de borrar audios que ya no necesites) o descárgalos a mano desde el link mientras la cuenta esté activa.`;
 
     const readme = `Bitácora de ${capitalizarNombre(perfil.name || perfil.username || '')}
 Exportado el ${fechaExport}.
@@ -3460,7 +3460,7 @@ function plantillaRecordatorio(nombre, link) {
     <h1 style="font-size:1.3rem">Hola, ${nombre} 👋</h1>
     <p>Hace un tiempo que no charlamos — tu bitácora sigue esperando la próxima historia.</p>
     <p><a href="${link}" style="display:inline-block;background:#8F5A20;color:#FBF6EA;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:bold">Seguir contando →</a></p>
-    <p style="color:#706551;font-size:.85rem">Este link te lleva directo a tu cuenta, sin pedirte la clave, y vence en 30 minutos por seguridad. Si no querés seguir recibiendo estos correos, podés apagarlos desde el menú de Cuenta.</p>
+    <p style="color:#706551;font-size:.85rem">Este link te lleva directo a tu cuenta, sin pedirte la clave, y vence en 30 minutos por seguridad. Si no quieres seguir recibiendo estos correos, puedes apagarlos desde el menú de Cuenta.</p>
   </div>`;
 }
 
@@ -3826,16 +3826,16 @@ function plantillaRegaloListo(nombre, code) {
     <h1 style="font-size:1.3rem">¡Gracias, ${nombre}! 🎁</h1>
     <p>Tu regalo ya está pago. Este es el código para que la persona que lo va a recibir lo active desde su cuenta (Cuenta → Plan → Canjear un regalo):</p>
     <p style="font-family:monospace;font-size:1.6rem;font-weight:bold;letter-spacing:0.1em;text-align:center;background:#F5EFE2;padding:14px;border-radius:10px">${code}</p>
-    <p style="color:#706551;font-size:.85rem">Los 12 meses empiezan a contar recién cuando lo canjeen, no desde hoy — se lo podés mandar cuando quieras, no vence por tu lado.</p>
+    <p style="color:#706551;font-size:.85rem">Los 12 meses empiezan a contar recién cuando lo canjeen, no desde hoy — se lo puedes mandar cuando quieras, no vence por tu lado.</p>
   </div>`;
 }
 
 function plantillaRenovacion(nombre, plan, link) {
   return `<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;color:#2B241C">
     <h1 style="font-size:1.3rem">Hola, ${nombre} 👋</h1>
-    <p>Tu plan <strong>${plan.nombre}</strong> está por renovarse. Cuando quieras, pagá acá para seguir sin cortes:</p>
+    <p>Tu plan <strong>${plan.nombre}</strong> está por renovarse. Cuando quieras, paga acá para seguir sin cortes:</p>
     <p><a href="${link}" style="display:inline-block;background:#5B6B45;color:#FBF6EA;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:bold">Renovar ahora →</a></p>
-    <p style="color:#706551;font-size:.85rem">Si ya renovaste, ignorá este correo. Mientras tanto tu bitácora sigue disponible en modo lectura — nada se borra por no pagar a tiempo.</p>
+    <p style="color:#706551;font-size:.85rem">Si ya renovaste, ignora este correo. Mientras tanto tu bitácora sigue disponible en modo lectura — nada se borra por no pagar a tiempo.</p>
   </div>`;
 }
 
