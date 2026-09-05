@@ -436,6 +436,45 @@
     return conPos.flatMap((c) => c.us.flatMap((u) => u));
   }
 
+  // Antes de armar nada: TODO en este árbol (parejas, generación, quién es
+  // hijo de quién, y al final las líneas mismas) se resuelve comparando el
+  // texto de "padres" contra el "nombre" exacto de otra persona — no hay
+  // ningún ID de por medio. Como esa lista la reescribe la IA charla a
+  // charla, alcanza con que en algún momento haya escrito el mismo nombre
+  // con un acento de más o de menos, o un espacio extra, para que TODO lo
+  // de acá abajo deje de reconocer la conexión — el nodo se sigue
+  // dibujando, pero suelto, sin línea y a veces en la fila que no es.
+  // Acá se corrige eso una sola vez, al entrar: si una referencia de
+  // "padres" no coincide con nadie exacto pero sí coincide ignorando
+  // acentos/mayúsculas/espacios de más, se reemplaza por el nombre real —
+  // así todo el resto del cálculo (que sigue comparando texto tal cual)
+  // encuentra la coincidencia sin tener que tocarlo en cada lugar.
+  function normalizarNombreParaComparar(str) {
+    return String(str || '')
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, ' ');
+  }
+  function resolverPadresPorNombreParecido(people) {
+    const porNombreExacto = new Set(people.map((p) => p.nombre));
+    const porNombreNormalizado = new Map();
+    people.forEach((p) => {
+      const norm = normalizarNombreParaComparar(p.nombre);
+      if (!porNombreNormalizado.has(norm)) porNombreNormalizado.set(norm, p.nombre);
+    });
+    people.forEach((p) => {
+      if (!Array.isArray(p.padres) || !p.padres.length) return;
+      p.padres = p.padres.map((ref) => {
+        if (porNombreExacto.has(ref)) return ref;
+        const canonico = porNombreNormalizado.get(normalizarNombreParaComparar(ref));
+        return canonico || ref;
+      });
+    });
+    return people;
+  }
+
   function renderTree(people) {
     wrap.innerHTML = '';
     if (scrollHint) scrollHint.classList.remove('visible');
@@ -445,6 +484,7 @@
       return;
     }
 
+    resolverPadresPorNombreParecido(people);
     const partnerOf = detectarParejas(people);
 
     // La generación de cada quien sale de la cadena real de "padres", no de

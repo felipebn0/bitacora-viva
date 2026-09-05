@@ -61,6 +61,13 @@ jobs:
       - name: Pruebas de pausar/seguir grabando (Playwright)
         run: npm run test:pause-resume
 
+      # También Playwright, sirviendo public/ solo: reproduce el bug
+      # reportado (nombres con un acento distinto entre charlas rompían la
+      # conexión padre/hijo en el árbol, dejando gente "flotando" en la fila
+      # que no era) y confirma que se cierra sin inventar conexiones falsas.
+      - name: Pruebas de conexiones del árbol genealógico (Playwright)
+        run: npm run test:arbol
+
       - name: Subir capturas de las pruebas responsive
         if: always()
         uses: actions/upload-artifact@v4
