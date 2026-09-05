@@ -89,6 +89,13 @@ jobs:
       - name: Pruebas de vista horizontal y safe-area (Playwright)
         run: npm run test:landscape
 
+      # Con más de una historia a la que se puede colaborar, después de
+      # bajar la página no quedaba ningún recordatorio de a quién se le
+      # está aportando — la barra de contexto fija (colaborar.html)
+      # aparece cuando el header original sale de la vista.
+      - name: Pruebas de contexto fijo en colaborar.html (Playwright)
+        run: npm run test:colaborar-sticky
+
       - name: Subir capturas de las pruebas responsive
         if: always()
         uses: actions/upload-artifact@v4

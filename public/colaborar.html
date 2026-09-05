@@ -134,6 +134,26 @@
   header { max-width: 440px; width: 100%; text-align: center; margin-bottom: 20px; }
   .owner-name { font-family: var(--font-display); font-size: 1.7rem; font-weight: 700; color: var(--gold-deep); margin: 6px 0 2px; }
 
+  /* Barra de contexto fija: con varias historias distintas a las que se
+     puede colaborar (ver #collabSwitch), después de bajar un poco la
+     página (pasado el <header> con el nombre grande) no quedaba ningún
+     recordatorio de A QUIÉN se le está aportando la historia — fácil de
+     olvidar a mitad de grabar, sobre todo yendo y viniendo entre más de
+     una. Aparece recién cuando el <header> sale de la vista (ver el
+     IntersectionObserver más abajo), no desde el arranque: al principio
+     ya se ve el nombre grande de sobra, mostrar las dos cosas a la vez
+     sería redundante. */
+  .sticky-context {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 40;
+    background: var(--bg); border-bottom: 1px solid #E7DFCC;
+    padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+    text-align: center; font-size: 0.92rem; color: var(--ink-soft);
+    transform: translateY(-100%); transition: transform .22s ease;
+  }
+  .sticky-context.visible { transform: translateY(0); }
+  .sticky-context b { color: var(--gold-deep); font-weight: 700; }
+  @media (prefers-reduced-motion: reduce) { .sticky-context { transition: none; } }
+
   /* Antes esto era una fila de 3 botones-ícono (Volver/Árbol/Libro) propia
      de esta página — distinta del link "← volver a la bitácora" que usan
      arbol.html/capitulos.html/colaboraciones.html/historias.html para lo
@@ -303,6 +323,14 @@
   <div id="appContent">
     <!-- Mismo patrón que app.html: invisible hasta que se navega con Tab. -->
     <a class="skip-link" href="#main-content">Saltar al contenido</a>
+
+    <!-- role="status": el contenido cambia (aparece/cambia el nombre) sin
+         que la persona haya pedido nada, así que un lector de pantalla
+         debe poder enterarse sin que se lo tenga que estar preguntando —
+         pero sin aria-live="assertive": no es urgente, no debe interrumpir
+         lo que se esté leyendo en ese momento. -->
+    <div class="sticky-context" id="stickyContext" role="status" hidden>Aportando a la historia de <b id="stickyOwnerName"></b></div>
+
     <!-- <nav>, no <div>: es un enlace a otra sección de la propia bitácora
          (cuando quien colabora está viendo la de otra persona) — mismo
          criterio que el topbar de app.html, esté visible o no en este
@@ -416,6 +444,9 @@
     return path + (path.includes('?') ? '&' : '?') + 'owner=' + encodeURIComponent(activeOwnerId);
   }
 
+  const stickyContext = document.getElementById('stickyContext');
+  const stickyOwnerName = document.getElementById('stickyOwnerName');
+
   function showApp(data) {
     checkingScreen.style.display = 'none';
     loginScreen.style.display = 'none';
@@ -423,10 +454,46 @@
     appContent.style.display = 'flex';
     whoami.textContent = data.guestName || data.username || '';
     ownerName.textContent = data.ownerName || '';
+    if (stickyOwnerName) stickyOwnerName.textContent = data.ownerName || '';
     // Un invitado sin cuenta no tiene nada que borrar — la ruta de borrar
     // cuenta ya lo rechaza del lado del servidor, pero mostrar el botón
     // igual sería confuso ("¿cuál cuenta?").
     if (dangerZone) dangerZone.style.display = data.isGuest ? 'none' : '';
+    activarContextoFijo();
+  }
+
+  // La barra de contexto fija (ver CSS de .sticky-context) aparece recién
+  // cuando el <header> con el nombre grande sale de la vista al hacer
+  // scroll — mostrarla desde el principio sería redundante con lo que ya
+  // se está viendo. Se activa una sola vez (yaObservando), después de que
+  // showApp() ya puso el nombre real — activarlo antes serviría de poco,
+  // el header ni se ve todavía.
+  let yaObservando = false;
+  function activarContextoFijo() {
+    if (yaObservando || !stickyContext) return;
+    const header = document.querySelector('#appContent > header');
+    if (!header) return;
+    yaObservando = true;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          // Header a la vista de nuevo: no hace falta animar la salida,
+          // que desaparezca ya mismo — nadie se queda mirando el hueco de
+          // arriba mientras sigue subiendo.
+          stickyContext.classList.remove('visible');
+          stickyContext.hidden = true;
+        } else {
+          // Mostrar SÍ se anima: quitar "hidden" y agregar "visible" en el
+          // mismo tick no dispara la transición (el navegador no llega a
+          // pintar el estado "oculto" de por medio) — el rAF de acá fuerza
+          // ese frame intermedio para que translateY sí se note animando.
+          stickyContext.hidden = false;
+          requestAnimationFrame(() => stickyContext.classList.add('visible'));
+        }
+      },
+      { threshold: 0 }
+    );
+    io.observe(header);
   }
 
   function showLogin() {
