@@ -176,7 +176,7 @@ async function launchChromium() {
   return chromium.launch({ executablePath: '/opt/pw-browsers/chromium' }).catch(() => chromium.launch());
 }
 
-async function checkNav(page, label) {
+async function checkNav(page, label, w, scale) {
   const info = await page.evaluate(() => {
     const nav = document.querySelector('nav');
     if (!nav) return null;
@@ -199,6 +199,7 @@ async function checkNav(page, label) {
       overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       fueraDelNav,
       chicos,
+      navHeight: navRect.height,
     };
   });
   if (!info) {
@@ -208,6 +209,18 @@ async function checkNav(page, label) {
   check(info.overflowX <= 1, `${label}: sin scroll horizontal (overflow=${info.overflowX}px)`);
   check(info.fueraDelNav.length === 0, `${label}: nada se sale de los límites del nav (${JSON.stringify(info.fueraDelNav)})`);
   check(info.chicos.length === 0, `${label}: todos los targets del nav miden 44px+ de alto (${JSON.stringify(info.chicos)})`);
+
+  // Guarda de regresión: en 320/390px el header llegó a medir 123px (una
+  // auditoría de UX lo marcó como que consumía demasiado espacio útil de
+  // la pantalla) — se achicó a ~111px sin esconder ningún control ni bajar
+  // ningún target de 44px (ver el CSS de .nav-inner en index.html). El
+  // límite es más laxo a 140% porque ahí "Iniciar sesión"/"Crear cuenta"
+  // pueden necesitar una fila extra — igual sirve para agarrar si alguien
+  // vuelve a agregar padding/filas de más sin querer.
+  if (w <= 390) {
+    const limite = scale >= 140 ? 200 : 130;
+    check(info.navHeight <= limite, `${label}: el header no volvió a crecer sin control (alto=${Math.round(info.navHeight)}px, límite=${limite}px)`);
+  }
 }
 
 async function checkLanding(browser, base, w, scale, screenshotDir) {
@@ -220,7 +233,7 @@ async function checkLanding(browser, base, w, scale, screenshotDir) {
     await page.evaluate((s) => window.bitacoraFontSize.set(s), scale);
     await page.waitForTimeout(120);
   }
-  await checkNav(page, label);
+  await checkNav(page, label, w, scale);
 
   // El botón "Ver cómo funciona" salta a #como-funciona — el destino no
   // debe quedar tapado por el nav sticky (bug real que se reprodujo en

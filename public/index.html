@@ -394,8 +394,19 @@
          desbordaba el header (y peor al agrandar la letra, porque el
          control también crece con el resto del texto). Se resuelve
          dejando que el header se envuelva en varias filas en vez de
-         desbordar (ver .nav-inner{flex-wrap:wrap} abajo). */
-      .nav-inner{flex-wrap:wrap;height:auto;padding:12px 0}
+         desbordar (ver .nav-inner{flex-wrap:wrap} abajo).
+         El alto de cada fila no se puede bajar de 44px (zona táctil
+         mínima, ver .nav-links a / .nav-font-ctrl button más arriba) —
+         pero el padding vertical y el espacio ENTRE filas sí sobraban un
+         poco: a 320/390px el header llegaba a 123px (row-gap:10px +
+         padding:12px arriba y abajo). Achicando esos dos nada más (sin
+         tocar ningún botón ni escondiendo el control de letra en un
+         menú) baja a ~107px — sigue siendo dos filas, pero ocupa menos
+         de la pantalla sin perder ningún control. row-gap aparte de
+         column-gap: el espacio ENTRE la marca y el control de letra
+         (misma fila) se mantiene cómodo, solo se achica el espacio
+         vertical entre filas. */
+      .nav-inner{flex-wrap:wrap;height:auto;padding:8px 0;row-gap:6px;column-gap:10px}
       /* El control de tamaño de letra NO va en su propia fila aparte: acá
          al lado de la marca (que en este ancho solo muestra el ícono, sin
          el nombre) sobra espacio de sobra, así que entra bien en la misma
