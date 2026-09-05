@@ -68,6 +68,20 @@ jobs:
       - name: Pruebas de conexiones del árbol genealógico (Playwright)
         run: npm run test:arbol
 
+      # Cubre qué pasa si el navegador niega o revoca el permiso de
+      # micrófono a mitad de una charla: antes no había ningún test que
+      # verificara que app.html avisa con un mensaje claro y ofrece
+      # escribir la respuesta, en vez de quedar trabado en "Escuchando…".
+      - name: Pruebas de denegación de micrófono (Playwright)
+        run: npm run test:mic-denegado
+
+      # Scan automático de accesibilidad (axe-core) sobre landing, login y
+      # app.html (con el menú de Cuenta abierto). No reemplaza una
+      # auditoría manual con lector de pantalla, pero agarra gratis los
+      # errores mecánicos más comunes (contraste, labels, landmarks, ARIA).
+      - name: Pruebas de accesibilidad (axe-core)
+        run: npm run test:a11y
+
       - name: Subir capturas de las pruebas responsive
         if: always()
         uses: actions/upload-artifact@v4

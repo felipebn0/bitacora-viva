@@ -570,6 +570,13 @@
         se navega con Tab, para no obligar a pasar por el saludo y los 5
         íconos del nav cada vez que se entra a la página con lector de
         pantalla o teclado. -->
+   <!-- <header>: el saludo, la marca y el menú de "Mi cuenta" quedaban
+        sueltos en el body, fuera de cualquier landmark (axe-core: "region:
+        todo el contenido debe estar en un landmark"). Es justo el
+        contenido de cabecera/identidad + controles de cuenta de la
+        página, así que es un <header> (banner), separado del <nav> de
+        secciones y del <main> de la charla, que ya tenían sus landmarks. -->
+   <header>
    <a class="skip-link" href="#main-content">Saltar al contenido</a>
    <div class="greeting-bar">
      <img class="brand-logo" src="/images/logo-icon.png" alt="Los recuerdos de mis viejos">
@@ -689,6 +696,7 @@
        </div>
      </div>
    </div>
+   </header>
    <!-- <nav>, no <div>: son los enlaces a las otras secciones de la
         bitácora — sin esto un lector de pantalla no puede saltar
         directamente a la navegación (o saltearla) como hace con el

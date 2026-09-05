@@ -254,6 +254,12 @@
 </style>
 </head>
 <body>
+  <!-- Antes de iniciar sesión (chequeando/login/invitado) tampoco había
+       ningún landmark alrededor — axe-core lo marcaba como "region: todo
+       el contenido debe estar en un landmark" y "no hay <main>" para quien
+       todavía no entró. Es contenido intercambiable entre sí (nunca dos
+       visibles a la vez), así que comparten un solo <main>. -->
+  <main id="pre-auth-main" aria-label="Acceso">
   <div id="checkingScreen" role="status" aria-live="polite">
     <img src="/images/logo-icon.png" alt="">
     <span>Comprobando tu sesión…</span>
@@ -292,6 +298,7 @@
     <p class="error" id="guestError" role="alert"></p>
     <p class="sub" style="margin-top:2px;">No hace falta crear cuenta ni clave — solo tu nombre.</p>
   </div>
+  </main>
 
   <div id="appContent">
     <!-- Mismo patrón que app.html: invisible hasta que se navega con Tab. -->

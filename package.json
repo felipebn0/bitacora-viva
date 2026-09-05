@@ -11,6 +11,8 @@
     "test:responsive": "node test/responsive.playwright.js",
     "test:pause-resume": "node test/pause-resume.playwright.js",
     "test:arbol": "node test/arbol-conexiones.playwright.js",
+    "test:mic-denegado": "node test/mic-denegado.playwright.js",
+    "test:a11y": "node test/accesibilidad.playwright.js",
     "eval:conversacion": "node test/eval-conversacion.js"
   },
   "dependencies": {
@@ -24,6 +26,7 @@
     "file-type": "^22.0.2"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "nodemon": "^3.1.0",
     "playwright": "^1.62.1"
   },
