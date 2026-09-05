@@ -8,6 +8,7 @@ const { neon } = require('@neondatabase/serverless');
 const { put, del, get } = require('@vercel/blob');
 const archiver = require('archiver');
 const { Readable } = require('stream');
+const { calcularHashesDeInline } = require('./csp-hashes');
 
 // Observabilidad (Sentry): hasta ahora, si algo fallaba en producción nos
 // enterábamos solo si alguien nos escribía o si alguien iba a mirar los
@@ -108,10 +109,22 @@ const CSP_MODE_ENFORCE = false;
 // en enforce (reporte 2026-09-06): juntar violaciones reales antes de
 // extraer nada a ciegas.
 const CSP_REPORT_PATH = '/api/csp-report';
+// Ronda 3 del camino a CSP en enforce (2026-09-06): las 7 páginas de
+// public/ tienen <script>/<style> inline (no unsafe-inline en la
+// política) -- en vez de extraer ~3.865 líneas de JS y ~1.728 de CSS a
+// archivos aparte (mucho más trabajo y riesgo para el mismo resultado),
+// se permite cada bloque por su hash sha256 exacto. Calculado en cada
+// arranque desde el contenido REAL de las páginas (ver csp-hashes.js) --
+// nunca queda desactualizado acá; lo que sí puede desactualizarse es la
+// copia de vercel.json (texto estático, sin forma de ejecutar código):
+// correr `node tools/actualizar-hashes-vercel.js` después de tocar el
+// <script>/<style> de cualquier página, y test/hashes-csp-vercel.smoke.js
+// falla fuerte si alguien se olvida.
+const { scriptHashes: HASHES_SCRIPT, styleHashes: HASHES_STYLE } = calcularHashesDeInline();
 const CSP_POLICY = [
   "default-src 'self'",
-  "script-src 'self'",
-  "style-src 'self'",
+  `script-src 'self' ${HASHES_SCRIPT.map((h) => `'${h}'`).join(' ')}`,
+  `style-src 'self' ${HASHES_STYLE.map((h) => `'${h}'`).join(' ')}`,
   "img-src 'self' data: https://*.blob.vercel-storage.com",
   "media-src 'self' https://*.blob.vercel-storage.com",
   "connect-src 'self'",
