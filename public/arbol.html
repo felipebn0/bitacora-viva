@@ -160,6 +160,18 @@
   .colab-card strong { display: block; color: var(--ink); font-size: 0.95rem; }
   .colab-card .parentesco { display: block; color: var(--gold-deep); font-size: 0.85rem; font-weight: 700; margin-top: 2px; }
   .colab-card .historias { display: block; color: var(--ink-soft); font-size: 0.85rem; margin-top: 4px; }
+
+    /* Extraído de atributos style="" inline -- ronda 4 del camino a CSP en enforce (2026-09-06).
+       Nombradas por hash del valor (mismo valor => misma clase). Cada declaración lleva
+       !important a propósito -- EXCEPTO "display" -- para reproducir lo que hacía el
+       atributo style="" inline, que le ganaba a cualquier otra regla (comprobado con un caso
+       real: .login p.sub tiene más especificidad que una clase sola y sin esto perdía el
+       margin-top que el inline sí forzaba). "display" queda sin !important porque este
+       código alterna la visibilidad de varios de estos mismos elementos en runtime con
+       elemento.style.display = "block"/"none" (ver server.js/estas páginas) -- un inline
+       plano puesto por JS no le gana a una regla con !important, así que esos toggles se
+       hubieran roto. No es una clase de uso general para reutilizar en HTML nuevo. */
+    .pc-93b8ea5b{display:none;}
 </style>
 </head>
 <body>
@@ -189,7 +201,7 @@
     </div>
   </div>
 
-  <section class="colab-section" id="colabSection" style="display:none;">
+  <section class="colab-section pc-93b8ea5b" id="colabSection">
     <h2>Quiénes han colaborado</h2>
     <p class="sub">Familiares que aportaron historias con su código de invitación.</p>
     <div class="colab-grid" id="colabGrid"></div>

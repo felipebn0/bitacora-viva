@@ -536,6 +536,27 @@
   }
   .login-fontsize-row button:disabled { opacity: 0.6; cursor: default; }
   .login-fontsize-row span { color: var(--ink-soft); font-size: 0.85rem; font-weight: 700; min-width: 3.2ch; text-align: center; }
+
+    /* Extraído de atributos style="" inline -- ronda 4 del camino a CSP en enforce (2026-09-06).
+       Nombradas por hash del valor (mismo valor => misma clase). Cada declaración lleva
+       !important a propósito -- EXCEPTO "display" -- para reproducir lo que hacía el
+       atributo style="" inline, que le ganaba a cualquier otra regla (comprobado con un caso
+       real: .login p.sub tiene más especificidad que una clase sola y sin esto perdía el
+       margin-top que el inline sí forzaba). "display" queda sin !important porque este
+       código alterna la visibilidad de varios de estos mismos elementos en runtime con
+       elemento.style.display = "block"/"none" (ver server.js/estas páginas) -- un inline
+       plano puesto por JS no le gana a una regla con !important, así que esos toggles se
+       hubieran roto. No es una clase de uso general para reutilizar en HTML nuevo. */
+    .pc-53425f7d{margin-top:2px !important;}
+    .pc-07135648{color:var(--gold-deep) !important;}
+    .pc-cb458930{display:none;}
+    .pc-39ddb588{text-transform:uppercase !important;}
+    .pc-5d029f6b{display:flex; align-items:center !important; gap:8px !important; cursor:pointer !important;}
+    .pc-1f5ad18c{display:none; margin-top:8px !important;}
+    .pc-93b8ea5b{display:none;}
+    .pc-71494e54{display:none; margin-top: 10px !important;}
+    .pc-ccc12387{max-width: 340px !important; margin: 0 auto 8px !important;}
+    .pc-298fc7ae{font-family: var(--font-display) !important; font-size: 1.4rem !important; font-weight: 700 !important; letter-spacing: 0.1em !important; margin: 0 0 4px !important;}
 </style>
 </head>
 <body>
@@ -564,7 +585,7 @@
     </div>
     <button id="loginBtn" type="button">Entrar</button>
     <p class="error" id="loginError" role="status" aria-live="polite" aria-atomic="true"></p>
-    <p class="sub" style="margin-top:2px;">¿No tienes cuenta? <a href="/" style="color:var(--gold-deep);">Crea una</a>.</p>
+    <p class="sub pc-53425f7d">¿No tienes cuenta? <a class="pc-07135648" href="/">Crea una</a>.</p>
   </div>
 
   <div id="appContent">
@@ -644,7 +665,7 @@
          <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecPlan">Plan <span class="um-chevron" aria-hidden="true">›</span></button>
          <div class="um-section-body" id="umSecPlan" hidden>
            <p class="um-msg" id="umPlanEstado">Cargando…</p>
-           <div id="umPlanOpciones" style="display:none">
+           <div class="pc-cb458930" id="umPlanOpciones">
              <button class="um-btn" id="umPlanPersonalBtn" type="button">Legado personal — $399.000/año</button>
              <button class="um-btn" id="umPlanFamiliarBtn" type="button">Legado familiar — $649.000/año</button>
              <button class="um-btn um-plain" id="umPlanRegalarBtn" type="button">🎁 Comprar un regalo para otra persona — $449.000</button>
@@ -655,7 +676,7 @@
            <hr>
            <p class="um-hint">¿Te regalaron una bitácora? Canjea el código acá — se activa en TU cuenta, no en la de quien te lo regaló.</p>
            <div class="um-fontsize-row">
-             <input type="text" id="umRegaloCodigo" placeholder="Código de regalo" maxlength="8" style="text-transform:uppercase;" aria-label="Código de regalo">
+             <input class="pc-39ddb588" type="text" id="umRegaloCodigo" placeholder="Código de regalo" maxlength="8" aria-label="Código de regalo">
              <button class="um-btn" id="umRegaloCanjearBtn" type="button">Canjear</button>
            </div>
            <p class="um-msg" id="umRegaloMsg" role="status" aria-live="polite" aria-atomic="true"></p>
@@ -663,7 +684,7 @@
 
          <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecRecordatorios">Recordatorios <span class="um-chevron" aria-hidden="true">›</span></button>
          <div class="um-section-body" id="umSecRecordatorios" hidden>
-           <label class="um-hint" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+           <label class="um-hint pc-5d029f6b">
              <input type="checkbox" id="umRecordatoriosActivos"> Avisarme por correo si hace un tiempo que no charlamos
            </label>
            <select id="umRecordatoriosFrecuencia" aria-label="Cada cuánto avisar">
@@ -682,13 +703,13 @@
          <div class="um-section-body" id="umSecRiesgo" hidden>
            <div class="danger-zone">
              <button class="um-btn um-plain um-warn" id="umResetToggle" type="button">🔄 Reiniciar mi bitácora</button>
-             <div id="umResetRow" style="display:none; margin-top:8px;">
+             <div class="pc-1f5ad18c" id="umResetRow">
                <input type="password" id="umResetPassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para reiniciar la bitácora">
                <button class="um-btn um-danger" id="umResetConfirm" type="button">Reiniciar bitácora</button>
                <p class="um-msg um-error" id="umResetError" role="alert"></p>
              </div>
              <button class="um-btn um-plain um-warn" id="umDeleteToggle" type="button">⚠️ Borrar mi cuenta permanentemente</button>
-             <div id="umDeleteRow" style="display:none; margin-top:8px;">
+             <div class="pc-1f5ad18c" id="umDeleteRow">
                <input type="password" id="umDeletePassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para borrar la cuenta">
                <button class="um-btn um-danger" id="umDeleteConfirm" type="button">Borrar cuenta</button>
                <p class="um-msg um-error" id="umDeleteError" role="alert"></p>
@@ -733,14 +754,14 @@
         igual, pero un lector de pantalla no tiene forma de saltar directo
         a "lo importante" sin pasar por el resto. -->
    <main id="main-content" tabindex="-1">
-   <div class="join-collab-panel" id="joinCollabPanel" style="display:none;">
+   <div class="join-collab-panel pc-93b8ea5b" id="joinCollabPanel">
      <p class="sub">Quiero colaborar con otra historia — ingresa el código que te compartieron.</p>
      <div class="join-collab-row">
        <input type="text" id="joinCollabCode" placeholder="Ej: B46NWEC7" maxlength="8" aria-label="Código de invitación">
        <button id="joinCollabSubmit" type="button">Entrar</button>
      </div>
      <p class="msg" id="joinCollabMsg" role="alert"></p>
-     <div class="join-collab-existentes" id="joinCollabExistentes" style="display:none;">
+     <div class="join-collab-existentes pc-93b8ea5b" id="joinCollabExistentes">
        <p class="sub">Ya colaboras con:</p>
        <div class="join-collab-lista" id="joinCollabLista"></div>
      </div>
@@ -764,13 +785,13 @@
                porque el texto se REEMPLAZA entero cada vez (no se agrega),
                así que conviene anunciarlo completo y no solo la diferencia. -->
           <div class="state-label" id="stateLabel" role="status" aria-live="polite" aria-atomic="true"></div>
-          <button class="write-toggle end-toggle" id="endBtn" type="button" style="display:none;">terminar la charla</button>
+          <button class="write-toggle end-toggle pc-93b8ea5b" id="endBtn" type="button">terminar la charla</button>
           <button class="write-toggle" id="treeModeBtn" type="button">armar árbol genealógico</button>
           <!-- Oculto a pedido: el botón manual "prefiero escribir" ya no se
                muestra. El cuadro para escribir (writeRow) sigue apareciendo
                solo, automáticamente, cuando el micrófono falla o no se
                entendió bien lo dicho — ver listenForAnswer/finalizeSpokenAnswer. -->
-          <button class="write-toggle" id="writeToggle" type="button" style="display:none;">prefiero escribir</button>
+          <button class="write-toggle pc-93b8ea5b" id="writeToggle" type="button">prefiero escribir</button>
           <div class="write-row" id="writeRow">
             <input type="text" id="writeInput" placeholder="Escribe tu respuesta…" aria-label="Escribir respuesta">
             <button id="writeSend" type="button">Enviar</button>
@@ -783,10 +804,10 @@
 
     <div class="logout-row">
       <button class="invite-cta" id="inviteToggle" type="button" aria-expanded="false" aria-controls="inviteRow">Invitar familiares a colaborar</button>
-      <div id="inviteRow" style="display:none; margin-top: 10px;">
-        <p class="sub" style="max-width: 340px; margin: 0 auto 8px;">Comparte este código con familiares — crean su propia cuenta y pueden aportar historias, sin ver ni tocar tus charlas.</p>
-        <p style="font-family: var(--font-display); font-size: 1.4rem; font-weight: 700; letter-spacing: 0.1em; margin: 0 0 4px;" id="inviteCode">…</p>
-        <a class="write-toggle" id="inviteWhatsappBtn" href="#" target="_blank" rel="noopener" style="display:none;">📲 mandar por WhatsApp</a>
+      <div class="pc-71494e54" id="inviteRow">
+        <p class="sub pc-ccc12387">Comparte este código con familiares — crean su propia cuenta y pueden aportar historias, sin ver ni tocar tus charlas.</p>
+        <p class="pc-298fc7ae" id="inviteCode">…</p>
+        <a class="write-toggle pc-93b8ea5b" id="inviteWhatsappBtn" href="#" target="_blank" rel="noopener">📲 mandar por WhatsApp</a>
         <button class="write-toggle" id="inviteCopyBtn" type="button">copiar código</button>
         <button class="write-toggle" id="inviteRegenBtn" type="button">generar código nuevo</button>
       </div>
