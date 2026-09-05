@@ -13,6 +13,7 @@
     "test:arbol": "node test/arbol-conexiones.playwright.js",
     "test:mic-denegado": "node test/mic-denegado.playwright.js",
     "test:a11y": "node test/accesibilidad.playwright.js",
+    "test:landscape": "node test/landscape-safearea.playwright.js",
     "eval:conversacion": "node test/eval-conversacion.js"
   },
   "dependencies": {

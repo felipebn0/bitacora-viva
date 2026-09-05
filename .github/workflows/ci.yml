@@ -82,6 +82,13 @@ jobs:
       - name: Pruebas de accesibilidad (axe-core)
         run: npm run test:a11y
 
+      # Vista horizontal (celular girado) y env(safe-area-inset-*) — el
+      # segundo simulado vía CDP (Emulation.setSafeAreaInsetsOverride), ya
+      # que esos valores no dependen del viewport sino de una barra/notch
+      # real del sistema operativo.
+      - name: Pruebas de vista horizontal y safe-area (Playwright)
+        run: npm run test:landscape
+
       - name: Subir capturas de las pruebas responsive
         if: always()
         uses: actions/upload-artifact@v4
