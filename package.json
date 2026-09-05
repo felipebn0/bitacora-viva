@@ -9,6 +9,7 @@
     "start": "node server.js",
     "test": "node test/smoke.js && node test/next.smoke.js && node test/shutdown.smoke.js && node test/account-actions.smoke.js && node test/export.smoke.js && node test/media-file.smoke.js && node test/guest.smoke.js && node test/billing.smoke.js && node test/billing-dummy.smoke.js && node test/chapters.smoke.js && node test/contribute-draft.smoke.js",
     "test:responsive": "node test/responsive.playwright.js",
+    "test:pause-resume": "node test/pause-resume.playwright.js",
     "eval:conversacion": "node test/eval-conversacion.js"
   },
   "dependencies": {

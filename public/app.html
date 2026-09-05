@@ -2053,14 +2053,42 @@
   }
 
   async function pauseConversation() {
-    pausedFromState = state;
+    const estadoAlPausar = state;
+    pausedFromState = estadoAlPausar;
     releaseWakeLock();
     stopVoiceActivityDetection();
-    if (fallbackRecognition) { try { fallbackRecognition.abort(); } catch (e) {} }
     if ('speechSynthesis' in window) speechSynthesis.cancel();
     if (ttsAudioEl) { try { ttsAudioEl.pause(); } catch (e) {} }
     sessionId += 1; // invalida cualquier respuesta pendiente de este turno
-    await stopRecordingAudio();
+
+    // Antes, pausar a mitad de estar grabando una respuesta tiraba esa
+    // grabación a la basura sin más — la persona volvía y la entrevistadora
+    // repetía la misma pregunta de cero, como si nunca hubiera dicho nada.
+    // Ahora, si alcanzó a decir algo entendible antes de pausar, se guarda
+    // como una respuesta real (mismo camino que si hubiera terminado de
+    // hablar sola) — no se pierde nada de lo ya contado. La frase queda
+    // cortada ahí en vez de seguir exactamente en el mismo punto, pero eso
+    // se siente como una charla real con una interrupción, no como un error.
+    if (estadoAlPausar === 'listening') {
+      if (fallbackRecognition) { try { fallbackRecognition.stop(); } catch (e) {} }
+      const audioBlob = await stopRecordingAudio();
+      if (audioBlob && audioBlob.size >= 800) {
+        let text = await transcribeAudio(audioBlob);
+        if (!text && fallbackTranscript.trim()) {
+          text = fallbackTranscript.trim(); // el servidor no pudo: usamos lo que captó el navegador
+        }
+        if (text) {
+          await handleAnswer(text, audioBlob, { seguir: false });
+          // pausedFromState='thinking': al volver, resumeConversation() pide
+          // una pregunta NUEVA (siguiendo lo que ya se contó) en vez de
+          // repetir la pregunta anterior, que ya quedó respondida.
+          pausedFromState = 'thinking';
+        }
+      }
+    } else {
+      if (fallbackRecognition) { try { fallbackRecognition.abort(); } catch (e) {} }
+      await stopRecordingAudio();
+    }
     // stopRecordingAudio() para la grabación en curso, pero no suelta el
     // micrófono en sí — sin esto, "pausar" dejaba el micrófono prendido de
     // fondo (el punto/ícono de grabación seguía encendido) aunque no se
@@ -2129,7 +2157,13 @@
     }
   }
 
-  async function handleAnswer(text, audioBlob) {
+  // seguir=false: guarda la respuesta (texto + audio si calificó) igual que
+  // siempre, pero NO pide el siguiente turno a la IA — lo usa
+  // pauseConversation() cuando la persona pausa a mitad de estar grabando,
+  // para no gastar un llamado a la IA que quizás se descarta si nunca
+  // vuelve, y para que sea resumeConversation() (con pausedFromState =
+  // 'thinking') quien pida la pregunta nueva recién cuando de verdad vuelve.
+  async function handleAnswer(text, audioBlob, { seguir = true } = {}) {
     if (!text || !text.trim()) return;
     if (audioBlob === undefined && mediaRecorder && mediaRecorder.state !== 'inactive') {
       stopVoiceActivityDetection();
@@ -2153,7 +2187,7 @@
       // Si no calificó, el audio del navegador se descarta solo (nunca se
       // sube) — el texto transcrito ya quedó guardado en logEntry/history.
     }
-    fetchNext();
+    if (seguir) fetchNext();
   }
 
   async function saveSessionLog() {

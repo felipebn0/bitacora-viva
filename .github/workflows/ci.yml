@@ -54,6 +54,13 @@ jobs:
       - name: Pruebas responsive (ancho x escala de letra, Playwright)
         run: npm run test:responsive
 
+      # También con Playwright, pero sin server.js: mockea /api/* a nivel
+      # de red y sirve public/ solo. Verifica que pausar a mitad de grabar
+      # una respuesta guarde lo dicho (en vez de tirarlo a la basura) y que
+      # al volver se pida una pregunta nueva, no una repetida.
+      - name: Pruebas de pausar/seguir grabando (Playwright)
+        run: npm run test:pause-resume
+
       - name: Subir capturas de las pruebas responsive
         if: always()
         uses: actions/upload-artifact@v4
