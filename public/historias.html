@@ -137,9 +137,10 @@
         if (typeof s.audio_url === 'string' && /^https?:\/\//.test(s.audio_url)) {
           const audio = document.createElement('audio');
           audio.controls = true;
-          // El audio se guarda con acceso privado en Blob — /api/media-file
-          // es quien de verdad lo trae, después de confirmar que esta
-          // sesión tiene permiso de verlo (ver server.js).
+          // El Blob donde vive el audio no tiene su propia ACL privada
+          // (ver "Decisiones de seguridad pendientes" en claude/links.md) —
+          // la protección real la hace /api/media-file, que confirma que
+          // esta sesión tiene permiso de verlo antes de traerlo (server.js).
           audio.src = '/api/media-file?u=' + encodeURIComponent(s.audio_url);
           div.appendChild(audio);
         } else {
