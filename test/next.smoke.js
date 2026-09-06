@@ -16,6 +16,10 @@
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'ci-smoke-secret';
 process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgres://fake:fake@localhost/fake';
 process.env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || 'fake';
+// Ver el mismo comentario en test/media-file.smoke.js: un BLOB_READ_WRITE_TOKEN
+// real en el .env de la máquina pinearía el host exacto a ESE store y
+// haría fallar el chequeo de audioUrl con el host de prueba de más abajo.
+process.env.BLOB_READ_WRITE_TOKEN = '';
 
 const path = require('path');
 const http = require('http');
@@ -40,6 +44,8 @@ const user = {
 };
 
 let storyLogInserts = []; // para verificar que se guardó (o no) una historia larga
+let storyLogRows = []; // { id, userId, texto, audioUrl } — simula la tabla real para el chequeo de duplicados
+let storyLogUpdates = []; // ids a los que se les completó el audio_url
 let familyNoteMarkedDiscussed = []; // ids marcados como discussed=true
 let mediaMarkedDiscussed = []; // ids marcados como discussed=true
 
@@ -91,7 +97,21 @@ function fakeSql(strings, ...values) {
 
   if (text.includes('SELECT nombre, relacion, detalles FROM family_members')) return Promise.resolve([]);
 
+  if (text.includes('SELECT id, audio_url FROM story_log')) {
+    const [userId, texto] = values;
+    const fila = storyLogRows.find((r) => r.userId === userId && r.texto === texto);
+    return Promise.resolve(fila ? [{ id: fila.id, audio_url: fila.audioUrl }] : []);
+  }
+  if (text.includes('UPDATE story_log SET audio_url')) {
+    const [audioUrl, id] = values;
+    const fila = storyLogRows.find((r) => r.id === id);
+    if (fila) fila.audioUrl = audioUrl;
+    storyLogUpdates.push(id);
+    return Promise.resolve([]);
+  }
   if (text.includes('INSERT INTO story_log')) {
+    const fila = { id: storyLogRows.length + 1, userId: values[0], texto: values[1], audioUrl: values[2] };
+    storyLogRows.push(fila);
     storyLogInserts.push({ userId: values[0], texto: values[1], audioUrl: values[2] });
     return Promise.resolve([]);
   }
@@ -368,6 +388,27 @@ async function main() {
     mode: 'historia',
   });
   check('respuesta corta: NO se guarda en story_log', storyLogInserts.length === 0);
+
+  // --- 10.1) La misma respuesta larga NO se duplica si /api/next se llama
+  // de nuevo sin que se haya sumado una respuesta nueva (bug real: pausar y
+  // seguir varias veces seguidas insertaba la misma historia una y otra vez).
+  resetAnthropicMock();
+  storyLogInserts = [];
+  storyLogRows = [];
+  storyLogUpdates = [];
+  const historialConRespuestaLarga = [...historial, { role: 'assistant', content: '¿Y qué más recordás?' }, { role: 'user', content: respuestaLarga }];
+  pushAnthropicResponse('Qué recuerdo tan lindo, gracias por contarlo.');
+  await nextForUser(server, cookie, { history: historialConRespuestaLarga, mode: 'historia', lastAudioUrl: null });
+  pushAnthropicResponse('Qué recuerdo tan lindo, gracias por contarlo.');
+  await nextForUser(server, cookie, { history: historialConRespuestaLarga, mode: 'historia', lastAudioUrl: null });
+  check('la misma respuesta larga repetida -> una sola fila en story_log, no dos', storyLogInserts.length === 1 && storyLogRows.length === 1);
+
+  // Si en la repetida esta vez sí llega el audio (que antes no había
+  // llegado a tiempo), se completa la fila existente en vez de duplicarla.
+  pushAnthropicResponse('Qué recuerdo tan lindo, gracias por contarlo.');
+  await nextForUser(server, cookie, { history: historialConRespuestaLarga, mode: 'historia', lastAudioUrl: 'https://fake.blob.vercel-storage.com/audio/1/x/y.webm' });
+  check('con audio en la repetida: se completa la fila existente, no se crea otra', storyLogRows.length === 1 && storyLogUpdates.length === 1);
+  check('la fila existente quedó con el audio completado', storyLogRows[0].audioUrl === 'https://fake.blob.vercel-storage.com/audio/1/x/y.webm');
 
   // --- 11) Nota pendiente de un colaborador se incorpora al arranque ---------
   resetAnthropicMock();

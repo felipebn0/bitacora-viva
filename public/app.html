@@ -1884,6 +1884,19 @@
   // terminado de hablar. 0.035 sigue detectando voz normal sin colgarse del
   // ruido de fondo típico de una casa.
   const VAD_THRESHOLD = 0.035; // umbral de volumen para considerar que hay voz
+  // Corte de seguridad aparte del silencio: si alguien cuenta una historia
+  // larga SIN pausas de más de SILENCE_MS, la grabación sigue creciendo sin
+  // límite — y tanto /api/transcribe como /api/save-audio rechazan
+  // cualquier cuerpo de más de ~4.5MB (tope real de las funciones
+  // serverless de Vercel, ver el comentario junto a /api/transcribe). Eso
+  // perdía la historia entera ("no se pudo entender el audio") o, si el
+  // texto igual se rescataba por el reconocimiento del navegador, dejaba
+  // guardada la historia SIN su audio. 150 segundos queda con margen de
+  // sobra por debajo de ese tope al bitrate que graba MediaRecorder acá.
+  // Al llegar acá se corta el turno igual que con un silencio real — la
+  // charla sigue pidiendo lo que falte en el turno siguiente, no se pierde
+  // nada de lo ya dicho.
+  const MAX_TURN_MS = 150 * 1000;
   let audioContext = null;
   let analyser = null;
   let vadRafId = null;
@@ -1916,7 +1929,9 @@
       const rms = Math.sqrt(sumSquares / data.length);
       if (rms > VAD_THRESHOLD) lastLoudTime = Date.now();
 
-      if (Date.now() - lastLoudTime > SILENCE_MS) {
+      const silencioLargo = Date.now() - lastLoudTime > SILENCE_MS;
+      const turnoDemasiadoLargo = recordingStartedAt && (Date.now() - recordingStartedAt > MAX_TURN_MS);
+      if (silencioLargo || turnoDemasiadoLargo) {
         stopVoiceActivityDetection();
         finalizeSpokenAnswer();
         return;

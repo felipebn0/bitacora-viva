@@ -2618,8 +2618,26 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiReadOnly, rate
     const ultimaRespuesta = [...history].reverse().find((m) => m.role === 'user' && !/^\(.*\)$/.test(m.content.trim()));
     if (mode === 'historia' && ultimaRespuesta && ultimaRespuesta.content.length >= HISTORIA_MIN_CHARS) {
       const audioUrl = urlHttpValida(typeof req.body.lastAudioUrl === 'string' ? req.body.lastAudioUrl.slice(0, 1000) : null);
+      const textoAGuardar = capitalizarInicio(ultimaRespuesta.content);
       try {
-        await sql`INSERT INTO story_log (user_id, texto, audio_url) VALUES (${req.userId}, ${capitalizarInicio(ultimaRespuesta.content)}, ${audioUrl})`;
+        // "history" trae TODOS los turnos de la sesión, así que si el
+        // cliente vuelve a llamar a /api/next sin haber sumado una
+        // respuesta nueva (ej. pausar y seguir varias veces seguidas
+        // mientras esta misma respuesta todavía era la última — ver el bug
+        // reportado de la historia repetida varias veces), "ultimaRespuesta"
+        // es exactamente la misma de la llamada anterior y se insertaba de
+        // nuevo como una fila aparte. Antes de insertar, nos fijamos si esta
+        // MISMA historia ya quedó guardada hace poco para esta cuenta — si
+        // sí, no la duplicamos; si esta vez sí llegó el audio y antes no,
+        // aprovechamos y se lo completamos a esa fila en vez de perderlo.
+        const previa = await sql`SELECT id, audio_url FROM story_log WHERE user_id = ${req.userId} AND texto = ${textoAGuardar} AND created_at > now() - interval '10 minutes' ORDER BY created_at DESC LIMIT 1`;
+        if (previa.length) {
+          if (audioUrl && !previa[0].audio_url) {
+            await sql`UPDATE story_log SET audio_url = ${audioUrl} WHERE id = ${previa[0].id}`;
+          }
+        } else {
+          await sql`INSERT INTO story_log (user_id, texto, audio_url) VALUES (${req.userId}, ${textoAGuardar}, ${audioUrl})`;
+        }
       } catch (err) {
         console.error('No se pudo guardar en story_log:', err);
       }
