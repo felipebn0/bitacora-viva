@@ -166,7 +166,30 @@ app.use((req, res, next) => {
 // navegador para mandar los reportes de violación de CSP a /api/csp-report
 // (ver esa ruta más abajo) — sin sumarlos acá, express.json() los ignora
 // (por Content-Type distinto) y req.body llega vacío ahí.
-app.use(express.json({ limit: '1mb', type: ['application/json', 'application/csp-report', 'application/reports+json'] }));
+const CSP_REPORT_JSON_TYPES = ['application/json', 'application/csp-report', 'application/reports+json'];
+
+// /api/csp-report tiene su propio límite de cuerpo, mucho más chico que el
+// 1mb global de la línea de abajo (reporte 2026-09-06, punto 5): un reporte
+// real de violación pesa unos pocos KB, nunca cerca de 1mb — ese límite
+// grande existe para rutas que sí necesitan mandar fotos/audio en base64,
+// no tiene sentido dárselo gratis a una ruta pública sin sesión que solo
+// loguea. 16kb es margen de sobra para el reporte más verboso (varios
+// campos de texto largo) sin abrir la puerta a que alguien mande basura
+// grande a una ruta que ni siquiera requiere estar logueado.
+//
+// Tiene que ir ANTES del parser global: si no, el global ya habría leído y
+// parseado el body entero (hasta 1mb) antes de que este límite más chico
+// pudiera aplicarse. Como express.json() no se puede llamar dos veces sobre
+// el mismo pedido (la segunda vez el stream ya se leyó y pisaría el body ya
+// parseado con uno vacío), el parser global se salta esta ruta explícitamente
+// más abajo en vez de correr de nuevo sobre ella.
+app.use(CSP_REPORT_PATH, express.json({ limit: '16kb', type: CSP_REPORT_JSON_TYPES }));
+
+const jsonBodyParserGlobal = express.json({ limit: '1mb', type: CSP_REPORT_JSON_TYPES });
+app.use((req, res, next) => {
+  if (req.path === CSP_REPORT_PATH) return next(); // ya se parseó arriba, con el límite chico
+  jsonBodyParserGlobal(req, res, next);
+});
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Las respuestas de /api/ pueden traer datos privados (historias, datos de
@@ -298,6 +321,66 @@ async function rateLimit(req, res, next) {
 // de Origin de las rutas mutantes (ver esa regla, más arriba) — el
 // navegador no siempre manda un Origin usable en este pedido en
 // particular.
+
+// Trunca strings largos antes de loguear: el body ya está acotado a 16kb
+// (ver el express.json de arriba), pero un solo campo (típicamente
+// blocked-uri, que puede traer una data: URI entera) podía igual acaparar
+// la mayor parte de esos 16kb — esto evita que un campo así infle el log
+// sin agregar información real (lo que importa es identificar el recurso,
+// no verlo entero).
+function truncarCampoReporte(valor, maxLen) {
+  if (typeof valor !== 'string') return valor;
+  return valor.length > maxLen ? `${valor.slice(0, maxLen)}…(truncado)` : valor;
+}
+
+// Deduplicación/muestreo (reporte 2026-09-06, punto 4): el rate limiter de
+// arriba (rateLimit, compartido con el resto de la API) limita cuánto puede
+// mandar UNA IP, pero no protege de la suma de MUCHAS IPs distintas
+// reportando lo mismo a la vez -- que es exactamente lo que pasa cuando un
+// deploy rompe la CSP para todo el mundo (ej: un hash desactualizado):
+// cientos de sesiones de usuarios distintos, cada una dentro de su propio
+// límite individual, mandando el mismo reporte casi al mismo tiempo. Cada
+// console.error de acá se reenvía a Sentry (ver rondas anteriores), así que
+// eso también inunda el cupo de eventos de Sentry, no solo los logs.
+//
+// Por combinación directiva+recurso-bloqueado (la firma real de "qué se
+// rompió", sin importar en qué página ni qué usuario) se loguea la primera
+// vez completo, y durante los siguientes CSP_REPORTES_VENTANA_MS se cuentan
+// las repeticiones sin loguearlas de nuevo -- al vencer la ventana, el
+// próximo reporte igual sí se loguea, esta vez incluyendo cuántos quedaron
+// afuera mientras tanto (repetidoAntes), así no se pierde del todo la
+// magnitud del problema. Es best-effort por instancia de proceso (en
+// Vercel puede haber varias instancias corriendo en paralelo, cada una con
+// su propio mapa, y el mapa se reinicia si la instancia se recicla) -- no
+// es un conteo exacto, es para bajar el volumen real de ruido.
+const CSP_REPORTES_VENTANA_MS = 5 * 60 * 1000; // 5 minutos
+const CSP_REPORTES_MAX_CLAVES = 200; // techo de memoria del mapa
+const cspReportesVistos = new Map(); // clave "directiva|bloqueado" -> { logueadoEn, suprimidos }
+
+function registrarReporteCsp(datos) {
+  const clave = `${datos.directiva}|${datos.bloqueado}`;
+  const ahora = Date.now();
+  const visto = cspReportesVistos.get(clave);
+  if (visto && ahora - visto.logueadoEn < CSP_REPORTES_VENTANA_MS) {
+    visto.suprimidos += 1;
+    return; // igual a uno logueado hace poco -- se cuenta, no se repite en el log
+  }
+  const repetidoAntes = visto ? visto.suprimidos : 0;
+  if (visto) {
+    cspReportesVistos.delete(clave); // reinsertar al final: orden aproximado por uso más reciente
+  } else if (cspReportesVistos.size >= CSP_REPORTES_MAX_CLAVES) {
+    // Mapa lleno: se descarta la entrada menos usada recientemente (la
+    // primera del Map, dado el reinsertado de arriba) -- no es un LRU
+    // exacto, alcanza para no crecer sin límite ante abuso real.
+    const masVieja = cspReportesVistos.keys().next().value;
+    if (masVieja !== undefined) cspReportesVistos.delete(masVieja);
+  }
+  cspReportesVistos.set(clave, { logueadoEn: ahora, suprimidos: 0 });
+  console.error('[csp-report]', JSON.stringify(
+    repetidoAntes > 0 ? { ...datos, repetidoAntes } : datos
+  ));
+}
+
 app.post(CSP_REPORT_PATH, rateLimit, (req, res) => {
   try {
     const body = req.body;
@@ -307,13 +390,13 @@ app.post(CSP_REPORT_PATH, rateLimit, (req, res) => {
         ? [body['csp-report']]
         : [];
     reportes.forEach((r) => {
-      console.error('[csp-report]', JSON.stringify({
-        directiva: r['effective-directive'] || r.effectiveDirective || null,
-        bloqueado: r['blocked-uri'] || r.blockedURL || null,
-        pagina: r['document-uri'] || r.documentURL || null,
-        linea: r['line-number'] ?? r.lineNumber ?? null,
-        modo: r.disposition || null,
-      }));
+      registrarReporteCsp({
+        directiva: truncarCampoReporte(r['effective-directive'] || r.effectiveDirective || null, 200),
+        bloqueado: truncarCampoReporte(r['blocked-uri'] || r.blockedURL || null, 500),
+        pagina: truncarCampoReporte(r['document-uri'] || r.documentURL || null, 500),
+        linea: typeof (r['line-number'] ?? r.lineNumber) === 'number' ? (r['line-number'] ?? r.lineNumber) : null,
+        modo: truncarCampoReporte(r.disposition || null, 20),
+      });
     });
   } catch (err) {
     console.error('No se pudo procesar un reporte de CSP:', err);

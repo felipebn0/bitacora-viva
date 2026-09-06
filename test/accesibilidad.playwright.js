@@ -78,6 +78,8 @@ try {
   process.exit(0);
 }
 
+const { attachCspViolationCollector, checkSinViolacionesCsp } = require('./helpers/csp-violations');
+
 const app = require(serverPath);
 
 function request(server, opts) {
@@ -156,6 +158,7 @@ async function main() {
   const browser = await launchChromium();
   try {
     const context = await browser.newContext();
+    await attachCspViolationCollector(context);
     const page = await context.newPage();
 
     await scanPagina(page, `${base}/index.html`, 'landing');
@@ -176,6 +179,8 @@ async function main() {
     await page.click('text=Perfil').catch(() => {});
     await page.waitForTimeout(150);
     await scanPagina(page, null, 'menú de Cuenta abierto (dentro de app.html)');
+
+    await checkSinViolacionesCsp(page, 'recorrido completo (landing, login, app.html, menú de Cuenta)', check);
 
     await context.close();
   } finally {

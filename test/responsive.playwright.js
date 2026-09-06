@@ -125,6 +125,8 @@ try {
   process.exit(0);
 }
 
+const { attachCspViolationCollector, checkSinViolacionesCsp } = require('./helpers/csp-violations');
+
 const app = require(serverPath);
 
 function request(server, opts) {
@@ -243,6 +245,7 @@ async function checkLanding(browser, base, w, scale, screenshotDir) {
   // debilitar ningún chequeo — se sigue verificando el estado FINAL, no la
   // animación en sí.
   const context = await browser.newContext({ viewport: { width: w, height: 900 }, reducedMotion: 'reduce' });
+  await attachCspViolationCollector(context);
   const page = await context.newPage();
   await page.goto(`${base}/`, { waitUntil: 'load' });
   await page.waitForTimeout(300);
@@ -329,6 +332,7 @@ async function checkLanding(browser, base, w, scale, screenshotDir) {
     check(!compactoArriba, `${label}: al volver arriba, el header vuelve a su tamaño normal`);
   }
 
+  await checkSinViolacionesCsp(page, label, check);
   await page.screenshot({ path: path.join(screenshotDir, `landing-${w}-${scale}.png`) });
   await context.close();
 }
@@ -336,6 +340,7 @@ async function checkLanding(browser, base, w, scale, screenshotDir) {
 async function checkLogin(browser, base, w, scale, screenshotDir) {
   const label = `login ${w}px @ ${scale}%`;
   const context = await browser.newContext({ viewport: { width: w, height: 900 }, reducedMotion: 'reduce' });
+  await attachCspViolationCollector(context);
   const page = await context.newPage();
   await page.goto(`${base}/app.html`, { waitUntil: 'load' });
   await page.waitForSelector('#loginScreen', { state: 'visible' }).catch(() => {});
@@ -352,6 +357,7 @@ async function checkLogin(browser, base, w, scale, screenshotDir) {
   });
   check(info.overflowX <= 1, `${label}: sin scroll horizontal (overflow=${info.overflowX}px)`);
   check(info.botonAlto !== null && info.botonAlto >= 43.5, `${label}: A-/A+ mide 44px+ de alto (${info.botonAlto}px)`);
+  await checkSinViolacionesCsp(page, label, check);
   await page.screenshot({ path: path.join(screenshotDir, `login-${w}-${scale}.png`) });
   await context.close();
 }
@@ -359,6 +365,7 @@ async function checkLogin(browser, base, w, scale, screenshotDir) {
 async function checkCuenta(browser, base, w, scale, sessionCookie, screenshotDir) {
   const label = `cuenta ${w}px @ ${scale}%`;
   const context = await browser.newContext({ viewport: { width: w, height: 900 }, reducedMotion: 'reduce' });
+  await attachCspViolationCollector(context);
   await context.addCookies([{ name: sessionCookie.name, value: sessionCookie.value, url: base }]);
   const page = await context.newPage();
   await page.goto(`${base}/app.html`, { waitUntil: 'load' });
@@ -393,6 +400,7 @@ async function checkCuenta(browser, base, w, scale, sessionCookie, screenshotDir
   check(info.overflowX <= 1, `${label}: sin scroll horizontal (overflow=${info.overflowX}px)`);
   check(info.emailLegible !== false, `${label}: el correo se ve completo, en el cuadro o en el texto de abajo`);
   check(info.botonAlto !== null && info.botonAlto >= 43.5, `${label}: A-/A+ mide 44px+ de alto (${info.botonAlto}px)`);
+  await checkSinViolacionesCsp(page, label, check);
   await page.screenshot({ path: path.join(screenshotDir, `cuenta-${w}-${scale}.png`) });
   await context.close();
 }
@@ -410,6 +418,7 @@ async function checkCuenta(browser, base, w, scale, sessionCookie, screenshotDir
 async function checkColaborar(browser, server, base, screenshotDir) {
   const sessionCookieDueña = await loginAs(server, 'personadeprueba');
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+  await attachCspViolationCollector(context);
   await context.addCookies([{ name: sessionCookieDueña.name, value: sessionCookieDueña.value, url: base }]);
   const page = await context.newPage();
 
@@ -427,6 +436,7 @@ async function checkColaborar(browser, server, base, screenshotDir) {
     !!collabBox && Math.abs(collabBox.x - (1440 - (collabBox.x + collabBox.width))) < 30,
     `colaborar (owner=): "Tus colaboraciones" queda centrado, no pegado al borde izquierdo (${collabBox ? `leftGap=${Math.round(collabBox.x)} rightGap=${Math.round(1440 - (collabBox.x + collabBox.width))}` : 'no se encontró la caja'})`
   );
+  await checkSinViolacionesCsp(page, 'colaborar (owner=), cuenta dueña', check);
   await page.screenshot({ path: path.join(screenshotDir, 'colaborar-owner-1440.png') });
   await context.close();
 
@@ -435,6 +445,7 @@ async function checkColaborar(browser, server, base, screenshotDir) {
   //     cuenta" porque no tiene otro lugar para eso. ---
   const sessionCookieColab = await loginAs(server, 'colabfija');
   const context2 = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+  await attachCspViolationCollector(context2);
   await context2.addCookies([{ name: sessionCookieColab.name, value: sessionCookieColab.value, url: base }]);
   const page2 = await context2.newPage();
   await page2.goto(`${base}/colaborar.html`, { waitUntil: 'load' });
@@ -443,6 +454,7 @@ async function checkColaborar(browser, server, base, screenshotDir) {
 
   check(!(await page2.locator('#ownTopbar').isVisible().catch(() => false)), 'colaborar (cuenta 100% colaboradora): sigue sin topbar de "volver" (no tiene otra bitácora)');
   check(await page2.locator('#logoutRow').isVisible().catch(() => false), 'colaborar (cuenta 100% colaboradora): SÍ conserva "cerrar sesión"/"borrar cuenta"');
+  await checkSinViolacionesCsp(page2, 'colaborar (cuenta 100% colaboradora)', check);
   await page2.screenshot({ path: path.join(screenshotDir, 'colaborar-propia-1440.png') });
   await context2.close();
 }

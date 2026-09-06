@@ -124,6 +124,66 @@ function check(nombre, cond) {
     // --- Un cuerpo vacío/basura no rompe la ruta ---
     const r3 = await post(server, { path: '/api/csp-report', contentType: 'application/csp-report', body: '{}' });
     check('cuerpo sin "csp-report" adentro -> igual 204, no 500', r3.status === 204);
+
+    // --- Endurecimiento (reporte 2026-09-06, punto 5): límite de tamaño propio ---
+    // /api/csp-report tiene su propio límite de 16kb (mucho más chico que
+    // el 1mb global de otras rutas) -- un cuerpo que se pasa de eso tiene
+    // que rechazarse con 413, no bancarse entero ni tirar un 500.
+    stderrCapturado = '';
+    const reporteGigante = JSON.stringify({
+      'csp-report': {
+        'document-uri': 'https://ejemplo.com/app.html',
+        'effective-directive': 'script-src',
+        'blocked-uri': 'https://ejemplo.com/' + 'x'.repeat(20 * 1024), // ~20kb, > el límite de 16kb
+      },
+    });
+    const r4 = await post(server, { path: '/api/csp-report', contentType: 'application/csp-report', body: reporteGigante });
+    check('cuerpo de ~20kb (> 16kb) -> 413, no 500 ni 204', r4.status === 413);
+    check('un cuerpo rechazado por tamaño no llega a loguearse', !stderrCapturado.includes('[csp-report]'));
+
+    // --- Endurecimiento: truncado de campos largos antes de loguear ---
+    // Un campo individual (típicamente blocked-uri con una data: URI larga)
+    // puede pesar la mayoría de esos 16kb sin que el cuerpo entero se pase
+    // del límite -- eso igual se trunca antes de loguear, para no inflar el
+    // log/Sentry con un valor que no aporta más información que sus
+    // primeros caracteres.
+    stderrCapturado = '';
+    const urlLarga = 'https://ejemplo.com/' + 'a'.repeat(700); // > el tope de 500 para "bloqueado"
+    const reporteConCampoLargo = JSON.stringify({
+      'csp-report': {
+        'document-uri': 'https://ejemplo.com/app.html',
+        'effective-directive': 'connect-src', // directiva propia de este caso, no choca con los de arriba
+        'blocked-uri': urlLarga,
+      },
+    });
+    const r5 = await post(server, { path: '/api/csp-report', contentType: 'application/csp-report', body: reporteConCampoLargo });
+    check('reporte con un campo largo (pero cuerpo < 16kb) -> 204 igual', r5.status === 204);
+    check('el campo largo quedó truncado en el log (no aparece completo)', !stderrCapturado.includes(urlLarga));
+    check('el log deja la marca "(truncado)" en el campo recortado', stderrCapturado.includes('(truncado)'));
+
+    // --- Endurecimiento: deduplicación/muestreo de reportes repetidos ---
+    // La misma combinación directiva+recurso-bloqueado, repetida en
+    // seguida (como pasaría si un solo quiebre de CSP dispara el mismo
+    // reporte desde muchas sesiones a la vez), se loguea una sola vez
+    // dentro de la ventana -- las repeticiones se cuentan pero no inflan
+    // el log ni Sentry. (La reaparición del log al vencer la ventana de 5
+    // minutos no se prueba acá: no tiene sentido esperar 5 minutos reales
+    // en un smoke test -- lo que sí se verifica es que la repetición
+    // inmediata efectivamente se suprime.)
+    stderrCapturado = '';
+    const reporteRepetido = JSON.stringify({
+      'csp-report': {
+        'document-uri': 'https://ejemplo.com/otra-pagina.html', // página distinta a propósito
+        'effective-directive': 'font-src', // directiva propia de este caso
+        'blocked-uri': 'https://cdn-rota.ejemplo.com/tipografia.woff2',
+      },
+    });
+    const rRep1 = await post(server, { path: '/api/csp-report', contentType: 'application/csp-report', body: reporteRepetido });
+    check('primer reporte de una combinación nueva -> 204 y queda logueado', rRep1.status === 204 && stderrCapturado.includes('font-src'));
+    stderrCapturado = '';
+    const rRep2 = await post(server, { path: '/api/csp-report', contentType: 'application/csp-report', body: reporteRepetido });
+    check('repetición inmediata de la misma combinación -> sigue devolviendo 204...', rRep2.status === 204);
+    check('...pero NO se vuelve a loguear (deduplicada dentro de la ventana)', !stderrCapturado.includes('[csp-report]'));
   } finally {
     process.stderr.write = stderrWriteOriginal;
     server.close();
