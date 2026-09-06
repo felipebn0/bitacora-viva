@@ -801,6 +801,17 @@ function ensureSchema() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`,
       sql`CREATE INDEX IF NOT EXISTS idx_gift_redemptions_bought_by ON gift_redemptions(bought_by_user_id)`,
+      // Respaldo a nivel de base para el UPDATE atómico de más abajo (ver
+      // /api/webhooks/wava): aunque ese código ya evita que dos entregas
+      // del mismo webhook generen dos códigos para la misma orden, este
+      // índice único es la garantía de verdad — si algún día otro camino
+      // de código insertara un segundo gift_redemptions para la misma
+      // orden, Postgres lo rechaza en vez de dejarlo pasar en silencio.
+      // Un índice único (no un ALTER TABLE ADD CONSTRAINT) porque
+      // "IF NOT EXISTS" en una constraint con nombre no es sintaxis
+      // estándar de Postgres — un índice único hace exactamente la misma
+      // garantía y sí soporta CREATE INDEX IF NOT EXISTS.
+      sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_gift_redemptions_billing_order_unico ON gift_redemptions(billing_order_id)`,
 
       // --- Activación recurrente (recordatorios por correo) -------------
       // Preferencia de cada cuenta dueña sobre si/cuándo recibir un
@@ -2285,24 +2296,41 @@ async function updateFamilyTree(userId, newExchanges) {
       await sql`UPDATE users SET tree_pending_names = ${JSON.stringify(Array.from(pendientes))} WHERE id = ${userId}`;
     }
 
-    await sql`DELETE FROM family_members WHERE user_id = ${userId}`;
-    for (const p of personas) {
-      const padres = Array.isArray(p.padres) ? p.padres.filter((x) => typeof x === 'string' && x.trim()).slice(0, 2) : [];
-      await sql`INSERT INTO family_members (user_id, nombre, relacion, detalles, padres) VALUES (
+    // Antes, el borrado y cada inserción (de personas y de eventos, dos
+    // reemplazos completos seguidos) eran pedidos sueltos, sin
+    // transacción -- si el proceso se caía a mitad de cualquiera de los
+    // dos loops, la familia podía quedar con el árbol o la línea de
+    // tiempo vacíos o a medio reconstruir, sin nada guardado. Es el mismo
+    // problema que ya se había arreglado en reset-bitacora/delete-account
+    // (server.js, rondas anteriores) pero nunca se aplicó acá. Ahora los
+    // dos reemplazos (personas y eventos) van juntos en una sola
+    // transacción: o queda el árbol completo y nuevo, o queda el de antes
+    // intacto, nunca algo a medias.
+    //
+    // Los .map() que arman cada INSERT van INLINE, adentro mismo del
+    // arreglo que se le pasa a sql.transaction() (no en variables aparte
+    // construidas antes) — así cada DELETE queda evaluado antes que sus
+    // propios INSERT, en ese orden, tanto contra Postgres real como
+    // contra el mock de los tests (que ejecuta cada sql\`...\` apenas se
+    // lo llama, no de forma perezosa como el driver real).
+    await sql.transaction([
+      sql`DELETE FROM family_members WHERE user_id = ${userId}`,
+      ...personas.map((p) => {
+        const padres = Array.isArray(p.padres) ? p.padres.filter((x) => typeof x === 'string' && x.trim()).slice(0, 2) : [];
+        return sql`INSERT INTO family_members (user_id, nombre, relacion, detalles, padres) VALUES (
         ${userId}, ${String(p.nombre).slice(0, 120)}, ${String(p.relacion).slice(0, 80)}, ${p.detalles ? capitalizarInicio(String(p.detalles).slice(0, 300)) : null}, ${padres.length ? JSON.stringify(padres) : null}
       )`;
-    }
-
-    await sql`DELETE FROM timeline_events WHERE user_id = ${userId}`;
-    for (const e of eventos) {
-      if (!e || !e.descripcion) continue;
-      const anio = Number.isFinite(e.anio) ? Math.round(e.anio) : null;
-      const edad = Number.isFinite(e.edad_aprox) ? Math.round(e.edad_aprox) : null;
-      const categoria = e.categoria ? String(e.categoria).slice(0, 40) : null;
-      await sql`INSERT INTO timeline_events (user_id, descripcion, anio, edad_aprox, categoria) VALUES (
+      }),
+      sql`DELETE FROM timeline_events WHERE user_id = ${userId}`,
+      ...eventos.filter((e) => e && e.descripcion).map((e) => {
+        const anio = Number.isFinite(e.anio) ? Math.round(e.anio) : null;
+        const edad = Number.isFinite(e.edad_aprox) ? Math.round(e.edad_aprox) : null;
+        const categoria = e.categoria ? String(e.categoria).slice(0, 40) : null;
+        return sql`INSERT INTO timeline_events (user_id, descripcion, anio, edad_aprox, categoria) VALUES (
         ${userId}, ${capitalizarInicio(String(e.descripcion).slice(0, 300))}, ${anio}, ${edad}, ${categoria}
       )`;
-    }
+      }),
+    ]);
   } catch (err) {
     console.error('No se pudo actualizar el árbol genealógico:', err);
   }
@@ -3570,14 +3598,29 @@ app.post('/api/chapters/generate', requireAuth, bloquearColaborador, rateLimit, 
       return res.json({ ok: true, message: 'No se pudo generar ningún capítulo todavía.', chapters: [] });
     }
 
-    await sql`DELETE FROM chapters WHERE user_id = ${req.userId}`;
-    const guardados = [];
-    for (const c of nuevos) {
-      const row = await sql`INSERT INTO chapters (user_id, title, theme, generated_text, story_ids, persona) VALUES (
+    // Antes, el DELETE y cada INSERT (uno por capítulo) eran pedidos
+    // sueltos, uno por uno, sin transacción -- si el proceso se caía a
+    // mitad del loop (timeout de la función serverless, un error puntual
+    // en un capítulo), la cuenta podía quedar con los capítulos viejos ya
+    // borrados y solo algunos de los nuevos guardados, o ninguno. Ahora
+    // todo el reemplazo (el borrado y cada inserción) va en una sola
+    // transacción (mismo patrón que ya usan reset-bitacora/delete-account
+    // y el webhook de pagos, más arriba): o queda el juego de capítulos
+    // completo y nuevo, o queda el de antes intacto, nunca algo a medias.
+    //
+    // El .map() que arma cada INSERT va INLINE, adentro mismo del arreglo
+    // que se le pasa a sql.transaction() (no en una variable aparte
+    // construida antes) — así el DELETE queda evaluado primero y cada
+    // INSERT después, en ese orden, tanto contra Postgres real como
+    // contra el mock de los tests (que ejecuta cada sql\`...\` apenas se
+    // lo llama, no de forma perezosa como el driver real).
+    const resultadosTransaccion = await sql.transaction([
+      sql`DELETE FROM chapters WHERE user_id = ${req.userId}`,
+      ...nuevos.map((c) => sql`INSERT INTO chapters (user_id, title, theme, generated_text, story_ids, persona) VALUES (
         ${req.userId}, ${c.title}, ${c.theme}, ${c.generated_text}, ${JSON.stringify(c.ids)}, ${persona}
-      ) RETURNING id, title, theme, generated_text, story_ids, persona, created_at`;
-      guardados.push({ ...row[0], story_ids: parseJsonArray(row[0].story_ids) });
-    }
+      ) RETURNING id, title, theme, generated_text, story_ids, persona, created_at`),
+    ]);
+    const guardados = resultadosTransaccion.slice(1).map((row) => ({ ...row[0], story_ids: parseJsonArray(row[0].story_ids) }));
 
     res.json({ ok: true, chapters: guardados });
   } catch (err) {
@@ -4298,11 +4341,34 @@ app.post('/api/webhooks/wava', express.raw({ type: '*/*', limit: '256kb' }), asy
     // de eso, se genera el código de canje y se le avisa por correo a
     // quien compró.
     if (!orden.subscription_id && orden.plan_id === 'regalo') {
+      // Antes, el UPDATE que marca la orden "paid" y el INSERT del código
+      // iban juntos en una sola transacción, pero SIN ningún filtro que
+      // impidiera correrla dos veces: dos entregas del mismo webhook casi
+      // simultáneas (Wava reintenta como práctica normal, no es un caso
+      // raro) podían pasar el chequeo `orden.status === 'paid'` de más
+      // arriba las dos ANTES de que cualquiera terminara de escribir, y
+      // cada una generaba y guardaba su propio código — dos regalos de 12
+      // meses por un solo pago. Ahora el UPDATE va primero y SOLO, con el
+      // filtro adentro del WHERE (mismo patrón que ya usa
+      // /api/billing/redeem-gift): de dos entregas simultáneas, la
+      // segunda que llegue ya encuentra status='paid' y no actualiza
+      // ninguna fila — recién la que ganó esa carrera sigue de largo y
+      // genera el código (generarCodigoDeRegaloUnico va DESPUÉS del claim
+      // a propósito, para no gastarlo ni consultar la base de más en la
+      // entrega que pierde la carrera). (Igual que en redeem-gift, si el
+      // proceso se cayera justo entre este UPDATE y el INSERT de abajo,
+      // el peor caso es una orden marcada "paid" sin código emitido —
+      // raro y arreglable a mano, mucho mejor que emitir dos códigos por
+      // un pago.)
+      const claim = await sql`
+        UPDATE billing_orders
+        SET status = 'paid', paid_at = now(), raw_webhook = ${JSON.stringify(evento)}::jsonb
+        WHERE id = ${orden.id} AND status <> 'paid'
+        RETURNING id
+      `;
+      if (!claim.length) return res.status(200).json({ ok: true }); // otra entrega ya ganó la carrera — idempotente
       const code = await generarCodigoDeRegaloUnico();
-      await sql.transaction([
-        sql`UPDATE billing_orders SET status = 'paid', paid_at = now(), raw_webhook = ${JSON.stringify(evento)}::jsonb WHERE id = ${orden.id}`,
-        sql`INSERT INTO gift_redemptions (code, billing_order_id, bought_by_user_id, plan_id, meses) VALUES (${code}, ${orden.id}, ${orden.user_id}, 'regalo', 12)`,
-      ]);
+      await sql`INSERT INTO gift_redemptions (code, billing_order_id, bought_by_user_id, plan_id, meses) VALUES (${code}, ${orden.id}, ${orden.user_id}, 'regalo', 12)`;
       await avisarCodigoDeRegaloPorCorreo(orden.user_id, code);
       return res.status(200).json({ ok: true });
     }
@@ -4311,10 +4377,17 @@ app.post('/api/webhooks/wava', express.raw({ type: '*/*', limit: '256kb' }), asy
     const periodo = subRows[0] ? subRows[0].periodo : 'annual';
     const intervalo = periodo === 'monthly' ? '1 month' : '1 year';
 
-    await sql.transaction([
-      sql`UPDATE billing_orders SET status = 'paid', paid_at = now(), raw_webhook = ${JSON.stringify(evento)}::jsonb WHERE id = ${orden.id}`,
-      sql`UPDATE subscriptions SET status = 'active', current_period_end = now() + ${intervalo}::interval, grace_until = NULL, updated_at = now() WHERE id = ${orden.subscription_id}`,
-    ]);
+    // Mismo arreglo que arriba: UPDATE atómico con el filtro en el WHERE,
+    // primero y solo, antes de tocar subscriptions — dos entregas del
+    // mismo webhook ya no pueden extender el período dos veces.
+    const claim = await sql`
+      UPDATE billing_orders
+      SET status = 'paid', paid_at = now(), raw_webhook = ${JSON.stringify(evento)}::jsonb
+      WHERE id = ${orden.id} AND status <> 'paid'
+      RETURNING id
+    `;
+    if (!claim.length) return res.status(200).json({ ok: true }); // otra entrega ya ganó la carrera — idempotente
+    await sql`UPDATE subscriptions SET status = 'active', current_period_end = now() + ${intervalo}::interval, grace_until = NULL, updated_at = now() WHERE id = ${orden.subscription_id}`;
     res.status(200).json({ ok: true });
   } catch (err) {
     console.error('Error procesando webhook de Wava:', err);
