@@ -111,16 +111,6 @@
     text-align: center;
   }
   .greeting .sub { color: var(--ink-soft); font-size: 1.15rem; max-width: 26ch; margin: 0 auto; }
-  .transcript {
-    display: none;
-    flex-direction: column;
-    gap: 12px;
-    width: 100%;
-  }
-  .transcript.visible { display: flex; }
-  .bubble { max-width: 90%; text-align: left; }
-  .bubble.q { align-self: flex-start; font-family: var(--font-display); font-style: italic; color: var(--moss); font-size: 1.05rem; }
-  .bubble.a { align-self: flex-end; background: var(--bubble-user); padding: 8px 12px; border-radius: 12px; border-bottom-right-radius: 3px; font-size: 0.95rem; }
   .orb-zone { display: grid; justify-items: center; gap: 12px; }
   .orb {
     width: 168px; height: 168px; border-radius: 50%; border: none; cursor: pointer;
@@ -210,13 +200,6 @@
 
   @media (min-width: 980px) {
     .device-col { width: min(440px, 100%); }
-    /* Con el celular en una sola columna (ver arriba), la página entera ya
-       scrollea de una — un scroll interno acá adentro obligaba a scrollear
-       dos cosas distintas (la charla y la página) para seguir leyendo,
-       confuso al tacto. Acá en desktop sí hace falta acotar la altura de la
-       charla, y sin este límite una conversación larga la empujaría más
-       alto que la pantalla. */
-    .transcript { overflow-y: auto; max-height: 380px; }
   }
 
   .greeting-bar {
@@ -429,7 +412,7 @@
   }
 
   .join-collab-panel {
-    width: 100%; max-width: 420px; margin: -8px auto 18px; background: #FBF6EA;
+    width: 100%; max-width: 420px; margin: 20px auto 0; background: #FBF6EA;
     border: 1px solid #E7DFCC; border-radius: 16px; padding: 16px 20px; text-align: center;
   }
   .join-collab-row { display: flex; gap: 8px; margin-top: 8px; }
@@ -731,18 +714,6 @@
         igual, pero un lector de pantalla no tiene forma de saltar directo
         a "lo importante" sin pasar por el resto. -->
    <main id="main-content" tabindex="-1">
-   <div class="join-collab-panel" id="joinCollabPanel" style="display:none;">
-     <p class="sub">Quiero colaborar con otra historia — ingresa el código que te compartieron.</p>
-     <div class="join-collab-row">
-       <input type="text" id="joinCollabCode" placeholder="Ej: B46NWEC7" maxlength="8" aria-label="Código de invitación">
-       <button id="joinCollabSubmit" type="button">Entrar</button>
-     </div>
-     <p class="msg" id="joinCollabMsg" role="alert"></p>
-     <div class="join-collab-existentes" id="joinCollabExistentes" style="display:none;">
-       <p class="sub">Ya colaboras con:</p>
-       <div class="join-collab-lista" id="joinCollabLista"></div>
-     </div>
-   </div>
    <div class="main-layout">
     <div class="device-col">
     <div class="device">
@@ -750,7 +721,6 @@
         <div class="greeting" id="greeting">
           <div class="sub">Presiona el botón para empezar a charlar.</div>
         </div>
-        <div class="transcript" id="transcript" aria-live="polite"></div>
         <div class="orb-zone">
           <button class="orb" id="orb" data-state="idle" aria-label="Presionar para comenzar la charla">
             <span id="orbLabel">Presiona<br>para hablar</span>
@@ -777,6 +747,19 @@
       </div>
     </div>
     </div>
+   </div>
+
+   <div class="join-collab-panel" id="joinCollabPanel" style="display:none;">
+     <p class="sub">Quiero colaborar con otra historia — ingresa el código que te compartieron.</p>
+     <div class="join-collab-row">
+       <input type="text" id="joinCollabCode" placeholder="Ej: B46NWEC7" maxlength="8" aria-label="Código de invitación">
+       <button id="joinCollabSubmit" type="button">Entrar</button>
+     </div>
+     <p class="msg" id="joinCollabMsg" role="alert"></p>
+     <div class="join-collab-existentes" id="joinCollabExistentes" style="display:none;">
+       <p class="sub">Ya colaboras con:</p>
+       <div class="join-collab-lista" id="joinCollabLista"></div>
+     </div>
    </div>
 
     <div class="logout-row">
@@ -1547,7 +1530,6 @@
   const orbLabel = document.getElementById('orbLabel');
   const stateLabel = document.getElementById('stateLabel');
   const greeting = document.getElementById('greeting');
-  const transcript = document.getElementById('transcript');
   const writeToggle = document.getElementById('writeToggle');
   const writeRow = document.getElementById('writeRow');
   const writeInput = document.getElementById('writeInput');
@@ -1862,30 +1844,23 @@
     }
   }
 
-  function addBubble(kind, text) {
-    const div = document.createElement('div');
-    div.className = 'bubble ' + kind;
-    div.textContent = text;
-    transcript.appendChild(div);
-    // scrollIntoView (a diferencia de fijar transcript.scrollTop a mano)
-    // encuentra solo el ancestro que de verdad scrollea: en desktop es
-    // .transcript (tiene su propio scroll acotado, ver CSS), y en el
-    // celular — donde .transcript ya no tiene scroll propio, ver Bloque 21
-    // — es la página entera. Así el último mensaje queda visible en ambos
-    // casos sin tener que distinguir de cuál de los dos se trata acá.
-    div.scrollIntoView({ block: 'end' });
-  }
-
   // Detección de pausas por volumen (en vez del reconocimiento de voz del
   // navegador, que Safari/iPad no soportan): mientras haya sonido, seguimos
   // escuchando; recién cuando pasan SILENCE_MS sin volumen, cerramos la
   // grabación y la mandamos al servidor para transcribirla.
-  // Antes eran 2000ms — para este público (recordando fechas, nombres,
-  // eventos) es fácil hacer una pausa más larga sin haber terminado de
-  // responder, y el corte prematuro contradice la idea de una charla
-  // paciente. 4000ms como punto de partida conservador.
-  const SILENCE_MS = 4000; // pausa tolerada antes de dar la respuesta por terminada
-  const VAD_THRESHOLD = 0.02; // umbral de volumen para considerar que hay voz
+  // Antes eran 2000ms, después 4000ms — pensado para dar tiempo a
+  // recordar fechas/nombres sin cortar antes de tiempo. En uso real (2026-
+  // 09-06) resultó demasiado: se quedaba "escuchando" varios segundos
+  // después de que la persona ya había dejado de hablar, sintiéndose lento
+  // y poco fluido. Bajado a 1200ms (cerca del segundo pedido).
+  const SILENCE_MS = 1200; // pausa tolerada antes de dar la respuesta por terminada
+  // Subido de 0.02: con ruido de fondo (ventilador, TV, eco del cuarto) el
+  // volumen ambiente solía superar 0.02 seguido, así que lastLoudTime nunca
+  // dejaba de renovarse y SILENCE_MS de arriba no llegaba a cumplirse nunca
+  // — se quedaba escuchando indefinidamente aunque la persona ya hubiera
+  // terminado de hablar. 0.035 sigue detectando voz normal sin colgarse del
+  // ruido de fondo típico de una casa.
+  const VAD_THRESHOLD = 0.035; // umbral de volumen para considerar que hay voz
   let audioContext = null;
   let analyser = null;
   let vadRafId = null;
@@ -2034,7 +2009,6 @@
       history.push({ role: 'assistant', content: data.message });
       const logEntry = { role: 'assistant', content: data.message, timestamp: new Date().toISOString() };
       sessionLog.push(logEntry);
-      addBubble('q', data.message);
       setState('speaking', 'Hablando…');
       speak(data.message, () => {
         if (mySession !== sessionId) return;
@@ -2146,6 +2120,17 @@
       fetchNext(); // se había pausado antes de recibir la pregunta nueva
       return;
     }
+    // pausedFromState==='listening': se pausó a mitad de grabar una
+    // respuesta y esa grabación NO se pudo transcribir (ver
+    // pauseConversation) — la pregunta ya se había dicho entera ANTES de
+    // arrancar a escuchar, así que no hace falta repetirla; antes esto caía
+    // al mismo camino que "se pausó mientras la IA hablaba" y volvía a
+    // reproducir toda la pregunta de nuevo, sintiéndose como si la charla
+    // repitiera todo lo ya dicho.
+    if (pausedFromState === 'listening') {
+      listenForAnswer();
+      return;
+    }
     const lastAssistant = [...history].reverse().find((m) => m.role === 'assistant');
     if (!lastAssistant) { fetchNext(); return; }
     setState('speaking', 'Hablando…');
@@ -2191,7 +2176,6 @@
       stopVoiceActivityDetection();
       await stopRecordingAudio(); // vino de "escribir": se descarta la grabación en curso
     }
-    addBubble('a', text.trim());
     turnIndex += 1;
     const myTurn = turnIndex;
     history.push({ role: 'user', content: text.trim() });
@@ -2246,8 +2230,6 @@
     pausedFromState = null;
     currentSessionDbId = null;
     greeting.style.display = 'none';
-    transcript.classList.add('visible');
-    transcript.innerHTML = '';
     history = [];
     sessionLog = [];
     turnIndex = 0;
