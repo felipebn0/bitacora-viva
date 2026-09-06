@@ -1777,7 +1777,40 @@ app.post('/api/login', rateLimit, async (req, res) => {
   }
 });
 
-app.post('/api/logout', (req, res) => {
+app.post('/api/logout', async (req, res) => {
+  // Antes esto solo borraba la cookie del navegador que hizo el pedido —
+  // el token en sí (autofirmado, sin tabla de sesiones) seguía siendo
+  // válido hasta sus 30 días de vida o hasta un cambio de clave, así que
+  // una copia de esa cookie sacada de antes (un dispositivo compartido, un
+  // navegador prestado) seguía sirviendo después de "cerrar sesión".
+  // token_version es el único mecanismo de revocación que existe (ya se
+  // usa al cambiar la clave, ver /api/change-password) y es por CUENTA, no
+  // por sesión individual — no hay una tabla de sesiones para revocar solo
+  // esta una, así que subirlo acá cierra todos los dispositivos de esta
+  // cuenta a la vez, no solo el que pidió el logout. Se decidió aceptar
+  // ese efecto (2026-09-06): es la misma cuenta cerrándose sesión a sí
+  // misma en todos lados, nunca afecta a otra cuenta, y evita construir
+  // una tabla de sesiones nueva solo para esto.
+  //
+  // No aplica a sesiones de invitado (session.guest, ver /api/guest-start):
+  // no tienen cuenta propia ni token_version que subir — para ellas cerrar
+  // sesión sigue siendo solo borrar la cookie, como siempre fue.
+  try {
+    const cookies = parseCookies(req.headers.cookie);
+    const session = verifySession(cookies[SESSION_COOKIE]);
+    if (session && !session.guest && session.userId) {
+      await ensureSchema();
+      await sql`UPDATE users SET token_version = token_version + 1 WHERE id = ${session.userId}`;
+    }
+  } catch (err) {
+    // Falla abierto a propósito, solo para este paso: si la base no
+    // responde, mejor dejar que el logout local funcione igual (el botón
+    // de "cerrar sesión" nunca se queda trabado por esto) a que la persona
+    // no pueda cerrar sesión por un problema transitorio de la base — en
+    // el peor caso, el token viejo sigue vivo un rato más, ni mejor ni
+    // peor que el comportamiento de antes de este cambio.
+    console.error('No se pudo revocar la sesión en el logout:', err);
+  }
   clearSessionCookie(req, res);
   res.json({ ok: true });
 });

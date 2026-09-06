@@ -22,6 +22,17 @@
 //     para loguearse y la nueva sirviendo, y que token_version+1 invalida
 //     cualquier cookie de sesión emitida ANTES del cambio (mientras que la
 //     cookie reemitida en la misma respuesta del cambio sí sigue sirviendo).
+//   POST /api/logout (2026-09-06) — ya no se limita a borrar la cookie del
+//     navegador que pidió el logout: ahora también sube token_version de
+//     la cuenta, así que una copia de esa misma sesión en OTRO dispositivo
+//     (o una copia "robada" de antes del logout) queda invalidada de
+//     verdad, no solo la del navegador que cerró sesión. Efecto colateral
+//     aceptado a propósito: como token_version es por cuenta y no por
+//     sesión individual, esto cierra TODOS los dispositivos de esa cuenta
+//     a la vez (nunca afecta a otras cuentas) — ver claude/links.md.
+//     También cubre que si la base falla al revocar, el logout igual
+//     responde 200 (falla abierto solo en ese paso, para no trabar el
+//     botón de cerrar sesión por un problema transitorio de la base).
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'ci-smoke-secret';
 process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgres://fake:fake@localhost/fake';
 process.env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || 'fake';
@@ -34,6 +45,7 @@ const bcrypt = require(path.resolve(__dirname, '..', 'node_modules', 'bcryptjs')
 
 const PASSWORD_HASH_A = bcrypt.hashSync('claveA123', 4);
 const PASSWORD_HASH_B = bcrypt.hashSync('claveB123', 4);
+const PASSWORD_HASH_D = bcrypt.hashSync('claveD123', 4);
 
 // Dos cuentas dueñas independientes (A y B) para probar aislamiento, más
 // una cuenta colaboradora de A (C) para probar que también puede editar su
@@ -42,6 +54,7 @@ const users = {
   1: { id: 1, username: 'usuarioa', password_hash: PASSWORD_HASH_A, token_version: 0, owner_user_id: null, name: 'Usuaria A', email: null, fecha_nacimiento: null },
   2: { id: 2, username: 'usuariob', password_hash: PASSWORD_HASH_B, token_version: 0, owner_user_id: null, name: 'Usuario B', email: null, fecha_nacimiento: null },
   3: { id: 3, username: 'colabc', password_hash: PASSWORD_HASH_A, token_version: 0, owner_user_id: 1, name: 'Colaboradora C', email: null, fecha_nacimiento: null },
+  4: { id: 4, username: 'usuariod', password_hash: PASSWORD_HASH_D, token_version: 0, owner_user_id: null, name: 'Usuario D', email: null, fecha_nacimiento: null },
 };
 const byUsername = {};
 for (const u of Object.values(users)) byUsername[u.username] = u;
@@ -101,6 +114,13 @@ function fakeSql(strings, ...values) {
     u.password_hash = newHash; // hash real de bcryptjs — server.js lo calculó antes de esta llamada
     u.token_version += 1;
     return Promise.resolve([{ username: u.username, token_version: u.token_version }]);
+  }
+
+  if (text.includes('UPDATE users SET token_version = token_version + 1')) {
+    const [id] = values;
+    const u = users[id];
+    if (u) u.token_version += 1; // mismo campo que sube change-password — /api/logout ahora también lo usa
+    return Promise.resolve([]);
   }
 
   // Cualquier otro SELECT/DELETE/UPDATE de las transacciones de
@@ -321,6 +341,60 @@ async function main() {
   check('change-password: la cookie de sesión de ANTES del cambio queda invalidada', meConCookieDeAntesDelCambio.status === 401);
   const meConCookieNueva = await request(server, { path: '/api/me', method: 'GET' }, nuevaCookieA);
   check('change-password: la cookie nueva reemitida en la misma respuesta sí sirve', meConCookieNueva.status === 200);
+
+  // ============================================================
+  // POST /api/logout
+  // ============================================================
+  // Cuenta D, sin usar en ninguna sección anterior — cookieD1/cookieD2
+  // simulan dos sesiones activas de la MISMA cuenta (dos dispositivos, o
+  // un dispositivo legítimo + una copia de la cookie sacada de antes).
+
+  const cookieD1 = await login(server, 'usuariod', 'claveD123');
+  const cookieD2 = await login(server, 'usuariod', 'claveD123');
+
+  const meAntesDeLogout = await request(server, { path: '/api/me', method: 'GET' }, cookieD1);
+  check('logout: antes de cerrar sesión, la cookie funciona normalmente', meAntesDeLogout.status === 200);
+
+  const logoutD1 = await request(server, { path: '/api/logout', method: 'POST' }, cookieD1);
+  check('logout: responde 200', logoutD1.status === 200);
+  check(
+    'logout: manda un Set-Cookie que borra la cookie local (Max-Age=0)',
+    /Max-Age=0/.test((logoutD1.headers['set-cookie'] || [])[0] || '')
+  );
+
+  const meConLaMismaCookieYaCerrada = await request(server, { path: '/api/me', method: 'GET' }, cookieD1);
+  check(
+    'logout: la MISMA cookie usada para cerrar sesión queda invalidada del lado del servidor (no solo borrada del navegador)',
+    meConLaMismaCookieYaCerrada.status === 401
+  );
+
+  const meConCopiaDeOtroDispositivo = await request(server, { path: '/api/me', method: 'GET' }, cookieD2);
+  check(
+    'logout: una copia de la sesión de OTRO dispositivo (o "robada" de antes del logout) también queda invalidada',
+    meConCopiaDeOtroDispositivo.status === 401
+  );
+
+  // Efecto colateral aceptado a propósito (ver claude/links.md): la cuenta
+  // sigue pudiendo volver a loguearse normalmente después.
+  const cookieD3 = await login(server, 'usuariod', 'claveD123');
+  const meConCookieD3 = await request(server, { path: '/api/me', method: 'GET' }, cookieD3);
+  check('logout: la cuenta puede volver a loguearse normalmente después', meConCookieD3.status === 200);
+
+  // Falla abierto a propósito, solo en este paso: si la base rechaza la
+  // revocación, el logout igual responde 200 y borra la cookie local —
+  // no se traba el botón de cerrar sesión por un problema transitorio.
+  forceFailSubstring = 'UPDATE users SET token_version = token_version + 1';
+  const logoutConBaseCaida = await request(server, { path: '/api/logout', method: 'POST' }, cookieD3);
+  forceFailSubstring = null;
+  check('logout: si falla la revocación en la base, el logout igual responde 200 (no se traba)', logoutConBaseCaida.status === 200);
+
+  // Sin ninguna cookie (ej. alguien que aprieta "cerrar sesión" dos veces
+  // seguidas, o cuya sesión ya había expirado): sin sesión que leer, no
+  // hay token_version que subir — sigue respondiendo 200 en vez de
+  // romperse. La sesión de invitado (sin cuenta ni token_version propios)
+  // ya está cubierta end-to-end en test/guest.smoke.js.
+  const logoutSinCookie = await request(server, { path: '/api/logout', method: 'POST' });
+  check('logout: sin ninguna cookie (doble logout, sesión ya vencida) también responde 200', logoutSinCookie.status === 200);
 
   server.close();
   console.log(`\n${passed} pasaron, ${failed} fallaron`);
