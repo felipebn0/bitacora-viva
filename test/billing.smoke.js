@@ -137,12 +137,23 @@ function fakeSql(strings, ...values) {
     const u = users[values[0]];
     return Promise.resolve(u ? [{ email: u.email, name: u.name, username: u.username }] : []);
   }
-  if (text.includes("UPDATE billing_orders SET status = 'paid'")) {
-    // 'paid' y now() van como literales acá — solo 2 values: [raw_webhook, id].
+  // El claim atómico del webhook (arregla la carrera de dos entregas
+  // simultáneas del mismo webhook generando dos códigos de regalo, o
+  // activando la suscripción dos veces, 2026-09-06): un solo UPDATE con
+  // el filtro "status <> 'paid'" adentro del WHERE — mismo patrón que ya
+  // usa el claim de redeem-gift, más abajo. 'paid' y now() van como
+  // literales acá — solo 2 values: [raw_webhook, id]. Solo devuelve una
+  // fila si ESTA llamada es la que gana la carrera (la orden todavía no
+  // estaba 'paid'); si no, simula lo que haría Postgres con esa misma
+  // orden ya tomada por otra entrega del webhook.
+  if (text.includes("status <> 'paid'") && text.includes('RETURNING id')) {
     const [rawWebhook, id] = values;
     const orden = Object.values(billingOrders).find((o) => o.id === id);
-    if (orden) { orden.status = 'paid'; orden.raw_webhook = rawWebhook; orden.paid_at = new Date().toISOString(); }
-    return Promise.resolve([]);
+    if (!orden || orden.status === 'paid') return Promise.resolve([]); // ya lo ganó otra entrega
+    orden.status = 'paid';
+    orden.raw_webhook = rawWebhook;
+    orden.paid_at = new Date().toISOString();
+    return Promise.resolve([{ id: orden.id }]);
   }
   if (text.includes('UPDATE billing_orders SET status = ') && text.includes('raw_webhook')) {
     // Caso "no confirmado": [estadoWava, raw_webhook, id].
@@ -393,6 +404,35 @@ function firmarWava(bodyBuffer) {
 
     const redeemRepetido = await request(server, { path: '/api/billing/redeem-gift', method: 'POST', body: { code: codigoRegalo } }, cookieB);
     check('el mismo código no se puede canjear dos veces -> 400', redeemRepetido.status === 400);
+
+    // --- Endurecimiento (2026-09-06): dos entregas del mismo webhook no generan dos códigos ---
+    // Wava reintenta webhooks como práctica normal (no es un caso raro) —
+    // antes, dos entregas casi simultáneas del mismo evento podían pasar
+    // el chequeo "¿ya está paid?" las dos antes de que cualquiera
+    // terminara de escribir, y cada una generaba su propio código de
+    // regalo para la MISMA orden. En vez de depender de que dos pedidos
+    // HTTP reales lleguen a interlazarse en el momento justo (no
+    // determinístico, un test así podría pasar por suerte y no probar
+    // nada), se simula directamente el punto exacto de la carrera:  la
+    // orden ya queda "paid" (como si otra entrega hubiera ganado) ANTES
+    // de que esta entrega intente procesarla — el UPDATE atómico
+    // (WHERE status <> 'paid') tiene que encontrar 0 filas y no generar
+    // nada más.
+    const giftCheckout2 = await request(server, { path: '/api/billing/gift-checkout', method: 'POST' }, cookieA);
+    const giftOrderKey2 = Object.keys(billingOrders).find((k) => billingOrders[k].plan_id === 'regalo' && billingOrders[k].status === 'pending');
+    check('gift-checkout (segunda orden, para la prueba de carrera) -> 200', giftCheckout2.status === 200 && !!giftOrderKey2);
+
+    const giftEvento2 = Buffer.from(JSON.stringify({ event: 'link_paid', id_external: giftOrderKey2, status: 'paid' }));
+    const giftFirma2 = firmarWava(giftEvento2);
+    // Simula que "otra entrega" de este mismo webhook ya ganó la carrera
+    // un instante antes: la orden queda paid SIN que exista todavía
+    // ningún gift_redemptions para ella (para no confundir esto con el
+    // caso normal de "webhook repetido, ya con su código emitido").
+    billingOrders[giftOrderKey2].status = 'paid';
+    const codigosAntesDeLaCarrera = Object.keys(giftRedemptions).length;
+    const giftWebhookEnCarrera = await request(server, { path: '/api/webhooks/wava', method: 'POST', body: giftEvento2, headers: { 'x-wava-signature': giftFirma2 } });
+    check('webhook para una orden ya "paid" por otra entrega -> sigue respondiendo 200 (idempotente)', giftWebhookEnCarrera.status === 200);
+    check('...pero NO generó un segundo código para esa orden (se cortó en el UPDATE atómico, nunca llegó a generarCodigoDeRegaloUnico)', Object.keys(giftRedemptions).length === codigosAntesDeLaCarrera);
   } finally {
     server.close();
   }

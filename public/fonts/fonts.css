@@ -1,0 +1,97 @@
+/* Fuentes autoalojadas — ronda 2 del camino hacia CSP en enforce (2026-09-06).
+ * Antes esto llegaba desde fonts.googleapis.com/fonts.gstatic.com: la
+ * política ya pide font-src 'self' desde la cuarta ronda, así que cada
+ * visita generaba una violación de CSP (todavía en report-only) y además
+ * mandaba la IP de quien mira la app a un tercero solo para traer una
+ * tipografía. Archivos extraídos de los paquetes de Fontsource
+ * (@fontsource/atkinson-hyperlegible, @fontsource-variable/source-serif-4
+ * — el mismo archivo binario que sirve Google, empaquetado para
+ * autoalojar), no descargados a mano: no hay salida de red desde este
+ * entorno hacia fonts.googleapis.com para hacerlo de otra forma.
+ *
+ * Mismos pesos/estilos que se pedían antes (ver los <link> que reemplaza
+ * este archivo en cada página):
+ *   - Atkinson Hyperlegible: wght 400 y 700, solo redonda (no se pedía
+ *     itálica).
+ *   - Source Serif 4: variable (wght 200-900, con eje óptico "opsz"
+ *     incluido en el archivo — antes wght@400/500/600 con opsz 8..60,
+ *     ahora el navegador interpola cualquier peso dentro del archivo
+ *     variable, así que cubre esos tres y cualquier otro que se use).
+ *     Redonda e itálica, como antes.
+ *
+ * Solo subconjuntos latin y latin-ext (cubren de sobra el español: á é í ó
+ * ú ñ ü ¿ ¡ caen todos dentro de latin) — se dejan afuera cirílico, griego
+ * y vietnamita, que las páginas nunca usan; el navegador de cada visitante
+ * solo baja el archivo del subconjunto que de verdad necesita, gracias a
+ * unicode-range.
+ */
+
+/* --- Atkinson Hyperlegible (texto de cuerpo) --- */
+
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./files/atkinson-hyperlegible-latin-ext-400-normal.woff2') format('woff2');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./files/atkinson-hyperlegible-latin-400-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./files/atkinson-hyperlegible-latin-ext-700-normal.woff2') format('woff2');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./files/atkinson-hyperlegible-latin-700-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
+/* --- Source Serif 4 (títulos y frases destacadas) — variable, eje óptico incluido --- */
+
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url('./files/source-serif-4-latin-ext-standard-normal.woff2') format('woff2-variations');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url('./files/source-serif-4-latin-standard-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: italic;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url('./files/source-serif-4-latin-ext-standard-italic.woff2') format('woff2-variations');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: italic;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url('./files/source-serif-4-latin-standard-italic.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}

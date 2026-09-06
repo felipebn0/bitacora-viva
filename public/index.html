@@ -8,9 +8,11 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png">
   <link rel="icon" type="image/png" sizes="192x192" href="/images/favicon-192.png">
   <link rel="apple-touch-icon" href="/images/favicon-192.png">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,500&display=swap" rel="stylesheet">
+  <!-- Fuentes autoalojadas (ronda 2 del camino a CSP en enforce, 2026-09-06):
+       antes venían de fonts.googleapis.com/fonts.gstatic.com, lo que además
+       de la violación de CSP (font-src 'self') mandaba la IP de cada visita
+       a un tercero. Ver public/fonts/fonts.css para el detalle. -->
+  <link rel="stylesheet" href="/fonts/fonts.css">
   <script src="/font-size.js"></script>
   <style>
     :root{
@@ -496,7 +498,30 @@
       .final-cta{padding:60px 0}.footer-row{align-items:flex-start;flex-direction:column}
     }
     @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation:none!important;transition:none!important}.reveal{opacity:1;transform:none}}
-  </style>
+  
+    /* Extraído de atributos style="" inline -- ronda 4 del camino a CSP en enforce (2026-09-06).
+       Nombradas por hash del valor (mismo valor => misma clase). Cada declaración lleva
+       !important a propósito -- EXCEPTO "display" -- para reproducir lo que hacía el
+       atributo style="" inline, que le ganaba a cualquier otra regla (comprobado con un caso
+       real: .login p.sub tiene más especificidad que una clase sola y sin esto perdía el
+       margin-top que el inline sí forzaba). "display" queda sin !important porque este
+       código alterna la visibilidad de varios de estos mismos elementos en runtime con
+       elemento.style.display = "block"/"none" (ver server.js/estas páginas) -- un inline
+       plano puesto por JS no le gana a una regla con !important, así que esos toggles se
+       hubieran roto. No es una clase de uso general para reutilizar en HTML nuevo. */
+    .pc-f1b4ce9c{color:#D9B479 !important;}
+    .pc-9b54a373{justify-content:center !important;}
+    .pc-1e28117f{font-size:.85rem !important;}
+    .pc-fa3e1c7d{margin-bottom:12px !important;}
+    .pc-6899e93a{font-size:1.8rem !important; margin-bottom:10px !important;}
+    .pc-f3b0f625{display:block; margin-bottom:4px !important;}
+    .pc-166017f1{color:var(--ink-soft) !important; font-size:.92rem !important; margin:0 !important;}
+    .pc-d3a18014{margin-top:36px !important;}
+    .pc-93b8ea5b{display:none;}
+    .pc-39ddb588{text-transform:uppercase !important;}
+    .pc-81e00bde{display:none; color:#B3261E !important; font-size:.85rem !important; margin:4px 0 0 !important;}
+    .pc-a2ef1fee{width:30px !important; height:30px !important;}
+</style>
 </head>
 <body>
   <a class="skip-link" href="#main-content">Saltar al contenido</a>
@@ -562,7 +587,7 @@
     <section class="problem">
       <div class="wrap problem-grid">
         <div class="reveal">
-          <div class="eyebrow" style="color:#D9B479">Lo que no se pregunta, puede perderse</div>
+          <div class="eyebrow pc-f1b4ce9c">Lo que no se pregunta, puede perderse</div>
           <h2>Hay historias que solo existen mientras alguien pueda contarlas.</h2>
         </div>
         <div class="reveal">
@@ -595,7 +620,7 @@
     <section class="product" id="producto">
       <div class="wrap">
         <div class="section-head center reveal">
-          <div class="eyebrow" style="justify-content:center">Una memoria que se puede explorar</div>
+          <div class="eyebrow pc-9b54a373">Una memoria que se puede explorar</div>
           <h2>No es un archivo. Es una historia viva.</h2>
           <p>Las conversaciones pueden convertirse en recuerdos consultables, capítulos y conexiones familiares.</p>
         </div>
@@ -607,14 +632,14 @@
               <div class="bubble a">Era una casa pequeña, pero siempre estaba llena de gente. Mi mamá cocinaba los domingos y mis hermanos llegaban desde temprano...</div>
               <div class="bubble q">¿Hay algún domingo que recuerdes especialmente?</div>
               <div class="bubble a">Sí. El día que mi hermano volvió después de varios años. Nadie sabía que venía.</div>
-              <div class="audio-card"><button class="play" id="playDemo" aria-label="Vista previa visual — este ejemplo no tiene audio real">▶</button><div><strong>Así se guarda un recuerdo con audio</strong><div class="quiet" style="font-size:.85rem">Vista previa · sin audio</div></div><div class="wave" id="waveDemo"></div></div>
+              <div class="audio-card"><button class="play" id="playDemo" aria-label="Vista previa visual — este ejemplo no tiene audio real">▶</button><div><strong>Así se guarda un recuerdo con audio</strong><div class="quiet pc-1e28117f">Vista previa · sin audio</div></div><div class="wave" id="waveDemo"></div></div>
             </div>
             <aside class="story-side">
               <h3>Libro de la historia</h3>
               <div class="chapter"><small>Capítulo 01</small><b>La casa donde crecimos</b></div>
               <div class="chapter"><small>Capítulo 02</small><b>Conocer a mamá</b></div>
               <div class="chapter"><small>Capítulo 03</small><b>El primer trabajo</b></div>
-              <div class="tree-mini"><div class="quiet" style="margin-bottom:12px">Árbol familiar</div><div class="tree-row"><span class="person">Abuelo</span><span class="arrow">→</span><span class="person">Papá</span><span class="arrow">→</span><span class="person">Hijos</span></div></div>
+              <div class="tree-mini"><div class="quiet pc-fa3e1c7d">Árbol familiar</div><div class="tree-row"><span class="person">Abuelo</span><span class="arrow">→</span><span class="person">Papá</span><span class="arrow">→</span><span class="person">Hijos</span></div></div>
             </aside>
           </div>
         </div>
@@ -639,30 +664,30 @@
     <section id="familia">
       <div class="wrap">
         <div class="section-head center reveal">
-          <div class="eyebrow" style="justify-content:center">Una historia de todos</div>
+          <div class="eyebrow pc-9b54a373">Una historia de todos</div>
           <h2>Esta historia la construimos entre todos.</h2>
-          <p>No hace falta que una sola persona cuente todo. Manda tu código de familia por WhatsApp y cualquiera puede sumar recuerdos — sin ver ni tocar tus charlas.</p>
+          <p>No hace falta que una sola persona cuente todo. Manda tu código de familia por WhatsApp: quien lo recibe puede sumar sus propios recuerdos, y también volver cuando quiera a escuchar y leer los que ya se guardaron — así esta historia se arma y se disfruta entre todos.</p>
         </div>
         <div class="family-cards reveal">
           <div class="family-card">
-            <div style="font-size:1.8rem;margin-bottom:10px">📲</div>
-            <b style="display:block;margin-bottom:4px">Un link, directo por WhatsApp</b>
-            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Cada bitácora tiene su propio código — lo mandas con un toque, listo para compartir con quien quieras.</p>
+            <div class="pc-6899e93a">📲</div>
+            <b class="pc-f3b0f625">Un link, directo por WhatsApp</b>
+            <p class="pc-166017f1">Cada bitácora tiene su propio código — lo mandas con un toque, listo para compartir con quien quieras.</p>
           </div>
           <div class="family-card">
-            <div style="font-size:1.8rem;margin-bottom:10px">🎙️</div>
-            <b style="display:block;margin-bottom:4px">Entran y hablan, sin crear cuenta</b>
-            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Tocan el link, dicen su nombre una vez, y una entrevistadora los va guiando — sin correo, sin clave, sin formularios.</p>
+            <div class="pc-6899e93a">🎙️</div>
+            <b class="pc-f3b0f625">Entran y hablan, sin crear cuenta</b>
+            <p class="pc-166017f1">Tocan el link, dicen su nombre una vez, y una entrevistadora los va guiando — sin correo, sin clave, sin formularios.</p>
           </div>
           <div class="family-card">
-            <div style="font-size:1.8rem;margin-bottom:10px">🔒</div>
-            <b style="display:block;margin-bottom:4px">Cada quien ve lo suyo</b>
-            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Un colaborador nunca ve lo que aportó otro, ni las charlas principales — solo suma.</p>
+            <div class="pc-6899e93a">🔒</div>
+            <b class="pc-f3b0f625">Nunca se cuela nadie de afuera</b>
+            <p class="pc-166017f1">Solo entra quien tenga tu código — nadie ajeno a tu familia puede crearse una cuenta y llegar a tu bitácora.</p>
           </div>
           <div class="family-card">
-            <div style="font-size:1.8rem;margin-bottom:10px">🤝</div>
-            <b style="display:block;margin-bottom:4px">Puedes tener la tuya y ayudar en otras</b>
-            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Tu propia bitácora y, con un código, colaborar en la historia de alguien más — sin cerrar sesión ni crear otra cuenta.</p>
+            <div class="pc-6899e93a">🤝</div>
+            <b class="pc-f3b0f625">Puedes tener la tuya y ayudar en otras</b>
+            <p class="pc-166017f1">Tu propia bitácora y, con un código, colaborar en la historia de alguien más — sin cerrar sesión ni crear otra cuenta.</p>
           </div>
         </div>
       </div>
@@ -679,40 +704,40 @@
     <section id="proximamente">
       <div class="wrap">
         <div class="section-head center reveal">
-          <div class="eyebrow" style="justify-content:center">Lo que viene</div>
+          <div class="eyebrow pc-9b54a373">Lo que viene</div>
           <h2>Próximamente</h2>
           <p>Seguimos construyendo la bitácora. Esto es lo que se viene.</p>
         </div>
         <div class="soon-cards reveal">
           <div class="soon-card">
             <span class="soon-badge">Próximamente</span>
-            <div style="font-size:1.8rem;margin-bottom:10px">📷</div>
-            <b style="display:block;margin-bottom:4px">Fotos y videos</b>
-            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Súbelos para que cuenten, en sus propias palabras, cómo vivieron esas fechas.</p>
+            <div class="pc-6899e93a">📷</div>
+            <b class="pc-f3b0f625">Fotos y videos</b>
+            <p class="pc-166017f1">Súbelos para que cuenten, en sus propias palabras, cómo vivieron esas fechas.</p>
           </div>
           <div class="soon-card">
             <span class="soon-badge">Próximamente</span>
-            <div style="font-size:1.8rem;margin-bottom:10px">🍲</div>
-            <b style="display:block;margin-bottom:4px">Recetas</b>
-            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Para que esa "receta de la abuela" perdure, contada con su propia voz.</p>
+            <div class="pc-6899e93a">🍲</div>
+            <b class="pc-f3b0f625">Recetas</b>
+            <p class="pc-166017f1">Para que esa "receta de la abuela" perdure, contada con su propia voz.</p>
           </div>
           <div class="soon-card">
             <span class="soon-badge">Próximamente</span>
-            <div style="font-size:1.8rem;margin-bottom:10px">🙏</div>
-            <b style="display:block;margin-bottom:4px">Oraciones</b>
-            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Las que solían recitar, para que las escuches y las recites junto a ellos.</p>
+            <div class="pc-6899e93a">🙏</div>
+            <b class="pc-f3b0f625">Oraciones</b>
+            <p class="pc-166017f1">Las que solían recitar, para que las escuches y las recites junto a ellos.</p>
           </div>
           <div class="soon-card">
             <span class="soon-badge">Próximamente</span>
-            <div style="font-size:1.8rem;margin-bottom:10px">🎵</div>
-            <b style="display:block;margin-bottom:4px">Memorias musicales</b>
-            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Un archivo con la música de su vida, para que también la puedan disfrutar, no solo conversar.</p>
+            <div class="pc-6899e93a">🎵</div>
+            <b class="pc-f3b0f625">Memorias musicales</b>
+            <p class="pc-166017f1">Un archivo con la música de su vida, para que también la puedan disfrutar, no solo conversar.</p>
           </div>
           <div class="soon-card">
             <span class="soon-badge">Próximamente</span>
-            <div style="font-size:1.8rem;margin-bottom:10px">🎙️</div>
-            <b style="display:block;margin-bottom:4px">Historias ya grabadas</b>
-            <p style="color:var(--ink-soft);font-size:.92rem;margin:0">Sube audios de historias que ya se contaron antes, para guardarlas también.</p>
+            <div class="pc-6899e93a">🎙️</div>
+            <b class="pc-f3b0f625">Historias ya grabadas</b>
+            <p class="pc-166017f1">Sube audios de historias que ya se contaron antes, para guardarlas también.</p>
           </div>
         </div>
       </div>
@@ -721,15 +746,15 @@
     <section class="privacy" id="privacidad">
       <div class="wrap">
         <div class="privacy-box reveal">
-          <div><div class="eyebrow" style="color:#D9B479">Recuerdos personales</div><h2>Tu historia tiene que sentirse tuya.</h2><p>Lo que se guarda acá son voces, recuerdos y relaciones familiares — no un dato cualquiera. Por eso la privacidad no es un detalle secundario, es la base de todo lo demás.</p></div>
+          <div><div class="eyebrow pc-f1b4ce9c">Recuerdos personales</div><h2>Tu historia tiene que sentirse tuya.</h2><p>Lo que se guarda acá son voces, recuerdos y relaciones familiares — no un dato cualquiera. Por eso la privacidad no es un detalle secundario, es la base de todo lo demás.</p></div>
           <div class="privacy-list">
-            <div class="privacy-item"><b>🔐 Nadie entra sin tu clave</b><span>Tu bitácora está protegida con usuario y contraseña — las claves nunca se guardan en texto plano, se cifran antes de guardarse.</span></div>
+            <div class="privacy-item"><b>🔐 Tu clave nunca queda expuesta</b><span>Inicias sesión con usuario y contraseña — la tuya nunca se guarda en texto plano: se guarda como un hash de un solo sentido, así que ni siquiera nosotros podemos leerla ni revertirla a la clave original.</span></div>
             <div class="privacy-item"><b>🔒 Todo viaja cifrado</b><span>Cada conexión con el sitio va por HTTPS (la misma tecnología que usa tu banco) — nadie que intercepte la conexión puede leer lo que hablas o escribes.</span></div>
-            <div class="privacy-item"><b>👨‍👩‍👧 Solo entra quien tú invitas</b><span>Nadie ve tu bitácora sin el código de invitación que tú generas — 8 caracteres al azar, con cerca de 852 mil millones de combinaciones posibles, no una palabra fácil de adivinar. Alguien que se registra sin ese código no entra a la tuya: le queda su propia bitácora vacía, separada. Y cuando alguien colabora, ve únicamente lo que él mismo aportó — no las charlas del dueño, ni los aportes de otros colaboradores. Que ninguna cuenta pueda leer los datos de otra se revisa con pruebas automáticas en cada cambio que hacemos.</span></div>
+            <div class="privacy-item"><b>👨‍👩‍👧 Solo entra quien tú invitas</b><span>Nadie ve tu bitácora sin el código de invitación que tú generas — 8 caracteres al azar, con cerca de 852 mil millones de combinaciones posibles, no una palabra fácil de adivinar. Alguien que se registra sin ese código no entra a la tuya: le queda su propia bitácora vacía, separada. Y quien se une con tu código pasa a ser parte de tu círculo — puede escuchar y leer lo que ya se guardó, igual que tú, además de sumar lo suyo. Pero nadie de fuera de ese círculo entra jamás, ni creándose una cuenta nueva por su cuenta: que una bitácora nunca sea alcanzable desde una cuenta ajena se revisa con pruebas automáticas en cada cambio que hacemos.</span></div>
             <div class="privacy-item"><b>🤖 La IA no aprende de tus historias</b><span>Claude, la inteligencia artificial que hace las preguntas de seguimiento y ayuda a armar los capítulos, no se entrena con lo que se conversa acá — es una herramienta ya entrenada que usamos, como un traductor o un corrector, no algo que "aprende" de cada charla. Es la política estándar de Anthropic (quien la crea) para cualquier cliente de su tecnología, no una configuración especial nuestra.</span></div>
-            <div class="privacy-item"><b>🔒 Tus audios y fotos también son privados</b><span>Se guardan con acceso privado — no basta con adivinar o encontrar un link para abrirlos. Solo se entregan cuando quien los pide inició sesión y tiene permiso real de ver esa bitácora.</span></div>
+            <div class="privacy-item"><b>🔒 Tus audios y fotos también son privados</b><span>No se entregan directo desde donde se guardan: cada vez que se piden, la app primero confirma que iniciaste sesión y que tenés permiso real de ver esa bitácora, y recién ahí los entrega.</span></div>
             <div class="privacy-item"><b>🚫 Nada de historial editado a escondidas</b><span>Si algo se corrige, la versión anterior queda guardada — nunca se reescribe la historia sin dejar rastro.</span></div>
-            <div class="privacy-item"><b>🗑️ Tú tienes el control</b><span>Puedes borrar todos tus recuerdos guardados cuando quieras. Nada se borra por accidente ni por un mensaje de chat: solo con una acción tuya, deliberada.</span></div>
+            <div class="privacy-item"><b>🗑️ Tú tienes el control</b><span>Puedes borrar todos tus recuerdos guardados cuando quieras, con una acción tuya deliberada — nada se borra por accidente ni por un mensaje de chat. Al confirmar, se borra de la base de datos y de donde se guardan tus audios y fotos; puede quedar, por un tiempo limitado, en una copia de resguardo interna que usamos solo para recuperarnos de una falla grave, nunca para volver a mostrar tu contenido.</span></div>
           </div>
         </div>
       </div>
@@ -739,14 +764,14 @@
       <div class="wrap">
         <div class="eyebrow">Preguntas frecuentes</div>
         <h2>Lo que la gente más nos pregunta</h2>
-        <div class="faq" style="margin-top:36px">
+        <div class="faq pc-d3a18014">
           <details class="faq-item">
             <summary>¿Quién puede escuchar o leer las historias que se guardan acá?</summary>
             <p>Solo tu círculo de confianza: tú, y la familia que invites con tu propio código. Cualquiera de ellos puede entrar cuando quiera a escuchar, leer y disfrutar lo que se fue guardando — <strong>ese es justo el sentido de la aplicación</strong>, que esas historias no se pierdan y se puedan volver a visitar. Nadie por fuera de ese círculo puede entrar, ni creando una cuenta nueva por su cuenta.</p>
           </details>
           <details class="faq-item">
             <summary>¿Mis audios y fotos están protegidos, o cualquiera con el link los puede abrir?</summary>
-            <p>Están protegidos. Se guardan con acceso privado — no alcanza con tener el link para abrirlos: hace falta haber iniciado sesión en una cuenta con permiso real de ver esa bitácora. La app confirma ese permiso cada vez, antes de entregar el archivo.</p>
+            <p>Protegidos, sí — pero no porque el archivo en sí sea inaccesible: es que la app nunca lo entrega directo. Cada vez que se pide un audio o una foto, primero confirma que iniciaste sesión y que tenés permiso real de ver esa bitácora, y recién ahí lo entrega.</p>
           </details>
           <details class="faq-item">
             <summary>¿La inteligencia artificial "aprende" de lo que cuento?</summary>
@@ -764,7 +789,7 @@
       <div class="wrap">
         <div class="registro-box reveal">
           <div class="registro-copy">
-            <div class="eyebrow" style="color:#D9B479">Empieza hoy</div>
+            <div class="eyebrow pc-f1b4ce9c">Empieza hoy</div>
             <h2>Crea tu cuenta en menos de un minuto.</h2>
             <p>Con nombre, correo y clave alcanza. En cuanto te registres entras directo a la herramienta y puedes empezar la primera charla.</p>
             <div class="registro-points">
@@ -805,12 +830,12 @@
               </div>
               <p class="field-hint">Mínimo 6 caracteres.</p>
 
-              <div class="field" id="familyCodeField" style="display:none;">
+              <div class="field pc-93b8ea5b" id="familyCodeField">
                 <label for="suCode">Código de familia</label>
-                <input id="suCode" name="inviteCode" type="text" placeholder="Ej: B46NWEC7" maxlength="8" pattern="[A-Za-z0-9]{8}" aria-describedby="suCodeError" style="text-transform:uppercase;">
-                <p class="field-error" id="suCodeError" role="alert" style="display:none;color:#B3261E;font-size:.85rem;margin:4px 0 0;"></p>
+                <input class="pc-39ddb588" id="suCode" name="inviteCode" type="text" placeholder="Ej: B46NWEC7" maxlength="8" pattern="[A-Za-z0-9]{8}" aria-describedby="suCodeError">
+                <p class="field-error pc-81e00bde" id="suCodeError" role="alert"></p>
               </div>
-              <p class="field-note" id="familyCodeNote" style="display:none;">Vas a poder aportar historias a esa bitácora, contando con tu propia voz — no vas a tener una bitácora propia.</p>
+              <p class="field-note pc-93b8ea5b" id="familyCodeNote">Vas a poder aportar historias a esa bitácora, contando con tu propia voz — no vas a tener una bitácora propia.</p>
 
               <button class="btn btn-primary submit" id="signupSubmit" type="submit">Crear cuenta y entrar</button>
               <p class="form-status" id="signupStatus" role="status" aria-live="polite"></p>
@@ -824,7 +849,7 @@
 
     <section class="final-cta" id="empezar">
       <div class="wrap inner reveal">
-        <div class="eyebrow" style="justify-content:center">Una historia empieza con una pregunta</div>
+        <div class="eyebrow pc-9b54a373">Una historia empieza con una pregunta</div>
         <h2>Algún día vas a querer escuchar esa historia una vez más.</h2>
         <p>Su voz, sus palabras, su forma de contar las cosas — eso no se puede recuperar después. Guárdala mientras todavía puede ser contada.</p>
         <a class="btn btn-primary" href="#registro">Crear mi cuenta</a>
@@ -834,7 +859,7 @@
 
   <footer>
     <div class="wrap footer-row">
-      <div class="brand"><img class="brand-mark" src="/images/logo-icon.png" alt="" aria-hidden="true" style="width:30px;height:30px"><span>Los recuerdos de mis viejos</span></div>
+      <div class="brand"><img class="brand-mark pc-a2ef1fee" src="/images/logo-icon.png" alt="" aria-hidden="true"><span>Los recuerdos de mis viejos</span></div>
       <div class="footer-tagline">Las historias pasan. Los recuerdos pueden quedarse.</div>
       <div class="footer-links"><a href="#como-funciona">Cómo funciona</a><a href="#registro">Crear cuenta</a><a href="/app.html">Iniciar sesión</a><a href="#privacidad">Privacidad</a><a href="#preguntas">Preguntas frecuentes</a></div>
     </div>

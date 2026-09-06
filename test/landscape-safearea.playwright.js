@@ -55,6 +55,8 @@ try {
   process.exit(0);
 }
 
+const { attachCspViolationCollector, checkSinViolacionesCsp } = require('./helpers/csp-violations');
+
 const app = require(serverPath);
 
 function request(server, opts) {
@@ -101,6 +103,7 @@ const LANDSCAPES = [
 async function checkLandscapePagina(browser, base, url, etiqueta, cookie) {
   for (const { w, h, label } of LANDSCAPES) {
     const context = await browser.newContext({ viewport: { width: w, height: h } });
+    await attachCspViolationCollector(context);
     if (cookie) await context.addCookies([{ name: cookie.name, value: cookie.value, url: base }]);
     const page = await context.newPage();
     await page.goto(url, { waitUntil: 'load' });
@@ -108,12 +111,14 @@ async function checkLandscapePagina(browser, base, url, etiqueta, cookie) {
     await page.waitForTimeout(150);
     const overflowX = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     check(overflowX <= 1, `${etiqueta} — ${label} (${w}x${h}): sin scroll horizontal (overflow=${overflowX}px)`);
+    await checkSinViolacionesCsp(page, `${etiqueta} — ${label} (${w}x${h})`, check);
     await context.close();
   }
 }
 
 async function checkSafeArea(browser, base, cookie) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await attachCspViolationCollector(context);
   await context.addCookies([{ name: cookie.name, value: cookie.value, url: base }]);
   const page = await context.newPage();
   const cdp = await context.newCDPSession(page);
@@ -139,6 +144,7 @@ async function checkSafeArea(browser, base, cookie) {
   // aplicando de verdad (si no se aplicara, quedaría clavado en 24px).
   check(padTop > 30, `app.html con notch simulado (top:47px): el padding superior del body lo respeta (padding-top=${padTop}px, base sin notch sería 24px)`);
   check(padBottom > 30, `app.html con barra inferior simulada (bottom:34px): el padding inferior del body lo respeta (padding-bottom=${padBottom}px, base sin barra sería 24px)`);
+  await checkSinViolacionesCsp(page, 'app.html con safe-area simulado', check);
   await context.close();
 }
 

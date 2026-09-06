@@ -7,9 +7,11 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/images/favicon-192.png">
 <link rel="apple-touch-icon" href="/images/favicon-192.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,500&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<!-- Fuentes autoalojadas (ronda 2 del camino a CSP en enforce, 2026-09-06):
+     antes venían de fonts.googleapis.com/fonts.gstatic.com, lo que además
+     de la violación de CSP (font-src 'self') mandaba la IP de cada visita
+     a un tercero. Ver public/fonts/fonts.css para el detalle. -->
+<link rel="stylesheet" href="/fonts/fonts.css">
 <script src="/font-size.js"></script>
 <style>
   :root {
@@ -271,6 +273,24 @@
      misma clase) disparaba el zoom automático de iOS Safari al tocarlo. */
   .write-row input { flex: 1; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 12px; font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink); }
   .write-row button { border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px; padding: 0 14px; font-weight: 700; cursor: pointer; }
+
+    /* Extraído de atributos style="" inline -- ronda 4 del camino a CSP en enforce (2026-09-06).
+       Nombradas por hash del valor (mismo valor => misma clase). Cada declaración lleva
+       !important a propósito -- EXCEPTO "display" -- para reproducir lo que hacía el
+       atributo style="" inline, que le ganaba a cualquier otra regla (comprobado con un caso
+       real: .login p.sub tiene más especificidad que una clase sola y sin esto perdía el
+       margin-top que el inline sí forzaba). "display" queda sin !important porque este
+       código alterna la visibilidad de varios de estos mismos elementos en runtime con
+       elemento.style.display = "block"/"none" (ver server.js/estas páginas) -- un inline
+       plano puesto por JS no le gana a una regla con !important, así que esos toggles se
+       hubieran roto. No es una clase de uso general para reutilizar en HTML nuevo. */
+    .pc-1015cafb{margin-bottom: 6px !important;}
+    .pc-53425f7d{margin-top:2px !important;}
+    .pc-07135648{color:var(--gold-deep) !important;}
+    .pc-93b8ea5b{display:none;}
+    .pc-accd6151{margin: 0 auto !important;}
+    .pc-b521a21a{margin: 10px auto 0 !important;}
+    .pc-b23b7a58{background:#a33 !important;}
 </style>
 </head>
 <body>
@@ -286,7 +306,7 @@
   </div>
   <div class="login" id="loginScreen">
     <h1>Los recuerdos de mis viejos</h1>
-    <p class="sub" style="margin-bottom: 6px;">Inicia sesión para aportar historias.</p>
+    <p class="sub pc-1015cafb">Inicia sesión para aportar historias.</p>
     <div class="login-field">
       <label for="loginUser">Correo o usuario</label>
       <input type="text" id="loginUser" placeholder="Correo o usuario" autocomplete="username">
@@ -300,23 +320,23 @@
     </div>
     <button id="loginBtn" type="button">Entrar</button>
     <p class="error" id="loginError" role="alert"></p>
-    <p class="sub" style="margin-top:2px;">¿No tienes cuenta? <a href="/?modo=colaborar#registro" style="color:var(--gold-deep);">Crea una</a>.</p>
+    <p class="sub pc-53425f7d">¿No tienes cuenta? <a class="pc-07135648" href="/?modo=colaborar#registro">Crea una</a>.</p>
   </div>
 
   <!-- Entrada de invitado: llega con ?codigo=XXXXXXXX (link de WhatsApp
        compartido desde app.html) — sin cuenta, sin clave, solo el nombre.
        Ver /api/guest-start. Distinto de #loginScreen a propósito: no tiene
        sentido pedirle usuario/clave a alguien que nunca va a crear cuenta. -->
-  <div class="login" id="guestScreen" style="display:none;">
+  <div class="login pc-93b8ea5b" id="guestScreen">
     <h1>Los recuerdos de mis viejos</h1>
-    <p class="sub" id="guestOwnerLine" style="margin-bottom: 6px;">Te invitaron a sumar una historia.</p>
+    <p class="sub pc-1015cafb" id="guestOwnerLine">Te invitaron a sumar una historia.</p>
     <div class="login-field">
       <label for="guestName">Tu nombre</label>
       <input type="text" id="guestName" placeholder="¿Cómo te llamas?" autocomplete="given-name" maxlength="60">
     </div>
     <button id="guestStartBtn" type="button">Empezar</button>
     <p class="error" id="guestError" role="alert"></p>
-    <p class="sub" style="margin-top:2px;">No hace falta crear cuenta ni clave — solo tu nombre.</p>
+    <p class="sub pc-53425f7d">No hace falta crear cuenta ni clave — solo tu nombre.</p>
   </div>
   </main>
 
@@ -337,7 +357,7 @@
          momento. Un solo link "← volver a mi bitácora", igual que en
          arbol.html/capitulos.html/colaboraciones.html/historias.html — antes
          era una fila de 3 íconos que no existía en ninguna otra página. -->
-    <nav class="topbar" id="ownTopbar" aria-label="Tu bitácora" style="display:none;">
+    <nav class="topbar pc-93b8ea5b" id="ownTopbar" aria-label="Tu bitácora">
       <a class="volver" href="/app.html">← volver a mi bitácora</a>
     </nav>
 
@@ -350,7 +370,7 @@
     <!-- <main>: el resto del contenido autenticado — antes no estaba en
          ningún landmark, igual que le pasaba a app.html. -->
     <main id="main-content" tabindex="-1">
-    <div class="collab-switch" id="collabSwitch" style="display:none;">
+    <div class="collab-switch pc-93b8ea5b" id="collabSwitch">
       <p class="sub">Tus colaboraciones:</p>
       <div class="collab-switch-list" id="collabSwitchList"></div>
     </div>
@@ -370,9 +390,9 @@
              (grabando/procesando/errores) y se reemplaza entero cada vez. -->
         <div class="state-label" id="recStatus" role="status" aria-live="polite" aria-atomic="true"></div>
         <button class="write-toggle" id="subirAudioBtn" type="button">o sube una nota de voz que ya tengas</button>
-        <input type="file" id="subirAudioInput" accept="audio/*" style="display:none;">
+        <input class="pc-93b8ea5b" type="file" id="subirAudioInput" accept="audio/*">
         <button class="write-toggle" id="writeToggleColab" type="button" aria-expanded="false" aria-controls="writeRowColab">o prefiero escribir mi historia</button>
-        <div class="write-row" id="writeRowColab" style="margin: 0 auto;">
+        <div class="write-row pc-accd6151" id="writeRowColab">
           <input type="text" id="writeInputColab" placeholder="Escribe tu historia…" aria-label="Escribir historia">
           <button id="writeSendColab" type="button">Enviar</button>
         </div>
@@ -396,9 +416,9 @@
       <button class="write-toggle" id="logoutBtn" type="button">cerrar sesión (<span id="whoami"></span>)</button>
       <div class="danger-zone">
         <button class="write-toggle end-toggle" id="deleteAccountToggle" type="button" aria-expanded="false" aria-controls="deleteAccountRow">⚠️ borrar mi cuenta permanentemente</button>
-        <div class="write-row" id="deleteAccountRow" style="margin: 10px auto 0;">
+        <div class="write-row pc-b521a21a" id="deleteAccountRow">
           <input type="password" id="deleteAccountPassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para borrar la cuenta">
-          <button id="deleteAccountConfirm" type="button" style="background:#a33;">borrar</button>
+          <button class="pc-b23b7a58" id="deleteAccountConfirm" type="button">borrar</button>
         </div>
         <p class="error" id="deleteAccountError"></p>
       </div>

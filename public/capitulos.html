@@ -7,9 +7,11 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/images/favicon-192.png">
 <link rel="apple-touch-icon" href="/images/favicon-192.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,500&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<!-- Fuentes autoalojadas (ronda 2 del camino a CSP en enforce, 2026-09-06):
+     antes venían de fonts.googleapis.com/fonts.gstatic.com, lo que además
+     de la violación de CSP (font-src 'self') mandaba la IP de cada visita
+     a un tercero. Ver public/fonts/fonts.css para el detalle. -->
+<link rel="stylesheet" href="/fonts/fonts.css">
 <script src="/font-size.js"></script>
 <style>
   :root {
@@ -117,6 +119,19 @@
   .aporte-item .quien { color: var(--gold-deep); font-weight: 700; font-size: 0.875rem; margin: 0 0 4px; }
   .aporte-item .texto { line-height: 1.5; }
   .aporte-item audio { width: 100%; margin-top: 8px; }
+
+    /* Extraído de atributos style="" inline -- ronda 4 del camino a CSP en enforce (2026-09-06).
+       Nombradas por hash del valor (mismo valor => misma clase). Cada declaración lleva
+       !important a propósito -- EXCEPTO "display" -- para reproducir lo que hacía el
+       atributo style="" inline, que le ganaba a cualquier otra regla (comprobado con un caso
+       real: .login p.sub tiene más especificidad que una clase sola y sin esto perdía el
+       margin-top que el inline sí forzaba). "display" queda sin !important porque este
+       código alterna la visibilidad de varios de estos mismos elementos en runtime con
+       elemento.style.display = "block"/"none" (ver server.js/estas páginas) -- un inline
+       plano puesto por JS no le gana a una regla con !important, así que esos toggles se
+       hubieran roto. No es una clase de uso general para reutilizar en HTML nuevo. */
+    .pc-93b8ea5b{display:none;}
+    .pc-46dcee64{margin:0 !important;}
 </style>
 </head>
 <body>
@@ -130,7 +145,7 @@
   <!-- <main>, no <div>: mismo criterio que app.html — sin esto un lector de
        pantalla no tiene forma de saltar directo al contenido. -->
   <main class="wrap">
-    <div class="aportes-section" id="aportesSection" style="display:none;">
+    <div class="aportes-section pc-93b8ea5b" id="aportesSection">
       <h2>Aportes de la familia</h2>
       <p class="sub">Historias que colaboradores agregaron con su propia voz.</p>
       <!-- El anuncio corto va aparte del contenido: si aria-live estuviera
@@ -141,7 +156,7 @@
     </div>
 
     <div class="toolbar">
-      <label class="sub" for="personaSelect" style="margin:0;">Narrado en</label>
+      <label class="sub pc-46dcee64" for="personaSelect">Narrado en</label>
       <select id="personaSelect" aria-label="Persona narrativa de los capítulos">
         <option value="tercera">tercera persona ("ella contó...")</option>
         <option value="primera">primera persona ("yo conté...")</option>

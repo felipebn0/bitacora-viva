@@ -8,6 +8,7 @@ const { neon } = require('@neondatabase/serverless');
 const { put, del, get } = require('@vercel/blob');
 const archiver = require('archiver');
 const { Readable } = require('stream');
+const { calcularHashesDeInline } = require('./csp-hashes');
 
 // Observabilidad (Sentry): hasta ahora, si algo fallaba en producción nos
 // enterábamos solo si alguien nos escribía o si alguien iba a mirar los
@@ -100,10 +101,30 @@ app.use((req, res, next) => {
 // a vercel.json también — no hay forma de compartir el string entre los
 // dos archivos.
 const CSP_MODE_ENFORCE = false;
+// Ruta relativa (no una URL absoluta): report-uri la resuelve contra el
+// origen de la propia página, así que sirve igual para una página servida
+// por Express (/api/*) o por el build estático de Vercel (public/**) — el
+// mismo motivo por el que la política entera vive copiada en los dos
+// lugares (ver el comentario de arriba). Primer paso de la ruta hacia CSP
+// en enforce (reporte 2026-09-06): juntar violaciones reales antes de
+// extraer nada a ciegas.
+const CSP_REPORT_PATH = '/api/csp-report';
+// Ronda 3 del camino a CSP en enforce (2026-09-06): las 7 páginas de
+// public/ tienen <script>/<style> inline (no unsafe-inline en la
+// política) -- en vez de extraer ~3.865 líneas de JS y ~1.728 de CSS a
+// archivos aparte (mucho más trabajo y riesgo para el mismo resultado),
+// se permite cada bloque por su hash sha256 exacto. Calculado en cada
+// arranque desde el contenido REAL de las páginas (ver csp-hashes.js) --
+// nunca queda desactualizado acá; lo que sí puede desactualizarse es la
+// copia de vercel.json (texto estático, sin forma de ejecutar código):
+// correr `node tools/actualizar-hashes-vercel.js` después de tocar el
+// <script>/<style> de cualquier página, y test/hashes-csp-vercel.smoke.js
+// falla fuerte si alguien se olvida.
+const { scriptHashes: HASHES_SCRIPT, styleHashes: HASHES_STYLE } = calcularHashesDeInline();
 const CSP_POLICY = [
   "default-src 'self'",
-  "script-src 'self'",
-  "style-src 'self'",
+  `script-src 'self' ${HASHES_SCRIPT.map((h) => `'${h}'`).join(' ')}`,
+  `style-src 'self' ${HASHES_STYLE.map((h) => `'${h}'`).join(' ')}`,
   "img-src 'self' data: https://*.blob.vercel-storage.com",
   "media-src 'self' https://*.blob.vercel-storage.com",
   "connect-src 'self'",
@@ -112,6 +133,16 @@ const CSP_POLICY = [
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'none'",
+  // report-uri: mecanismo viejo pero el más compatible (lo sigue
+  // soportando todo navegador mayor, aunque esté "deprecado" a favor de
+  // report-to) — el navegador manda un POST directo a esta URL con cada
+  // violación, sin depender de que la Reporting API esté disponible.
+  // report-to: mecanismo nuevo (agrupa violaciones y las manda en lote,
+  // con reintentos) — necesita el header Reporting-Endpoints de abajo
+  // para saber a dónde mandarlas. Se mandan los dos para cubrir el navegador
+  // que sea; /api/csp-report (ver más abajo) entiende el formato de ambos.
+  `report-uri ${CSP_REPORT_PATH}`,
+  'report-to csp-endpoint',
 ].join('; ');
 
 // Cabeceras de seguridad estándar en cada respuesta — no cambian nada
@@ -123,10 +154,42 @@ app.use((req, res, next) => {
   res.setHeader('Permissions-Policy', 'microphone=(self)'); // el mic solo lo pide este sitio, nada externo
   res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains');
   res.setHeader(CSP_MODE_ENFORCE ? 'Content-Security-Policy' : 'Content-Security-Policy-Report-Only', CSP_POLICY);
+  // Le dice al navegador a dónde mandar los reportes agrupados del grupo
+  // "csp-endpoint" que usa el "report-to" de la política de arriba (ruta
+  // relativa: se resuelve contra el propio origen, igual que report-uri).
+  res.setHeader('Reporting-Endpoints', `csp-endpoint="${CSP_REPORT_PATH}"`);
   next();
 });
 
-app.use(express.json({ limit: '1mb' }));
+// 'application/csp-report' y 'application/reports+json' además del
+// 'application/json' de siempre: son los dos Content-Type que usa el
+// navegador para mandar los reportes de violación de CSP a /api/csp-report
+// (ver esa ruta más abajo) — sin sumarlos acá, express.json() los ignora
+// (por Content-Type distinto) y req.body llega vacío ahí.
+const CSP_REPORT_JSON_TYPES = ['application/json', 'application/csp-report', 'application/reports+json'];
+
+// /api/csp-report tiene su propio límite de cuerpo, mucho más chico que el
+// 1mb global de la línea de abajo (reporte 2026-09-06, punto 5): un reporte
+// real de violación pesa unos pocos KB, nunca cerca de 1mb — ese límite
+// grande existe para rutas que sí necesitan mandar fotos/audio en base64,
+// no tiene sentido dárselo gratis a una ruta pública sin sesión que solo
+// loguea. 16kb es margen de sobra para el reporte más verboso (varios
+// campos de texto largo) sin abrir la puerta a que alguien mande basura
+// grande a una ruta que ni siquiera requiere estar logueado.
+//
+// Tiene que ir ANTES del parser global: si no, el global ya habría leído y
+// parseado el body entero (hasta 1mb) antes de que este límite más chico
+// pudiera aplicarse. Como express.json() no se puede llamar dos veces sobre
+// el mismo pedido (la segunda vez el stream ya se leyó y pisaría el body ya
+// parseado con uno vacío), el parser global se salta esta ruta explícitamente
+// más abajo en vez de correr de nuevo sobre ella.
+app.use(CSP_REPORT_PATH, express.json({ limit: '16kb', type: CSP_REPORT_JSON_TYPES }));
+
+const jsonBodyParserGlobal = express.json({ limit: '1mb', type: CSP_REPORT_JSON_TYPES });
+app.use((req, res, next) => {
+  if (req.path === CSP_REPORT_PATH) return next(); // ya se parseó arriba, con el límite chico
+  jsonBodyParserGlobal(req, res, next);
+});
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Las respuestas de /api/ pueden traer datos privados (historias, datos de
@@ -160,6 +223,13 @@ function origenPermitido(req) {
 
 app.use('/api', (req, res, next) => {
   if (!METODOS_MUTANTES.has(req.method)) return next();
+  // /api/csp-report (ver más abajo) lo llama el navegador solo, disparado
+  // por la propia política de CSP — no siempre manda un Origin/Referer
+  // usable en ese pedido en particular, y no hay sesión ni estado que
+  // proteger acá (no lee cookies, no cambia nada, solo loguea). En el
+  // peor caso alguien manda reportes falsos que ensucian el log — no algo
+  // que valga la pena bloquear con este chequeo.
+  if (req.originalUrl.startsWith('/api/csp-report')) return next();
   if (!origenPermitido(req)) {
     return res.status(403).json({ error: 'Solicitud rechazada: no se pudo verificar el origen.' });
   }
@@ -232,6 +302,109 @@ async function rateLimit(req, res, next) {
     next();
   }
 }
+
+// Recibe los reportes de violación de CSP que manda el navegador solo,
+// disparados por la propia política (Content-Security-Policy-Report-Only,
+// ver CSP_POLICY más arriba) — sin esto, una violación solo se veía en la
+// consola de quien tuviera las herramientas de desarrollador abiertas en
+// ESE momento, nadie del equipo se enteraba. Primer paso de la ruta hacia
+// CSP en enforce (reporte 2026-09-06): juntar datos reales de qué se
+// bloquearía en vez de ir a ciegas por lectura de código.
+//
+// El navegador manda el reporte con Content-Type application/csp-report
+// (report-uri, formato viejo: body {"csp-report": {...}}, snake-case) o
+// application/reports+json (report-to/Reporting API, formato nuevo: un
+// array de {type, body: {...}}, camelCase) — según qué soporte cada
+// navegador; se piden los dos en la política (ver más arriba) y acá se
+// entienden ambos formatos. Sin sesión ni estado que proteger (no lee
+// cookies, no cambia nada, solo loguea), así que queda afuera del chequeo
+// de Origin de las rutas mutantes (ver esa regla, más arriba) — el
+// navegador no siempre manda un Origin usable en este pedido en
+// particular.
+
+// Trunca strings largos antes de loguear: el body ya está acotado a 16kb
+// (ver el express.json de arriba), pero un solo campo (típicamente
+// blocked-uri, que puede traer una data: URI entera) podía igual acaparar
+// la mayor parte de esos 16kb — esto evita que un campo así infle el log
+// sin agregar información real (lo que importa es identificar el recurso,
+// no verlo entero).
+function truncarCampoReporte(valor, maxLen) {
+  if (typeof valor !== 'string') return valor;
+  return valor.length > maxLen ? `${valor.slice(0, maxLen)}…(truncado)` : valor;
+}
+
+// Deduplicación/muestreo (reporte 2026-09-06, punto 4): el rate limiter de
+// arriba (rateLimit, compartido con el resto de la API) limita cuánto puede
+// mandar UNA IP, pero no protege de la suma de MUCHAS IPs distintas
+// reportando lo mismo a la vez -- que es exactamente lo que pasa cuando un
+// deploy rompe la CSP para todo el mundo (ej: un hash desactualizado):
+// cientos de sesiones de usuarios distintos, cada una dentro de su propio
+// límite individual, mandando el mismo reporte casi al mismo tiempo. Cada
+// console.error de acá se reenvía a Sentry (ver rondas anteriores), así que
+// eso también inunda el cupo de eventos de Sentry, no solo los logs.
+//
+// Por combinación directiva+recurso-bloqueado (la firma real de "qué se
+// rompió", sin importar en qué página ni qué usuario) se loguea la primera
+// vez completo, y durante los siguientes CSP_REPORTES_VENTANA_MS se cuentan
+// las repeticiones sin loguearlas de nuevo -- al vencer la ventana, el
+// próximo reporte igual sí se loguea, esta vez incluyendo cuántos quedaron
+// afuera mientras tanto (repetidoAntes), así no se pierde del todo la
+// magnitud del problema. Es best-effort por instancia de proceso (en
+// Vercel puede haber varias instancias corriendo en paralelo, cada una con
+// su propio mapa, y el mapa se reinicia si la instancia se recicla) -- no
+// es un conteo exacto, es para bajar el volumen real de ruido.
+const CSP_REPORTES_VENTANA_MS = 5 * 60 * 1000; // 5 minutos
+const CSP_REPORTES_MAX_CLAVES = 200; // techo de memoria del mapa
+const cspReportesVistos = new Map(); // clave "directiva|bloqueado" -> { logueadoEn, suprimidos }
+
+function registrarReporteCsp(datos) {
+  const clave = `${datos.directiva}|${datos.bloqueado}`;
+  const ahora = Date.now();
+  const visto = cspReportesVistos.get(clave);
+  if (visto && ahora - visto.logueadoEn < CSP_REPORTES_VENTANA_MS) {
+    visto.suprimidos += 1;
+    return; // igual a uno logueado hace poco -- se cuenta, no se repite en el log
+  }
+  const repetidoAntes = visto ? visto.suprimidos : 0;
+  if (visto) {
+    cspReportesVistos.delete(clave); // reinsertar al final: orden aproximado por uso más reciente
+  } else if (cspReportesVistos.size >= CSP_REPORTES_MAX_CLAVES) {
+    // Mapa lleno: se descarta la entrada menos usada recientemente (la
+    // primera del Map, dado el reinsertado de arriba) -- no es un LRU
+    // exacto, alcanza para no crecer sin límite ante abuso real.
+    const masVieja = cspReportesVistos.keys().next().value;
+    if (masVieja !== undefined) cspReportesVistos.delete(masVieja);
+  }
+  cspReportesVistos.set(clave, { logueadoEn: ahora, suprimidos: 0 });
+  console.error('[csp-report]', JSON.stringify(
+    repetidoAntes > 0 ? { ...datos, repetidoAntes } : datos
+  ));
+}
+
+app.post(CSP_REPORT_PATH, rateLimit, (req, res) => {
+  try {
+    const body = req.body;
+    const reportes = Array.isArray(body)
+      ? body.filter((r) => r && r.type === 'csp-violation').map((r) => r.body || {})
+      : body && body['csp-report']
+        ? [body['csp-report']]
+        : [];
+    reportes.forEach((r) => {
+      registrarReporteCsp({
+        directiva: truncarCampoReporte(r['effective-directive'] || r.effectiveDirective || null, 200),
+        bloqueado: truncarCampoReporte(r['blocked-uri'] || r.blockedURL || null, 500),
+        pagina: truncarCampoReporte(r['document-uri'] || r.documentURL || null, 500),
+        linea: typeof (r['line-number'] ?? r.lineNumber) === 'number' ? (r['line-number'] ?? r.lineNumber) : null,
+        modo: truncarCampoReporte(r.disposition || null, 20),
+      });
+    });
+  } catch (err) {
+    console.error('No se pudo procesar un reporte de CSP:', err);
+  }
+  // 204: el navegador no hace nada con el cuerpo de la respuesta, y no
+  // hace falta darle ningún dato de vuelta.
+  res.status(204).end();
+});
 
 // Igual que rateLimit, pero por una clave elegida por quien llama (no la
 // IP) — reutiliza la misma tabla rate_limits con un prefijo en la clave
@@ -628,6 +801,17 @@ function ensureSchema() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`,
       sql`CREATE INDEX IF NOT EXISTS idx_gift_redemptions_bought_by ON gift_redemptions(bought_by_user_id)`,
+      // Respaldo a nivel de base para el UPDATE atómico de más abajo (ver
+      // /api/webhooks/wava): aunque ese código ya evita que dos entregas
+      // del mismo webhook generen dos códigos para la misma orden, este
+      // índice único es la garantía de verdad — si algún día otro camino
+      // de código insertara un segundo gift_redemptions para la misma
+      // orden, Postgres lo rechaza en vez de dejarlo pasar en silencio.
+      // Un índice único (no un ALTER TABLE ADD CONSTRAINT) porque
+      // "IF NOT EXISTS" en una constraint con nombre no es sintaxis
+      // estándar de Postgres — un índice único hace exactamente la misma
+      // garantía y sí soporta CREATE INDEX IF NOT EXISTS.
+      sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_gift_redemptions_billing_order_unico ON gift_redemptions(billing_order_id)`,
 
       // --- Activación recurrente (recordatorios por correo) -------------
       // Preferencia de cada cuenta dueña sobre si/cuándo recibir un
@@ -1604,7 +1788,40 @@ app.post('/api/login', rateLimit, async (req, res) => {
   }
 });
 
-app.post('/api/logout', (req, res) => {
+app.post('/api/logout', async (req, res) => {
+  // Antes esto solo borraba la cookie del navegador que hizo el pedido —
+  // el token en sí (autofirmado, sin tabla de sesiones) seguía siendo
+  // válido hasta sus 30 días de vida o hasta un cambio de clave, así que
+  // una copia de esa cookie sacada de antes (un dispositivo compartido, un
+  // navegador prestado) seguía sirviendo después de "cerrar sesión".
+  // token_version es el único mecanismo de revocación que existe (ya se
+  // usa al cambiar la clave, ver /api/change-password) y es por CUENTA, no
+  // por sesión individual — no hay una tabla de sesiones para revocar solo
+  // esta una, así que subirlo acá cierra todos los dispositivos de esta
+  // cuenta a la vez, no solo el que pidió el logout. Se decidió aceptar
+  // ese efecto (2026-09-06): es la misma cuenta cerrándose sesión a sí
+  // misma en todos lados, nunca afecta a otra cuenta, y evita construir
+  // una tabla de sesiones nueva solo para esto.
+  //
+  // No aplica a sesiones de invitado (session.guest, ver /api/guest-start):
+  // no tienen cuenta propia ni token_version que subir — para ellas cerrar
+  // sesión sigue siendo solo borrar la cookie, como siempre fue.
+  try {
+    const cookies = parseCookies(req.headers.cookie);
+    const session = verifySession(cookies[SESSION_COOKIE]);
+    if (session && !session.guest && session.userId) {
+      await ensureSchema();
+      await sql`UPDATE users SET token_version = token_version + 1 WHERE id = ${session.userId}`;
+    }
+  } catch (err) {
+    // Falla abierto a propósito, solo para este paso: si la base no
+    // responde, mejor dejar que el logout local funcione igual (el botón
+    // de "cerrar sesión" nunca se queda trabado por esto) a que la persona
+    // no pueda cerrar sesión por un problema transitorio de la base — en
+    // el peor caso, el token viejo sigue vivo un rato más, ni mejor ni
+    // peor que el comportamiento de antes de este cambio.
+    console.error('No se pudo revocar la sesión en el logout:', err);
+  }
   clearSessionCookie(req, res);
   res.json({ ok: true });
 });
@@ -2079,24 +2296,41 @@ async function updateFamilyTree(userId, newExchanges) {
       await sql`UPDATE users SET tree_pending_names = ${JSON.stringify(Array.from(pendientes))} WHERE id = ${userId}`;
     }
 
-    await sql`DELETE FROM family_members WHERE user_id = ${userId}`;
-    for (const p of personas) {
-      const padres = Array.isArray(p.padres) ? p.padres.filter((x) => typeof x === 'string' && x.trim()).slice(0, 2) : [];
-      await sql`INSERT INTO family_members (user_id, nombre, relacion, detalles, padres) VALUES (
+    // Antes, el borrado y cada inserción (de personas y de eventos, dos
+    // reemplazos completos seguidos) eran pedidos sueltos, sin
+    // transacción -- si el proceso se caía a mitad de cualquiera de los
+    // dos loops, la familia podía quedar con el árbol o la línea de
+    // tiempo vacíos o a medio reconstruir, sin nada guardado. Es el mismo
+    // problema que ya se había arreglado en reset-bitacora/delete-account
+    // (server.js, rondas anteriores) pero nunca se aplicó acá. Ahora los
+    // dos reemplazos (personas y eventos) van juntos en una sola
+    // transacción: o queda el árbol completo y nuevo, o queda el de antes
+    // intacto, nunca algo a medias.
+    //
+    // Los .map() que arman cada INSERT van INLINE, adentro mismo del
+    // arreglo que se le pasa a sql.transaction() (no en variables aparte
+    // construidas antes) — así cada DELETE queda evaluado antes que sus
+    // propios INSERT, en ese orden, tanto contra Postgres real como
+    // contra el mock de los tests (que ejecuta cada sql\`...\` apenas se
+    // lo llama, no de forma perezosa como el driver real).
+    await sql.transaction([
+      sql`DELETE FROM family_members WHERE user_id = ${userId}`,
+      ...personas.map((p) => {
+        const padres = Array.isArray(p.padres) ? p.padres.filter((x) => typeof x === 'string' && x.trim()).slice(0, 2) : [];
+        return sql`INSERT INTO family_members (user_id, nombre, relacion, detalles, padres) VALUES (
         ${userId}, ${String(p.nombre).slice(0, 120)}, ${String(p.relacion).slice(0, 80)}, ${p.detalles ? capitalizarInicio(String(p.detalles).slice(0, 300)) : null}, ${padres.length ? JSON.stringify(padres) : null}
       )`;
-    }
-
-    await sql`DELETE FROM timeline_events WHERE user_id = ${userId}`;
-    for (const e of eventos) {
-      if (!e || !e.descripcion) continue;
-      const anio = Number.isFinite(e.anio) ? Math.round(e.anio) : null;
-      const edad = Number.isFinite(e.edad_aprox) ? Math.round(e.edad_aprox) : null;
-      const categoria = e.categoria ? String(e.categoria).slice(0, 40) : null;
-      await sql`INSERT INTO timeline_events (user_id, descripcion, anio, edad_aprox, categoria) VALUES (
+      }),
+      sql`DELETE FROM timeline_events WHERE user_id = ${userId}`,
+      ...eventos.filter((e) => e && e.descripcion).map((e) => {
+        const anio = Number.isFinite(e.anio) ? Math.round(e.anio) : null;
+        const edad = Number.isFinite(e.edad_aprox) ? Math.round(e.edad_aprox) : null;
+        const categoria = e.categoria ? String(e.categoria).slice(0, 40) : null;
+        return sql`INSERT INTO timeline_events (user_id, descripcion, anio, edad_aprox, categoria) VALUES (
         ${userId}, ${capitalizarInicio(String(e.descripcion).slice(0, 300))}, ${anio}, ${edad}, ${categoria}
       )`;
-    }
+      }),
+    ]);
   } catch (err) {
     console.error('No se pudo actualizar el árbol genealógico:', err);
   }
@@ -3364,14 +3598,29 @@ app.post('/api/chapters/generate', requireAuth, bloquearColaborador, rateLimit, 
       return res.json({ ok: true, message: 'No se pudo generar ningún capítulo todavía.', chapters: [] });
     }
 
-    await sql`DELETE FROM chapters WHERE user_id = ${req.userId}`;
-    const guardados = [];
-    for (const c of nuevos) {
-      const row = await sql`INSERT INTO chapters (user_id, title, theme, generated_text, story_ids, persona) VALUES (
+    // Antes, el DELETE y cada INSERT (uno por capítulo) eran pedidos
+    // sueltos, uno por uno, sin transacción -- si el proceso se caía a
+    // mitad del loop (timeout de la función serverless, un error puntual
+    // en un capítulo), la cuenta podía quedar con los capítulos viejos ya
+    // borrados y solo algunos de los nuevos guardados, o ninguno. Ahora
+    // todo el reemplazo (el borrado y cada inserción) va en una sola
+    // transacción (mismo patrón que ya usan reset-bitacora/delete-account
+    // y el webhook de pagos, más arriba): o queda el juego de capítulos
+    // completo y nuevo, o queda el de antes intacto, nunca algo a medias.
+    //
+    // El .map() que arma cada INSERT va INLINE, adentro mismo del arreglo
+    // que se le pasa a sql.transaction() (no en una variable aparte
+    // construida antes) — así el DELETE queda evaluado primero y cada
+    // INSERT después, en ese orden, tanto contra Postgres real como
+    // contra el mock de los tests (que ejecuta cada sql\`...\` apenas se
+    // lo llama, no de forma perezosa como el driver real).
+    const resultadosTransaccion = await sql.transaction([
+      sql`DELETE FROM chapters WHERE user_id = ${req.userId}`,
+      ...nuevos.map((c) => sql`INSERT INTO chapters (user_id, title, theme, generated_text, story_ids, persona) VALUES (
         ${req.userId}, ${c.title}, ${c.theme}, ${c.generated_text}, ${JSON.stringify(c.ids)}, ${persona}
-      ) RETURNING id, title, theme, generated_text, story_ids, persona, created_at`;
-      guardados.push({ ...row[0], story_ids: parseJsonArray(row[0].story_ids) });
-    }
+      ) RETURNING id, title, theme, generated_text, story_ids, persona, created_at`),
+    ]);
+    const guardados = resultadosTransaccion.slice(1).map((row) => ({ ...row[0], story_ids: parseJsonArray(row[0].story_ids) }));
 
     res.json({ ok: true, chapters: guardados });
   } catch (err) {
@@ -4092,11 +4341,34 @@ app.post('/api/webhooks/wava', express.raw({ type: '*/*', limit: '256kb' }), asy
     // de eso, se genera el código de canje y se le avisa por correo a
     // quien compró.
     if (!orden.subscription_id && orden.plan_id === 'regalo') {
+      // Antes, el UPDATE que marca la orden "paid" y el INSERT del código
+      // iban juntos en una sola transacción, pero SIN ningún filtro que
+      // impidiera correrla dos veces: dos entregas del mismo webhook casi
+      // simultáneas (Wava reintenta como práctica normal, no es un caso
+      // raro) podían pasar el chequeo `orden.status === 'paid'` de más
+      // arriba las dos ANTES de que cualquiera terminara de escribir, y
+      // cada una generaba y guardaba su propio código — dos regalos de 12
+      // meses por un solo pago. Ahora el UPDATE va primero y SOLO, con el
+      // filtro adentro del WHERE (mismo patrón que ya usa
+      // /api/billing/redeem-gift): de dos entregas simultáneas, la
+      // segunda que llegue ya encuentra status='paid' y no actualiza
+      // ninguna fila — recién la que ganó esa carrera sigue de largo y
+      // genera el código (generarCodigoDeRegaloUnico va DESPUÉS del claim
+      // a propósito, para no gastarlo ni consultar la base de más en la
+      // entrega que pierde la carrera). (Igual que en redeem-gift, si el
+      // proceso se cayera justo entre este UPDATE y el INSERT de abajo,
+      // el peor caso es una orden marcada "paid" sin código emitido —
+      // raro y arreglable a mano, mucho mejor que emitir dos códigos por
+      // un pago.)
+      const claim = await sql`
+        UPDATE billing_orders
+        SET status = 'paid', paid_at = now(), raw_webhook = ${JSON.stringify(evento)}::jsonb
+        WHERE id = ${orden.id} AND status <> 'paid'
+        RETURNING id
+      `;
+      if (!claim.length) return res.status(200).json({ ok: true }); // otra entrega ya ganó la carrera — idempotente
       const code = await generarCodigoDeRegaloUnico();
-      await sql.transaction([
-        sql`UPDATE billing_orders SET status = 'paid', paid_at = now(), raw_webhook = ${JSON.stringify(evento)}::jsonb WHERE id = ${orden.id}`,
-        sql`INSERT INTO gift_redemptions (code, billing_order_id, bought_by_user_id, plan_id, meses) VALUES (${code}, ${orden.id}, ${orden.user_id}, 'regalo', 12)`,
-      ]);
+      await sql`INSERT INTO gift_redemptions (code, billing_order_id, bought_by_user_id, plan_id, meses) VALUES (${code}, ${orden.id}, ${orden.user_id}, 'regalo', 12)`;
       await avisarCodigoDeRegaloPorCorreo(orden.user_id, code);
       return res.status(200).json({ ok: true });
     }
@@ -4105,10 +4377,17 @@ app.post('/api/webhooks/wava', express.raw({ type: '*/*', limit: '256kb' }), asy
     const periodo = subRows[0] ? subRows[0].periodo : 'annual';
     const intervalo = periodo === 'monthly' ? '1 month' : '1 year';
 
-    await sql.transaction([
-      sql`UPDATE billing_orders SET status = 'paid', paid_at = now(), raw_webhook = ${JSON.stringify(evento)}::jsonb WHERE id = ${orden.id}`,
-      sql`UPDATE subscriptions SET status = 'active', current_period_end = now() + ${intervalo}::interval, grace_until = NULL, updated_at = now() WHERE id = ${orden.subscription_id}`,
-    ]);
+    // Mismo arreglo que arriba: UPDATE atómico con el filtro en el WHERE,
+    // primero y solo, antes de tocar subscriptions — dos entregas del
+    // mismo webhook ya no pueden extender el período dos veces.
+    const claim = await sql`
+      UPDATE billing_orders
+      SET status = 'paid', paid_at = now(), raw_webhook = ${JSON.stringify(evento)}::jsonb
+      WHERE id = ${orden.id} AND status <> 'paid'
+      RETURNING id
+    `;
+    if (!claim.length) return res.status(200).json({ ok: true }); // otra entrega ya ganó la carrera — idempotente
+    await sql`UPDATE subscriptions SET status = 'active', current_period_end = now() + ${intervalo}::interval, grace_until = NULL, updated_at = now() WHERE id = ${orden.subscription_id}`;
     res.status(200).json({ ok: true });
   } catch (err) {
     console.error('Error procesando webhook de Wava:', err);

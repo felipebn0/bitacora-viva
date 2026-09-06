@@ -63,6 +63,8 @@ try {
   process.exit(0);
 }
 
+const { attachCspViolationCollector, checkSinViolacionesCsp } = require('./helpers/csp-violations');
+
 const app = require(serverPath);
 
 function request(server, opts) {
@@ -112,6 +114,7 @@ async function main() {
     // nada para scrollear — acá se fuerza que SÍ haya overflow, sin
     // depender de cuánto contenido real termine habiendo.
     const context = await browser.newContext({ viewport: { width: 390, height: 350 } });
+    await attachCspViolationCollector(context);
     await context.addCookies([{ name: cookie.name, value: cookie.value, url: base }]);
     const page = await context.newPage();
     await page.goto(`${base}/colaborar.html?owner=2`, { waitUntil: 'load' });
@@ -140,6 +143,8 @@ async function main() {
     await page.waitForTimeout(300);
     const hiddenAlVolver = await page.$eval('#stickyContext', (el) => el.hidden);
     check(hiddenAlVolver, 'al volver a subir (header de nuevo a la vista): la barra de contexto se oculta otra vez');
+
+    await checkSinViolacionesCsp(page, 'colaborar.html (colaborador, con sesión)', check);
 
     await context.close();
   } finally {
