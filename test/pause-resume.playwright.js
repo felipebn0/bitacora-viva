@@ -9,6 +9,12 @@
 // al volver se repetía la misma pregunta como si la persona nunca hubiera
 // dicho nada.
 //
+// Escenario 2 cubre el otro caso (no se pudo transcribir nada): acá
+// pausedFromState queda en 'listening', y resumeConversation() vuelve
+// directo a escuchar sin repetir la pregunta en voz alta (arreglo del
+// 2026-09-06 — antes SÍ la repetía, sintiéndose como si la charla
+// repitiera todo lo ya dicho).
+//
 // No usa server.js ni mockea la base de datos/Blob/Anthropic: este test es
 // sobre la lógica del front-end en app.html, así que todas las llamadas a
 // /api/* se interceptan directamente con page.route(), y los archivos de
@@ -151,8 +157,10 @@ async function setupPage(browser, { transcript }) {
     contentType: 'application/json',
     body: JSON.stringify({ names: [] }),
   }));
+  const nextCalls = []; // el "history" que mandó cada pedido a /api/next, en orden
   await page.route('**/api/next', async (route) => {
     callCounts.next += 1;
+    nextCalls.push(route.request().postDataJSON());
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ message: `Pregunta ${callCounts.next}` }) });
   });
   await page.route('**/api/speak', (route) => route.fulfill({ contentType: 'audio/wav', body: SILENT_WAV }));
@@ -162,7 +170,7 @@ async function setupPage(browser, { transcript }) {
   }));
   await page.route('**/api/save', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ sessionDbId: 1 }) }));
 
-  return { context, page, callCounts };
+  return { context, page, callCounts, nextCalls };
 }
 
 async function esperarEstado(page, estado) {
@@ -171,7 +179,7 @@ async function esperarEstado(page, estado) {
 
 async function scenarioGuardaRespuestaParcial(browser, base) {
   console.log('\n--- Escenario 1: pausar a mitad de grabar SÍ guarda lo dicho ---');
-  const { context, page, callCounts } = await setupPage(browser, { transcript: 'Lo que alcancé a contar antes de pausar' });
+  const { context, page, callCounts, nextCalls } = await setupPage(browser, { transcript: 'Lo que alcancé a contar antes de pausar' });
 
   await page.goto(base + '/app.html');
   await page.waitForSelector('#orb', { state: 'visible' });
@@ -183,24 +191,29 @@ async function scenarioGuardaRespuestaParcial(browser, base) {
   await page.click('#orb'); // listening -> pauseConversation()
   await esperarEstado(page, 'paused');
 
-  const respuestas = await page.$$eval('.bubble.a', (els) => els.map((e) => e.textContent));
-  assert(respuestas.includes('Lo que alcancé a contar antes de pausar'), 'la respuesta parcial quedó guardada como burbuja de respuesta al pausar (antes se perdía)');
   assert(callCounts.next === 1, 'pausar todavía no pidió una pregunta nueva (seguir:false — se evita gastar un llamado a la IA que podría descartarse)');
 
   await page.click('#orb'); // paused -> resumeConversation()
   await esperarEstado(page, 'listening');
 
-  const preguntas = await page.$$eval('.bubble.q', (els) => els.map((e) => e.textContent));
+  // app.html ya no muestra un transcript en pantalla (a pedido, ver
+  // commit "Ajustes de charla por voz") — se verifica lo mismo de antes
+  // (que la respuesta parcial no se perdió, y que la pregunta original no
+  // se coló dos veces) mirando el "history" que de verdad se mandó al
+  // pedir la pregunta nueva, en vez de leer burbujas que ya no existen.
   assert(callCounts.next === 2, 'al volver, resumeConversation() pidió una pregunta NUEVA (pausedFromState quedó en "thinking")');
-  assert(preguntas.includes('Pregunta 2'), 'la pregunta nueva ("Pregunta 2") se agregó al chat');
-  assert(preguntas.filter((p) => p === 'Pregunta 1').length === 1, 'la pregunta original ("Pregunta 1") no se repitió como si fuera nueva');
+  const historyAlVolver = (nextCalls[1] && nextCalls[1].history) || [];
+  const respuestasDeUsuario = historyAlVolver.filter((m) => m.role === 'user').map((m) => m.content);
+  const preguntasDeIA = historyAlVolver.filter((m) => m.role === 'assistant').map((m) => m.content);
+  assert(respuestasDeUsuario.includes('Lo que alcancé a contar antes de pausar'), 'la respuesta parcial quedó guardada (viaja en el "history" al pedir la pregunta nueva) — antes se perdía');
+  assert(preguntasDeIA.filter((p) => p === 'Pregunta 1').length === 1, 'la pregunta original ("Pregunta 1") aparece una sola vez en el historial, no se repitió como si fuera nueva');
 
   await context.close();
 }
 
 async function scenarioSinNadaQueGuardar(browser, base) {
-  console.log('\n--- Escenario 2: pausar sin haber dicho nada entendible cae al comportamiento anterior ---');
-  const { context, page, callCounts } = await setupPage(browser, { transcript: '' }); // el servidor "no entendió nada"
+  console.log('\n--- Escenario 2: pausar sin haber dicho nada entendible vuelve directo a escuchar ---');
+  const { context, page, callCounts, nextCalls } = await setupPage(browser, { transcript: '' }); // el servidor "no entendió nada"
 
   await page.goto(base + '/app.html');
   await page.waitForSelector('#orb', { state: 'visible' });
@@ -210,12 +223,18 @@ async function scenarioSinNadaQueGuardar(browser, base) {
   await page.click('#orb'); // pausa — hay audio "de sobra" (blob fake de 2000 bytes), pero la transcripción vuelve vacía
   await esperarEstado(page, 'paused');
 
-  const respuestas = await page.$$eval('.bubble.a', (els) => els.map((e) => e.textContent));
-  assert(respuestas.length === 0, 'sin nada entendible, no se agrega ninguna burbuja de respuesta (nada real que guardar)');
+  assert(callCounts.next === 1, 'sin nada entendible, pausar no pidió ninguna pregunta nueva');
 
-  await page.click('#orb'); // resume: debería repetir la Pregunta 1 (no pedir una nueva)
-  await page.waitForTimeout(400);
-  assert(callCounts.next === 1, 'al volver sin haber dicho nada entendible, NO se pide una pregunta nueva — se repite la que ya estaba, como antes del arreglo');
+  // pausedFromState queda en 'listening' (no se pudo transcribir nada) —
+  // la pregunta original YA se había dicho entera antes de arrancar a
+  // escuchar, así que resumeConversation() ya no la repite en voz alta
+  // (arreglo de hoy: antes volvía a reproducirla entera, sintiéndose como
+  // si la charla repitiera todo lo ya dicho). Va directo a escuchar de
+  // nuevo, sin pedirle nada nuevo a la IA.
+  await page.click('#orb'); // resume -> listenForAnswer() directo
+  await esperarEstado(page, 'listening');
+  assert(callCounts.next === 1, 'al volver sin haber dicho nada entendible, tampoco se pide una pregunta nueva (vuelve directo a escuchar)');
+  assert(nextCalls.length === 1, 'no se mandó ningún pedido extra a /api/next solo por pausar y seguir sin decir nada nuevo');
 
   await context.close();
 }
