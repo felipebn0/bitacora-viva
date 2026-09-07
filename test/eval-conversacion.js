@@ -24,7 +24,7 @@
 // cualquier cosa que afecte lo que la entrevistadora recibe como contexto.
 // No es pass/fail automático — los chequeos mecánicos (una sola pregunta,
 // respuesta no vacía, sin marcadores colados) sí se marcan OK/REVISAR, pero
-// el tacto y la calidad de la respuesta hay que leerlos vos.
+// el tacto y la calidad de la respuesta hay que leerlos a mano.
 //
 //   ANTHROPIC_API_KEY=sk-ant-... node test/eval-conversacion.js
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'ci-eval-secret';

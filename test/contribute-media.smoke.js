@@ -1,13 +1,20 @@
 // Smoke test para POST /api/contribute-media — subir una foto o video que
-// acompañe una historia (BACKLOG #1: el backend ya existía pero no había
+// acompaña una historia (BACKLOG #1: el backend ya existía pero no había
 // ningún botón para usarlo desde la interfaz; se agregó en colaborar.html).
+//
+// Esta ruta solo sube el archivo a Blob y devuelve su URL/tipo — YA NO
+// inserta ninguna fila en la tabla "media" genérica (ver el comentario en
+// server.js junto a este endpoint): la foto/video queda atada a la
+// historia puntual que se está contando en ese momento, guardada por el
+// CLIENTE (colaborar.html, mediaUrlsLocal) y persistida recién cuando esa
+// historia se guarda (family_notes.media_urls, ver test/contribute-draft.smoke.js).
+// Insertarla acá TAMBIÉN como pendiente suelto competía con la historia por
+// ser lo primero que se le mostraba al dueño en su próxima charla.
 //
 // Cubre: el dueño puede subir una foto para su propia bitácora, una
 // colaboradora fija puede subir para la bitácora de su dueña (no la propia),
-// una cuenta sin relación no puede, un archivo que no es una imagen/video de
-// verdad se rechaza (chequeo por bytes reales, no por Content-Type), y que
-// la fila en "media" queda con contributor/caption limpios y discussed=false
-// (para que /api/next la traiga a colación en la próxima charla del dueño).
+// una cuenta sin relación no puede, y un archivo que no es una imagen/video
+// de verdad se rechaza (chequeo por bytes reales, no por Content-Type).
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'ci-smoke-secret';
 process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgres://fake:fake@localhost/fake';
 process.env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || 'fake';
@@ -26,7 +33,7 @@ const users = {
   3: { id: 3, username: 'colabfija', password_hash: PASSWORD_HASH, token_version: 0, owner_user_id: 1 },
 };
 
-let mediaInserts = [];
+let mediaInserts = []; // se espera que quede siempre vacío — ver el comentario de arriba
 
 function fakeSql(strings, ...values) {
   const text = strings.join('?');
@@ -42,8 +49,7 @@ function fakeSql(strings, ...values) {
   }
   if (text.includes('SELECT 1 FROM collaborations')) return Promise.resolve([]);
   if (text.includes('INSERT INTO media')) {
-    const [userId, type, url, caption, contributor] = values;
-    mediaInserts.push({ userId, type, url, caption, contributor });
+    mediaInserts.push(values);
     return Promise.resolve([]);
   }
   return Promise.resolve([]);
@@ -124,23 +130,20 @@ function check(nombre, cond) {
     const cookieC = await login(server, 'colabfija');
 
     // --- Sin cuerpo ---
-    mediaInserts = [];
     const sinCuerpo = await request(server, { path: '/api/contribute-media', method: 'POST', headers: { 'Content-Type': 'image/png' } }, cookieA);
     check('sin archivo -> 400', sinCuerpo.status === 400);
 
     // --- Archivo que no es una imagen/video de verdad ---
     const noEsImagen = await request(server, { path: '/api/contribute-media', method: 'POST', headers: { 'Content-Type': 'image/png', 'Content-Length': TEXTO_NO_ES_IMAGEN.length }, body: TEXTO_NO_ES_IMAGEN }, cookieA);
     check('texto plano disfrazado de imagen -> 400 (chequeo por bytes reales)', noEsImagen.status === 400);
-    check('texto plano disfrazado: no se insertó nada en media', mediaInserts.length === 0);
 
     // --- Cuenta sin relación con A: no puede subir para la bitácora de A ---
     const comoAjena = await request(server, { path: '/api/contribute-media?owner=1', method: 'POST', headers: { 'Content-Type': 'image/png', 'Content-Length': PNG_1X1.length }, body: PNG_1X1 }, cookieB);
     check('cuenta sin relación con A -> 403', comoAjena.status === 403);
-    check('cuenta sin relación: no se insertó nada en media', mediaInserts.length === 0);
 
     // --- La dueña sube una foto real para su propia bitácora ---
     const comoDuena = await request(server, {
-      path: '/api/contribute-media?' + new URLSearchParams({ contributor: 'felipe', caption: 'Cumpleaños de 15 en el patio' }).toString(),
+      path: '/api/contribute-media',
       method: 'POST',
       headers: { 'Content-Type': 'image/png', 'Content-Length': PNG_1X1.length },
       body: PNG_1X1,
@@ -149,14 +152,9 @@ function check(nombre, cond) {
     const dataDuena = JSON.parse(comoDuena.body);
     check('la respuesta trae ok:true y una url', dataDuena.ok === true && typeof dataDuena.url === 'string' && dataDuena.url.length > 0);
     check('la respuesta identifica el tipo como foto', dataDuena.type === 'foto');
-    check('se insertó una sola fila en media', mediaInserts.length === 1);
-    check('la fila quedó con user_id de la dueña', mediaInserts[0].userId === 1);
-    check('la fila quedó con el contributor limpio', mediaInserts[0].contributor === 'Felipe');
-    check('la fila quedó con el caption', mediaInserts[0].caption === 'Cumpleaños de 15 en el patio');
-    check('la fila quedó con type=foto', mediaInserts[0].type === 'foto');
+    check('la url apunta a la carpeta de la dueña (user_id=1)', dataDuena.url.includes('/media/1/'));
 
     // --- La colaboradora fija de A sube para la bitácora de A (no la propia) ---
-    mediaInserts = [];
     const comoColabFija = await request(server, {
       path: '/api/contribute-media',
       method: 'POST',
@@ -164,8 +162,11 @@ function check(nombre, cond) {
       body: PNG_1X1,
     }, cookieC);
     check('la colaboradora fija de A sube una foto -> 200', comoColabFija.status === 200);
-    check('la fila quedó a nombre de la bitácora de A (user_id=1), no de la colaboradora (id=3)', mediaInserts.length === 1 && mediaInserts[0].userId === 1);
-    check('sin contributor/caption -> quedan null, no vacío ni undefined', mediaInserts[0].contributor === null && mediaInserts[0].caption === null);
+    const dataColabFija = JSON.parse(comoColabFija.body);
+    check('la url queda en la carpeta de la bitácora de A (user_id=1), no de la colaboradora (id=3)', dataColabFija.url.includes('/media/1/'));
+
+    // --- Nada de esto debería haber tocado la tabla "media" genérica ---
+    check('ningún caso insertó una fila en la tabla "media" (ver el comentario de arriba)', mediaInserts.length === 0);
   } finally {
     server.close();
   }

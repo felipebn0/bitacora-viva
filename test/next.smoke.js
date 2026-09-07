@@ -72,7 +72,7 @@ function fakeSql(strings, ...values) {
   // loadPendingFamilyNote (con "id," al principio) — tiene que chequearse
   // ANTES que loadFamilyContext (sin "id,"), aunque en los hechos ninguna
   // es substring literal de la otra por la coma después de SELECT.
-  if (text.includes('SELECT id, contributor, parentesco, texto FROM family_notes')) {
+  if (text.includes('SELECT id, contributor, parentesco, texto, media_urls FROM family_notes')) {
     return Promise.resolve(user.pendingFamilyNote ? [user.pendingFamilyNote] : []);
   }
   if (text.includes('UPDATE family_notes SET discussed = true')) {
@@ -263,7 +263,7 @@ async function main() {
   pushAnthropicResponse('Qué lindo recuerdo. ¿Y quién más vivía con ustedes en esa casa?');
   const historial = [
     { role: 'user', content: 'Hola, soy Diego.' },
-    { role: 'assistant', content: '¡Hola Diego! Contame, ¿de dónde sos?' },
+    { role: 'assistant', content: '¡Hola Diego! Cuéntame, ¿de dónde eres?' },
     { role: 'user', content: 'Nací en Bogotá, en una casa grande con mis abuelos.' },
   ];
   const normal = await nextForUser(server, cookie, { history: historial, mode: 'historia' });
@@ -284,7 +284,7 @@ async function main() {
 
   // --- 4) Oferta de pausa -----------------------------------------------------
   resetAnthropicMock();
-  pushAnthropicResponse('Qué historia tan linda. ¿Querés seguir charlando un rato más o preferís hacer una pausa por ahora?');
+  pushAnthropicResponse('Qué historia tan linda. ¿Quieres seguir charlando un rato más o prefieres hacer una pausa por ahora?');
   const ofertaPausa = await nextForUser(server, cookie, { history: historial, mode: 'historia', ofrecerPausa: true });
   check('oferta de pausa -> 200', ofertaPausa.status === 200);
   check('oferta de pausa: el prompt extra se pegó al último mensaje del usuario', capturedCalls[0].messages[capturedCalls[0].messages.length - 1].content.includes('hacer una pausa'));
@@ -293,7 +293,7 @@ async function main() {
   resetAnthropicMock();
   pushAnthropicResponse('Dale, nos vemos pronto entonces. Ya quedó todo guardado. [PAUSA]');
   const interpretaPausa = await nextForUser(server, cookie, {
-    history: [...historial, { role: 'assistant', content: '¿Querés seguir o pausamos?' }, { role: 'user', content: 'Prefiero pausar por ahora.' }],
+    history: [...historial, { role: 'assistant', content: '¿Quieres seguir o pausamos?' }, { role: 'user', content: 'Prefiero pausar por ahora.' }],
     mode: 'historia',
     interpretarRespuestaPausa: true,
   });
@@ -414,7 +414,7 @@ async function main() {
   resetAnthropicMock();
   user.resumenTexto = 'Diego ya contó algunas historias de su infancia.';
   user.pendingFamilyNote = { id: 42, contributor: 'María', parentesco: 'hija', texto: 'Contó que su papá le enseñó a andar en bici en el parque.' };
-  pushAnthropicResponse('¡Hola Diego! Quiero contarte que estuve hablando con María y me contó una historia sobre vos, de cuando tu papá te enseñó a andar en bici. ¿Qué te acordás de eso?');
+  pushAnthropicResponse('¡Hola Diego! Quiero contarte que estuve hablando con María y me contó una historia sobre ti, de cuando tu papá te enseñó a andar en bici. ¿Qué te acuerdas de eso?');
   const conNota = await nextForUser(server, cookie, { history: [], mode: 'historia' });
   check('nota pendiente -> 200', conNota.status === 200);
   check('nota pendiente: el prompt de arranque incluye el texto de la nota', capturedCalls[0].messages[0].content.includes('andar en bici'));
@@ -431,6 +431,26 @@ async function main() {
   const conNotaFallaProveedor = await nextForUser(server, cookie, { history: [], mode: 'historia' });
   check('nota pendiente + falla del proveedor -> 500 (no 200)', conNotaFallaProveedor.status === 500);
   check('nota pendiente + falla del proveedor: la nota NO se marca como discutida', !familyNoteMarkedDiscussed.includes(43));
+
+  // --- 11b2) Si la historia pendiente tiene una foto adjunta (se subió
+  // mientras se contaba, ver mediaUrls en /api/contribute-chat), se
+  // menciona y se muestra JUNTO con la historia en la misma introducción
+  // — no como un pendiente aparte que compita por ser lo primero (bug
+  // real reportado: la foto de una historia quedaba sin mencionarse
+  // porque la nota de texto siempre tenía prioridad).
+  resetAnthropicMock();
+  user.pendingFamilyNote = {
+    id: 44, contributor: 'Felipe', parentesco: 'hijo', texto: 'Contó del río de la finca de la abuela.',
+    media_urls: JSON.stringify([{ url: 'https://fake.blob.vercel-storage.com/media/1/foto-1.jpg', type: 'foto', caption: 'El río de la finca' }]),
+  };
+  pushAnthropicResponse('¡Hola Diego! Felipe te contó una historia sobre el río de la finca, y también subió una foto. ¿Qué recuerdas de eso?');
+  const conNotaYFoto = await nextForUser(server, cookie, { history: [], mode: 'historia' });
+  check('nota con foto adjunta -> 200', conNotaYFoto.status === 200);
+  check('nota con foto: el prompt de arranque menciona al contribuidor real (Felipe)', capturedCalls[0].messages[0].content.includes('Felipe'));
+  check('nota con foto: el prompt de arranque NO usa el ejemplo "Marcela"', !capturedCalls[0].messages[0].content.includes('Marcela'));
+  check('nota con foto: se marcó la nota como discutida', familyNoteMarkedDiscussed.includes(44));
+  const notaYFotoBody = JSON.parse(conNotaYFoto.body);
+  check('nota con foto: la respuesta trae la foto para mostrarla en pantalla', notaYFotoBody.media && notaYFotoBody.media.url === 'https://fake.blob.vercel-storage.com/media/1/foto-1.jpg' && notaYFotoBody.media.type === 'foto');
 
   user.pendingFamilyNote = null;
 
