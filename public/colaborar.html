@@ -1107,6 +1107,10 @@
   // corto NO se guarda — solo se transcribe para seguir la charla.
   async function procesarAudio(blob, contentType) {
     const esSoloAclaracion = esperandoAclaracion;
+    // DEBUG TEMPORAL (2026-09-07): diagnóstico de "no se pudo entender el
+    // audio" reportado de nuevo — sacar apenas se confirme la causa real.
+    const debugAudio = { blobSize: blob.size, blobType: blob.type };
+    window.__ultimoDebugAudio = debugAudio;
 
     if (!esSoloAclaracion) {
       try {
@@ -1115,11 +1119,14 @@
           headers: { 'Content-Type': contentType },
           body: blob,
         });
+        debugAudio.uploadStatus = upResp.status;
         if (upResp.ok) {
           const upData = await upResp.json();
           if (upData.url) audioUrlsLocal.push(upData.url);
+        } else {
+          debugAudio.uploadError = await upResp.text();
         }
-      } catch (e) {}
+      } catch (e) { debugAudio.uploadException = e.message; }
     }
 
     let texto = '';
@@ -1129,11 +1136,15 @@
         headers: { 'Content-Type': contentType },
         body: blob,
       });
+      debugAudio.transcribeStatus = trResp.status;
       if (trResp.ok) {
         const trData = await trResp.json();
         texto = (trData.text || '').trim();
+        debugAudio.transcribeTextoVacio = !texto;
+      } else {
+        debugAudio.transcribeError = await trResp.text();
       }
-    } catch (e) {}
+    } catch (e) { debugAudio.transcribeException = e.message; }
 
     if (!texto) return false;
     historyLocal.push({ role: 'user', content: texto });
@@ -1170,7 +1181,8 @@
     }
 
     const ok = await procesarAudio(blob, blob.type || 'audio/webm');
-    recStatus.textContent = ok ? '' : 'No se pudo entender el audio. Intenta de nuevo.';
+    // DEBUG TEMPORAL (2026-09-07): ver el comentario en procesarAudio().
+    recStatus.textContent = ok ? '' : 'No se pudo entender el audio. Intenta de nuevo. [debug: ' + JSON.stringify(window.__ultimoDebugAudio) + ']';
     reset();
   }
 
