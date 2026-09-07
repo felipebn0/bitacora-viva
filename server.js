@@ -530,6 +530,12 @@ function ensureSchema() {
       // nombres; se vacía cuando la persona entra a ver el árbol.
       sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS tree_pending_names TEXT`,
 
+      // Mismo mecanismo que tree_pending_names de arriba, pero para el
+      // ícono de "Aportes" (💬): nombres de quienes terminaron de aportar
+      // una historia y el dueño todavía no vio en /colaboraciones.html. Ver
+      // marcarAportePendiente() y /api/aportes/pending más abajo.
+      sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS aportes_pending_names TEXT`,
+
       // token_version: para poder revocar sesiones sin esperar a que
       // expiren solas. Cada cookie de sesión firmada lleva adentro el
       // token_version que tenía la cuenta en el momento de loguearse; si no
@@ -3044,6 +3050,7 @@ app.post('/api/contribute-story', requireAuth, rateLimit, async (req, res) => {
 
     await ensureSchema();
     await sql`INSERT INTO family_notes (user_id, contributor, parentesco, texto, audio_url, contributed_by) VALUES (${ownerId}, ${cleanContributor}, ${cleanParentesco}, ${text}, ${cleanAudioUrl}, ${req.userId})`;
+    await marcarAportePendiente(ownerId, cleanContributor);
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -3184,6 +3191,25 @@ async function guardarBorradorAporte(ownerId, draftId, historyHastaAhora, audioU
   }
 }
 
+// Campanita de aviso en el ícono de "Aportes" (💬): mismo mecanismo que el
+// bloque de tree_pending_names más arriba (ensureSchema), pero para
+// historias de family_notes en vez del árbol. Se llama solo cuando un
+// aporte queda TERMINADO (nunca para un borrador en_progreso=true) — desde
+// finalizarAporte (charla) y desde /api/contribute-story (formulario
+// corto, sin charla). Falla en silencio a propósito: que la campanita no
+// se actualice nunca debería tirar abajo el guardado real del aporte.
+async function marcarAportePendiente(ownerId, contributorName) {
+  try {
+    const nombre = (contributorName || '').trim() || 'Un familiar';
+    const rows = await sql`SELECT aportes_pending_names FROM users WHERE id = ${ownerId}`;
+    const pendientes = new Set(parseJsonArray(rows[0] && rows[0].aportes_pending_names));
+    pendientes.add(nombre);
+    await sql`UPDATE users SET aportes_pending_names = ${JSON.stringify(Array.from(pendientes))} WHERE id = ${ownerId}`;
+  } catch (err) {
+    console.error('No se pudo marcar el aporte pendiente:', err);
+  }
+}
+
 async function finalizarAporte(ownerId, draftId, fullHistory, audioUrls, contributedByUserId, colaboradorNombre, protagonista, mediaUrls) {
   try {
     const transcript = fullHistory
@@ -3218,10 +3244,14 @@ async function finalizarAporte(ownerId, draftId, fullHistory, audioUrls, contrib
     await ensureSchema();
     if (draftId) {
       const actualizada = await sql`UPDATE family_notes SET contributor = ${cleanContributor}, parentesco = ${cleanParentesco}, texto = ${texto}, audio_urls = ${audioUrlsJson}, protagonista = ${cleanProtagonista}, en_progreso = false, media_urls = ${mediaUrlsJson} WHERE id = ${draftId} AND user_id = ${ownerId} RETURNING id`;
-      if (actualizada.length) return true;
+      if (actualizada.length) {
+        await marcarAportePendiente(ownerId, cleanContributor);
+        return true;
+      }
       // El borrador no existía (nunca se llegó a guardar, o algo raro pasó) — no perder el aporte.
     }
     await sql`INSERT INTO family_notes (user_id, contributor, parentesco, texto, audio_urls, contributed_by, protagonista, media_urls) VALUES (${ownerId}, ${cleanContributor}, ${cleanParentesco}, ${texto}, ${audioUrlsJson}, ${contributedByUserId}, ${cleanProtagonista}, ${mediaUrlsJson})`;
+    await marcarAportePendiente(ownerId, cleanContributor);
     return true;
   } catch (err) {
     console.error('No se pudo guardar el aporte final:', err);
@@ -3850,6 +3880,32 @@ app.post('/api/tree/mark-seen', requireAuth, bloquearColaborador, rateLimit, asy
   try {
     await ensureSchema();
     await sql`UPDATE users SET tree_pending_names = NULL WHERE id = ${req.userId}`;
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo actualizar.' });
+  }
+});
+
+// Campanita de aviso en el ícono de "Aportes" (💬): quién terminó de
+// aportar una historia desde la última vez que se abrió
+// /colaboraciones.html. Mismo mecanismo que /api/tree/pending de arriba,
+// aplicado a family_notes en vez del árbol (ver marcarAportePendiente()).
+app.get('/api/aportes/pending', requireAuth, bloquearColaborador, async (req, res) => {
+  try {
+    await ensureSchema();
+    const rows = await sql`SELECT aportes_pending_names FROM users WHERE id = ${req.userId}`;
+    res.json({ names: parseJsonArray(rows[0] && rows[0].aportes_pending_names) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo consultar los aportes.' });
+  }
+});
+
+app.post('/api/aportes/mark-seen', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    await sql`UPDATE users SET aportes_pending_names = NULL WHERE id = ${req.userId}`;
     res.json({ ok: true });
   } catch (err) {
     console.error(err);

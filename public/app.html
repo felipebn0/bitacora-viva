@@ -699,7 +699,10 @@
        <span class="icon-label" aria-hidden="true">Colaborar</span>
      </div>
      <div class="icon-nav-item">
-       <a class="icon-btn" href="/colaboraciones.html" title="Aportes de la familia" aria-label="Aportes de la familia">💬</a>
+       <div class="icon-btn-wrap">
+         <a class="icon-btn" href="/colaboraciones.html" title="Aportes de la familia" aria-label="Aportes de la familia">💬</a>
+         <span class="icon-badge" id="aportesBadge"></span>
+       </div>
        <span class="icon-label" aria-hidden="true">Aportes</span>
      </div>
      <div class="icon-nav-item">
@@ -2324,6 +2327,28 @@
     } catch (e) {}
   }
   cargarBadgeArbol();
+
+  // Mismo mecanismo que cargarBadgeArbol() de arriba, para el ícono de
+  // "Aportes" (💬) — avisa cuando un familiar terminó de contar una
+  // historia y todavía no se vio en /colaboraciones.html (backlog UX
+  // 2026-09-07: "avisar al dueño cuando un colaborador termina de
+  // aportar", con badge en vez de correo).
+  async function cargarBadgeAportes() {
+    const aportesBadge = document.getElementById('aportesBadge');
+    if (!aportesBadge) return;
+    try {
+      const resp = await fetch('/api/aportes/pending');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const nombres = data.names || [];
+      if (nombres.length) {
+        aportesBadge.textContent = String(nombres.length);
+        aportesBadge.title = 'Aportó una historia: ' + nombres.join(', ');
+        aportesBadge.classList.add('visible');
+      }
+    } catch (e) {}
+  }
+  cargarBadgeAportes();
 })();
 </script>
 </body>

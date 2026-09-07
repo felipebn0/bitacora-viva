@@ -287,12 +287,23 @@
   }
 
 
+  // Campanita del ícono "Aportes" (💬) en app.html: se apaga la primera vez
+  // que esta página termina de cargar los aportes sin error — mismo
+  // criterio que arbolVisto en arbol.html (una sola vez, no en cada
+  // reintento fallido, para no perder el aviso si la carga real todavía no
+  // se vio).
+  let aportesVistos = false;
+
   async function cargarTodo() {
     colaboradoresLista.innerHTML = '<p class="empty">Cargando…</p>';
     aportesLista.innerHTML = '<p class="empty">Cargando…</p>';
     const [colabResultado, aportesResultado] = await Promise.all([pedirColaboradores(), pedirAportes()]);
     const colaboradoresVacios = pintarColaboradores(colabResultado);
     pintarAportes(aportesResultado, colaboradoresVacios);
+    if (!aportesResultado.error && !aportesVistos) {
+      aportesVistos = true;
+      fetch('/api/aportes/mark-seen', { method: 'POST' }).catch(() => {});
+    }
   }
 
   cargarTodo();
