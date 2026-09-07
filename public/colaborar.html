@@ -974,11 +974,27 @@
   // Igual que en la charla principal: no hace falta presionar de nuevo
   // para "cortar" — mientras haya voz seguimos grabando, y recién cuando
   // pasan unos segundos de silencio se corta y se manda solo.
-  // Antes eran 2000ms — mismo motivo que en app.html: quien está
-  // recordando una historia puede pausar más de 2 segundos sin haber
-  // terminado. 4000ms como punto de partida conservador.
-  const SILENCE_MS = 4000;
-  const VAD_THRESHOLD = 0.02;
+  // Antes eran 2000ms, después 4000ms — en uso real (2026-09-06, ver el
+  // mismo ajuste en app.html) resultó demasiado lento: se quedaba
+  // "escuchando" varios segundos de más. Bajado a 1200ms.
+  const SILENCE_MS = 1200;
+  // Subido de 0.02: con ruido de fondo, el volumen ambiente solía superar
+  // 0.02 seguido y la detección de silencio no llegaba a cumplirse nunca
+  // — se quedaba escuchando sin parar aunque ya hubiera terminado de
+  // hablar. 0.035 sigue detectando voz normal sin colgarse del ruido de
+  // fondo típico de una casa.
+  const VAD_THRESHOLD = 0.035;
+  // Corte de seguridad aparte del silencio: /api/transcribe y
+  // /api/contribute-audio rechazan cualquier cuerpo de más de ~4.5MB
+  // (tope real de las funciones serverless de Vercel, ver el comentario
+  // junto a /api/transcribe en server.js). Una historia contada de
+  // corrido, sin pausas de más de SILENCE_MS, podía superar ese tope y
+  // perder el audio o la transcripción entera ("No se pudo entender el
+  // audio"). A los 150 segundos se corta el turno igual que con un
+  // silencio real — no se pierde nada, sigue escuchando el resto como el
+  // turno siguiente.
+  const MAX_TURN_MS = 150 * 1000;
+  let grabacionIniciadaEn = 0;
   let audioContext = null;
   let analyser = null;
   let vadRafId = null;
@@ -1008,7 +1024,9 @@
       }
       const rms = Math.sqrt(sumSquares / data.length);
       if (rms > VAD_THRESHOLD) lastLoudTime = Date.now();
-      if (Date.now() - lastLoudTime > SILENCE_MS) {
+      const silencioLargo = Date.now() - lastLoudTime > SILENCE_MS;
+      const turnoDemasiadoLargo = grabacionIniciadaEn && (Date.now() - grabacionIniciadaEn > MAX_TURN_MS);
+      if (silencioLargo || turnoDemasiadoLargo) {
         stopVAD();
         terminarGrabacion();
         return;
@@ -1065,6 +1083,7 @@
     mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
     mediaRecorder.start();
     grabando = true;
+    grabacionIniciadaEn = Date.now();
     orb.dataset.state = 'listening';
     orb.innerHTML = 'Te<br>escucho…';
     orb.setAttribute('aria-label', 'Grabando tu historia — presiona para cortar');
