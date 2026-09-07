@@ -11,6 +11,7 @@
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'ci-smoke-secret';
 process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgres://fake:fake@localhost/fake';
 process.env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || 'fake';
+process.env.CRON_SECRET = process.env.CRON_SECRET || 'ci-cron-secret';
 delete process.env.WAVA_MERCHANT_KEY;
 delete process.env.RESEND_API_KEY;
 
@@ -31,6 +32,7 @@ let nextSubId = 1;
 let billingOrders = []; // lista simple, no hace falta indexar por order_key acá
 let nextOrderId = 1;
 let giftRedemptions = {}; // code -> row
+let nextGiftId = 1;
 
 function fakeSql(strings, ...values) {
   const text = strings.join('?');
@@ -76,20 +78,34 @@ function fakeSql(strings, ...values) {
     return Promise.resolve([]);
   }
 
-  // --- Gift-checkout dummy: INSERT ya como 'paid' (5 values, RETURNING id) ---
-  if (text.includes("VALUES (NULL, ?, ?, NULL, ?, ?, ?, 'paid', 'regalo')")) {
-    const [userId, orderKey, link, concepto, montoCop] = values;
+  // --- Gift-checkout dummy: INSERT ya como 'paid' (7 values, RETURNING id) ---
+  if (text.includes("VALUES (NULL, ?, ?, NULL, ?, ?, ?, 'paid', 'regalo', ?, ?)")) {
+    const [userId, orderKey, link, concepto, montoCop, sendOn, giftMessage] = values;
     const id = nextOrderId++;
-    billingOrders.push({ id, subscription_id: null, user_id: userId, order_key: orderKey, wava_link: link, concepto, monto_cop: montoCop, plan_id: 'regalo', status: 'paid' });
+    billingOrders.push({ id, subscription_id: null, user_id: userId, order_key: orderKey, wava_link: link, concepto, monto_cop: montoCop, plan_id: 'regalo', status: 'paid', send_on: sendOn, gift_message: giftMessage });
     return Promise.resolve([{ id }]);
   }
   if (text.includes('SELECT 1 FROM gift_redemptions WHERE code')) {
     return Promise.resolve(giftRedemptions[values[0]] ? [{ '?column?': 1 }] : []);
   }
-  if (text.includes('INSERT INTO gift_redemptions (code, billing_order_id, bought_by_user_id, plan_id, meses)')) {
-    const [code, billingOrderId, boughtByUserId] = values;
-    giftRedemptions[code] = { code, billing_order_id: billingOrderId, bought_by_user_id: boughtByUserId, plan_id: 'regalo', redeemed_by_user_id: null };
-    return Promise.resolve([]);
+  if (text.includes('INSERT INTO gift_redemptions (code, billing_order_id, bought_by_user_id, plan_id, meses, send_on, gift_message)')) {
+    const [code, billingOrderId, boughtByUserId, sendOn, giftMessage] = values;
+    const id = nextGiftId++;
+    giftRedemptions[code] = { id, code, billing_order_id: billingOrderId, bought_by_user_id: boughtByUserId, plan_id: 'regalo', redeemed_by_user_id: null, send_on: sendOn, gift_message: giftMessage, email_sent_at: null };
+    return Promise.resolve([{ id }]);
+  }
+  // --- Marca de correo enviado (inmediato o desde el cron) -- claim atómico ---
+  if (text.includes('UPDATE gift_redemptions SET email_sent_at = now()')) {
+    const [id] = values;
+    const g = Object.values(giftRedemptions).find((x) => x.id === id);
+    if (!g || g.email_sent_at) return Promise.resolve([]);
+    g.email_sent_at = new Date().toISOString();
+    return Promise.resolve([{ id }]);
+  }
+  if (text.includes('SELECT id, code, bought_by_user_id, gift_message FROM gift_redemptions')) {
+    const hoy = new Date().toISOString().slice(0, 10);
+    const pendientes = Object.values(giftRedemptions).filter((g) => g.send_on && g.send_on <= hoy && !g.email_sent_at);
+    return Promise.resolve(pendientes.map((g) => ({ id: g.id, code: g.code, bought_by_user_id: g.bought_by_user_id, gift_message: g.gift_message })));
   }
   if (text.includes('SELECT email, name, username FROM users WHERE id')) {
     const u = users[values[0]];
@@ -202,12 +218,44 @@ function check(nombre, cond) {
     check('current_period_end quedó seteado', !!subscriptions[1].current_period_end);
     check('se guardó la orden como paid', billingOrders.some((o) => o.user_id === 1 && o.status === 'paid'));
 
-    // --- Regalo, en modo dummy ---
+    // --- Regalo, en modo dummy: sin fecha programada -> el correo se marca mandado ya mismo ---
     const gift = await request(server, { path: '/api/billing/gift-checkout', method: 'POST' }, cookieA);
     check('gift-checkout en modo dummy -> 200 (no 501)', gift.status === 200);
     const giftData = JSON.parse(gift.body);
     check('la respuesta trae el código directo (sin depender del correo)', typeof giftData.code === 'string' && giftData.code.length === 8);
     check('la orden de regalo quedó paid, sin subscription_id', billingOrders.some((o) => o.plan_id === 'regalo' && o.status === 'paid' && o.subscription_id === null));
+    check('sin fecha programada, se marca el correo como mandado ya mismo', !!giftRedemptions[giftData.code].email_sent_at);
+
+    // --- Regalo con fecha de envío futura + mensaje: el código sale igual, pero el correo NO se manda todavía ---
+    const manana = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const giftProgramado = await request(server, { path: '/api/billing/gift-checkout', method: 'POST', body: { sendOn: manana, message: 'Para que sigas contando tus historias, papá' } }, cookieA);
+    check('gift-checkout programado -> 200', giftProgramado.status === 200);
+    const giftProgramadoData = JSON.parse(giftProgramado.body);
+    check('con fecha futura, el correo NO se manda de una', !giftRedemptions[giftProgramadoData.code].email_sent_at);
+    check('se guardó el mensaje personalizado', giftRedemptions[giftProgramadoData.code].gift_message === 'Para que sigas contando tus historias, papá');
+
+    // --- El cron de facturación todavía no lo manda: falta para la fecha ---
+    const cronAntes = await request(server, { path: '/api/cron/billing', method: 'GET', headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` } });
+    check('cron corre -> 200', cronAntes.status === 200);
+    check('el cron no manda nada antes de que llegue la fecha', !giftRedemptions[giftProgramadoData.code].email_sent_at);
+
+    // --- Llegó el día (simulado moviendo la fecha al pasado): el cron sí lo manda ---
+    giftRedemptions[giftProgramadoData.code].send_on = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const cronDespues = await request(server, { path: '/api/cron/billing', method: 'GET', headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` } });
+    const cronDespuesData = JSON.parse(cronDespues.body);
+    check('el cron mandó el regalo pendiente cuando llegó la fecha', cronDespuesData.regalosMandados === 1);
+    check('email_sent_at quedó marcado después del cron', !!giftRedemptions[giftProgramadoData.code].email_sent_at);
+
+    // --- El cron es idempotente: correrlo de nuevo no lo manda otra vez ---
+    const cronOtraVez = await request(server, { path: '/api/cron/billing', method: 'GET', headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` } });
+    const cronOtraVezData = JSON.parse(cronOtraVez.body);
+    check('correr el cron de nuevo no lo manda dos veces', cronOtraVezData.regalosMandados === 0);
+
+    // --- Fecha inválida (en el pasado) se ignora silenciosamente: manda igual, sin fecha programada ---
+    const ayer = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const giftFechaInvalida = await request(server, { path: '/api/billing/gift-checkout', method: 'POST', body: { sendOn: ayer } }, cookieA);
+    const giftFechaInvalidaData = JSON.parse(giftFechaInvalida.body);
+    check('fecha en el pasado se ignora (no queda programada) y el correo se manda de una', !!giftRedemptions[giftFechaInvalidaData.code].email_sent_at);
 
     // --- El código dummy se puede canjear como cualquier otro ---
     const redeem = await request(server, { path: '/api/billing/redeem-gift', method: 'POST', body: { code: giftData.code } }, cookieB);

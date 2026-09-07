@@ -312,10 +312,11 @@
      Safari hace zoom automático al enfocar el campo (nombre, correo,
      fecha de nacimiento, cambio de clave, confirmar clave para
      reiniciar/borrar la cuenta — todos pasan por esta regla). */
-  .user-menu-panel input, .user-menu-panel select {
+  .user-menu-panel input, .user-menu-panel select, .user-menu-panel textarea {
     width: 100%; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 10px;
     font-family: var(--font-body); background: #fff; color: var(--ink); font-size: 1rem; margin-bottom: 8px;
   }
+  .user-menu-panel textarea { resize: vertical; min-height: 60px; box-sizing: border-box; }
   /* min-height:44px + flex (en vez de block): quedaba en ~35px de alto —
      el texto centrado horizontal ya estaba, pero faltaba alto real. */
   .user-menu-panel .um-btn {
@@ -637,8 +638,16 @@
            <div class="pc-cb458930" id="umPlanOpciones">
              <button class="um-btn" id="umPlanPersonalBtn" type="button">Legado personal — $399.000/año</button>
              <button class="um-btn" id="umPlanFamiliarBtn" type="button">Legado familiar — $649.000/año</button>
-             <button class="um-btn um-plain" id="umPlanRegalarBtn" type="button">🎁 Comprar un regalo para otra persona — $449.000</button>
+             <button class="um-btn um-plain" id="umPlanRegalarBtn" type="button" aria-expanded="false" aria-controls="umRegaloDetalles">🎁 Comprar un regalo para otra persona — $449.000</button>
              <p class="um-hint">Te lleva a una página de pago segura de Wava — tarjeta, Nequi, Daviplata o Bre-B.</p>
+           </div>
+           <div id="umRegaloDetalles" hidden>
+             <label class="um-field-label" for="umRegaloFecha">¿Cuándo quieres que llegue el código? (opcional)</label>
+             <input type="date" id="umRegaloFecha" aria-label="Fecha para recibir el código del regalo">
+             <p class="um-hint">Si lo dejas vacío, te llega por correo ya mismo, apenas se confirme el pago.</p>
+             <label class="um-field-label" for="umRegaloNota">Un mensaje para acompañarlo (opcional)</label>
+             <textarea id="umRegaloNota" maxlength="300" rows="3" placeholder="Ej: Para que sigas contando tus historias, papá..."></textarea>
+             <button class="um-btn" id="umRegaloConfirmarBtn" type="button">Continuar al pago →</button>
            </div>
            <p class="um-msg" id="umPlanMsg" role="status" aria-live="polite" aria-atomic="true"></p>
 
@@ -1187,16 +1196,33 @@
   // Regalo: quien compra acá no tiene por qué ser quien narra — el link de
   // pago es el mismo, pero el código que llega después por correo se
   // canjea desde CUALQUIER cuenta (ver umRegaloCanjearBtn más abajo), no
-  // necesariamente esta.
-  document.getElementById('umPlanRegalarBtn').addEventListener('click', async () => {
+  // necesariamente esta. El botón principal solo despliega los detalles
+  // (fecha de envío + mensaje); el pago se dispara recién desde
+  // umRegaloConfirmarBtn, ya con esos datos en mano.
+  const umPlanRegalarBtn = document.getElementById('umPlanRegalarBtn');
+  const umRegaloDetalles = document.getElementById('umRegaloDetalles');
+  const umRegaloFecha = document.getElementById('umRegaloFecha');
+  const umRegaloNota = document.getElementById('umRegaloNota');
+  umRegaloFecha.min = new Date().toISOString().slice(0, 10);
+  umPlanRegalarBtn.addEventListener('click', () => {
+    const abrir = umRegaloDetalles.hidden;
+    umRegaloDetalles.hidden = !abrir;
+    umPlanRegalarBtn.setAttribute('aria-expanded', String(abrir));
+  });
+  document.getElementById('umRegaloConfirmarBtn').addEventListener('click', async () => {
     umPlanMsg.textContent = 'Generando el link de pago…';
     try {
-      const resp = await fetch('/api/billing/gift-checkout', { method: 'POST' });
+      const resp = await fetch('/api/billing/gift-checkout', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sendOn: umRegaloFecha.value || null, message: umRegaloNota.value.trim() || null }),
+      });
       const data = await resp.json();
       if (!resp.ok) { umPlanMsg.textContent = data.error || 'No se pudo iniciar el pago.'; return; }
       if (data.dummy) {
         // Sin Wava conectada todavía: acá ya está el código, sin pasar por
-        // ningún link externo ni esperar un correo.
+        // ningún link externo. Si se programó una fecha futura, el correo
+        // todavía no se mandó (lo manda el cron cuando llegue el día) — el
+        // código igual se muestra acá para poder probar el resto del flujo.
         umPlanMsg.textContent = `(Modo de prueba) Código de regalo: ${data.code} — cánjealo desde la cuenta que va a narrar (Cuenta → Plan → Canjear un regalo).`;
         return;
       }

@@ -811,6 +811,13 @@ function ensureSchema() {
       // el webhook usa para reconocer ese caso y generar el código de
       // canje en vez de extender una suscripción que no existe.
       sql`ALTER TABLE billing_orders ADD COLUMN IF NOT EXISTS plan_id TEXT`,
+      // send_on/gift_message: lo que se llena en /api/billing/gift-checkout
+      // ANTES de que exista ninguna fila en gift_redemptions (esa recién se
+      // crea cuando se confirma el pago) — el webhook los copia de acá para
+      // allá. NULL en send_on significa "mandar apenas se confirme el pago",
+      // igual que el comportamiento de siempre.
+      sql`ALTER TABLE billing_orders ADD COLUMN IF NOT EXISTS send_on DATE`,
+      sql`ALTER TABLE billing_orders ADD COLUMN IF NOT EXISTS gift_message TEXT`,
 
       // --- Regalo: comprador y narrador son cuentas distintas -----------
       // Una fila por cada regalo comprado. redeemed_by_user_id queda NULL
@@ -827,6 +834,14 @@ function ensureSchema() {
         redeemed_at TIMESTAMPTZ,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`,
+      // send_on: copiado de billing_orders al crear esta fila — si es una
+      // fecha futura, el correo con el código NO se manda de una, lo manda
+      // el cron de /api/cron/billing cuando llegue el día (ver más abajo).
+      // email_sent_at es lo que evita mandarlo dos veces (acá o desde el
+      // cron) — NULL significa "todavía no se mandó".
+      sql`ALTER TABLE gift_redemptions ADD COLUMN IF NOT EXISTS send_on DATE`,
+      sql`ALTER TABLE gift_redemptions ADD COLUMN IF NOT EXISTS gift_message TEXT`,
+      sql`ALTER TABLE gift_redemptions ADD COLUMN IF NOT EXISTS email_sent_at TIMESTAMPTZ`,
       sql`CREATE INDEX IF NOT EXISTS idx_gift_redemptions_bought_by ON gift_redemptions(bought_by_user_id)`,
       // Respaldo a nivel de base para el UPDATE atómico de más abajo (ver
       // /api/webhooks/wava): aunque ese código ya evita que dos entregas
@@ -4389,16 +4404,52 @@ async function generarCodigoDeRegaloUnico() {
   return code;
 }
 
-async function avisarCodigoDeRegaloPorCorreo(boughtByUserId, code) {
+// Fecha de envío programado del regalo: 'YYYY-MM-DD', ni en el pasado ni más
+// de un año hacia adelante (evita fechas absurdas por error de tipeo). null
+// o vacío es válido — significa "mandar el correo apenas se confirme el
+// pago", el comportamiento de siempre.
+function limpiarFechaEnvioRegalo(fecha) {
+  if (!fecha || typeof fecha !== 'string') return null;
+  const limpia = fecha.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(limpia)) return null;
+  const hoy = new Date().toISOString().slice(0, 10);
+  const maximo = new Date(Date.now() + 366 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  if (limpia < hoy || limpia > maximo) return null;
+  return limpia;
+}
+
+function limpiarMensajeRegalo(mensaje) {
+  if (!mensaje || typeof mensaje !== 'string') return null;
+  return mensaje.trim().slice(0, 300) || null;
+}
+
+async function avisarCodigoDeRegaloPorCorreo(boughtByUserId, code, mensaje) {
   try {
     const compradorRows = await sql`SELECT email, name, username FROM users WHERE id = ${boughtByUserId}`;
     const comprador = compradorRows[0];
     if (comprador && comprador.email) {
-      await enviarCorreo({ to: comprador.email, subject: '¡Tu regalo está listo! 🎁', html: plantillaRegaloListo(capitalizarNombre(comprador.name || comprador.username) || 'hola', code) });
+      await enviarCorreo({ to: comprador.email, subject: '¡Tu regalo está listo! 🎁', html: plantillaRegaloListo(capitalizarNombre(comprador.name || comprador.username) || 'hola', code, mensaje) });
     }
   } catch (err) {
     console.error('No se pudo avisar por correo el código de regalo (el pago y el código ya quedaron guardados igual):', err);
   }
+}
+
+// Decide si el correo con el código va ya mismo o si lo deja para el cron
+// (ver /api/cron/billing) — sendOn en el pasado/hoy/null manda de una,
+// igual que siempre; sendOn futuro lo deja pendiente. email_sent_at es la
+// marca que evita mandarlo dos veces (acá y desde el cron, o dos corridas
+// del cron entre sí).
+async function enviarRegaloSegunFecha(giftRedemptionId, boughtByUserId, code, sendOn, mensaje) {
+  const hoy = new Date().toISOString().slice(0, 10);
+  // sendOn puede llegar como string ('YYYY-MM-DD') o como Date (según cómo
+  // lo haya parseado el driver al leerlo de una columna DATE) — se normaliza
+  // a string antes de comparar para no depender de cuál sea.
+  const sendOnStr = sendOn ? (sendOn instanceof Date ? sendOn.toISOString().slice(0, 10) : String(sendOn).slice(0, 10)) : null;
+  if (sendOnStr && sendOnStr > hoy) return;
+  const claim = await sql`UPDATE gift_redemptions SET email_sent_at = now() WHERE id = ${giftRedemptionId} AND email_sent_at IS NULL RETURNING id`;
+  if (!claim.length) return;
+  await avisarCodigoDeRegaloPorCorreo(boughtByUserId, code, mensaje);
 }
 
 app.get('/api/billing/plans', (req, res) => {
@@ -4504,6 +4555,8 @@ app.post('/api/billing/gift-checkout', requireAuth, rateLimit, async (req, res) 
   try {
     const plan = PLANES.regalo;
     const monto = plan.precioAnual;
+    const sendOn = limpiarFechaEnvioRegalo(req.body && req.body.sendOn);
+    const gift_message = limpiarMensajeRegalo(req.body && req.body.message);
 
     await ensureSchema();
     const orderKey = `gift-${req.userId}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
@@ -4511,18 +4564,19 @@ app.post('/api/billing/gift-checkout', requireAuth, rateLimit, async (req, res) 
 
     if (PAGOS_DUMMY) {
       // Sin Wava configurada: se simula el pago y se genera el código de
-      // una — no hay link externo al que mandar, así que el código se
-      // devuelve directo en la respuesta (además de intentar el correo,
-      // por si ya está Resend configurado aparte).
+      // una. Si sendOn quedó en el futuro, el correo NO se manda acá — lo
+      // manda el cron de /api/cron/billing cuando llegue el día — pero el
+      // código igual se devuelve directo en la respuesta para probar el
+      // resto del flujo sin esperar.
       const link = `${base}/app.html?regalo=ok`;
       const [orden] = await sql`
-        INSERT INTO billing_orders (subscription_id, user_id, order_key, wava_hash, wava_link, concepto, monto_cop, status, plan_id)
-        VALUES (NULL, ${req.userId}, ${orderKey}, NULL, ${link}, ${plan.nombre + ' (simulado)'}, ${monto}, 'paid', 'regalo')
+        INSERT INTO billing_orders (subscription_id, user_id, order_key, wava_hash, wava_link, concepto, monto_cop, status, plan_id, send_on, gift_message)
+        VALUES (NULL, ${req.userId}, ${orderKey}, NULL, ${link}, ${plan.nombre + ' (simulado)'}, ${monto}, 'paid', 'regalo', ${sendOn}, ${gift_message})
         RETURNING id
       `;
       const code = await generarCodigoDeRegaloUnico();
-      await sql`INSERT INTO gift_redemptions (code, billing_order_id, bought_by_user_id, plan_id, meses) VALUES (${code}, ${orden.id}, ${req.userId}, 'regalo', 12)`;
-      await avisarCodigoDeRegaloPorCorreo(req.userId, code);
+      const [gift] = await sql`INSERT INTO gift_redemptions (code, billing_order_id, bought_by_user_id, plan_id, meses, send_on, gift_message) VALUES (${code}, ${orden.id}, ${req.userId}, 'regalo', 12, ${sendOn}, ${gift_message}) RETURNING id`;
+      await enviarRegaloSegunFecha(gift.id, req.userId, code, sendOn, gift_message);
       return res.json({ ok: true, link, dummy: true, code });
     }
 
@@ -4550,8 +4604,8 @@ app.post('/api/billing/gift-checkout', requireAuth, rateLimit, async (req, res) 
     if (!link) return res.status(502).json({ error: 'No se pudo generar el link de pago.' });
 
     await sql`
-      INSERT INTO billing_orders (subscription_id, user_id, order_key, wava_hash, wava_link, concepto, monto_cop, status, plan_id)
-      VALUES (NULL, ${req.userId}, ${orderKey}, ${hash || null}, ${link}, ${plan.nombre}, ${monto}, 'pending', 'regalo')
+      INSERT INTO billing_orders (subscription_id, user_id, order_key, wava_hash, wava_link, concepto, monto_cop, status, plan_id, send_on, gift_message)
+      VALUES (NULL, ${req.userId}, ${orderKey}, ${hash || null}, ${link}, ${plan.nombre}, ${monto}, 'pending', 'regalo', ${sendOn}, ${gift_message})
     `;
 
     res.json({ ok: true, link });
@@ -4651,7 +4705,7 @@ app.post('/api/webhooks/wava', express.raw({ type: '*/*', limit: '256kb' }), asy
     if (!orderKey) return res.status(200).json({ ok: true }); // evento sin nada que podamos ubicar — no es un error nuestro
 
     await ensureSchema();
-    const filas = await sql`SELECT id, subscription_id, status, plan_id, user_id FROM billing_orders WHERE order_key = ${orderKey}`;
+    const filas = await sql`SELECT id, subscription_id, status, plan_id, user_id, send_on, gift_message FROM billing_orders WHERE order_key = ${orderKey}`;
     if (!filas.length) {
       console.error('Webhook de Wava para un order_key que no existe acá:', orderKey);
       return res.status(200).json({ ok: true });
@@ -4698,8 +4752,8 @@ app.post('/api/webhooks/wava', express.raw({ type: '*/*', limit: '256kb' }), asy
       `;
       if (!claim.length) return res.status(200).json({ ok: true }); // otra entrega ya ganó la carrera — idempotente
       const code = await generarCodigoDeRegaloUnico();
-      await sql`INSERT INTO gift_redemptions (code, billing_order_id, bought_by_user_id, plan_id, meses) VALUES (${code}, ${orden.id}, ${orden.user_id}, 'regalo', 12)`;
-      await avisarCodigoDeRegaloPorCorreo(orden.user_id, code);
+      const [gift] = await sql`INSERT INTO gift_redemptions (code, billing_order_id, bought_by_user_id, plan_id, meses, send_on, gift_message) VALUES (${code}, ${orden.id}, ${orden.user_id}, 'regalo', 12, ${orden.send_on}, ${orden.gift_message}) RETURNING id`;
+      await enviarRegaloSegunFecha(gift.id, orden.user_id, code, orden.send_on, orden.gift_message);
       return res.status(200).json({ ok: true });
     }
 
@@ -4725,11 +4779,19 @@ app.post('/api/webhooks/wava', express.raw({ type: '*/*', limit: '256kb' }), asy
   }
 });
 
-function plantillaRegaloListo(nombre, code) {
+function escapeHtmlCorreo(texto) {
+  return String(texto).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function plantillaRegaloListo(nombre, code, mensaje) {
+  const notaPersonal = mensaje
+    ? `<p style="background:#EFEAD9;border-radius:10px;padding:12px 14px;font-style:italic">"${escapeHtmlCorreo(mensaje)}"</p>`
+    : '';
   return `<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;color:#2B241C">
     <h1 style="font-size:1.3rem">¡Gracias, ${nombre}! 🎁</h1>
     <p>Tu regalo ya está pago. Este es el código para que la persona que lo va a recibir lo active desde su cuenta (Cuenta → Plan → Canjear un regalo):</p>
     <p style="font-family:monospace;font-size:1.6rem;font-weight:bold;letter-spacing:0.1em;text-align:center;background:#F5EFE2;padding:14px;border-radius:10px">${code}</p>
+    ${notaPersonal}
     <p style="color:#706551;font-size:.85rem">Los 12 meses empiezan a contar recién cuando lo canjeen, no desde hoy — se lo puedes mandar cuando quieras, no vence por tu lado.</p>
   </div>`;
 }
@@ -4823,7 +4885,25 @@ app.get('/api/cron/billing', async (req, res) => {
       RETURNING id
     `;
 
-    res.json({ ok: true, avisosEnviados, pasaronAPastDue: vencidas.length, canceladas: canceladas.length, pasaronAReadOnly: sinGracia.length });
+    // 4) Regalos con fecha de envío programada que ya llegó — el código y
+    // el pago ya existen desde que se confirmó la compra (ver
+    // /api/billing/gift-checkout y /api/webhooks/wava); acá solo se manda el
+    // correo que había quedado pendiente. email_sent_at IS NULL es lo que
+    // filtra los que ya se mandaron (de una, o en una corrida anterior de
+    // este mismo cron).
+    const regalosPorMandar = await sql`
+      SELECT id, code, bought_by_user_id, gift_message FROM gift_redemptions
+      WHERE send_on IS NOT NULL AND send_on <= CURRENT_DATE AND email_sent_at IS NULL
+    `;
+    let regalosMandados = 0;
+    for (const g of regalosPorMandar) {
+      const claim = await sql`UPDATE gift_redemptions SET email_sent_at = now() WHERE id = ${g.id} AND email_sent_at IS NULL RETURNING id`;
+      if (!claim.length) continue; // otra corrida ya lo mandó — idempotente
+      await avisarCodigoDeRegaloPorCorreo(g.bought_by_user_id, g.code, g.gift_message);
+      regalosMandados++;
+    }
+
+    res.json({ ok: true, avisosEnviados, pasaronAPastDue: vencidas.length, canceladas: canceladas.length, pasaronAReadOnly: sinGracia.length, regalosMandados });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo correr el ciclo de facturación.' });
