@@ -651,6 +651,9 @@ function ensureSchema() {
         audio_url TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`,
+      // Fotos/video que se suben mientras se cuenta esta historia (ver
+      // mediaUrls en /api/next) — mismo patrón que family_notes.media_urls.
+      sql`ALTER TABLE story_log ADD COLUMN IF NOT EXISTS media_urls TEXT`,
       sql`CREATE INDEX IF NOT EXISTS idx_story_log_user ON story_log(user_id)`,
 
       // Historial de versiones: cuando se edita una historia (aportada o
@@ -2642,6 +2645,8 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiReadOnly, rate
     const ultimaRespuesta = [...history].reverse().find((m) => m.role === 'user' && !/^\(.*\)$/.test(m.content.trim()));
     if (mode === 'historia' && ultimaRespuesta && ultimaRespuesta.content.length >= HISTORIA_MIN_CHARS) {
       const audioUrl = urlHttpValida(typeof req.body.lastAudioUrl === 'string' ? req.body.lastAudioUrl.slice(0, 1000) : null);
+      const mediaUrlsLimpias = limpiarMediaAdjunta(req.body.mediaUrls);
+      const mediaUrlsJson = mediaUrlsLimpias.length ? JSON.stringify(mediaUrlsLimpias) : null;
       const textoAGuardar = capitalizarInicio(ultimaRespuesta.content);
       try {
         // "history" trae TODOS los turnos de la sesión, así que si el
@@ -2652,15 +2657,19 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiReadOnly, rate
         // es exactamente la misma de la llamada anterior y se insertaba de
         // nuevo como una fila aparte. Antes de insertar, nos fijamos si esta
         // MISMA historia ya quedó guardada hace poco para esta cuenta — si
-        // sí, no la duplicamos; si esta vez sí llegó el audio y antes no,
-        // aprovechamos y se lo completamos a esa fila en vez de perderlo.
-        const previa = await sql`SELECT id, audio_url FROM story_log WHERE user_id = ${req.userId} AND texto = ${textoAGuardar} AND created_at > now() - interval '10 minutes' ORDER BY created_at DESC LIMIT 1`;
+        // sí, no la duplicamos; si esta vez sí llegó el audio (o la foto) y
+        // antes no, aprovechamos y se lo completamos a esa fila en vez de
+        // perderlo.
+        const previa = await sql`SELECT id, audio_url, media_urls FROM story_log WHERE user_id = ${req.userId} AND texto = ${textoAGuardar} AND created_at > now() - interval '10 minutes' ORDER BY created_at DESC LIMIT 1`;
         if (previa.length) {
           if (audioUrl && !previa[0].audio_url) {
             await sql`UPDATE story_log SET audio_url = ${audioUrl} WHERE id = ${previa[0].id}`;
           }
+          if (mediaUrlsJson && !previa[0].media_urls) {
+            await sql`UPDATE story_log SET media_urls = ${mediaUrlsJson} WHERE id = ${previa[0].id}`;
+          }
         } else {
-          await sql`INSERT INTO story_log (user_id, texto, audio_url) VALUES (${req.userId}, ${textoAGuardar}, ${audioUrl})`;
+          await sql`INSERT INTO story_log (user_id, texto, audio_url, media_urls) VALUES (${req.userId}, ${textoAGuardar}, ${audioUrl}, ${mediaUrlsJson})`;
         }
       } catch (err) {
         console.error('No se pudo guardar en story_log:', err);
@@ -3392,8 +3401,8 @@ app.get('/api/contributions', requireAuth, async (req, res) => {
 app.get('/api/story-log', requireAuth, bloquearColaborador, async (req, res) => {
   try {
     await ensureSchema();
-    const rows = await sql`SELECT id, texto, audio_url, created_at FROM story_log WHERE user_id = ${req.userId} ORDER BY created_at DESC LIMIT 50`;
-    res.json({ stories: rows.map((r) => ({ ...r, texto: capitalizarInicio(r.texto) })) });
+    const rows = await sql`SELECT id, texto, audio_url, media_urls, created_at FROM story_log WHERE user_id = ${req.userId} ORDER BY created_at DESC LIMIT 50`;
+    res.json({ stories: rows.map((r) => ({ ...r, texto: capitalizarInicio(r.texto), media_urls: parseJsonArray(r.media_urls) })) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo cargar el log de historias.' });

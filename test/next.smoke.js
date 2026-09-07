@@ -46,6 +46,7 @@ const user = {
 let storyLogInserts = []; // para verificar que se guardó (o no) una historia larga
 let storyLogRows = []; // { id, userId, texto, audioUrl } — simula la tabla real para el chequeo de duplicados
 let storyLogUpdates = []; // ids a los que se les completó el audio_url
+let storyLogMediaUpdates = []; // ids a los que se les completó el media_urls
 let familyNoteMarkedDiscussed = []; // ids marcados como discussed=true
 let mediaMarkedDiscussed = []; // ids marcados como discussed=true
 
@@ -97,10 +98,10 @@ function fakeSql(strings, ...values) {
 
   if (text.includes('SELECT nombre, relacion, detalles FROM family_members')) return Promise.resolve([]);
 
-  if (text.includes('SELECT id, audio_url FROM story_log')) {
+  if (text.includes('SELECT id, audio_url, media_urls FROM story_log')) {
     const [userId, texto] = values;
     const fila = storyLogRows.find((r) => r.userId === userId && r.texto === texto);
-    return Promise.resolve(fila ? [{ id: fila.id, audio_url: fila.audioUrl }] : []);
+    return Promise.resolve(fila ? [{ id: fila.id, audio_url: fila.audioUrl, media_urls: fila.mediaUrls }] : []);
   }
   if (text.includes('UPDATE story_log SET audio_url')) {
     const [audioUrl, id] = values;
@@ -109,10 +110,17 @@ function fakeSql(strings, ...values) {
     storyLogUpdates.push(id);
     return Promise.resolve([]);
   }
+  if (text.includes('UPDATE story_log SET media_urls')) {
+    const [mediaUrls, id] = values;
+    const fila = storyLogRows.find((r) => r.id === id);
+    if (fila) fila.mediaUrls = mediaUrls;
+    storyLogMediaUpdates.push(id);
+    return Promise.resolve([]);
+  }
   if (text.includes('INSERT INTO story_log')) {
-    const fila = { id: storyLogRows.length + 1, userId: values[0], texto: values[1], audioUrl: values[2] };
+    const fila = { id: storyLogRows.length + 1, userId: values[0], texto: values[1], audioUrl: values[2], mediaUrls: values[3] };
     storyLogRows.push(fila);
-    storyLogInserts.push({ userId: values[0], texto: values[1], audioUrl: values[2] });
+    storyLogInserts.push({ userId: values[0], texto: values[1], audioUrl: values[2], mediaUrls: values[3] });
     return Promise.resolve([]);
   }
 
@@ -368,16 +376,19 @@ async function main() {
   check('cuenta colaboradora: no llegó a llamar a Anthropic', capturedCalls.length === 0);
   user.owner_user_id = originalOwnerId; // deshacer para el resto de los tests
 
-  // --- 10) Respuesta larga del usuario se guarda en story_log -----------------
+  // --- 10) Respuesta larga del usuario se guarda en story_log, con su foto ---
   resetAnthropicMock();
   storyLogInserts = [];
   pushAnthropicResponse('Qué recuerdo tan lindo, gracias por contarlo.');
   const respuestaLarga = 'x'.repeat(200); // >= HISTORIA_MIN_CHARS (180)
+  const fotoPrimeraVez = { url: 'https://fake.blob.vercel-storage.com/media/1/foto-2.jpg', type: 'foto', caption: 'Un momento' };
   await nextForUser(server, cookie, {
     history: [...historial, { role: 'assistant', content: '¿Y qué más recordás?' }, { role: 'user', content: respuestaLarga }],
     mode: 'historia',
+    mediaUrls: [fotoPrimeraVez],
   });
   check('respuesta larga: se guardó en story_log', storyLogInserts.length === 1 && storyLogInserts[0].texto.length >= 180);
+  check('respuesta larga: la foto agregada en el mismo turno queda guardada', JSON.parse(storyLogInserts[0].mediaUrls)[0].url === fotoPrimeraVez.url);
 
   // Contraprueba: una respuesta corta NO se guarda en story_log.
   resetAnthropicMock();
@@ -396,6 +407,7 @@ async function main() {
   storyLogInserts = [];
   storyLogRows = [];
   storyLogUpdates = [];
+  storyLogMediaUpdates = [];
   const historialConRespuestaLarga = [...historial, { role: 'assistant', content: '¿Y qué más recordás?' }, { role: 'user', content: respuestaLarga }];
   pushAnthropicResponse('Qué recuerdo tan lindo, gracias por contarlo.');
   await nextForUser(server, cookie, { history: historialConRespuestaLarga, mode: 'historia', lastAudioUrl: null });
@@ -409,6 +421,13 @@ async function main() {
   await nextForUser(server, cookie, { history: historialConRespuestaLarga, mode: 'historia', lastAudioUrl: 'https://fake.blob.vercel-storage.com/audio/1/x/y.webm' });
   check('con audio en la repetida: se completa la fila existente, no se crea otra', storyLogRows.length === 1 && storyLogUpdates.length === 1);
   check('la fila existente quedó con el audio completado', storyLogRows[0].audioUrl === 'https://fake.blob.vercel-storage.com/audio/1/x/y.webm');
+
+  // Mismo criterio con una foto que llega recién en la repetida.
+  pushAnthropicResponse('Qué recuerdo tan lindo, gracias por contarlo.');
+  const fotoDeLaHistoria = { url: 'https://fake.blob.vercel-storage.com/media/1/foto-1.jpg', type: 'foto', caption: 'La finca' };
+  await nextForUser(server, cookie, { history: historialConRespuestaLarga, mode: 'historia', mediaUrls: [fotoDeLaHistoria] });
+  check('con foto en la repetida: se completa la fila existente, no se crea otra', storyLogRows.length === 1 && storyLogMediaUpdates.length === 1);
+  check('la fila existente quedó con la foto completada', JSON.parse(storyLogRows[0].mediaUrls)[0].url === fotoDeLaHistoria.url);
 
   // --- 11) Nota pendiente de un colaborador se incorpora al arranque ---------
   resetAnthropicMock();

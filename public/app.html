@@ -743,6 +743,12 @@
           <div class="state-label" id="stateLabel" role="status" aria-live="polite" aria-atomic="true"></div>
           <button class="write-toggle end-toggle pc-93b8ea5b" id="endBtn" type="button">terminar la charla</button>
           <button class="write-toggle" id="treeModeBtn" type="button">armar árbol genealógico</button>
+          <button class="write-toggle pc-93b8ea5b" id="subirFotoBtn" type="button">📷 agregar una foto o video de esta historia</button>
+          <input class="pc-93b8ea5b" type="file" id="subirFotoInput" accept="image/*,video/*">
+          <div class="write-row" id="fotoCaptionRow">
+            <input type="text" id="fotoCaptionInput" placeholder="¿Quién aparece? (opcional)" aria-label="Descripción de la foto o video">
+            <button id="fotoCaptionSend" type="button">Subir</button>
+          </div>
           <!-- Oculto a pedido: el botón manual "prefiero escribir" ya no se
                muestra. El cuadro para escribir (writeRow) sigue apareciendo
                solo, automáticamente, cuando el micrófono falla o no se
@@ -1472,9 +1478,20 @@
   const voiceSelect = document.getElementById('voiceSelect');
   const endBtn = document.getElementById('endBtn');
   const treeModeBtn = document.getElementById('treeModeBtn');
+  const subirFotoBtn = document.getElementById('subirFotoBtn');
+  const subirFotoInput = document.getElementById('subirFotoInput');
+  const fotoCaptionRow = document.getElementById('fotoCaptionRow');
+  const fotoCaptionInput = document.getElementById('fotoCaptionInput');
+  const fotoCaptionSend = document.getElementById('fotoCaptionSend');
 
   let history = [];       // lo que se le manda a Claude (solo role/content)
   let sessionLog = [];    // lo que se guarda en la bitácora (incluye audio)
+  // Fotos/video agregados para la respuesta que se está por guardar — se
+  // manda con el turno actual (ver fetchNext) y se vacía después, porque acá
+  // cada turno es una historia distinta (a diferencia de colaborar.html,
+  // donde toda una charla arma UNA sola historia).
+  let mediaUrlsLocal = [];
+  let subidaFotoEnCurso = null; // ver el comentario igual en colaborar.html
   let sessionKey = null;  // carpeta de audio de esta charla
   let currentSessionDbId = null;  // fila de "sessions" de esta charla, para actualizar en vez de duplicar
   let sessionMode = 'historia';  // 'historia' (charla normal) o 'arbol' (armar árbol genealógico)
@@ -1691,6 +1708,7 @@
     orb.setAttribute('aria-label', orbHint);
     endBtn.style.display = resting ? 'none' : 'inline';
     treeModeBtn.style.display = resting ? 'inline' : 'none';
+    subirFotoBtn.style.display = (resting || sessionMode === 'arbol') ? 'none' : 'inline';
   }
 
   function speakWithSystemVoice(text, onEnd) {
@@ -1961,9 +1979,16 @@
 
   async function fetchNext() {
     const mySession = sessionId;
+    // Ver el comentario junto a subidaFotoEnCurso: si hay una foto
+    // subiéndose todavía, esperamos a que termine antes de armar este
+    // turno — así mediaUrlsLocal ya la tiene adentro.
+    if (subidaFotoEnCurso) { try { await subidaFotoEnCurso; } catch (e) {} }
+    if (mySession !== sessionId) return;
     setState('thinking', 'Pensando…');
     orbLabel.innerHTML = '···';
     try {
+      const mediaUrls = mediaUrlsLocal;
+      mediaUrlsLocal = []; // las fotos de este turno ya se van a mandar; el próximo empieza vacío
       const lastEntry = sessionLog.length ? sessionLog[sessionLog.length - 1] : null;
       const lastAudioUrl = lastEntry && lastEntry.role === 'user' ? lastEntry.audioFile || null : null;
       // Si el turno anterior ofreció la pausa, este turno tiene que avisarle
@@ -1985,7 +2010,7 @@
       const resp = await fetch('/api/next', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ history, lastAudioUrl, mode: sessionMode, ofrecerPausa, interpretarRespuestaPausa }),
+        body: JSON.stringify({ history, lastAudioUrl, mode: sessionMode, ofrecerPausa, interpretarRespuestaPausa, mediaUrls }),
       });
       if (mySession !== sessionId) return;
       if (!resp.ok) {
@@ -2223,6 +2248,8 @@
     currentSessionDbId = null;
     greeting.style.display = 'none';
     mostrarMediaMomento(null);
+    mediaUrlsLocal = [];
+    fotoCaptionRow.classList.remove('visible');
     history = [];
     sessionLog = [];
     turnIndex = 0;
@@ -2280,6 +2307,61 @@
   if (!window.MediaRecorder || !navigator.mediaDevices) {
     writeToggle.textContent = 'escribir respuesta';
   }
+
+  // --- Agregar una foto o video a la historia que se está contando ---
+  // Mismo mecanismo que en colaborar.html (subirFotoPendiente/mediaUrlsLocal).
+  const MAX_MEDIA_FILE_BYTES = 4 * 1024 * 1024; // Vercel corta pedidos de más de ~4.5MB
+  let fotoPendiente = null;
+
+  subirFotoBtn.addEventListener('click', () => subirFotoInput.click());
+
+  subirFotoInput.addEventListener('change', () => {
+    const file = subirFotoInput.files[0];
+    subirFotoInput.value = '';
+    if (!file) return;
+    if (file.size > MAX_MEDIA_FILE_BYTES) {
+      stateLabel.textContent = 'El archivo pesa más de 4MB — prueba con uno más liviano por ahora.';
+      return;
+    }
+    fotoPendiente = file;
+    fotoCaptionInput.value = '';
+    fotoCaptionRow.classList.add('visible');
+    fotoCaptionInput.focus();
+  });
+
+  function subirFotoPendiente() {
+    if (!fotoPendiente) return;
+    const file = fotoPendiente;
+    const caption = fotoCaptionInput.value.trim();
+    fotoPendiente = null;
+    fotoCaptionRow.classList.remove('visible');
+    subirFotoBtn.disabled = true;
+    stateLabel.textContent = 'Subiendo…';
+    const promesa = (async () => {
+      try {
+        const resp = await fetch('/api/contribute-media', {
+          method: 'POST',
+          headers: { 'Content-Type': file.type || 'application/octet-stream' },
+          body: file,
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.url) mediaUrlsLocal.push({ url: data.url, type: data.type, caption });
+          stateLabel.textContent = '✓ Se agregó a esta historia.';
+        } else {
+          stateLabel.textContent = 'No se pudo subir el archivo. Intenta de nuevo.';
+        }
+      } catch (e) {
+        stateLabel.textContent = 'Hubo un problema para conectar.';
+      }
+      subirFotoBtn.disabled = false;
+    })();
+    subidaFotoEnCurso = promesa;
+    promesa.then(() => { if (subidaFotoEnCurso === promesa) subidaFotoEnCurso = null; });
+    return promesa;
+  }
+  fotoCaptionSend.addEventListener('click', subirFotoPendiente);
+  fotoCaptionInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') subirFotoPendiente(); });
 
   // El árbol genealógico y la línea de tiempo ahora viven en /arbol.html
   // (se llega por el ícono 🌳 de arriba) — ya no hay un mini-árbol acá. Lo
