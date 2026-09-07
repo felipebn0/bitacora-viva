@@ -710,6 +710,16 @@ function ensureSchema() {
       // esta persona, para poder dibujar el árbol con las ramas reales en vez
       // de agrupar por generación nomás.
       sql`ALTER TABLE family_members ADD COLUMN IF NOT EXISTS padres TEXT`,
+      // es_principal: quién es "Yo" (el eje del árbol, el dueño de la
+      // bitácora) — antes esto se detectaba en el navegador buscando la
+      // palabra "principal" dentro del texto libre de "relacion", así que
+      // corregir a mano el parentesco de esa persona (algo tan simple como
+      // cambiar "Sujeto principal" por "Yo") apagaba el resaltado sin que
+      // nadie lo pidiera. Ahora es un flag aparte que la edición manual
+      // nunca toca (ver /api/tree/person/:id, que no lo actualiza) y que
+      // updateFamilyTree() vuelve a fijar en cada reconstrucción — ver el
+      // comentario ahí sobre cómo se decide a quién le corresponde.
+      sql`ALTER TABLE family_members ADD COLUMN IF NOT EXISTS es_principal BOOLEAN NOT NULL DEFAULT false`,
       sql`CREATE INDEX IF NOT EXISTS idx_family_members_user ON family_members(user_id)`,
 
       sql`CREATE TABLE IF NOT EXISTS timeline_events (
@@ -2185,6 +2195,75 @@ const TREE_TOOLS = [{
   },
 }];
 
+// A qué "casillero único" alrededor del sujeto principal pertenece una
+// relación, si pertenece a alguno. Papá, mamá y cada uno de los 4 abuelos
+// solo pueden tener UNA persona real ocupándolos — a diferencia de tíos,
+// primos o hermanos, donde dos filas con el mismo nombre pueden
+// perfectamente ser dos personas reales distintas (ej. un "Jorge" papá y
+// un "Jorge" abuelo). Por eso la fusión de duplicados (fusionarRolesUnicos,
+// más abajo) solo actúa sobre estos siete casilleros, nunca comparando
+// nombres sueltos en el resto del árbol.
+function clasificarRolUnico(relacion) {
+  const rel = (relacion || '').trim();
+  if (/principal/i.test(rel)) return 'principal';
+  if (/^pap[aá]$/i.test(rel)) return 'papa';
+  if (/^mam[aá]$/i.test(rel)) return 'mama';
+  if (/^abuelo paterno$/i.test(rel)) return 'abuelo_paterno';
+  if (/^abuela paterna$/i.test(rel)) return 'abuela_paterna';
+  if (/^abuelo materno$/i.test(rel)) return 'abuelo_materno';
+  if (/^abuela materna$/i.test(rel)) return 'abuela_materna';
+  return null;
+}
+
+// Fusiona duplicados dentro de esos siete casilleros únicos. El modelo
+// arma la lista de personas leyendo charla a charla, sin ningún id
+// estable — si en una charla mencionó a la mamá como "mamá" y en otra la
+// volvió a mencionar (con un nombre igual, parecido, o hasta distinto —
+// ej. transcripción distinta de la voz) como "pareja de papá", nada le
+// impide crear dos filas para la misma persona real. Esto se detectó con
+// un caso concreto: "Juliana Palacio" apareciendo dos veces en el árbol de
+// un usuario, una como "mamá" y otra como pareja del papá — y, en
+// cascada, ni mamá-papá ni los abuelos paternos quedaban conectados,
+// porque "padres" de otras personas solo podía apuntar a UNO de los dos
+// nombres duplicados, nunca a los dos.
+//
+// Se conserva la primera fila que ocupa cada casillero (la que ya venía
+// de antes, si "personas" trae primero lo previo y después lo nuevo) y se
+// le suman los datos que la fila descartada tuviera de más (padres,
+// detalles). Cualquier referencia de "padres" de OTRA persona que
+// apuntaba al nombre descartado se redirige al nombre que sobrevive, para
+// no perder la conexión.
+function fusionarRolesUnicos(personas, userId) {
+  const porRol = new Map(); // clave de rol único -> índice en "resultado"
+  const renombres = new Map(); // nombre descartado -> nombre que sobrevive
+  const resultado = [];
+  personas.forEach((p) => {
+    const rol = clasificarRolUnico(p.relacion);
+    if (!rol || !porRol.has(rol)) {
+      if (rol) porRol.set(rol, resultado.length);
+      resultado.push(p);
+      return;
+    }
+    const existente = resultado[porRol.get(rol)];
+    if (normalizarNombreParaComparar(existente.nombre) !== normalizarNombreParaComparar(p.nombre)) {
+      console.warn(`árbol (usuario ${userId}): "${p.nombre}" y "${existente.nombre}" se fusionaron en un solo "${rol}" (ese parentesco solo puede tener una persona) — se conserva "${existente.nombre}".`);
+      renombres.set(p.nombre, existente.nombre);
+    }
+    if ((!Array.isArray(existente.padres) || !existente.padres.length) && Array.isArray(p.padres) && p.padres.length) {
+      existente.padres = p.padres;
+    }
+    if (!existente.detalles && p.detalles) existente.detalles = p.detalles;
+  });
+  if (renombres.size) {
+    resultado.forEach((p) => {
+      if (Array.isArray(p.padres) && p.padres.length) {
+        p.padres = p.padres.map((n) => renombres.get(n) || n);
+      }
+    });
+  }
+  return resultado;
+}
+
 // Respaldo determinístico: si el modelo dejó "padres" vacío en los casos más
 // obvios (sujeto principal, papá/mamá, tíos), lo completamos por regla fija
 // en vez de depender solo de que la IA lo infiera bien.
@@ -2266,8 +2345,15 @@ async function updateFamilyTree(userId, newExchanges) {
     if (!nuevaCharla.trim()) return;
 
     await ensureSchema();
-    const personasPreviasRaw = await sql`SELECT nombre, relacion, detalles, padres FROM family_members WHERE user_id = ${userId}`;
+    const personasPreviasRaw = await sql`SELECT nombre, relacion, detalles, padres, es_principal FROM family_members WHERE user_id = ${userId}`;
     const personasPrevias = personasPreviasRaw.map((p) => ({ ...p, padres: parseJsonArray(p.padres) }));
+    // Quién quedó marcado como "Yo" (es_principal) antes de esta corrida, si
+    // había alguien — se usa más abajo para no perder el resaltado ni
+    // aunque el modelo, esta vez, no vuelva a redactar el parentesco con la
+    // palabra "principal" (por ejemplo porque el propio texto guardado ya
+    // fue corregido a mano una vez, y la IA tiende a repetir lo que ya
+    // estaba en "Personas ya conocidas").
+    const principalPrevioNombre = (personasPreviasRaw.find((p) => p.es_principal) || {}).nombre || null;
     const eventosPrevios = await sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${userId} ORDER BY anio NULLS LAST, id`;
 
     const prompt = `Personas ya conocidas:\n${JSON.stringify(personasPrevias)}\n\nEventos ya conocidos:\n${JSON.stringify(eventosPrevios)}\n\nCharla nueva para integrar:${envolverDatoNoConfiable('charla', nuevaCharla)}\n\nUsa la herramienta para devolver la lista COMPLETA actualizada de personas y eventos (lo anterior + lo nuevo, sin perder nada, corrigiendo si hay datos más precisos). Recuerda las reglas: personas SOLO de la familia directa (nada de novio/novia, solo esposo/a si está casado/a); para cada persona completa "padres" con los nombres exactos de su papá y/o mamá tal como aparecen en esta misma lista, siempre que se pueda inferir (por ejemplo, por los "detalles" ya guardados tipo "hija de Oscar"); eventos SOLO hitos importantes (nacimiento, cumpleaños, viaje, graduación, matrimonio, muerte), nada de charla cotidiana ni planes sin confirmar. Si alguna persona o evento ya guardado no cumple estas reglas, quítalo de la lista.`;
@@ -2294,16 +2380,22 @@ async function updateFamilyTree(userId, newExchanges) {
     const toolUse = response.content.find((b) => b.type === 'tool_use');
     if (!toolUse || !toolUse.input) return;
     // Filtro defensivo por si el modelo se cuela: nada de novio/novia en el árbol.
-    const personas = resolverPadresPorNombreParecido(
-      inferirPadresFaltantes(
-        (Array.isArray(toolUse.input.personas) ? toolUse.input.personas : [])
-          .filter((p) => p && p.nombre && p.relacion && !/\bnovi[oa]\b/i.test(p.relacion))
-          .slice(0, 60)
-      ).map((p) => ({
+    // Orden importa: primero se capitalizan los nombres tal cual los trajo
+    // la IA, después se fusionan los casilleros únicos (mamá/papá/abuelos/
+    // principal) para que no quede ninguna persona duplicada, y RECIÉN AHÍ
+    // se infieren padres faltantes y se corrigen referencias casi-iguales
+    // — así ambos pasos ya trabajan sobre la lista limpia, sin duplicados
+    // compitiendo por la misma conexión.
+    const personasCapitalizadas = (Array.isArray(toolUse.input.personas) ? toolUse.input.personas : [])
+      .filter((p) => p && p.nombre && p.relacion && !/\bnovi[oa]\b/i.test(p.relacion))
+      .slice(0, 60)
+      .map((p) => ({
         ...p,
         nombre: capitalizarNombre(p.nombre),
         padres: Array.isArray(p.padres) ? p.padres.map(capitalizarNombre) : p.padres,
-      })),
+      }));
+    const personas = resolverPadresPorNombreParecido(
+      inferirPadresFaltantes(fusionarRolesUnicos(personasCapitalizadas, userId)),
       userId
     );
     const eventos = Array.isArray(toolUse.input.eventos) ? toolUse.input.eventos.slice(0, 100) : [];
@@ -2336,12 +2428,30 @@ async function updateFamilyTree(userId, newExchanges) {
     // propios INSERT, en ese orden, tanto contra Postgres real como
     // contra el mock de los tests (que ejecuta cada sql\`...\` apenas se
     // lo llama, no de forma perezosa como el driver real).
+    // A quién le toca el resaltado de "Yo" en esta corrida: primero se
+    // busca, por nombre, a quien ya estaba confirmado como principal antes
+    // (sin importar cómo haya quedado redactado su "relacion" esta vez —
+    // esto es lo que evita que una corrección manual del parentesco apague
+    // el resaltado). Si esa persona ya no aparece en la lista nueva (caso
+    // raro: se le cambió el nombre por charla y no por edición manual, o
+    // dejó de mencionarse del todo), se cae al criterio de siempre — la
+    // palabra "principal" en el parentesco recién generado. Si nunca hubo
+    // nadie marcado (usuario nuevo, primera charla del árbol), es lo único
+    // que se usa.
+    const nombreNormalizadoPrincipalPrevio = principalPrevioNombre ? normalizarNombreParaComparar(principalPrevioNombre) : null;
+    let indicePrincipal = nombreNormalizadoPrincipalPrevio
+      ? personas.findIndex((p) => normalizarNombreParaComparar(p.nombre) === nombreNormalizadoPrincipalPrevio)
+      : -1;
+    if (indicePrincipal === -1) {
+      indicePrincipal = personas.findIndex((p) => clasificarRolUnico(p.relacion) === 'principal');
+    }
     await sql.transaction([
       sql`DELETE FROM family_members WHERE user_id = ${userId}`,
-      ...personas.map((p) => {
+      ...personas.map((p, i) => {
         const padres = Array.isArray(p.padres) ? p.padres.filter((x) => typeof x === 'string' && x.trim()).slice(0, 2) : [];
-        return sql`INSERT INTO family_members (user_id, nombre, relacion, detalles, padres) VALUES (
-        ${userId}, ${String(p.nombre).slice(0, 120)}, ${String(p.relacion).slice(0, 80)}, ${p.detalles ? capitalizarInicio(String(p.detalles).slice(0, 300)) : null}, ${padres.length ? JSON.stringify(padres) : null}
+        const esPrincipal = i === indicePrincipal;
+        return sql`INSERT INTO family_members (user_id, nombre, relacion, detalles, padres, es_principal) VALUES (
+        ${userId}, ${String(p.nombre).slice(0, 120)}, ${String(p.relacion).slice(0, 80)}, ${p.detalles ? capitalizarInicio(String(p.detalles).slice(0, 300)) : null}, ${padres.length ? JSON.stringify(padres) : null}, ${esPrincipal}
       )`;
       }),
       sql`DELETE FROM timeline_events WHERE user_id = ${userId}`,
@@ -3780,11 +3890,12 @@ app.delete('/api/chapters/:id', requireAuth, bloquearColaborador, rateLimit, asy
 app.get('/api/tree', requireAuth, bloquearColaborador, async (req, res) => {
   try {
     await ensureSchema();
-    const peopleRaw = await sql`SELECT id, nombre, relacion, detalles, padres FROM family_members WHERE user_id = ${req.userId} ORDER BY id`;
+    const peopleRaw = await sql`SELECT id, nombre, relacion, detalles, padres, es_principal FROM family_members WHERE user_id = ${req.userId} ORDER BY id`;
     const people = peopleRaw.map((p) => ({
       ...p,
       nombre: capitalizarNombre(p.nombre),
       padres: parseJsonArray(p.padres).map(capitalizarNombre),
+      es_principal: !!p.es_principal,
     }));
     const events = await sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${req.userId} ORDER BY anio NULLS LAST, id`;
     res.json({ people, events });
@@ -3860,6 +3971,77 @@ app.put('/api/tree/person/:id', requireAuth, bloquearColaborador, rateLimit, asy
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo guardar el cambio.' });
+  }
+});
+
+// Marcar a mano quién es "Yo" (el eje del árbol, resaltado en naranja) —
+// válvula de escape para cuando la detección automática (ver
+// updateFamilyTree) no encontró a nadie, o encontró a la persona
+// equivocada. Solo puede haber una persona marcada por vez: se apaga en
+// todas las demás filas de esta cuenta antes de prender la elegida.
+app.post('/api/tree/person/:id/marcar-principal', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ error: 'Falta el id.' });
+
+    const rows = await sql`SELECT id FROM family_members WHERE id = ${id} AND user_id = ${req.userId}`;
+    if (!rows.length) return res.status(404).json({ error: 'No se encontró esa persona.' });
+
+    await sql.transaction([
+      sql`UPDATE family_members SET es_principal = false WHERE user_id = ${req.userId} AND es_principal = true`,
+      sql`UPDATE family_members SET es_principal = true WHERE id = ${id} AND user_id = ${req.userId}`,
+    ]);
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo marcar como principal.' });
+  }
+});
+
+// Borrar a mano una persona del árbol — para cuando la IA la duplicó (dos
+// filas para la misma persona real, con un nombre o parentesco distinto
+// entre sí) y la fusión automática de updateFamilyTree() no lo detectó
+// (esa fusión solo actúa cuando las dos filas coinciden en el MISMO
+// parentesco único — mamá, papá, un abuelo puntual — a propósito, para
+// nunca arriesgarse a fusionar a dos personas reales distintas que
+// comparten nombre, como un papá y un abuelo que se llaman igual). No
+// borra a quien esté marcado como "Yo": para eso primero hay que marcar a
+// otra persona como principal.
+app.delete('/api/tree/person/:id', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ error: 'Falta el id.' });
+
+    const rows = await sql`SELECT nombre, relacion, padres, es_principal FROM family_members WHERE id = ${id} AND user_id = ${req.userId}`;
+    if (!rows.length) return res.status(404).json({ error: 'No se encontró esa persona.' });
+    if (rows[0].es_principal) return res.status(400).json({ error: 'Esta persona está marcada como "Yo" — marca a otra persona como principal antes de borrarla.' });
+    const nombreBorrado = rows[0].nombre;
+
+    const estadoAnterior = JSON.stringify({ nombre: rows[0].nombre, relacion: rows[0].relacion, padres: parseJsonArray(rows[0].padres) });
+    await sql`INSERT INTO historia_versiones (tabla, registro_id, texto_anterior, editado_por)
+              VALUES ('family_members', ${id}, ${estadoAnterior}, ${req.userId})`;
+
+    await sql`DELETE FROM family_members WHERE id = ${id} AND user_id = ${req.userId}`;
+
+    // Nadie más se queda apuntando, en su "padres", a un nombre que ya no
+    // existe — si no se limpia, esa persona queda "flotando" sin línea,
+    // igual que con una referencia mal escrita (ver
+    // resolverPadresPorNombreParecido).
+    const otros = await sql`SELECT id, padres FROM family_members WHERE user_id = ${req.userId} AND padres IS NOT NULL`;
+    for (const o of otros) {
+      const lista = parseJsonArray(o.padres);
+      if (!lista.includes(nombreBorrado)) continue;
+      const actualizada = lista.filter((n) => n !== nombreBorrado);
+      await sql`UPDATE family_members SET padres = ${actualizada.length ? JSON.stringify(actualizada) : null} WHERE id = ${o.id} AND user_id = ${req.userId}`;
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo borrar.' });
   }
 });
 

@@ -119,6 +119,48 @@ async function scenarioSinParecido(browser, base) {
   assert(filaPedro === filaAlejandrina, 'sin nada que de verdad se le parezca, Pedro NO se conecta con Alejandrina (quedan en la misma fila, como generación desconocida, en vez de forzar una conexión inventada)');
 }
 
+async function scenarioResaltadoPrincipal(browser, base) {
+  console.log('\n--- Escenario 3: el resaltado de "Yo" sigue al flag es_principal, no al texto del parentesco ---');
+  // "Diego" ya no tiene la palabra "principal" en su parentesco (se lo
+  // corrigieron a mano, ej. de "Sujeto principal" a "Yo") pero SÍ está
+  // marcado es_principal — tiene que seguir resaltado. "Alejandro" tiene la
+  // palabra "principal" metida en un dato cualquiera pero es_principal es
+  // false — antes eso alcanzaba para resaltarlo por error; ahora no.
+  const people = [
+    { id: 1, nombre: 'Diego', relacion: 'Yo', padres: [], es_principal: true },
+    { id: 2, nombre: 'Alejandro', relacion: 'tío (dato: fue el principal sostén de la familia)', padres: [], es_principal: false },
+  ];
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.route('**/api/tree', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ people, events: [] }) }));
+  await page.route('**/api/tree/mark-seen', (route) => route.fulfill({ contentType: 'application/json', body: '{}' }));
+  await page.route('**/api/tree/colaboradores', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ colaboradores: [] }) }));
+  await page.goto(base + '/arbol.html');
+  await page.waitForSelector('.tree-node', { timeout: 10000 });
+
+  const diegoEsPrincipal = await page.$eval(
+    '.tree-node:has(strong:text-is("Diego"))',
+    (el) => el.classList.contains('principal')
+  );
+  assert(diegoEsPrincipal, 'a "Diego" (es_principal:true, sin la palabra "principal" en el texto) se le sigue viendo la clase .principal (el resaltado naranja)');
+
+  const alejandroEsPrincipal = await page.$eval(
+    '.tree-node:has(strong:text-is("Alejandro"))',
+    (el) => el.classList.contains('principal')
+  );
+  assert(!alejandroEsPrincipal, 'a "Alejandro" (la palabra "principal" aparece en su texto, pero es_principal:false) NO se le pone la clase .principal — ya no se detecta por texto');
+
+  const diegoTieneMarcarBtn = await page.$('.tree-node:has(strong:text-is("Diego")) .marcar-principal-btn');
+  const diegoTieneBorrarBtn = await page.$('.tree-node:has(strong:text-is("Diego")) .borrar-btn');
+  assert(!diegoTieneMarcarBtn && !diegoTieneBorrarBtn, 'a quien ya es "Yo" no se le ofrece ni "marcar como principal" (ya lo es) ni "borrar" (para no poder borrar sin querer al eje del árbol)');
+
+  const alejandroTieneMarcarBtn = await page.$('.tree-node:has(strong:text-is("Alejandro")) .marcar-principal-btn');
+  const alejandroTieneBorrarBtn = await page.$('.tree-node:has(strong:text-is("Alejandro")) .borrar-btn');
+  assert(!!alejandroTieneMarcarBtn && !!alejandroTieneBorrarBtn, 'a cualquier otra persona sí se le ofrecen los botones de "marcar como principal" y "borrar"');
+
+  await context.close();
+}
+
 (async () => {
   const server = await startStaticServer();
   const port = server.address().port;
@@ -127,6 +169,7 @@ async function scenarioSinParecido(browser, base) {
   try {
     await scenarioAcentoCasiIgual(browser, base);
     await scenarioSinParecido(browser, base);
+    await scenarioResaltadoPrincipal(browser, base);
   } finally {
     await browser.close();
     server.close();
