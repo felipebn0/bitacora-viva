@@ -915,6 +915,13 @@
   // viajan junto con el aporte para que queden mostradas junto a él, no
   // como una foto suelta sin relación visual con la historia.
   let mediaUrlsLocal = [];
+  // Mientras subirFotoPendiente() está en curso (ver más abajo), guarda esa
+  // promesa acá — enviarTurno() la espera antes de mandar nada. Sin esto,
+  // si la persona seguía hablando/escribiendo apenas subida la foto (sin
+  // esperar el "✓ Se agregó"), el turno siguiente podía salir ANTES de que
+  // mediaUrlsLocal.push() llegara a correr, y esa foto se perdía en
+  // silencio — la historia se guardaba sin ella.
+  let subidaFotoEnCurso = null;
   let charlaTerminada = false;
   let esperandoAclaracion = false; // true justo después de que la IA pidió parentesco/año que faltaban
   // Id de la fila en family_notes que se va actualizando turno a turno
@@ -976,6 +983,10 @@
   }
 
   async function enviarTurno() {
+    // Ver el comentario junto a subidaFotoEnCurso: si hay una foto
+    // subiéndose todavía, esperamos a que termine antes de armar este
+    // turno — así mediaUrlsLocal ya la tiene adentro.
+    if (subidaFotoEnCurso) { try { await subidaFotoEnCurso; } catch (e) {} }
     const thinking = agregarBurbuja('thinking', 'Pensando…');
     try {
       const resp = await fetch(conOwner('/api/contribute-chat'), {
@@ -1377,7 +1388,7 @@
     fotoCaptionInput.focus();
   });
 
-  async function subirFotoPendiente() {
+  function subirFotoPendiente() {
     if (!fotoPendiente) return;
     const file = fotoPendiente;
     const caption = fotoCaptionInput.value.trim();
@@ -1385,26 +1396,35 @@
     fotoCaptionRow.classList.remove('visible');
     subirFotoBtn.disabled = true;
     recStatus.textContent = 'Subiendo…';
-    try {
-      // El caption/contributor ya no hace falta mandarlos acá: esta foto
-      // no se guarda suelta — queda atada a la historia (ver más abajo,
-      // mediaUrlsLocal), y ahí sí viajan junto con ella.
-      const resp = await fetch(conOwner('/api/contribute-media'), {
-        method: 'POST',
-        headers: { 'Content-Type': file.type || 'application/octet-stream' },
-        body: file,
-      });
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data.url) mediaUrlsLocal.push({ url: data.url, type: data.type, caption });
-        recStatus.textContent = '✓ Se agregó a esta historia.';
-      } else {
-        recStatus.textContent = 'No se pudo subir el archivo. Intenta de nuevo.';
+    // Guardada en subidaFotoEnCurso ANTES de que arranque el await de
+    // adentro — así, si enviarTurno() se dispara mientras esto sigue en
+    // vuelo, ya encuentra la promesa puesta y la espera (ver el
+    // comentario junto a subidaFotoEnCurso más arriba).
+    const promesa = (async () => {
+      try {
+        // El caption/contributor ya no hace falta mandarlos acá: esta foto
+        // no se guarda suelta — queda atada a la historia (ver más abajo,
+        // mediaUrlsLocal), y ahí sí viajan junto con ella.
+        const resp = await fetch(conOwner('/api/contribute-media'), {
+          method: 'POST',
+          headers: { 'Content-Type': file.type || 'application/octet-stream' },
+          body: file,
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.url) mediaUrlsLocal.push({ url: data.url, type: data.type, caption });
+          recStatus.textContent = '✓ Se agregó a esta historia.';
+        } else {
+          recStatus.textContent = 'No se pudo subir el archivo. Intenta de nuevo.';
+        }
+      } catch (e) {
+        recStatus.textContent = 'Hubo un problema para conectar.';
       }
-    } catch (e) {
-      recStatus.textContent = 'Hubo un problema para conectar.';
-    }
-    subirFotoBtn.disabled = false;
+      subirFotoBtn.disabled = false;
+    })();
+    subidaFotoEnCurso = promesa;
+    promesa.then(() => { if (subidaFotoEnCurso === promesa) subidaFotoEnCurso = null; });
+    return promesa;
   }
   fotoCaptionSend.addEventListener('click', subirFotoPendiente);
   fotoCaptionInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') subirFotoPendiente(); });
