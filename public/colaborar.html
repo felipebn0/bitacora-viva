@@ -1082,6 +1082,13 @@
   // silencio real — no se pierde nada, sigue escuchando el resto como el
   // turno siguiente.
   const MAX_TURN_MS = 150 * 1000;
+  // Grabaciones muy cortas (un ruido, un carraspeo, el micrófono captando
+  // algo apenas antes de cortar) no se procesan como una respuesta real —
+  // se descartan igual que si no se hubiera grabado nada, sin gastar una
+  // llamada a transcribir. No aplica mientras se está respondiendo la
+  // aclaración de parentesco/año (esperandoAclaracion): ahí una respuesta
+  // corta ("en 1985") es esperada y válida, no ruido.
+  const MIN_RESPUESTA_MS = 5 * 1000;
   let grabacionIniciadaEn = 0;
   let audioContext = null;
   let analyser = null;
@@ -1276,6 +1283,7 @@
     orb.disabled = true;
     recStatus.textContent = 'Procesando el audio…';
 
+    const duracionMs = grabacionIniciadaEn ? Date.now() - grabacionIniciadaEn : 0;
     const blob = await detenerGrabacionRaw();
     if (mediaStream) { mediaStream.getTracks().forEach((t) => t.stop()); mediaStream = null; }
 
@@ -1287,7 +1295,8 @@
       subirAudioBtn.disabled = false;
     };
 
-    if (!blob || !blob.size) {
+    const demasiadoCorta = !esperandoAclaracion && duracionMs < MIN_RESPUESTA_MS;
+    if (!blob || !blob.size || demasiadoCorta) {
       recStatus.textContent = '';
       reset();
       return;

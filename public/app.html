@@ -1508,6 +1508,13 @@
   // se guarda el texto igual — solo se descarta el archivo de audio.
   const HISTORIA_MIN_CHARS = 180; // debe coincidir con el mismo nombre en server.js
   const AUDIO_MIN_DURATION_MS = 50 * 1000;
+  // Grabaciones muy cortas (un ruido, un carraspeo, el micrófono
+  // captando algo apenas antes de cortar) no se procesan como una
+  // respuesta real — se descartan igual que "no te escuché bien", sin
+  // gastar una llamada a transcribir ni dejar que ese texto (a veces
+  // ruido mal transcrito) se cuele en la charla como si la persona
+  // hubiera dicho algo.
+  const MIN_RESPUESTA_MS = 5 * 1000;
   // Se guarda el motivo real del fallo (ver startRecordingAudio) para poder
   // avisar algo más útil que "no pude usar el micrófono" cuando el problema
   // es que el permiso quedó bloqueado — que es el caso más común y el único
@@ -1887,7 +1894,12 @@
   async function finalizeSpokenAnswer() {
     if (fallbackRecognition) { try { fallbackRecognition.stop(); } catch (e) {} }
     const audioBlob = await stopRecordingAudio();
-    if (!audioBlob || audioBlob.size < 800) {
+    // history.length===0 = la prueba de micrófono (primer turno de la
+    // sesión) — ahí una respuesta corta ("Felipe", un saludo) es esperada
+    // y válida, no ruido; el piso de MIN_RESPUESTA_MS aplica del segundo
+    // turno en adelante.
+    const demasiadoCorta = history.length > 0 && lastRecordingDurationMs < MIN_RESPUESTA_MS;
+    if (!audioBlob || audioBlob.size < 800 || demasiadoCorta) {
       writeRow.classList.add('visible');
       stateLabel.textContent = 'No te escuché bien — te sigo escuchando (o escribe tu respuesta).';
       listenForAnswer();
