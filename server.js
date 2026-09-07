@@ -2753,17 +2753,15 @@ app.post('/api/transcribe', requireAuth, rateLimit, express.raw({ type: '*/*', l
     });
 
     if (!resp.ok) {
-      const detalle = await resp.text();
-      console.error('ElevenLabs STT error:', resp.status, detalle);
-      // DEBUG TEMPORAL (2026-09-07): ver el comentario junto a /api/contribute-audio.
-      return res.status(502).json({ error: 'No se pudo transcribir el audio.', debug: `ElevenLabs ${resp.status}: ${detalle}`.slice(0, 300) });
+      console.error('ElevenLabs STT error:', resp.status, await resp.text());
+      return res.status(502).json({ error: 'No se pudo transcribir el audio.' });
     }
 
     const data = await resp.json();
     res.json({ text: (data.text || '').trim() });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'No se pudo transcribir el audio.', debug: err.message });
+    res.status(500).json({ error: 'No se pudo transcribir el audio.' });
   }
 });
 
@@ -3036,10 +3034,7 @@ app.post('/api/contribute-audio', requireAuth, rateLimit, express.raw({ type: '*
     res.json({ ok: true, url: blob.url });
   } catch (err) {
     console.error(err);
-    // DEBUG TEMPORAL (2026-09-07): diagnóstico de "no se pudo entender el
-    // audio" reportado de nuevo en colaborar.html — sacar apenas se
-    // confirme la causa real.
-    res.status(500).json({ error: 'No se pudo guardar el audio.', debug: err.message });
+    res.status(500).json({ error: 'No se pudo guardar el audio.' });
   }
 });
 
