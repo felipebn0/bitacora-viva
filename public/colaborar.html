@@ -1042,6 +1042,34 @@
     vadRafId = null;
   }
 
+  // Respaldo gratis: si el servidor no puede transcribir (por ejemplo, sin
+  // crédito de ElevenLabs), usamos el reconocimiento de voz del navegador
+  // como plan B — mismo mecanismo que ya existía en app.html, portado
+  // acá. Solo existe en Chrome de escritorio/Android, no en iPad/Safari —
+  // por eso es respaldo y no el camino principal.
+  function initFallbackRecognition() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return null;
+    const r = new SR();
+    r.lang = 'es-CO';
+    r.continuous = true;
+    r.interimResults = true;
+    r.maxAlternatives = 1;
+    return r;
+  }
+  const fallbackRecognition = initFallbackRecognition();
+  let fallbackTranscript = '';
+  if (fallbackRecognition) {
+    fallbackRecognition.onresult = (e) => {
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) {
+          fallbackTranscript += (fallbackTranscript ? ' ' : '') + e.results[i][0].transcript;
+        }
+      }
+    };
+    fallbackRecognition.onerror = () => {};
+  }
+
   // NotAllowedError es el motivo más común de que esto falle en iPhone: una
   // vez que el permiso de micrófono queda bloqueado para el sitio (o para
   // Safari/Chrome enteros, desde Ajustes de iOS), el navegador rechaza
@@ -1090,6 +1118,10 @@
     recStatus.textContent = '⏺️ Grabando… se corta sola cuando hagas una pausa.';
     subirAudioBtn.disabled = true;
     startVAD();
+    if (fallbackRecognition) {
+      fallbackTranscript = '';
+      try { fallbackRecognition.start(); } catch (e) {}
+    }
   }
 
   function detenerGrabacionRaw() {
@@ -1134,6 +1166,9 @@
         texto = (trData.text || '').trim();
       }
     } catch (e) {}
+    if (!texto && fallbackTranscript.trim()) {
+      texto = fallbackTranscript.trim(); // el servidor no pudo (ej. sin crédito de ElevenLabs): usamos lo que captó el navegador
+    }
 
     if (!texto) return false;
     historyLocal.push({ role: 'user', content: texto });
@@ -1145,6 +1180,7 @@
   async function terminarGrabacion() {
     if (!grabando) return;
     stopVAD();
+    if (fallbackRecognition) { try { fallbackRecognition.stop(); } catch (e) {} }
     grabando = false;
     orb.dataset.state = 'thinking';
     orb.innerHTML = 'Un<br>momento…';
