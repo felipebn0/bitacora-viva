@@ -129,6 +129,14 @@
     font-size: 0.68rem; cursor: pointer; display: flex; align-items: center; justify-content: center;
     opacity: 0; transition: opacity .15s;
   }
+  /* Mismo botón redondo que ✏️, pero del lado izquierdo — para que no se
+     superpongan cuando los dos aparecen juntos en un nodo que todavía no
+     es "Yo". */
+  .tree-node .marcar-principal-btn { right: auto; left: 4px; }
+  /* Y este, abajo a la derecha — con 52px de separación entre filas
+     (.tree-graphic) hay lugar de sobra para que no choque con la fila de
+     abajo. */
+  .tree-node .borrar-btn { top: auto; bottom: -14px; right: 4px; }
   .tree-node:hover .edit-btn, .tree-node:focus-within .edit-btn { opacity: 1; }
   /* En pantallas táctiles no existe ":hover" — sin esto, el botón de editar
      quedaba invisible siempre, sin ninguna pista de que se puede corregir
@@ -552,7 +560,12 @@
       row.className = 'tree-row';
       grupo.forEach((p) => {
         const node = document.createElement('div');
-        node.className = 'tree-node' + (/principal/i.test(p.relacion || '') ? ' principal' : '');
+        // Antes se detectaba por la palabra "principal" en el texto de
+        // "relacion" — corregir a mano el parentesco de esta persona (algo
+        // tan simple como cambiar "Sujeto principal" por "Yo") apagaba el
+        // resaltado sin querer. Ahora es un flag aparte (es_principal) que
+        // la edición nunca toca.
+        node.className = 'tree-node' + (p.es_principal ? ' principal' : '');
         const avatarDiv = document.createElement('div');
         avatarDiv.className = 'avatar';
         avatarDiv.textContent = initials(p.nombre);
@@ -574,6 +587,64 @@
           e.stopPropagation();
           editarPersona(p.id, p.nombre, p.relacion, p.padres);
         });
+        // Válvula de escape manual: si el resaltado de "Yo" no cayó en la
+        // persona correcta (o en nadie), se puede corregir a mano sin tener
+        // que reconstruir todo el árbol.
+        if (!p.es_principal) {
+          const marcarBtn = document.createElement('button');
+          marcarBtn.className = 'edit-btn marcar-principal-btn';
+          marcarBtn.type = 'button';
+          marcarBtn.title = 'Marcar como "Yo" (el eje del árbol)';
+          marcarBtn.setAttribute('aria-label', 'Marcar a ' + p.nombre + ' como la persona principal del árbol');
+          marcarBtn.textContent = '⭐';
+          node.appendChild(marcarBtn);
+          marcarBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (!confirm(`¿Marcar a ${p.nombre} como "Yo"? Se le va a quitar ese resaltado a quien lo tuviera antes.`)) return;
+            try {
+              const resp = await fetch('/api/tree/person/' + p.id + '/marcar-principal', { method: 'POST' });
+              if (resp.ok) {
+                cargar();
+              } else {
+                const data = await resp.json().catch(() => ({}));
+                alert(mensajeDeError(resp, data, 'No se pudo marcar como principal.'));
+              }
+            } catch (err) {
+              alert('No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.');
+            }
+          });
+        }
+        // Borrar del todo a alguien duplicado — por ejemplo, la misma
+        // persona guardada dos veces con un nombre o parentesco distinto
+        // entre sí, algo que la fusión automática no siempre puede
+        // detectar sola (a propósito: nunca fusiona solo por nombre
+        // parecido, para no arriesgarse a unir a dos personas reales
+        // distintas). A quien esté marcado como "Yo" no se le ofrece este
+        // botón — primero hay que marcar a otra persona como principal.
+        if (!p.es_principal) {
+          const borrarBtn = document.createElement('button');
+          borrarBtn.className = 'edit-btn borrar-btn';
+          borrarBtn.type = 'button';
+          borrarBtn.title = 'Borrar (por ejemplo, si quedó duplicado)';
+          borrarBtn.setAttribute('aria-label', 'Borrar a ' + p.nombre + ' del árbol');
+          borrarBtn.textContent = '🗑️';
+          node.appendChild(borrarBtn);
+          borrarBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (!confirm(`¿Borrar a ${p.nombre} (${p.relacion}) del árbol? No se puede deshacer desde acá.`)) return;
+            try {
+              const resp = await fetch('/api/tree/person/' + p.id, { method: 'DELETE' });
+              if (resp.ok) {
+                cargar();
+              } else {
+                const data = await resp.json().catch(() => ({}));
+                alert(mensajeDeError(resp, data, 'No se pudo borrar.'));
+              }
+            } catch (err) {
+              alert('No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.');
+            }
+          });
+        }
         row.appendChild(node);
         nodeById.set(p.id, node);
         avatarById.set(p.id, node.querySelector('.avatar'));
@@ -844,7 +915,10 @@
         const contraEscala = 1 / escala;
         graphic.querySelectorAll('.edit-btn').forEach((btn) => {
           btn.style.transform = `scale(${contraEscala})`;
-          btn.style.transformOrigin = 'top right';
+          let origen = 'top right'; // ✏️, por defecto
+          if (btn.classList.contains('marcar-principal-btn')) origen = 'top left'; // ⭐
+          else if (btn.classList.contains('borrar-btn')) origen = 'bottom right'; // 🗑️
+          btn.style.transformOrigin = origen;
         });
       } else {
         graphic.style.transform = '';

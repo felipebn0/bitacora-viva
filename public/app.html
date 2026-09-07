@@ -393,6 +393,15 @@
      nada más en esas pantallas, lo suficiente para que todo entre en una
      fila y el nombre quede en dos líneas como mucho. */
   @media (max-width: 400px) {
+    /* La foto/video de la charla (auditoría UX 2026-09-07) no llega a
+       taparse con el orbe — quedan en flujo normal, uno debajo del otro,
+       con espacio entre los dos — pero en un celular chico (320×568) SÍ
+       empuja el orbe y "terminar la charla" bastante más abajo de lo que
+       ya estaban sin foto, obligando a scrollear de más justo cuando
+       alguien tiene que volver a tocar el botón para seguir hablando.
+       Medido con Playwright, no a ojo: sin esto, mostrar una foto sumaba
+       ~90px extra de scroll antes de llegar al orbe en 320×568. */
+    .media-momento img, .media-momento video { max-height: 150px; }
     /* column-gap para separar los íconos entre sí (evita toques
        accidentales al vecino, sobre todo con letra agrandada) se deja
        igual; row-gap (el espacio entre la fila de arriba y la de abajo)
@@ -690,7 +699,10 @@
        <span class="icon-label" aria-hidden="true">Colaborar</span>
      </div>
      <div class="icon-nav-item">
-       <a class="icon-btn" href="/colaboraciones.html" title="Aportes de la familia" aria-label="Aportes de la familia">💬</a>
+       <div class="icon-btn-wrap">
+         <a class="icon-btn" href="/colaboraciones.html" title="Aportes de la familia" aria-label="Aportes de la familia">💬</a>
+         <span class="icon-badge" id="aportesBadge"></span>
+       </div>
        <span class="icon-label" aria-hidden="true">Aportes</span>
      </div>
      <div class="icon-nav-item">
@@ -2397,6 +2409,28 @@
     } catch (e) {}
   }
   cargarBadgeArbol();
+
+  // Mismo mecanismo que cargarBadgeArbol() de arriba, para el ícono de
+  // "Aportes" (💬) — avisa cuando un familiar terminó de contar una
+  // historia y todavía no se vio en /colaboraciones.html (backlog UX
+  // 2026-09-07: "avisar al dueño cuando un colaborador termina de
+  // aportar", con badge en vez de correo).
+  async function cargarBadgeAportes() {
+    const aportesBadge = document.getElementById('aportesBadge');
+    if (!aportesBadge) return;
+    try {
+      const resp = await fetch('/api/aportes/pending');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const nombres = data.names || [];
+      if (nombres.length) {
+        aportesBadge.textContent = String(nombres.length);
+        aportesBadge.title = 'Aportó una historia: ' + nombres.join(', ');
+        aportesBadge.classList.add('visible');
+      }
+    } catch (e) {}
+  }
+  cargarBadgeAportes();
 })();
 </script>
 </body>

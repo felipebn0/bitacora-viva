@@ -17,6 +17,15 @@
 // También verifica el caso sin arreglo posible (un nombre que de verdad no
 // se parece a nadie): se dejan tal cual, sin inventar una conexión, y se
 // avisa por consola para que el problema se pueda diagnosticar.
+//
+// Suma cobertura de dos bugs reportados sobre un árbol real (usuario
+// "Diego"): la mamá apareciendo dos veces (fusionarRolesUnicos, que junta
+// duplicados solo dentro de los siete casilleros únicos alrededor del
+// sujeto principal — mamá, papá, los 4 abuelos, y el propio "Yo" — nunca
+// por nombre suelto en el resto del árbol) y el resaltado naranja de "Yo"
+// perdiéndose al corregir el parentesco a mano (es_principal, un flag
+// aparte que sobrevive aunque la palabra "principal" ya no esté en el
+// texto).
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'ci-smoke-secret';
 process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgres://fake:fake@localhost/fake';
 process.env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || 'fake';
@@ -30,9 +39,22 @@ const PASSWORD_HASH = bcrypt.hashSync('miclave123', 4);
 
 const user = { id: 1, username: 'jorge', password_hash: PASSWORD_HASH, token_version: 0, owner_user_id: null };
 
-let familyMembers = []; // fila: { id, nombre, relacion, detalles, padres (string JSON o null) }
+let familyMembers = []; // fila: { id, nombre, relacion, detalles, padres (string JSON o null), es_principal }
 let nextId = 1;
 let treePendingNames = null;
+
+// "padres" se guarda en family_members como TEXT (JSON) o null — mismo
+// parseJsonArray defensivo que usa server.js, para leer el mock en los
+// checks de abajo.
+function parseJsonArrayTest(raw) {
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
 
 // El tool_use que "la IA" va a devolver en la próxima llamada de rebuild —
 // cada test lo pisa antes de pedir /api/rebuild-tree.
@@ -60,9 +82,16 @@ function fakeSql(strings, ...values) {
     ] }]);
   }
 
-  if (text.includes('SELECT nombre, relacion, detalles, padres FROM family_members') && !text.includes('ORDER BY id')) {
-    // personasPrevias, adentro de updateFamilyTree — vacío en ambos tests.
-    return Promise.resolve([]);
+  if (text.includes('SELECT id, nombre, relacion, detalles, padres, es_principal FROM family_members')) {
+    // GET /api/tree — lo que de verdad ve el navegador, con "id" y
+    // "es_principal" incluidos.
+    return Promise.resolve(familyMembers.map((p) => ({ id: p.id, nombre: p.nombre, relacion: p.relacion, detalles: p.detalles, padres: p.padres, es_principal: p.es_principal })));
+  }
+  if (text.includes('SELECT nombre, relacion, detalles, padres, es_principal FROM family_members')) {
+    // personasPrevias, adentro de updateFamilyTree — refleja lo que haya
+    // quedado guardado de la corrida anterior (para el test de que
+    // es_principal sobrevive entre reconstrucciones).
+    return Promise.resolve(familyMembers.map((p) => ({ nombre: p.nombre, relacion: p.relacion, detalles: p.detalles, padres: p.padres, es_principal: p.es_principal })));
   }
   if (text.includes('SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events')) {
     return Promise.resolve([]); // eventosPrevios, y la relectura final (no se usan eventos en este test)
@@ -76,13 +105,51 @@ function fakeSql(strings, ...values) {
     return Promise.resolve([]);
   }
 
+  // Endpoints de edición manual (PUT/DELETE/marcar-principal), todos por id
+  // — van ANTES del "DELETE FROM family_members" a secas de más abajo
+  // (el de la reconstrucción completa), que si no los atraparía primero.
+  if (text.includes('SELECT id FROM family_members WHERE id')) {
+    const fila = familyMembers.find((p) => p.id === values[0] && p.user_id === values[1]);
+    return Promise.resolve(fila ? [{ id: fila.id }] : []);
+  }
+  if (text.includes('SELECT nombre, relacion, padres, es_principal FROM family_members WHERE id')) {
+    const fila = familyMembers.find((p) => p.id === values[0] && p.user_id === values[1]);
+    return Promise.resolve(fila ? [{ nombre: fila.nombre, relacion: fila.relacion, padres: fila.padres, es_principal: fila.es_principal }] : []);
+  }
+  if (text.includes('SELECT nombre, relacion, padres FROM family_members WHERE id')) {
+    const fila = familyMembers.find((p) => p.id === values[0] && p.user_id === values[1]);
+    return Promise.resolve(fila ? [{ nombre: fila.nombre, relacion: fila.relacion, padres: fila.padres }] : []);
+  }
+  if (text.includes('UPDATE family_members SET es_principal = false')) {
+    familyMembers.filter((p) => p.user_id === values[0]).forEach((p) => { p.es_principal = false; });
+    return Promise.resolve([]);
+  }
+  if (text.includes('UPDATE family_members SET es_principal = true')) {
+    const fila = familyMembers.find((p) => p.id === values[0] && p.user_id === values[1]);
+    if (fila) fila.es_principal = true;
+    return Promise.resolve([]);
+  }
+  if (text.includes('INSERT INTO historia_versiones')) return Promise.resolve([]);
+  if (text.includes('SELECT id, padres FROM family_members WHERE user_id')) {
+    return Promise.resolve(familyMembers.filter((p) => p.padres).map((p) => ({ id: p.id, padres: p.padres })));
+  }
+  if (text.includes('UPDATE family_members SET padres = ') && text.includes('WHERE id')) {
+    const fila = familyMembers.find((p) => p.id === values[1]);
+    if (fila) fila.padres = values[0];
+    return Promise.resolve([]);
+  }
+  if (text.includes('DELETE FROM family_members WHERE id')) {
+    familyMembers = familyMembers.filter((p) => !(p.id === values[0] && p.user_id === values[1]));
+    return Promise.resolve([]);
+  }
+
   if (text.includes('DELETE FROM family_members')) {
     familyMembers = [];
     return Promise.resolve([]);
   }
   if (text.includes('INSERT INTO family_members')) {
-    const [userId, nombre, relacion, detalles, padres] = values;
-    familyMembers.push({ id: nextId++, user_id: userId, nombre, relacion, detalles, padres });
+    const [userId, nombre, relacion, detalles, padres, esPrincipal] = values;
+    familyMembers.push({ id: nextId++, user_id: userId, nombre, relacion, detalles, padres, es_principal: !!esPrincipal });
     return Promise.resolve([]);
   }
   if (text.includes('DELETE FROM timeline_events')) return Promise.resolve([]);
@@ -204,6 +271,150 @@ async function main() {
   const pedro2 = (data2.people || []).find((p) => p.nombre === 'Pedro Vargas');
   check('sin nada parecido, la referencia se deja tal cual (no se inventa una conexión)', !!pedro2 && Array.isArray(pedro2.padres) && pedro2.padres.includes('Alejandra Gómez'));
   check('se avisó por consola que esa referencia no coincide con nadie (diagnosticable)', capturedLogs.some((l) => l.includes('no coincide con nadie')));
+
+  // --- 3) "Mamá" duplicada (el bug real reportado: Juliana Palacio aparecía
+  // dos veces en el árbol) se fusiona en una sola fila, y la conexión
+  // mamá-papá queda intacta ---
+  familyMembers = [];
+  nextId = 1;
+  capturedLogs.length = 0;
+  proximaRespuestaArbol = {
+    personas: [
+      { nombre: 'Diego', relacion: 'sujeto principal', padres: ['Jorge Vargas', 'Juliana Palacio'] },
+      { nombre: 'Jorge Vargas', relacion: 'papá', padres: [] },
+      { nombre: 'Juliana Palacio', relacion: 'mamá', padres: [] },
+      { nombre: 'Juliana Palacio', relacion: 'mamá', padres: [] }, // duplicada — misma persona, mencionada dos veces
+    ],
+    eventos: [],
+  };
+  const r3 = await request(server, { path: '/api/rebuild-tree', method: 'POST' }, cookie);
+  check('rebuild-tree (3) -> 200', r3.status === 200);
+  const julianasGuardadas = familyMembers.filter((p) => p.nombre === 'Juliana Palacio');
+  check('"Juliana Palacio" quedó UNA sola vez en la base, no duplicada', julianasGuardadas.length === 1);
+  const diego3 = familyMembers.find((p) => p.nombre === 'Diego');
+  check('Diego (el sujeto principal) sigue conectado a las dos, mamá y papá', Array.isArray(parseJsonArrayTest(diego3.padres)) && parseJsonArrayTest(diego3.padres).includes('Jorge Vargas') && parseJsonArrayTest(diego3.padres).includes('Juliana Palacio'));
+  check('nombre idéntico duplicado: fusión silenciosa, nada raro que avisar', !capturedLogs.some((l) => l.includes('se fusionaron en un solo')));
+
+  // --- 3b) Mismo caso, pero la segunda mención de la mamá viene con un
+  // nombre distinto (ej. la IA la transcribió distinto en otra charla) —
+  // se fusiona igual (es el mismo casillero "mamá") y esta vez SÍ avisa
+  // por consola, porque acá sí conviene poder revisarlo a mano. ---
+  familyMembers = [];
+  nextId = 1;
+  capturedLogs.length = 0;
+  proximaRespuestaArbol = {
+    personas: [
+      { nombre: 'Diego', relacion: 'sujeto principal', padres: ['Jorge Vargas', 'Juliana Palacio'] },
+      { nombre: 'Jorge Vargas', relacion: 'papá', padres: [] },
+      { nombre: 'Juliana Palacio', relacion: 'mamá', padres: [] },
+      { nombre: 'Juliana P.', relacion: 'mamá', padres: [] }, // misma persona, nombre distinto
+    ],
+    eventos: [],
+  };
+  const r3b = await request(server, { path: '/api/rebuild-tree', method: 'POST' }, cookie);
+  check('rebuild-tree (3b) -> 200', r3b.status === 200);
+  check('con nombres distintos para la misma mamá, sigue quedando UNA sola fila', familyMembers.filter((p) => p.relacion === 'mamá').length === 1);
+  check('se avisó por consola de la fusión (diagnosticable, para poder revisarlo)', capturedLogs.some((l) => l.includes('se fusionaron en un solo "mama"')));
+
+  // --- 4) Dos personas con el MISMO nombre pero roles únicos distintos
+  // (ej. un papá y un abuelo que se llaman igual) NO se fusionan — la
+  // fusión es por casillero de rol, nunca por nombre suelto. ---
+  familyMembers = [];
+  nextId = 1;
+  proximaRespuestaArbol = {
+    personas: [
+      { nombre: 'Diego', relacion: 'sujeto principal', padres: ['Jorge'] },
+      { nombre: 'Jorge', relacion: 'papá', padres: ['Jorge'] },
+      { nombre: 'Jorge', relacion: 'abuelo paterno', padres: [] },
+    ],
+    eventos: [],
+  };
+  const r4 = await request(server, { path: '/api/rebuild-tree', method: 'POST' }, cookie);
+  check('rebuild-tree (4) -> 200', r4.status === 200);
+  const jorgesGuardados = familyMembers.filter((p) => p.nombre === 'Jorge');
+  check('dos "Jorge" en roles distintos (papá y abuelo) quedan como DOS personas, no se fusionan por compartir nombre', jorgesGuardados.length === 2);
+  check('el papá "Jorge" sigue con su propio padre (el abuelo "Jorge") conectado', !!jorgesGuardados.find((p) => p.relacion === 'papá' && parseJsonArrayTest(p.padres).includes('Jorge')));
+
+  // --- 5/6) El resaltado de "Yo" (es_principal) no depende de que la
+  // palabra "principal" siga en el texto — sobrevive a una corrección
+  // manual del parentesco Y a una reconstrucción posterior. ---
+  familyMembers = [];
+  nextId = 1;
+  proximaRespuestaArbol = {
+    personas: [{ nombre: 'Diego', relacion: 'sujeto principal', padres: [] }],
+    eventos: [],
+  };
+  await request(server, { path: '/api/rebuild-tree', method: 'POST' }, cookie);
+  const tree1 = JSON.parse((await request(server, { path: '/api/tree', method: 'GET' }, cookie)).body || '{}');
+  const diegoTree1 = (tree1.people || []).find((p) => p.nombre === 'Diego');
+  check('recién generado, "Diego" queda marcado es_principal (por la palabra "principal" en su parentesco)', !!diegoTree1 && diegoTree1.es_principal === true);
+
+  // Simula justo lo que hace PUT /api/tree/person/:id al corregir el
+  // parentesco a mano: cambia "relacion", nunca toca "es_principal".
+  const diegoRow = familyMembers.find((p) => p.nombre === 'Diego');
+  diegoRow.relacion = 'Yo';
+
+  // Reconstrucción posterior: la IA, al leer "Personas ya conocidas" con
+  // "relacion": "Yo", lo devuelve tal cual — sin la palabra "principal" en
+  // ningún lado de esta corrida.
+  proximaRespuestaArbol = {
+    personas: [{ nombre: 'Diego', relacion: 'Yo', padres: [] }],
+    eventos: [],
+  };
+  await request(server, { path: '/api/rebuild-tree', method: 'POST' }, cookie);
+  const tree2 = JSON.parse((await request(server, { path: '/api/tree', method: 'GET' }, cookie)).body || '{}');
+  const diegoTree2 = (tree2.people || []).find((p) => p.nombre === 'Diego');
+  check('después de una reconstrucción sin la palabra "principal" en el texto, "Diego" SIGUE marcado es_principal (se reconoce por nombre, no se pierde el resaltado)', !!diegoTree2 && diegoTree2.es_principal === true);
+
+  // --- 7) Válvula de escape manual: POST .../marcar-principal ---
+  familyMembers = [];
+  nextId = 1;
+  proximaRespuestaArbol = {
+    personas: [
+      { nombre: 'Diego', relacion: 'sujeto principal', padres: [] },
+      { nombre: 'Nicolás', relacion: 'hermano menor', padres: [] },
+    ],
+    eventos: [],
+  };
+  await request(server, { path: '/api/rebuild-tree', method: 'POST' }, cookie);
+  const nicolasId = familyMembers.find((p) => p.nombre === 'Nicolás').id;
+  const rMarcar = await request(server, { path: `/api/tree/person/${nicolasId}/marcar-principal`, method: 'POST' }, cookie);
+  check('marcar-principal -> 200', rMarcar.status === 200);
+  const treeTrasMarcar = JSON.parse((await request(server, { path: '/api/tree', method: 'GET' }, cookie)).body || '{}');
+  const diegoTrasMarcar = (treeTrasMarcar.people || []).find((p) => p.nombre === 'Diego');
+  const nicolasTrasMarcar = (treeTrasMarcar.people || []).find((p) => p.nombre === 'Nicolás');
+  check('al marcar a Nicolás como principal, Diego deja de estarlo (solo puede haber uno)', diegoTrasMarcar.es_principal === false);
+  check('y Nicolás pasa a estarlo', nicolasTrasMarcar.es_principal === true);
+  const rMarcarInexistente = await request(server, { path: '/api/tree/person/99999/marcar-principal', method: 'POST' }, cookie);
+  check('marcar-principal sobre un id que no existe -> 404', rMarcarInexistente.status === 404);
+
+  // --- 8) Borrar a mano un duplicado: limpia también las referencias de
+  // "padres" de terceros, y nunca deja borrar a quien es "Yo" ---
+  familyMembers = [];
+  nextId = 1;
+  proximaRespuestaArbol = {
+    personas: [
+      { nombre: 'Diego', relacion: 'sujeto principal', padres: ['Jorge Vargas'] },
+      { nombre: 'Jorge Vargas', relacion: 'papá', padres: [] },
+      { nombre: 'Jorge Vargas Duplicado', relacion: 'tío', padres: [] }, // duplicado que la fusión automática no atrapó (rol no-único)
+    ],
+    eventos: [],
+  };
+  await request(server, { path: '/api/rebuild-tree', method: 'POST' }, cookie);
+  const diegoId = familyMembers.find((p) => p.nombre === 'Diego').id;
+  const duplicadoId = familyMembers.find((p) => p.nombre === 'Jorge Vargas Duplicado').id;
+
+  const rBorrarPrincipal = await request(server, { path: `/api/tree/person/${diegoId}`, method: 'DELETE' }, cookie);
+  check('no se puede borrar a quien está marcado como "Yo" -> 400', rBorrarPrincipal.status === 400);
+  check('sigue estando en la base (no se borró)', !!familyMembers.find((p) => p.id === diegoId));
+
+  const rBorrarDuplicado = await request(server, { path: `/api/tree/person/${duplicadoId}`, method: 'DELETE' }, cookie);
+  check('borrar el duplicado -> 200', rBorrarDuplicado.status === 200);
+  check('el duplicado ya no está en la base', !familyMembers.find((p) => p.id === duplicadoId));
+  check('Diego y su papá siguen ahí, sin verse afectados', familyMembers.some((p) => p.nombre === 'Diego') && familyMembers.some((p) => p.nombre === 'Jorge Vargas'));
+
+  const rBorrarInexistente = await request(server, { path: '/api/tree/person/99999', method: 'DELETE' }, cookie);
+  check('borrar un id que no existe -> 404', rBorrarInexistente.status === 404);
 
   console.warn = originalWarn;
   server.close();

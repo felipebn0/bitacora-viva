@@ -3,7 +3,9 @@
 // en_progreso=true), no recién al final de toda la charla — así si
 // abandona a mitad de camino no se pierde lo que ya narró. Al terminar
 // ([FIN]), esa MISMA fila se actualiza con el texto pulido por la IA
-// (en_progreso=false), no se crea una fila aparte.
+// (en_progreso=false), no se crea una fila aparte. También cubre la
+// campanita del ícono "Aportes" (💬, backlog UX 2026-09-07 resuelto): un
+// borrador en_progreso no la prende, solo el aporte YA terminado.
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'ci-smoke-secret';
 process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgres://fake:fake@localhost/fake';
 process.env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || 'fake';
@@ -28,6 +30,10 @@ const users = {
 let familyNotesTable = [];
 let nextId = 1;
 let capturedAnthropicCalls = [];
+// Campanita del ícono "Aportes" (💬, ver marcarAportePendiente en server.js):
+// ownerId -> array de nombres pendientes de ver, simulando la columna
+// aportes_pending_names de "users".
+let aportesPendingByOwner = {};
 
 function fakeSql(strings, ...values) {
   const text = strings.join('?');
@@ -67,6 +73,16 @@ function fakeSql(strings, ...values) {
     const row = familyNotesTable.find((r) => r.id === id && r.user_id === userId);
     if (row) { row.contributor = contributor; row.parentesco = parentesco; row.texto = texto; row.audio_urls = audioUrls; row.protagonista = protagonista; row.en_progreso = false; row.media_urls = mediaUrls; }
     return Promise.resolve(row ? [{ id: row.id }] : []);
+  }
+  if (text.includes('SELECT aportes_pending_names FROM users WHERE id')) {
+    const ownerId = values[0];
+    const nombres = aportesPendingByOwner[ownerId] || [];
+    return Promise.resolve([{ aportes_pending_names: nombres.length ? JSON.stringify(nombres) : null }]);
+  }
+  if (text.includes('UPDATE users SET aportes_pending_names')) {
+    const [json, ownerId] = values;
+    aportesPendingByOwner[ownerId] = JSON.parse(json);
+    return Promise.resolve([]);
   }
   return Promise.resolve([]);
 }
@@ -164,6 +180,7 @@ function check(nombre, cond) {
     check('el texto crudo del borrador es lo que contó, no está vacío', familyNotesTable[0].texto.includes('bañar al río'));
     check('pidió el dato que faltaba (needsBasicInfo)', d2.needsBasicInfo === true);
     check('la foto quedó guardada junto con el borrador', JSON.parse(familyNotesTable[0].media_urls)[0].url === fotoDelRio.url);
+    check('un borrador en_progreso todavía NO prende la campanita de "Aportes" del dueño', !(aportesPendingByOwner[1] || []).length);
 
     // Turno 3: responde la aclaración -> se actualiza el MISMO borrador, no uno nuevo.
     const historial3 = historial2.concat([
@@ -192,6 +209,7 @@ function check(nombre, cond) {
     check('la fila final tiene el texto pulido por la IA (guardar_aporte)', familyNotesTable[0].texto.includes('pulido por la IA'));
     check('la fila final tiene el parentesco extraído', familyNotesTable[0].parentesco === 'Hija');
     check('la foto sigue ahí en la fila final (no se pierde al pulir el texto)', JSON.parse(familyNotesTable[0].media_urls)[0].url === fotoDelRio.url);
+    check('el aporte terminado SÍ prende la campanita de "Aportes" del dueño, con el nombre de quien aportó', (aportesPendingByOwner[1] || []).includes('Colab'));
   } finally {
     server.close();
   }
