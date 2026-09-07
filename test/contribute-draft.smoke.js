@@ -7,6 +7,10 @@
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'ci-smoke-secret';
 process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgres://fake:fake@localhost/fake';
 process.env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || 'fake';
+// Ver el mismo comentario en test/media-file.smoke.js: un BLOB_READ_WRITE_TOKEN
+// real en el .env de la máquina pinearía el host exacto a ESE store y haría
+// fallar el chequeo de urlHttpValida sobre el host de prueba de más abajo.
+process.env.BLOB_READ_WRITE_TOKEN = '';
 
 const path = require('path');
 const http = require('http');
@@ -43,25 +47,25 @@ function fakeSql(strings, ...values) {
   }
   if (text.includes('SELECT descripcion, anio, categoria FROM timeline_events')) return Promise.resolve([]);
   if (text.includes('INSERT INTO family_notes')) {
-    // (user_id, contributor, texto, audio_urls, contributed_by, protagonista) — "en_progreso"
-    // va literal (true) en el propio texto de la consulta, no como parámetro.
-    const [userId, contributor, texto, audioUrls, contributedBy, protagonista] = values;
-    const row = { id: nextId++, user_id: userId, contributor, parentesco: null, texto, audio_urls: audioUrls, contributed_by: contributedBy, protagonista, en_progreso: true };
+    // (user_id, contributor, texto, audio_urls, contributed_by, protagonista, media_urls) —
+    // "en_progreso" va literal (true) en el propio texto de la consulta, no como parámetro.
+    const [userId, contributor, texto, audioUrls, contributedBy, protagonista, mediaUrls] = values;
+    const row = { id: nextId++, user_id: userId, contributor, parentesco: null, texto, audio_urls: audioUrls, contributed_by: contributedBy, protagonista, en_progreso: true, media_urls: mediaUrls };
     familyNotesTable.push(row);
     return Promise.resolve([{ id: row.id }]);
   }
   if (text.includes('UPDATE family_notes SET texto') && text.includes('en_progreso = true')) {
-    // borrador: (texto, audio_urls, protagonista, id, user_id)
-    const [texto, audioUrls, protagonista, id, userId] = values;
+    // borrador: (texto, audio_urls, protagonista, media_urls, id, user_id)
+    const [texto, audioUrls, protagonista, mediaUrls, id, userId] = values;
     const row = familyNotesTable.find((r) => r.id === id && r.user_id === userId && r.en_progreso);
-    if (row) { row.texto = texto; row.audio_urls = audioUrls; row.protagonista = protagonista; }
+    if (row) { row.texto = texto; row.audio_urls = audioUrls; row.protagonista = protagonista; row.media_urls = mediaUrls; }
     return Promise.resolve(row ? [{ id: row.id }] : []);
   }
   if (text.includes('UPDATE family_notes SET contributor') && text.includes('en_progreso = false')) {
-    // final: (contributor, parentesco, texto, audio_urls, protagonista, id, user_id)
-    const [contributor, parentesco, texto, audioUrls, protagonista, id, userId] = values;
+    // final: (contributor, parentesco, texto, audio_urls, protagonista, media_urls, id, user_id)
+    const [contributor, parentesco, texto, audioUrls, protagonista, mediaUrls, id, userId] = values;
     const row = familyNotesTable.find((r) => r.id === id && r.user_id === userId);
-    if (row) { row.contributor = contributor; row.parentesco = parentesco; row.texto = texto; row.audio_urls = audioUrls; row.protagonista = protagonista; row.en_progreso = false; }
+    if (row) { row.contributor = contributor; row.parentesco = parentesco; row.texto = texto; row.audio_urls = audioUrls; row.protagonista = protagonista; row.en_progreso = false; row.media_urls = mediaUrls; }
     return Promise.resolve(row ? [{ id: row.id }] : []);
   }
   return Promise.resolve([]);
@@ -148,9 +152,10 @@ function check(nombre, cond) {
     check('turno 1 no crea borrador (nada contado aún)', !d1.draftId);
     check('todavía no hay ninguna fila en family_notes', familyNotesTable.length === 0);
 
-    // Turno 2: el colaborador ya contó su historia -> se guarda un borrador.
+    // Turno 2: el colaborador ya contó su historia (y agregó una foto) -> se guarda un borrador.
     const historial2 = [{ role: 'user', content: 'Recuerdo que en la finca de mi abuela nos íbamos a bañar al río todos los veranos.' }];
-    const t2 = await request(server, { path: '/api/contribute-chat', method: 'POST', body: { history: historial2, draftId: null } }, cookie);
+    const fotoDelRio = { url: 'https://fake.blob.vercel-storage.com/media/1/foto-1.jpg', type: 'foto', caption: 'El río de la finca' };
+    const t2 = await request(server, { path: '/api/contribute-chat', method: 'POST', body: { history: historial2, draftId: null, mediaUrls: [fotoDelRio] } }, cookie);
     check('turno 2 -> 200', t2.status === 200);
     const d2 = JSON.parse(t2.body);
     check('turno 2 crea un borrador (draftId)', Number.isInteger(d2.draftId));
@@ -158,13 +163,17 @@ function check(nombre, cond) {
     check('la fila quedó marcada en_progreso=true', familyNotesTable[0].en_progreso === true);
     check('el texto crudo del borrador es lo que contó, no está vacío', familyNotesTable[0].texto.includes('bañar al río'));
     check('pidió el dato que faltaba (needsBasicInfo)', d2.needsBasicInfo === true);
+    check('la foto quedó guardada junto con el borrador', JSON.parse(familyNotesTable[0].media_urls)[0].url === fotoDelRio.url);
 
     // Turno 3: responde la aclaración -> se actualiza el MISMO borrador, no uno nuevo.
     const historial3 = historial2.concat([
       { role: 'assistant', content: d2.message },
       { role: 'user', content: 'Fue en 1985.' },
     ]);
-    const t3 = await request(server, { path: '/api/contribute-chat', method: 'POST', body: { history: historial3, draftId: d2.draftId } }, cookie);
+    // El cliente real (colaborar.html) reenvía SIEMPRE el "mediaUrls"
+    // acumulado en cada turno (igual que "audioUrls") — se repite acá para
+    // simular eso, no porque el servidor lo pida de nuevo.
+    const t3 = await request(server, { path: '/api/contribute-chat', method: 'POST', body: { history: historial3, draftId: d2.draftId, mediaUrls: [fotoDelRio] } }, cookie);
     const d3 = JSON.parse(t3.body);
     check('turno 3 sigue con el mismo draftId (no crea uno nuevo)', d3.draftId === d2.draftId);
     check('sigue habiendo una sola fila en family_notes', familyNotesTable.length === 1);
@@ -175,13 +184,14 @@ function check(nombre, cond) {
       { role: 'assistant', content: d3.message },
       { role: 'user', content: 'No, eso fue todo.' },
     ]);
-    const t4 = await request(server, { path: '/api/contribute-chat', method: 'POST', body: { history: historial4, draftId: d3.draftId } }, cookie);
+    const t4 = await request(server, { path: '/api/contribute-chat', method: 'POST', body: { history: historial4, draftId: d3.draftId, mediaUrls: [fotoDelRio] } }, cookie);
     const d4 = JSON.parse(t4.body);
     check('turno final -> done y saved', d4.done === true && d4.saved === true);
     check('sigue habiendo una sola fila (se actualizó, no se duplicó)', familyNotesTable.length === 1);
     check('la fila final quedó en_progreso=false', familyNotesTable[0].en_progreso === false);
     check('la fila final tiene el texto pulido por la IA (guardar_aporte)', familyNotesTable[0].texto.includes('pulido por la IA'));
     check('la fila final tiene el parentesco extraído', familyNotesTable[0].parentesco === 'Hija');
+    check('la foto sigue ahí en la fila final (no se pierde al pulir el texto)', JSON.parse(familyNotesTable[0].media_urls)[0].url === fotoDelRio.url);
   } finally {
     server.close();
   }

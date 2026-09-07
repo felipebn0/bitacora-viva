@@ -911,6 +911,10 @@
 
   let historyLocal = [];
   let audioUrlsLocal = [];
+  // Fotos/video subidos durante ESTA historia (ver subirFotoPendiente) —
+  // viajan junto con el aporte para que queden mostradas junto a él, no
+  // como una foto suelta sin relación visual con la historia.
+  let mediaUrlsLocal = [];
   let charlaTerminada = false;
   let esperandoAclaracion = false; // true justo después de que la IA pidió parentesco/año que faltaban
   // Id de la fila en family_notes que se va actualizando turno a turno
@@ -947,6 +951,7 @@
   function resetChat() {
     historyLocal = [];
     audioUrlsLocal = [];
+    mediaUrlsLocal = [];
     charlaTerminada = false;
     esperandoAclaracion = false;
     draftIdLocal = null;
@@ -976,7 +981,7 @@
       const resp = await fetch(conOwner('/api/contribute-chat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ history: historyLocal, audioUrls: audioUrlsLocal, draftId: draftIdLocal }),
+        body: JSON.stringify({ history: historyLocal, audioUrls: audioUrlsLocal, mediaUrls: mediaUrlsLocal, draftId: draftIdLocal }),
       });
       const data = await resp.json();
       thinking.remove();
@@ -1389,7 +1394,13 @@
         headers: { 'Content-Type': file.type || 'application/octet-stream' },
         body: file,
       });
-      recStatus.textContent = resp.ok ? '✓ Se agregó a la bitácora.' : 'No se pudo subir el archivo. Intenta de nuevo.';
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.url) mediaUrlsLocal.push({ url: data.url, type: data.type, caption });
+        recStatus.textContent = '✓ Se agregó a esta historia.';
+      } else {
+        recStatus.textContent = 'No se pudo subir el archivo. Intenta de nuevo.';
+      }
     } catch (e) {
       recStatus.textContent = 'Hubo un problema para conectar.';
     }

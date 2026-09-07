@@ -85,15 +85,10 @@
   .aporte-item .quien { color: var(--gold-deep); font-weight: 700; font-size: 0.875rem; margin: 0 0 4px; }
   .aporte-item .texto { line-height: 1.5; white-space: pre-wrap; }
   .aporte-item audio { width: 100%; margin-top: 8px; }
-
-  .media-grid { display: flex; flex-wrap: wrap; gap: 14px; }
-  .media-card {
-    background: #FBF6EA; border: 1px solid #E7DFCC; border-radius: 14px;
-    padding: 10px; width: 220px; font-size: 0.85rem;
+  .aporte-item .media-adjunta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+  .aporte-item .media-adjunta img, .aporte-item .media-adjunta video {
+    max-width: 220px; max-height: 220px; border-radius: 10px; display: block;
   }
-  .media-card img, .media-card video { width: 100%; max-height: 220px; object-fit: cover; border-radius: 10px; display: block; }
-  .media-card .quien { color: var(--gold-deep); font-weight: 700; margin: 8px 0 2px; }
-  .media-card .caption { color: var(--ink); margin: 0; line-height: 1.4; }
 </style>
 </head>
 <body>
@@ -121,16 +116,9 @@
 
     <section id="aportesSection">
       <h2>Lo que contaron</h2>
-      <p class="sub">Las historias completas, con su audio si lo grabaron.</p>
+      <p class="sub">Las historias completas, con su audio y fotos si las agregaron.</p>
       <p id="aportesStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
       <div id="aportesLista"><p class="empty">Cargando…</p></div>
-    </section>
-
-    <section id="mediaSection">
-      <h2>Fotos y videos</h2>
-      <p class="sub">Lo que la familia subió para acompañar una historia.</p>
-      <p id="mediaStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
-      <div id="mediaLista"><p class="empty">Cargando…</p></div>
     </section>
   </main>
 
@@ -140,8 +128,6 @@
   const colaboradoresStatus = document.getElementById('colaboradoresStatus');
   const aportesLista = document.getElementById('aportesLista');
   const aportesStatus = document.getElementById('aportesStatus');
-  const mediaLista = document.getElementById('mediaLista');
-  const mediaStatus = document.getElementById('mediaStatus');
 
   // Mismo criterio que el resto de las páginas: si la sesión venció, decirlo
   // claro en vez de mostrar un error genérico de conexión.
@@ -171,7 +157,7 @@
       const resp = await fetch('/api/contributions');
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) return { error: mensajeDeError(resp, data, 'No se pudieron cargar los aportes.') };
-      return { notes: data.notes || [], media: data.media || [] };
+      return { notes: data.notes || [] };
     } catch (e) {
       return { error: 'No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.' };
     }
@@ -279,72 +265,34 @@
           item.appendChild(audio);
         }
       });
+      // Fotos/video que se subieron mientras se contaba ESTA historia (ver
+      // colaborar.html) — al lado de su propio aporte, no en una sección
+      // aparte sin relación visual con la historia a la que pertenecen.
+      const mediaAdjunta = Array.isArray(n.media_urls) ? n.media_urls : [];
+      if (mediaAdjunta.length) {
+        const grid = document.createElement('div');
+        grid.className = 'media-adjunta';
+        mediaAdjunta.forEach((m) => {
+          if (!m || typeof m.url !== 'string' || !/^https?:\/\//.test(m.url)) return;
+          const src = '/api/media-file?u=' + encodeURIComponent(m.url);
+          const el = m.type === 'video' ? document.createElement('video') : document.createElement('img');
+          if (m.type === 'video') { el.controls = true; el.src = src; }
+          else { el.src = src; el.alt = m.caption || 'Foto de la historia'; }
+          grid.appendChild(el);
+        });
+        item.appendChild(grid);
+      }
       aportesLista.appendChild(item);
     });
   }
 
-  // Antes esto se subía desde colaborar.html pero no había ninguna
-  // pantalla donde verlo después: quedaba guardado en la base, se
-  // mencionaba UNA sola vez en la próxima charla del dueño (ver
-  // /api/next) y ahí se perdía para siempre — sin ningún lugar para
-  // volver a mirarlo. Mismo patrón que pintarAportes().
-  function pintarMedia(resultado) {
-    if (resultado.error) {
-      mediaLista.innerHTML = '<p class="empty">' + resultado.error + '</p>';
-      agregarBotonReintentar(mediaLista);
-      return;
-    }
-    const media = resultado.media || [];
-    if (!media.length) {
-      mediaStatus.textContent = 'Todavía no hay fotos ni videos.';
-      mediaLista.innerHTML = '<p class="empty">Todavía no hay fotos ni videos — se suben desde "Aportar una historia".</p>';
-      return;
-    }
-    mediaStatus.textContent = media.length === 1 ? 'Se cargó 1 foto o video.' : `Se cargaron ${media.length} fotos y videos.`;
-    const grid = document.createElement('div');
-    grid.className = 'media-grid';
-    media.forEach((m) => {
-      if (typeof m.url !== 'string' || !/^https?:\/\//.test(m.url)) return;
-      const card = document.createElement('div');
-      card.className = 'media-card';
-      const src = '/api/media-file?u=' + encodeURIComponent(m.url);
-      if (m.type === 'video') {
-        const video = document.createElement('video');
-        video.controls = true;
-        video.src = src;
-        card.appendChild(video);
-      } else {
-        const img = document.createElement('img');
-        img.src = src;
-        img.alt = m.caption || 'Foto de la familia';
-        card.appendChild(img);
-      }
-      if (m.contributor) {
-        const quien = document.createElement('p');
-        quien.className = 'quien';
-        quien.textContent = m.contributor;
-        card.appendChild(quien);
-      }
-      if (m.caption) {
-        const caption = document.createElement('p');
-        caption.className = 'caption';
-        caption.textContent = m.caption;
-        card.appendChild(caption);
-      }
-      grid.appendChild(card);
-    });
-    mediaLista.innerHTML = '';
-    mediaLista.appendChild(grid);
-  }
 
   async function cargarTodo() {
     colaboradoresLista.innerHTML = '<p class="empty">Cargando…</p>';
     aportesLista.innerHTML = '<p class="empty">Cargando…</p>';
-    mediaLista.innerHTML = '<p class="empty">Cargando…</p>';
     const [colabResultado, aportesResultado] = await Promise.all([pedirColaboradores(), pedirAportes()]);
     const colaboradoresVacios = pintarColaboradores(colabResultado);
     pintarAportes(aportesResultado, colaboradoresVacios);
-    pintarMedia(aportesResultado);
   }
 
   cargarTodo();

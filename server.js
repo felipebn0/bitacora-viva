@@ -585,6 +585,14 @@ function ensureSchema() {
       // audio — se guardan todos acá como JSON. audio_url (singular) sigue
       // sirviendo para los aportes viejos de un solo audio.
       sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS audio_urls TEXT`,
+      // Fotos/video que se subieron DURANTE la charla de aportar esta
+      // historia puntual (ver /api/contribute-chat) — JSON con
+      // [{url, type, caption}]. Antes /api/contribute-media solo insertaba
+      // en la tabla "media" de acá abajo (genérica, para que el dueño la
+      // vea en su propia charla) sin ningún vínculo con la historia — el
+      // resultado se sentía como una foto suelta en una sección aparte, sin
+      // relación visual con el aporte al que en realidad pertenece.
+      sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS media_urls TEXT`,
       // Quién (qué CUENTA logueada) aportó esta historia — distinto de
       // "contributor", que es el nombre libre que la charla extrajo. Con
       // esto un colaborador solo ve sus propias historias aportadas, nunca
@@ -3100,6 +3108,25 @@ const APORTE_EXTRACT_TOOL = [{
   },
 }];
 
+// Sanea las fotos/video que se subieron durante la charla de aportar (ver
+// mediaUrlsLocal en colaborar.html) antes de guardarlas junto a la
+// historia — mismo criterio que urlHttpValida para el resto de archivos:
+// nunca confiar en la URL que manda el cliente sin validar host/protocolo.
+function limpiarMediaAdjunta(mediaUrls) {
+  if (!Array.isArray(mediaUrls)) return [];
+  return mediaUrls
+    .map((m) => {
+      if (!m || typeof m !== 'object') return null;
+      const url = urlHttpValida(typeof m.url === 'string' ? m.url : null);
+      if (!url) return null;
+      const type = m.type === 'video' ? 'video' : 'foto';
+      const caption = typeof m.caption === 'string' ? m.caption.trim().slice(0, 500) : '';
+      return { url, type, caption: caption || null };
+    })
+    .filter(Boolean)
+    .slice(0, 10);
+}
+
 // Guarda (o actualiza) lo que el colaborador ya contó ANTES de que termine
 // la charla — así, si se cae la conexión o abandona a mitad de camino, lo
 // que ya narró no se pierde. Es texto crudo, sin pulir todavía (eso lo hace
@@ -3108,7 +3135,7 @@ const APORTE_EXTRACT_TOOL = [{
 // que esté completa. Devuelve el id de la fila (nuevo o el mismo que ya
 // tenía) para que el siguiente turno actualice esa misma fila en vez de
 // crear una nueva.
-async function guardarBorradorAporte(ownerId, draftId, historyHastaAhora, audioUrls, contributedByUserId, colaboradorNombre, protagonista) {
+async function guardarBorradorAporte(ownerId, draftId, historyHastaAhora, audioUrls, contributedByUserId, colaboradorNombre, protagonista, mediaUrls) {
   try {
     const texto = historyHastaAhora
       .filter((m) => m.role === 'user' && !/^\(.*\)$/.test(m.content.trim()) && m.content.trim())
@@ -3125,14 +3152,16 @@ async function guardarBorradorAporte(ownerId, draftId, historyHastaAhora, audioU
       ? audioUrls.map((u) => urlHttpValida(u)).filter(Boolean).slice(0, 10)
       : [];
     const audioUrlsJson = audioUrlsLimpias.length ? JSON.stringify(audioUrlsLimpias) : null;
+    const mediaUrlsLimpias = limpiarMediaAdjunta(mediaUrls);
+    const mediaUrlsJson = mediaUrlsLimpias.length ? JSON.stringify(mediaUrlsLimpias) : null;
     const texfinal = capitalizarInicio(texto);
 
     await ensureSchema();
     if (draftId) {
-      await sql`UPDATE family_notes SET texto = ${texfinal}, audio_urls = ${audioUrlsJson}, protagonista = ${cleanProtagonista} WHERE id = ${draftId} AND user_id = ${ownerId} AND en_progreso = true`;
+      await sql`UPDATE family_notes SET texto = ${texfinal}, audio_urls = ${audioUrlsJson}, protagonista = ${cleanProtagonista}, media_urls = ${mediaUrlsJson} WHERE id = ${draftId} AND user_id = ${ownerId} AND en_progreso = true`;
       return draftId;
     }
-    const rows = await sql`INSERT INTO family_notes (user_id, contributor, texto, audio_urls, contributed_by, protagonista, en_progreso) VALUES (${ownerId}, ${cleanContributor}, ${texfinal}, ${audioUrlsJson}, ${contributedByUserId}, ${cleanProtagonista}, true) RETURNING id`;
+    const rows = await sql`INSERT INTO family_notes (user_id, contributor, texto, audio_urls, contributed_by, protagonista, en_progreso, media_urls) VALUES (${ownerId}, ${cleanContributor}, ${texfinal}, ${audioUrlsJson}, ${contributedByUserId}, ${cleanProtagonista}, true, ${mediaUrlsJson}) RETURNING id`;
     return (rows[0] && rows[0].id) || draftId;
   } catch (err) {
     console.error('No se pudo guardar el borrador del aporte:', err);
@@ -3140,7 +3169,7 @@ async function guardarBorradorAporte(ownerId, draftId, historyHastaAhora, audioU
   }
 }
 
-async function finalizarAporte(ownerId, draftId, fullHistory, audioUrls, contributedByUserId, colaboradorNombre, protagonista) {
+async function finalizarAporte(ownerId, draftId, fullHistory, audioUrls, contributedByUserId, colaboradorNombre, protagonista, mediaUrls) {
   try {
     const transcript = fullHistory
       .filter((m) => !/^\(.*\)$/.test(m.content.trim())) // sin los avisos internos entre paréntesis
@@ -3165,17 +3194,19 @@ async function finalizarAporte(ownerId, draftId, fullHistory, audioUrls, contrib
       ? audioUrls.map((u) => urlHttpValida(u)).filter(Boolean).slice(0, 10)
       : [];
     const audioUrlsJson = audioUrlsLimpias.length ? JSON.stringify(audioUrlsLimpias) : null;
+    const mediaUrlsLimpias = limpiarMediaAdjunta(mediaUrls);
+    const mediaUrlsJson = mediaUrlsLimpias.length ? JSON.stringify(mediaUrlsLimpias) : null;
     const cleanProtagonista = (protagonista && protagonista !== colaboradorNombre)
       ? capitalizarNombre(String(protagonista).trim().slice(0, 60)) || null
       : null;
 
     await ensureSchema();
     if (draftId) {
-      const actualizada = await sql`UPDATE family_notes SET contributor = ${cleanContributor}, parentesco = ${cleanParentesco}, texto = ${texto}, audio_urls = ${audioUrlsJson}, protagonista = ${cleanProtagonista}, en_progreso = false WHERE id = ${draftId} AND user_id = ${ownerId} RETURNING id`;
+      const actualizada = await sql`UPDATE family_notes SET contributor = ${cleanContributor}, parentesco = ${cleanParentesco}, texto = ${texto}, audio_urls = ${audioUrlsJson}, protagonista = ${cleanProtagonista}, en_progreso = false, media_urls = ${mediaUrlsJson} WHERE id = ${draftId} AND user_id = ${ownerId} RETURNING id`;
       if (actualizada.length) return true;
       // El borrador no existía (nunca se llegó a guardar, o algo raro pasó) — no perder el aporte.
     }
-    await sql`INSERT INTO family_notes (user_id, contributor, parentesco, texto, audio_urls, contributed_by, protagonista) VALUES (${ownerId}, ${cleanContributor}, ${cleanParentesco}, ${texto}, ${audioUrlsJson}, ${contributedByUserId}, ${cleanProtagonista})`;
+    await sql`INSERT INTO family_notes (user_id, contributor, parentesco, texto, audio_urls, contributed_by, protagonista, media_urls) VALUES (${ownerId}, ${cleanContributor}, ${cleanParentesco}, ${texto}, ${audioUrlsJson}, ${contributedByUserId}, ${cleanProtagonista}, ${mediaUrlsJson})`;
     return true;
   } catch (err) {
     console.error('No se pudo guardar el aporte final:', err);
@@ -3247,15 +3278,16 @@ app.post('/api/contribute-chat', requireAuth, rateLimit, async (req, res) => {
     // MISMA fila en vez de crear una nueva cada vez.
     let draftId = Number.isInteger(req.body.draftId) ? req.body.draftId : null;
     const audioUrls = Array.isArray(req.body.audioUrls) ? req.body.audioUrls : [];
+    const mediaUrls = Array.isArray(req.body.mediaUrls) ? req.body.mediaUrls : [];
 
     let saved = false;
     if (done) {
-      saved = await finalizarAporte(ownerId, draftId, messages.concat([{ role: 'assistant', content: text }]), audioUrls, req.userId, colaboradorNombre, protagonista);
+      saved = await finalizarAporte(ownerId, draftId, messages.concat([{ role: 'assistant', content: text }]), audioUrls, req.userId, colaboradorNombre, protagonista, mediaUrls);
     } else if (history.length) {
       // Ya contó algo — lo guardamos ahora mismo, no hace falta esperar a
       // que termine toda la charla (y las preguntas de aclaración) para que
       // quede a salvo.
-      draftId = await guardarBorradorAporte(ownerId, draftId, messages, audioUrls, req.userId, colaboradorNombre, protagonista);
+      draftId = await guardarBorradorAporte(ownerId, draftId, messages, audioUrls, req.userId, colaboradorNombre, protagonista, mediaUrls);
     }
 
     res.json({ message: text, done, saved, needsBasicInfo, draftId });
@@ -3313,10 +3345,10 @@ app.get('/api/contributions', requireAuth, async (req, res) => {
     // conocida, no un hueco de privacidad hacia afuera de la familia).
     const esDueño = ownerId === req.userId;
     const notesRaw = esDueño
-      ? await sql`SELECT id, contributor, parentesco, protagonista, texto, audio_url, audio_urls, created_at FROM family_notes WHERE user_id = ${ownerId} ORDER BY created_at DESC LIMIT 30`
+      ? await sql`SELECT id, contributor, parentesco, protagonista, texto, audio_url, audio_urls, media_urls, created_at FROM family_notes WHERE user_id = ${ownerId} ORDER BY created_at DESC LIMIT 30`
       : req.isGuest
-      ? await sql`SELECT id, contributor, parentesco, protagonista, texto, audio_url, audio_urls, created_at FROM family_notes WHERE user_id = ${ownerId} AND contributed_by IS NULL AND contributor = ${req.guestName} ORDER BY created_at DESC LIMIT 30`
-      : await sql`SELECT id, contributor, parentesco, protagonista, texto, audio_url, audio_urls, created_at FROM family_notes WHERE user_id = ${ownerId} AND contributed_by = ${req.userId} ORDER BY created_at DESC LIMIT 30`;
+      ? await sql`SELECT id, contributor, parentesco, protagonista, texto, audio_url, audio_urls, media_urls, created_at FROM family_notes WHERE user_id = ${ownerId} AND contributed_by IS NULL AND contributor = ${req.guestName} ORDER BY created_at DESC LIMIT 30`
+      : await sql`SELECT id, contributor, parentesco, protagonista, texto, audio_url, audio_urls, media_urls, created_at FROM family_notes WHERE user_id = ${ownerId} AND contributed_by = ${req.userId} ORDER BY created_at DESC LIMIT 30`;
     const mediaRaw = esDueño
       ? await sql`SELECT type, url, caption, contributor, created_at FROM media WHERE user_id = ${ownerId} ORDER BY created_at DESC LIMIT 30`
       : [];
@@ -3325,6 +3357,7 @@ app.get('/api/contributions', requireAuth, async (req, res) => {
       contributor: capitalizarNombre(n.contributor),
       texto: capitalizarInicio(n.texto),
       audio_urls: parseJsonArray(n.audio_urls),
+      media_urls: parseJsonArray(n.media_urls),
     }));
     const media = mediaRaw.map((m) => ({ ...m, contributor: capitalizarNombre(m.contributor) }));
     res.json({ notes, media });
