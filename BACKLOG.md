@@ -95,4 +95,13 @@ Cosas que se pidieron pero se decidió posponer, con suficiente detalle para ret
 - Login: la cuenta administradora inicia sesión una vez y elige a qué subperfil entrar (como elegir perfil en Netflix), sin que cada subperfil tenga su propio usuario/clave — o el subperfil SÍ tiene su propio login pero delega el pago/administración a la cuenta principal (más parecido a una familia de Google/Apple). Decidir cuál de los dos antes de tocar el esquema.
 - Qué puede hacer la cuenta administradora en cada subperfil: ¿solo pagar y ver, o también entrar a charlar POR esa persona (como si fuera ella)? Esto último ya tiene un riesgo señalado antes: quien tenga el teléfono en la mano durante una charla es a quien realmente le pregunta la IA.
 
-**Para retomarlo:** antes de tocar código, decidir con Felipe el modelo de login (perfiles tipo Netflix vs. cuentas separadas con pago delegado) y el modelo de facturación (una suscripción para todos los subperfiles vs. una por cada uno) — son decisiones de producto, no de implementación.
+**Decisiones ya tomadas (Felipe, 2026-09-07):**
+- **Login:** un solo login con selector de perfiles (estilo Netflix). Felipe inicia sesión con SU usuario/clave y elige a qué bitácora entrar — el papá nunca necesita su propio usuario/clave.
+- **Facturación:** una sola suscripción cubre todos los subperfiles administrados (no una por cada uno).
+- **Alcance:** la cuenta administradora solo puede pagar y ver las bitácoras que administra — NO puede narrar/grabar charlas COMO si fuera esa persona (evita mezclar de quién es realmente la voz que le contesta a la IA).
+
+**Lo que implica en el modelo de datos (para cuando se retome):** hoy una fila de `users` es a la vez "la cuenta que loguea" y "la bitácora" (dueña de `story_log`, `family_notes`, `arbol_relaciones`, `subscriptions`, etc.) — con perfiles tipo Netflix, esas dos cosas se separan:
+- Una cuenta que loguea (usuario/clave/correo) pasa a poder tener VARIAS bitácoras propias, no una sola — no alcanza con el `owner_user_id` que ya existe (ese es para colaboradores SIN bitácora propia; acá cada subperfil sí necesita su árbol/capítulos/historias completos e independientes).
+- Cada tabla de contenido (`story_log`, `family_notes`, `arbol_relaciones`, `capitulos`, `subscriptions`, etc.) pasa de estar atada a `user_id` (la cuenta que loguea) a estar atada a un `bitacora_id` propio — la cuenta que loguea entonces "posee" N bitácoras, y el selector de perfiles simplemente cambia cuál `bitacora_id` está activo en la sesión.
+- `req.userId` (usado en TODAS las rutas protegidas por `requireAuth`) pasa a significar "la bitácora activa", no "la cuenta logueada" — hay que revisar cada ruta que hoy asume que son lo mismo.
+- Es una migración de forma grande (toca casi todo `server.js` y probablemente varias tablas), no un campo nuevo — antes de empezarla, retomar con Felipe si se hace de una sola vez o por partes.
