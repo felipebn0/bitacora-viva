@@ -409,8 +409,18 @@
         <div class="state-label" id="recStatus" role="status" aria-live="polite" aria-atomic="true"></div>
         <button class="write-toggle" id="subirAudioBtn" type="button">o sube una nota de voz que ya tengas</button>
         <input class="pc-93b8ea5b" type="file" id="subirAudioInput" accept="audio/*">
-        <button class="write-toggle" id="subirFotoBtn" type="button">📷 agregar una foto o video de esta historia</button>
+        <!-- El límite de tamaño y el nombre del archivo elegido no se veían
+             en ningún lado antes de intentar subir (auditoría UX
+             2026-09-07): el tope de 4MB recién aparecía como error DESPUÉS
+             de elegir un archivo pesado, y una vez elegido uno bueno no
+             había forma de confirmar cuál quedó seleccionado. El botón
+             ahora avisa el límite de entrada, y #fotoSeleccionadaNombre (el
+             mismo estilo que .state-label, sin agregar CSS nuevo) muestra
+             el nombre — volver a tocar el botón de arriba sigue sirviendo
+             para elegir otro archivo en su lugar, ya lo permitía el JS. -->
+        <button class="write-toggle" id="subirFotoBtn" type="button">📷 agregar una foto o video de esta historia (máx. 4 MB)</button>
         <input class="pc-93b8ea5b" type="file" id="subirFotoInput" accept="image/*,video/*">
+        <p class="state-label" id="fotoSeleccionadaNombre"></p>
         <div class="write-row" id="fotoCaptionRow">
           <input type="text" id="fotoCaptionInput" placeholder="¿Quién aparece? (opcional)" aria-label="Descripción de la foto o video">
           <button id="fotoCaptionSend" type="button">Subir</button>
@@ -570,7 +580,14 @@
 
   async function unirseDesdeHub() {
     const code = hubCode.value.trim();
-    if (!code) return;
+    // Antes salía en silencio con el código vacío, sin mensaje ni foco —
+    // auditoría UX 2026-09-07. hubError ya tenía role="alert" listo, solo
+    // faltaba usarlo también en este caso.
+    if (!code) {
+      hubError.textContent = 'Escribe el código de invitación para continuar.';
+      hubCode.focus();
+      return;
+    }
     hubSubmitBtn.disabled = true;
     hubError.textContent = '';
     try {
@@ -1366,6 +1383,7 @@
   // confirmarla.
   const subirFotoBtn = document.getElementById('subirFotoBtn');
   const subirFotoInput = document.getElementById('subirFotoInput');
+  const fotoSeleccionadaNombre = document.getElementById('fotoSeleccionadaNombre');
   const fotoCaptionRow = document.getElementById('fotoCaptionRow');
   const fotoCaptionInput = document.getElementById('fotoCaptionInput');
   const fotoCaptionSend = document.getElementById('fotoCaptionSend');
@@ -1383,6 +1401,10 @@
       return;
     }
     fotoPendiente = file;
+    // Único aviso de qué archivo quedó elegido (auditoría UX 2026-09-07) —
+    // volver a tocar "agregar una foto o video" de arriba reabre el picker
+    // y, al elegir otro, este mismo handler lo reemplaza sin más cambios.
+    fotoSeleccionadaNombre.textContent = '📎 ' + file.name;
     fotoCaptionInput.value = '';
     fotoCaptionRow.classList.add('visible');
     fotoCaptionInput.focus();
@@ -1393,6 +1415,7 @@
     const file = fotoPendiente;
     const caption = fotoCaptionInput.value.trim();
     fotoPendiente = null;
+    fotoSeleccionadaNombre.textContent = '';
     fotoCaptionRow.classList.remove('visible');
     subirFotoBtn.disabled = true;
     recStatus.textContent = 'Subiendo…';

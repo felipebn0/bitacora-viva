@@ -30,6 +30,10 @@
 //     "← volver", sin "cerrar sesión"/"borrar cuenta", y "Tus
 //     colaboraciones" centrado — y la misma página, para una cuenta 100%
 //     colaboradora sin bitácora propia, sigue conservando esos dos.
+// Aparte, una vez más (auditoría UX 2026-09-07, ver checkHeroAlturaBaja):
+//   - el hero de la landing a 1024×600 y 1280×720 (portátiles típicas en
+//     horizontal, no celulares) — el CTA principal tiene que quedar
+//     completamente visible sin scroll.
 // Además guarda una captura de cada combinación en test-artifacts/responsive/
 // para poder revisarlas a simple vista (CI las sube como artifact).
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'ci-smoke-secret';
@@ -459,6 +463,29 @@ async function checkColaborar(browser, server, base, screenshotDir) {
   await context2.close();
 }
 
+// Portátiles en horizontal (auditoría UX 2026-09-07): toda esta suite ya
+// probaba 4 anchos, pero SIEMPRE con height:900 — un eje que nunca se tocaba.
+// A 1024×600/1280×720 (laptops típicas, no celulares) el hero quedaba con el
+// botón "Crear mi cuenta" fuera de pantalla antes de cualquier scroll — un
+// bug real que esta suite nunca hubiera agarrado sin variar la altura
+// también. Cubre justo los dos anchos×altos que pidió esa auditoría, no una
+// matriz completa (eso sí sería una tarea aparte).
+async function checkHeroAlturaBaja(browser, base, screenshotDir) {
+  for (const [w, h] of [[1024, 600], [1280, 720]]) {
+    const label = `hero ${w}x${h}`;
+    const context = await browser.newContext({ viewport: { width: w, height: h }, reducedMotion: 'reduce' });
+    await attachCspViolationCollector(context);
+    const page = await context.newPage();
+    await page.goto(`${base}/`, { waitUntil: 'load' });
+    await page.waitForTimeout(300);
+    const box = await page.locator('.hero-actions').first().boundingBox();
+    check(!!box && box.y >= 0 && box.y + box.height <= h, `${label}: el CTA principal del hero ("Crear mi cuenta") queda completamente visible sin scroll`);
+    await checkSinViolacionesCsp(page, label, check);
+    await page.screenshot({ path: path.join(screenshotDir, `hero-baja-${w}x${h}.png`) });
+    await context.close();
+  }
+}
+
 async function main() {
   const server = app.listen(0);
   await new Promise((r) => server.once('listening', r));
@@ -480,6 +507,7 @@ async function main() {
     }
   }
   await checkColaborar(browser, server, base, screenshotDir);
+  await checkHeroAlturaBaja(browser, base, screenshotDir);
 
   await browser.close();
   server.close();
