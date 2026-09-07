@@ -334,7 +334,19 @@
     /* PRIVACY */
     .privacy{padding-top:70px}.privacy-box{display:grid;grid-template-columns:.85fr 1.15fr;gap:50px;background:var(--moss-deep);color:#F9F1E3;border-radius:32px;padding:48px}
     .privacy h2{font-size:clamp(2.3rem,4vw,3.7rem);margin-bottom:12px}.privacy p{color:#D9DCCF}
-    .privacy-list{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}.privacy-item{border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:18px;background:rgba(255,255,255,.035)}.privacy-item b{display:block;margin-bottom:6px}.privacy-item span{color:#CCD0C2;font-size:.92rem}
+    .privacy-list{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+    /* privacy-item pasó de <div> siempre-abierto a <details>/<summary>
+       (auditoría UX 2026-09-07) — mismo motivo y mismo mecanismo nativo que
+       ya usa .faq-item más abajo (funciona con teclado/lector de pantalla
+       sin JS), pero con sus propios colores: esta sección tiene fondo
+       oscuro (--moss-deep), así que no puede reusar los colores claros de
+       .faq-item tal cual. */
+    .privacy-item{border:1px solid rgba(255,255,255,.12);border-radius:18px;background:rgba(255,255,255,.035);overflow:hidden}
+    .privacy-item summary{list-style:none;cursor:pointer;padding:14px 40px 14px 16px;font-weight:600;position:relative}
+    .privacy-item summary::-webkit-details-marker{display:none}
+    .privacy-item summary::after{content:"+";position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:1.2rem;color:#F9F1E3;transition:transform .15s ease}
+    .privacy-item[open] summary::after{transform:translateY(-50%) rotate(45deg)}
+    .privacy-item p{padding:0 16px 14px;margin:0;color:#CCD0C2;font-size:.92rem}
 
     /* FAQ: <details>/<summary> nativo — funciona con teclado y lector de
        pantalla sin JS, y no se necesita rearmar el estado abierto/cerrado a
@@ -717,98 +729,15 @@
       </div>
     </section>
 
-    <!-- "Próximamente" vivió antes justo antes del CTA final (diluía la
-         conversión: alguien por registrarse volvía a leer "esto todavía
-         no existe" justo antes de decidirse), y después justo después de
-         "Cómo funciona" — pero ahí seguía quedando ANTES de mostrar
-         producto/voz/familia, es decir antes de mostrar lo que la app YA
-         hace hoy (auditoría UX 2026-09-06). Acá, después de esas tres,
-         sigue lejos del CTA final (quedan privacidad y preguntas en el
-         medio) pero ya viene después de haber mostrado lo que existe. -->
-    <section id="proximamente">
-      <div class="wrap">
-        <div class="section-head center reveal">
-          <div class="eyebrow pc-9b54a373">Lo que viene</div>
-          <h2>Próximamente</h2>
-          <p>Seguimos construyendo la bitácora. Esto es lo que se viene.</p>
-        </div>
-        <!-- "Fotos y videos" e "Historias ya grabadas" vivían acá como
-             "Próximamente" hasta que dejaron de serlo: las dos ya están
-             construidas y en uso (subida de foto/video y de nota de voz ya
-             grabada, ambas desde colaborar.html vía /api/contribute-media)
-             — auditoría UX 2026-09-07. Se sacan de esta grilla (ya no es
-             cierto que "vienen") y su valor pasa a la tarjeta de "Entran y
-             hablan, sin crear cuenta" de la sección de familia, arriba, que
-             es donde de verdad se usan. -->
-        <div class="soon-cards reveal">
-          <div class="soon-card">
-            <span class="soon-badge">Próximamente</span>
-            <div class="pc-6899e93a">🍲</div>
-            <b class="pc-f3b0f625">Recetas</b>
-            <p class="pc-166017f1">Para que esa "receta de la abuela" perdure, contada con su propia voz.</p>
-          </div>
-          <div class="soon-card">
-            <span class="soon-badge">Próximamente</span>
-            <div class="pc-6899e93a">🙏</div>
-            <b class="pc-f3b0f625">Oraciones</b>
-            <p class="pc-166017f1">Las que solían recitar, para que las escuches y las recites junto a ellos.</p>
-          </div>
-          <div class="soon-card">
-            <span class="soon-badge">Próximamente</span>
-            <div class="pc-6899e93a">🎵</div>
-            <b class="pc-f3b0f625">Memorias musicales</b>
-            <p class="pc-166017f1">Un archivo con la música de su vida, para que también la puedan disfrutar, no solo conversar.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="privacy" id="privacidad">
-      <div class="wrap">
-        <div class="privacy-box reveal">
-          <div><div class="eyebrow pc-f1b4ce9c">Recuerdos personales</div><h2>Tu historia tiene que sentirse tuya.</h2><p>Lo que se guarda acá son voces, recuerdos y relaciones familiares — no un dato cualquiera. Por eso la privacidad no es un detalle secundario, es la base de todo lo demás.</p></div>
-          <div class="privacy-list">
-            <div class="privacy-item"><b>🔐 Tu clave nunca queda expuesta</b><span>Inicias sesión con usuario y contraseña — la tuya nunca se guarda en texto plano: se guarda como un hash de un solo sentido, así que ni siquiera nosotros podemos leerla ni revertirla a la clave original.</span></div>
-            <div class="privacy-item"><b>🔒 Todo viaja cifrado</b><span>Cada conexión con el sitio va por HTTPS (la misma tecnología que usa tu banco) — nadie que intercepte la conexión puede leer lo que hablas o escribes.</span></div>
-            <!-- Estos tres bloques repetían casi palabra por palabra lo que
-                 ya dicen las preguntas frecuentes de más abajo (auditoría
-                 UX 2026-09-07) — el detalle completo sigue estando ahí, acá
-                 queda solo la promesa central, más corta de leer. -->
-            <div class="privacy-item"><b>👨‍👩‍👧 Solo entra quien tú invitas</b><span>Nadie ve tu bitácora sin el código de invitación que tú generas — ni siquiera creándose una cuenta nueva por su cuenta. Más detalle en las preguntas frecuentes, abajo.</span></div>
-            <div class="privacy-item"><b>🤖 La IA no aprende de tus historias</b><span>Claude, la inteligencia artificial que hace las preguntas de seguimiento, es una herramienta ya entrenada que usamos — no algo que "aprende" de cada charla. Más detalle en las preguntas frecuentes, abajo.</span></div>
-            <div class="privacy-item"><b>🔒 Tus audios y fotos también son privados</b><span>No se entregan directo desde donde se guardan: la app confirma primero que tienes permiso real de ver esa bitácora.</span></div>
-            <div class="privacy-item"><b>🚫 Nada de historial editado a escondidas</b><span>Si algo se corrige, la versión anterior queda guardada — nunca se reescribe la historia sin dejar rastro.</span></div>
-            <div class="privacy-item"><b>🗑️ Tú tienes el control</b><span>Puedes borrar todos tus recuerdos guardados cuando quieras, con una acción tuya deliberada — nada se borra por accidente ni por un mensaje de chat. Al confirmar, se borra de la base de datos y de donde se guardan tus audios y fotos; puede quedar, por un tiempo limitado, en una copia de resguardo interna que usamos solo para recuperarnos de una falla grave, nunca para volver a mostrar tu contenido.</span></div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section id="preguntas">
-      <div class="wrap">
-        <div class="eyebrow">Preguntas frecuentes</div>
-        <h2>Lo que la gente más nos pregunta</h2>
-        <div class="faq pc-d3a18014">
-          <details class="faq-item">
-            <summary>¿Quién puede escuchar o leer las historias que se guardan acá?</summary>
-            <p>Solo tu círculo de confianza: tú, y la familia que invites con tu propio código. Cualquiera de ellos puede entrar cuando quiera a escuchar, leer y disfrutar lo que se fue guardando — <strong>ese es justo el sentido de la aplicación</strong>, que esas historias no se pierdan y se puedan volver a visitar. Nadie por fuera de ese círculo puede entrar, ni creando una cuenta nueva por su cuenta.</p>
-          </details>
-          <details class="faq-item">
-            <summary>¿Mis audios y fotos están protegidos, o cualquiera con el link los puede abrir?</summary>
-            <p>Protegidos, sí — pero no porque el archivo en sí sea inaccesible: es que la app nunca lo entrega directo. Cada vez que se pide un audio o una foto, primero confirma que iniciaste sesión y que tienes permiso real de ver esa bitácora, y recién ahí lo entrega.</p>
-          </details>
-          <details class="faq-item">
-            <summary>¿La inteligencia artificial "aprende" de lo que cuento?</summary>
-            <p>No. Claude, la IA que hace las preguntas de seguimiento, es una herramienta ya entrenada que usamos como se usa un traductor — no algo que va aprendiendo de cada charla que tiene. Es la política estándar de Anthropic (quien la crea) para cualquiera que use su tecnología, no algo que configuramos nosotros para esta app en particular.</p>
-          </details>
-          <details class="faq-item">
-            <summary>¿Voy a poder escuchar las historias con la voz real de quien las contó, no una voz generada?</summary>
-            <p>Para las respuestas más largas o más significativas, <strong>ya se guarda la voz real</strong> de la persona — no una voz generada por IA — y se puede volver a escuchar tal cual se contó. Las respuestas más cortas se guardan solo como texto, para no ocupar espacio de más con grabaciones sin mucho contenido. La meta hacia adelante es llegar a conservar la voz real de cada historia, sin excepción, no solo de las más largas.</p>
-          </details>
-        </div>
-      </div>
-    </section>
-
+    <!-- El registro se movió acá, justo después de mostrar producto/voz/
+         familia (auditoría UX 2026-09-07) — antes vivía después de
+         Próximamente/privacidad/preguntas, casi al final de la página, así
+         que alguien ya decidido a registrarse tenía que pasar por "esto
+         todavía no existe" y un muro de privacidad/FAQ antes de llegar al
+         formulario. El CTA final (más abajo, id="empezar") sigue estando
+         y sigue apuntando acá — con el registro más arriba, ese link ahora
+         scrollea hacia ARRIBA en vez de hacia abajo, cosa normal en
+         cualquier navegador. -->
     <section class="registro" id="registro">
       <div class="wrap">
         <div class="registro-box reveal">
@@ -875,6 +804,100 @@
               <p class="signup-alt">¿Ya tienes cuenta? <a href="/app.html">Inicia sesión</a>.</p>
             </form>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- "Próximamente" vivió antes justo antes del CTA final (diluía la
+         conversión: alguien por registrarse volvía a leer "esto todavía
+         no existe" justo antes de decidirse), después justo después de
+         "Cómo funciona" (pero ahí seguía quedando ANTES de mostrar
+         producto/voz/familia), y después de familia (auditoría UX
+         2026-09-06). Ahora el registro se movió justo antes de acá
+         (auditoría UX 2026-09-07) — Próximamente sigue después de mostrar
+         lo que la app YA hace Y después de la oportunidad de registrarse;
+         quien no está listo para registrarse todavía sigue viendo esto,
+         privacidad y preguntas antes del cierre final. -->
+    <section id="proximamente">
+      <div class="wrap">
+        <div class="section-head center reveal">
+          <div class="eyebrow pc-9b54a373">Lo que viene</div>
+          <h2>Próximamente</h2>
+          <p>Seguimos construyendo la bitácora. Esto es lo que se viene.</p>
+        </div>
+        <!-- "Fotos y videos" e "Historias ya grabadas" vivían acá como
+             "Próximamente" hasta que dejaron de serlo: las dos ya están
+             construidas y en uso (subida de foto/video y de nota de voz ya
+             grabada, ambas desde colaborar.html vía /api/contribute-media)
+             — auditoría UX 2026-09-07. Se sacan de esta grilla (ya no es
+             cierto que "vienen") y su valor pasa a la tarjeta de "Entran y
+             hablan, sin crear cuenta" de la sección de familia, arriba, que
+             es donde de verdad se usan. -->
+        <div class="soon-cards reveal">
+          <div class="soon-card">
+            <span class="soon-badge">Próximamente</span>
+            <div class="pc-6899e93a">🍲</div>
+            <b class="pc-f3b0f625">Recetas</b>
+            <p class="pc-166017f1">Para que esa "receta de la abuela" perdure, contada con su propia voz.</p>
+          </div>
+          <div class="soon-card">
+            <span class="soon-badge">Próximamente</span>
+            <div class="pc-6899e93a">🙏</div>
+            <b class="pc-f3b0f625">Oraciones</b>
+            <p class="pc-166017f1">Las que solían recitar, para que las escuches y las recites junto a ellos.</p>
+          </div>
+          <div class="soon-card">
+            <span class="soon-badge">Próximamente</span>
+            <div class="pc-6899e93a">🎵</div>
+            <b class="pc-f3b0f625">Memorias musicales</b>
+            <p class="pc-166017f1">Un archivo con la música de su vida, para que también la puedan disfrutar, no solo conversar.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="privacy" id="privacidad">
+      <div class="wrap">
+        <div class="privacy-box reveal">
+          <div><div class="eyebrow pc-f1b4ce9c">Recuerdos personales</div><h2>Tu historia tiene que sentirse tuya.</h2><p>Lo que se guarda acá son voces, recuerdos y relaciones familiares — no un dato cualquiera. Por eso la privacidad no es un detalle secundario, es la base de todo lo demás.</p></div>
+          <div class="privacy-list">
+            <details class="privacy-item"><summary>🔐 Tu clave nunca queda expuesta</summary><p>Inicias sesión con usuario y contraseña — la tuya nunca se guarda en texto plano: se guarda como un hash de un solo sentido, así que ni siquiera nosotros podemos leerla ni revertirla a la clave original.</p></details>
+            <details class="privacy-item"><summary>🔒 Todo viaja cifrado</summary><p>Cada conexión con el sitio va por HTTPS (la misma tecnología que usa tu banco) — nadie que intercepte la conexión puede leer lo que hablas o escribes.</p></details>
+            <!-- Estos tres bloques repetían casi palabra por palabra lo que
+                 ya dicen las preguntas frecuentes de más abajo (auditoría
+                 UX 2026-09-07) — el detalle completo sigue estando ahí, acá
+                 queda solo la promesa central, más corta de leer. -->
+            <details class="privacy-item"><summary>👨‍👩‍👧 Solo entra quien tú invitas</summary><p>Nadie ve tu bitácora sin el código de invitación que tú generas — ni siquiera creándose una cuenta nueva por su cuenta. Más detalle en las preguntas frecuentes, abajo.</p></details>
+            <details class="privacy-item"><summary>🤖 La IA no aprende de tus historias</summary><p>Claude, la inteligencia artificial que hace las preguntas de seguimiento, es una herramienta ya entrenada que usamos — no algo que "aprende" de cada charla. Más detalle en las preguntas frecuentes, abajo.</p></details>
+            <details class="privacy-item"><summary>🔒 Tus audios y fotos también son privados</summary><p>No se entregan directo desde donde se guardan: la app confirma primero que tienes permiso real de ver esa bitácora.</p></details>
+            <details class="privacy-item"><summary>🚫 Nada de historial editado a escondidas</summary><p>Si algo se corrige, la versión anterior queda guardada — nunca se reescribe la historia sin dejar rastro.</p></details>
+            <details class="privacy-item"><summary>🗑️ Tú tienes el control</summary><p>Puedes borrar todos tus recuerdos guardados cuando quieras, con una acción tuya deliberada — nada se borra por accidente ni por un mensaje de chat. Al confirmar, se borra de la base de datos y de donde se guardan tus audios y fotos; puede quedar, por un tiempo limitado, en una copia de resguardo interna que usamos solo para recuperarnos de una falla grave, nunca para volver a mostrar tu contenido.</p></details>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="preguntas">
+      <div class="wrap">
+        <div class="eyebrow">Preguntas frecuentes</div>
+        <h2>Lo que la gente más nos pregunta</h2>
+        <div class="faq pc-d3a18014">
+          <details class="faq-item">
+            <summary>¿Quién puede escuchar o leer las historias que se guardan acá?</summary>
+            <p>Solo tu círculo de confianza: tú, y la familia que invites con tu propio código. Cualquiera de ellos puede entrar cuando quiera a escuchar, leer y disfrutar lo que se fue guardando — <strong>ese es justo el sentido de la aplicación</strong>, que esas historias no se pierdan y se puedan volver a visitar. Nadie por fuera de ese círculo puede entrar, ni creando una cuenta nueva por su cuenta.</p>
+          </details>
+          <details class="faq-item">
+            <summary>¿Mis audios y fotos están protegidos, o cualquiera con el link los puede abrir?</summary>
+            <p>Protegidos, sí — pero no porque el archivo en sí sea inaccesible: es que la app nunca lo entrega directo. Cada vez que se pide un audio o una foto, primero confirma que iniciaste sesión y que tienes permiso real de ver esa bitácora, y recién ahí lo entrega.</p>
+          </details>
+          <details class="faq-item">
+            <summary>¿La inteligencia artificial "aprende" de lo que cuento?</summary>
+            <p>No. Claude, la IA que hace las preguntas de seguimiento, es una herramienta ya entrenada que usamos como se usa un traductor — no algo que va aprendiendo de cada charla que tiene. Es la política estándar de Anthropic (quien la crea) para cualquiera que use su tecnología, no algo que configuramos nosotros para esta app en particular.</p>
+          </details>
+          <details class="faq-item">
+            <summary>¿Voy a poder escuchar las historias con la voz real de quien las contó, no una voz generada?</summary>
+            <p>Para las respuestas más largas o más significativas, <strong>ya se guarda la voz real</strong> de la persona — no una voz generada por IA — y se puede volver a escuchar tal cual se contó. Las respuestas más cortas se guardan solo como texto, para no ocupar espacio de más con grabaciones sin mucho contenido. La meta hacia adelante es llegar a conservar la voz real de cada historia, sin excepción, no solo de las más largas.</p>
+          </details>
         </div>
       </div>
     </section>

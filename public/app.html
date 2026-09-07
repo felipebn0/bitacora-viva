@@ -393,6 +393,15 @@
      nada más en esas pantallas, lo suficiente para que todo entre en una
      fila y el nombre quede en dos líneas como mucho. */
   @media (max-width: 400px) {
+    /* La foto/video de la charla (auditoría UX 2026-09-07) no llega a
+       taparse con el orbe — quedan en flujo normal, uno debajo del otro,
+       con espacio entre los dos — pero en un celular chico (320×568) SÍ
+       empuja el orbe y "terminar la charla" bastante más abajo de lo que
+       ya estaban sin foto, obligando a scrollear de más justo cuando
+       alguien tiene que volver a tocar el botón para seguir hablando.
+       Medido con Playwright, no a ojo: sin esto, mostrar una foto sumaba
+       ~90px extra de scroll antes de llegar al orbe en 320×568. */
+    .media-momento img, .media-momento video { max-height: 150px; }
     /* column-gap para separar los íconos entre sí (evita toques
        accidentales al vecino, sobre todo con letra agrandada) se deja
        igual; row-gap (el espacio entre la fila de arriba y la de abajo)
