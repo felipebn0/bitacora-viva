@@ -113,6 +113,11 @@
     text-align: center;
   }
   .greeting .sub { color: var(--ink-soft); font-size: 1.15rem; max-width: 26ch; margin: 0 auto; }
+  .media-momento { width: 100%; display: flex; justify-content: center; }
+  .media-momento img, .media-momento video {
+    max-width: 100%; max-height: 260px; border-radius: 16px;
+    box-shadow: 0 10px 26px -10px rgba(0,0,0,0.35);
+  }
   .orb-zone { display: grid; justify-items: center; gap: 12px; }
   .orb {
     width: 168px; height: 168px; border-radius: 50%; border: none; cursor: pointer;
@@ -715,6 +720,15 @@
       <div class="body-area">
         <div class="greeting" id="greeting">
           <div class="sub">Presiona el botón para empezar a charlar.</div>
+        </div>
+        <!-- Foto/video que un familiar subió, mostrada mientras la
+             entrevistadora pregunta por esa ocasión (ver data.media en
+             fetchNext) — no es un transcript, aparece solo cuando hay algo
+             puntual de qué hablar y desaparece en cuanto la charla sigue
+             con otra cosa. -->
+        <div class="media-momento" id="mediaMomento" hidden>
+          <img id="mediaMomentoImg" alt="Foto que compartió tu familia" hidden>
+          <video id="mediaMomentoVideo" controls hidden></video>
         </div>
         <div class="orb-zone">
           <button class="orb" id="orb" data-state="idle" aria-label="Presionar para comenzar la charla">
@@ -1448,6 +1462,9 @@
   const orbLabel = document.getElementById('orbLabel');
   const stateLabel = document.getElementById('stateLabel');
   const greeting = document.getElementById('greeting');
+  const mediaMomento = document.getElementById('mediaMomento');
+  const mediaMomentoImg = document.getElementById('mediaMomentoImg');
+  const mediaMomentoVideo = document.getElementById('mediaMomentoVideo');
   const writeToggle = document.getElementById('writeToggle');
   const writeRow = document.getElementById('writeRow');
   const writeInput = document.getElementById('writeInput');
@@ -1901,6 +1918,35 @@
     return 'No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.';
   }
 
+  // Muestra la foto/video que un familiar subió mientras la entrevistadora
+  // pregunta por esa ocasión (ver "media" en la respuesta de /api/next) — o
+  // la esconde de nuevo apenas la charla sigue con otra cosa (media=null
+  // en cualquier turno posterior, ya sea porque se pasó de tema o porque
+  // arrancó una charla nueva).
+  function mostrarMediaMomento(media) {
+    if (!media || !media.url) {
+      mediaMomento.hidden = true;
+      mediaMomentoImg.hidden = true;
+      mediaMomentoVideo.hidden = true;
+      mediaMomentoVideo.pause();
+      mediaMomentoVideo.removeAttribute('src');
+      return;
+    }
+    const src = '/api/media-file?u=' + encodeURIComponent(media.url);
+    if (media.type === 'video') {
+      mediaMomentoImg.hidden = true;
+      mediaMomentoVideo.src = src;
+      mediaMomentoVideo.hidden = false;
+    } else {
+      mediaMomentoVideo.hidden = true;
+      mediaMomentoVideo.pause();
+      mediaMomentoVideo.removeAttribute('src');
+      mediaMomentoImg.src = src;
+      mediaMomentoImg.hidden = false;
+    }
+    mediaMomento.hidden = false;
+  }
+
   async function fetchNext() {
     const mySession = sessionId;
     setState('thinking', 'Pensando…');
@@ -1942,6 +1988,7 @@
       history.push({ role: 'assistant', content: data.message });
       const logEntry = { role: 'assistant', content: data.message, timestamp: new Date().toISOString() };
       sessionLog.push(logEntry);
+      mostrarMediaMomento(data.media);
       setState('speaking', 'Hablando…');
       speak(data.message, () => {
         if (mySession !== sessionId) return;
@@ -2163,6 +2210,7 @@
     pausedFromState = null;
     currentSessionDbId = null;
     greeting.style.display = 'none';
+    mostrarMediaMomento(null);
     history = [];
     sessionLog = [];
     turnIndex = 0;

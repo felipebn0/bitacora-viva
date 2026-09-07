@@ -409,6 +409,12 @@
         <div class="state-label" id="recStatus" role="status" aria-live="polite" aria-atomic="true"></div>
         <button class="write-toggle" id="subirAudioBtn" type="button">o sube una nota de voz que ya tengas</button>
         <input class="pc-93b8ea5b" type="file" id="subirAudioInput" accept="audio/*">
+        <button class="write-toggle" id="subirFotoBtn" type="button">📷 agregar una foto o video de esta historia</button>
+        <input class="pc-93b8ea5b" type="file" id="subirFotoInput" accept="image/*,video/*">
+        <div class="write-row" id="fotoCaptionRow">
+          <input type="text" id="fotoCaptionInput" placeholder="¿Quién aparece? (opcional)" aria-label="Descripción de la foto o video">
+          <button id="fotoCaptionSend" type="button">Subir</button>
+        </div>
         <button class="write-toggle" id="writeToggleColab" type="button" aria-expanded="false" aria-controls="writeRowColab">o prefiero escribir mi historia</button>
         <div class="write-row pc-accd6151" id="writeRowColab">
           <input type="text" id="writeInputColab" placeholder="Escribe tu historia…" aria-label="Escribir historia">
@@ -1327,6 +1333,61 @@
     subirAudioBtn.disabled = false;
     orb.disabled = false;
   });
+
+  // --- Agregar una foto o video que acompañe esta historia (BACKLOG #1:
+  // el backend ya existía — /api/contribute-media — pero no había botón
+  // en ninguna pantalla para usarlo). Se sube aparte del audio: primero se
+  // elige el archivo, después se puede escribir quién aparece antes de
+  // confirmarla.
+  const subirFotoBtn = document.getElementById('subirFotoBtn');
+  const subirFotoInput = document.getElementById('subirFotoInput');
+  const fotoCaptionRow = document.getElementById('fotoCaptionRow');
+  const fotoCaptionInput = document.getElementById('fotoCaptionInput');
+  const fotoCaptionSend = document.getElementById('fotoCaptionSend');
+  const MAX_MEDIA_FILE_BYTES = 4 * 1024 * 1024; // Vercel corta pedidos de más de ~4.5MB
+  let fotoPendiente = null;
+
+  subirFotoBtn.addEventListener('click', () => { if (!charlaTerminada) subirFotoInput.click(); });
+
+  subirFotoInput.addEventListener('change', () => {
+    const file = subirFotoInput.files[0];
+    subirFotoInput.value = '';
+    if (!file) return;
+    if (file.size > MAX_MEDIA_FILE_BYTES) {
+      recStatus.textContent = 'El archivo pesa más de 4MB — prueba con uno más liviano por ahora.';
+      return;
+    }
+    fotoPendiente = file;
+    fotoCaptionInput.value = '';
+    fotoCaptionRow.classList.add('visible');
+    fotoCaptionInput.focus();
+  });
+
+  async function subirFotoPendiente() {
+    if (!fotoPendiente) return;
+    const file = fotoPendiente;
+    const caption = fotoCaptionInput.value.trim();
+    fotoPendiente = null;
+    fotoCaptionRow.classList.remove('visible');
+    subirFotoBtn.disabled = true;
+    recStatus.textContent = 'Subiendo…';
+    try {
+      const params = new URLSearchParams();
+      if (whoami.textContent) params.set('contributor', whoami.textContent);
+      if (caption) params.set('caption', caption);
+      const resp = await fetch(conOwner('/api/contribute-media') + (params.toString() ? '?' + params.toString() : ''), {
+        method: 'POST',
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        body: file,
+      });
+      recStatus.textContent = resp.ok ? '✓ Se agregó a la bitácora.' : 'No se pudo subir el archivo. Intenta de nuevo.';
+    } catch (e) {
+      recStatus.textContent = 'Hubo un problema para conectar.';
+    }
+    subirFotoBtn.disabled = false;
+  }
+  fotoCaptionSend.addEventListener('click', subirFotoPendiente);
+  fotoCaptionInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') subirFotoPendiente(); });
 
   async function cargarAportes() {
     try {
