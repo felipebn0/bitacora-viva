@@ -413,34 +413,6 @@
     .topbar { max-width: 230px; }
   }
 
-  .join-collab-panel {
-    width: 100%; max-width: 420px; margin: 20px auto 0; background: #FBF6EA;
-    border: 1px solid #E7DFCC; border-radius: 16px; padding: 16px 20px; text-align: center;
-  }
-  .join-collab-row { display: flex; gap: 8px; margin-top: 8px; }
-  /* font-size:1rem: sin esto, el campo de código de invitación disparaba
-     el zoom automático de iOS Safari al tocarlo (ver comentario junto a
-     .write-row input más arriba). */
-  .join-collab-row input {
-    flex: 1; border: 1px solid #E7DFCC; border-radius: 10px; padding: 10px 12px;
-    font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink); text-transform: uppercase;
-  }
-  .join-collab-row button {
-    border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px;
-    padding: 0 18px; font-weight: 700; cursor: pointer; font-family: var(--font-body);
-  }
-  .join-collab-row button:disabled { opacity: 0.6; cursor: default; }
-  .join-collab-panel .msg { font-size: 0.85rem; min-height: 1.2em; color: var(--moss); margin: 8px 0 0; }
-  .join-collab-existentes { margin-top: 16px; padding-top: 14px; border-top: 1px solid #E7DFCC; }
-  .join-collab-existentes .sub { margin-bottom: 8px; }
-  .join-collab-lista { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-  /* min-height:44px: zona de toque cómoda para algo que se usa para entrar
-     directo a una bitácora en la que ya se colabora. */
-  .join-collab-lista a {
-    display: inline-flex; align-items: center; padding: 6px 14px; border-radius: 20px; font-size: 0.85rem;
-    text-decoration: none; color: var(--ink); background: #fff; border: 1px solid #E7DFCC;
-    min-height: 44px; box-sizing: border-box;
-  }
   .login {
     width: min(340px, 100%);
     background: #FBF6EA;
@@ -709,7 +681,7 @@
         contenido de <main>, más abajo. -->
    <nav class="topbar" aria-label="Secciones de tu bitácora">
      <div class="icon-nav-item">
-       <button class="icon-btn" id="joinCollabBtn" type="button" title="Colaborar con otra historia" aria-label="Colaborar con otra historia" aria-expanded="false" aria-controls="joinCollabPanel">🤝</button>
+       <a class="icon-btn" href="/colaborar.html" title="Colaborar con otra historia" aria-label="Colaborar con otra historia">🤝</a>
        <span class="icon-label" aria-hidden="true">Colaborar</span>
      </div>
      <div class="icon-nav-item">
@@ -770,19 +742,6 @@
       </div>
     </div>
     </div>
-   </div>
-
-   <div class="join-collab-panel pc-93b8ea5b" id="joinCollabPanel">
-     <p class="sub">Quiero colaborar con otra historia — ingresa el código que te compartieron.</p>
-     <div class="join-collab-row">
-       <input type="text" id="joinCollabCode" placeholder="Ej: B46NWEC7" maxlength="8" aria-label="Código de invitación">
-       <button id="joinCollabSubmit" type="button">Entrar</button>
-     </div>
-     <p class="msg" id="joinCollabMsg" role="alert"></p>
-     <div class="join-collab-existentes pc-93b8ea5b" id="joinCollabExistentes">
-       <p class="sub">Ya colaboras con:</p>
-       <div class="join-collab-lista" id="joinCollabLista"></div>
-     </div>
    </div>
 
     <div class="logout-row">
@@ -1469,70 +1428,6 @@
       inviteRegenBtn.disabled = false;
     }
   });
-
-  const joinCollabBtn = document.getElementById('joinCollabBtn');
-  const joinCollabPanel = document.getElementById('joinCollabPanel');
-  const joinCollabCode = document.getElementById('joinCollabCode');
-  const joinCollabSubmit = document.getElementById('joinCollabSubmit');
-  const joinCollabMsg = document.getElementById('joinCollabMsg');
-  const joinCollabExistentes = document.getElementById('joinCollabExistentes');
-  const joinCollabLista = document.getElementById('joinCollabLista');
-
-  // Bitácoras en las que ya se colabora — para entrar directo sin tener
-  // que volver a pedir el código cada vez que se abre este panel.
-  async function cargarMisColaboracionesEnPanel() {
-    try {
-      const resp = await fetch('/api/my-collaborations');
-      if (!resp.ok) return;
-      const data = await resp.json();
-      const historias = data.historias || [];
-      if (!historias.length) { joinCollabExistentes.style.display = 'none'; return; }
-      joinCollabLista.innerHTML = '';
-      historias.forEach((h) => {
-        const a = document.createElement('a');
-        a.href = '/colaborar.html?owner=' + h.ownerId;
-        a.textContent = h.ownerName;
-        joinCollabLista.appendChild(a);
-      });
-      joinCollabExistentes.style.display = 'block';
-    } catch (e) {}
-  }
-
-  joinCollabBtn.addEventListener('click', () => {
-    const visible = joinCollabPanel.style.display !== 'none';
-    joinCollabPanel.style.display = visible ? 'none' : 'block';
-    joinCollabBtn.setAttribute('aria-expanded', String(!visible));
-    if (!visible) {
-      joinCollabCode.focus();
-      cargarMisColaboracionesEnPanel();
-    }
-  });
-
-  async function unirseAColaboracion() {
-    const code = joinCollabCode.value.trim();
-    if (!code) return;
-    joinCollabSubmit.disabled = true;
-    joinCollabMsg.textContent = '';
-    try {
-      const resp = await fetch('/api/join-collaboration', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code }),
-      });
-      const data = await resp.json();
-      if (resp.ok) {
-        window.location.href = '/colaborar.html?owner=' + data.ownerId;
-      } else {
-        joinCollabMsg.textContent = data.error || 'No se pudo entrar con ese código.';
-        joinCollabSubmit.disabled = false;
-      }
-    } catch (e) {
-      joinCollabMsg.textContent = 'Hubo un problema para conectar.';
-      joinCollabSubmit.disabled = false;
-    }
-  }
-  joinCollabSubmit.addEventListener('click', unirseAColaboracion);
-  joinCollabCode.addEventListener('keydown', (e) => { if (e.key === 'Enter') unirseAColaboracion(); });
 
   fetch('/api/me')
     .then((resp) => (resp.ok ? resp.json() : Promise.reject()))

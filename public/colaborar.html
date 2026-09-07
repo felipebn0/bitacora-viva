@@ -338,6 +338,24 @@
     <p class="error" id="guestError" role="alert"></p>
     <p class="sub pc-53425f7d">No hace falta crear cuenta ni clave — solo tu nombre.</p>
   </div>
+
+  <!-- Cuenta dueña que llega acá por el botón "Colaborar" de app.html sin
+       código ni bitácora puntual (?owner=/?codigo= ausentes). Si ya
+       colabora con alguna historia entra derecho ahí (ver el fetch de
+       /api/me más abajo) — esta pantalla es solo para cuando todavía no
+       colabora con ninguna: antes esto rebotaba directo a /app.html sin
+       mostrar nada. -->
+  <div class="login pc-93b8ea5b" id="hubScreen">
+    <h1>Colaborar con otra historia</h1>
+    <p class="sub pc-1015cafb">Aún no colaboras con ninguna otra bitácora — ingresa el código que te compartieron.</p>
+    <div class="login-field">
+      <label for="hubCode">Código de invitación</label>
+      <input type="text" id="hubCode" placeholder="Ej: B46NWEC7" maxlength="8" autocomplete="off">
+    </div>
+    <button id="hubSubmitBtn" type="button">Entrar</button>
+    <p class="error" id="hubError" role="alert"></p>
+    <p class="sub pc-53425f7d"><a class="pc-07135648" href="/app.html">← volver a mi bitácora</a></p>
+  </div>
   </main>
 
   <div id="appContent">
@@ -435,6 +453,10 @@
   const guestName = document.getElementById('guestName');
   const guestStartBtn = document.getElementById('guestStartBtn');
   const guestError = document.getElementById('guestError');
+  const hubScreen = document.getElementById('hubScreen');
+  const hubCode = document.getElementById('hubCode');
+  const hubSubmitBtn = document.getElementById('hubSubmitBtn');
+  const hubError = document.getElementById('hubError');
   const appContent = document.getElementById('appContent');
   const loginUser = document.getElementById('loginUser');
   const loginPass = document.getElementById('loginPass');
@@ -471,6 +493,7 @@
     checkingScreen.style.display = 'none';
     loginScreen.style.display = 'none';
     guestScreen.style.display = 'none';
+    hubScreen.style.display = 'none';
     appContent.style.display = 'flex';
     whoami.textContent = data.guestName || data.username || '';
     ownerName.textContent = data.ownerName || '';
@@ -520,16 +543,56 @@
     checkingScreen.style.display = 'none';
     appContent.style.display = 'none';
     guestScreen.style.display = 'none';
+    hubScreen.style.display = 'none';
     loginScreen.style.display = 'flex';
     loginPass.value = '';
     ocultarClave();
     loginUser.focus();
   }
 
+  // Cuenta dueña que llega al botón "Colaborar" de app.html sin colaborar
+  // todavía con ninguna historia — ver el fetch de /api/me más abajo.
+  function mostrarHub() {
+    checkingScreen.style.display = 'none';
+    appContent.style.display = 'none';
+    loginScreen.style.display = 'none';
+    guestScreen.style.display = 'none';
+    hubScreen.style.display = 'flex';
+    hubError.textContent = '';
+    hubCode.focus();
+  }
+
+  async function unirseDesdeHub() {
+    const code = hubCode.value.trim();
+    if (!code) return;
+    hubSubmitBtn.disabled = true;
+    hubError.textContent = '';
+    try {
+      const resp = await fetch('/api/join-collaboration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        hubError.textContent = data.error || 'No se pudo entrar con ese código.';
+        hubSubmitBtn.disabled = false;
+        return;
+      }
+      window.location.href = location.pathname + '?owner=' + data.ownerId;
+    } catch (e) {
+      hubError.textContent = 'Hubo un problema para conectar.';
+      hubSubmitBtn.disabled = false;
+    }
+  }
+  hubSubmitBtn.addEventListener('click', unirseDesdeHub);
+  hubCode.addEventListener('keydown', (e) => { if (e.key === 'Enter') unirseDesdeHub(); });
+
   async function showGuestEntry() {
     checkingScreen.style.display = 'none';
     appContent.style.display = 'none';
     loginScreen.style.display = 'none';
+    hubScreen.style.display = 'none';
     guestScreen.style.display = 'flex';
     guestError.textContent = '';
     try {
@@ -728,6 +791,23 @@
         if (logoutRow) logoutRow.style.display = 'none';
       }
 
+      // Llegó por el botón "Colaborar" de app.html (nav directa, sin
+      // ?owner= ni ?codigo=) — antes esto rebotaba siempre a /app.html.
+      // Si esta cuenta ya colabora con alguna historia, entramos derecho
+      // ahí (la primera de la lista; si hay más de una, cargarMisColaboraciones
+      // más abajo arma el selector para cambiar entre ellas) en vez de
+      // hacerla volver a pedir el código cada vez.
+      if (!activeOwnerId && !codigoInvitado && !data.isCollaborator && !data.isGuest) {
+        try {
+          const resp = await fetch('/api/my-collaborations');
+          const historias = resp.ok ? (await resp.json()).historias || [] : [];
+          if (historias.length) {
+            activeOwnerId = historias[0].ownerId;
+            history.replaceState(null, '', location.pathname + '?owner=' + activeOwnerId);
+          }
+        } catch (e) {}
+      }
+
       if (activeOwnerId) {
         // Se llegó acá con un código de otra historia (botón "colaborar con
         // otra historia" en app.html) — puede ser una cuenta dueña normal
@@ -788,9 +868,11 @@
         return;
       }
 
-      // Esta página es solo para cuentas colaboradoras — si es una cuenta
-      // dueña normal, la mandamos a la app completa.
-      if (!data.isCollaborator) { window.location.href = '/app.html'; return; }
+      // Cuenta dueña normal, sin ?owner=/?codigo= y sin ninguna
+      // colaboración todavía (si tuviera alguna, ya se resolvió arriba) —
+      // se le ofrece ingresar un código acá mismo, en vez de rebotarla a
+      // /app.html sin mostrarle nada.
+      if (!data.isCollaborator) { mostrarHub(); return; }
       showApp(data);
       cargarMisColaboraciones(null, data.ownerName);
       iniciarAporte();
