@@ -216,7 +216,19 @@
   }
   .invite-cta:hover { background: #4a5738; }
 
-  #appContent { display: none; flex-direction: column; align-items: center; }
+  /* width:100% en appContent Y en #main-content (ver más abajo): el bug real
+     que reportó Felipe. Con align-items:center, un contenedor flex NO
+     estira a sus hijos por default — sin un ancho explícito, tanto
+     #appContent como <main> quedaban "shrink-to-fit" (se ajustaban al
+     ancho de SU contenido), y el min(640px, 100%) de .device terminaba
+     resolviendo ese 100% contra un ancho que variaba según qué había
+     visible en ese momento (el link "terminar", "agregar foto", el largo
+     del mensaje de error…) — por eso el cuadro cambiaba de tamaño según el
+     estado, aunque .device en sí nunca cambiara su propia regla. Con
+     ancho fijo en los dos, .device por fin mide siempre lo mismo.
+     Confirmado midiendo en el navegador: sin esto, 535px en un estado y
+     640px en otro; con esto, 640px siempre. */
+  #appContent { display: none; flex-direction: column; align-items: center; width: 100%; }
   /* .login (más abajo) pone display:flex por defecto, así que sin esto el
      login se ve un instante SIEMPRE al cargar esta página — incluso ya
      logueado, cada vez que se navega acá con un link normal (por ejemplo
@@ -262,6 +274,9 @@
   }
   #checkingScreen img { width: 40px; height: 40px; opacity: 0.7; }
 
+  /* width:100% acá también — ver el comentario largo junto a #appContent
+     más arriba, es la otra mitad del mismo arreglo. */
+  #main-content { width: 100%; }
   .main-layout { display: flex; flex-direction: column; align-items: center; }
   .device-col { display: flex; flex-direction: column; align-items: center; width: 100%; }
   .desktop-leaf { display: none; }
