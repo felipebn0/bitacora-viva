@@ -163,6 +163,16 @@
   .colab-card {
     background: #FBF6EA; border: 1px solid #E7DFCC; border-radius: 16px;
     padding: 16px 18px; text-align: center;
+    display: block; text-decoration: none; color: inherit;
+    transition: box-shadow .15s ease, border-color .15s ease;
+  }
+  /* Las tarjetas son enlaces a "Aportes de la familia" filtrados a esa
+     persona (ver cargarColaboradores) — el mismo indicio visual de
+     "esto se puede tocar" que ya usan el resto de tarjetas clicables de
+     la app, para que no queden como texto suelto. */
+  .colab-card:hover, .colab-card:focus-visible {
+    border-color: var(--moss);
+    box-shadow: 0 4px 10px -4px rgba(0,0,0,0.2);
   }
   .colab-card .avatar { margin: 0 auto 8px; }
   .colab-card strong { display: block; color: var(--ink); font-size: 0.95rem; }
@@ -1028,8 +1038,14 @@
       if (!colaboradores.length) return;
       colabGrid.innerHTML = '';
       colaboradores.forEach((c) => {
-        const card = document.createElement('div');
+        // <a>, no <div>: cada tarjeta lleva a sus aportes en
+        // colaboraciones.html (ver ?colaborador= ahí) — con <a> el teclado
+        // y los lectores de pantalla la reconocen como un enlace solos,
+        // sin agregar tabindex/role/keydown a mano.
+        const card = document.createElement('a');
         card.className = 'colab-card';
+        card.href = '/colaboraciones.html?colaborador=' + encodeURIComponent(c.nombre);
+        card.setAttribute('aria-label', `Ver los aportes de ${c.nombre}`);
         const historiaTxt = c.historias === 1 ? '1 historia aportada' : `${c.historias} historias aportadas`;
         const avatarDiv = document.createElement('div');
         avatarDiv.className = 'avatar';

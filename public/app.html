@@ -369,6 +369,12 @@
     min-height: 44px;
   }
   .user-menu-panel .um-btn:disabled { opacity: 0.6; cursor: default; }
+  /* Sin esto, "hidden" en un <button class="um-btn"> no alcanza a esconderlo:
+     la regla de arriba (dos clases, más específica que [hidden] del
+     navegador) le gana y el botón "Instalar app" quedaba visible aunque
+     JS le pusiera hidden=true (comprobado con Playwright: el atributo
+     quedaba en true, pero el botón se seguía dibujando). */
+  .user-menu-panel .um-btn[hidden] { display: none; }
   .user-menu-panel .um-fontsize-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
   /* min-height/min-width:44px: zona táctil mínima recomendada — estaba en
      38px de alto. */
@@ -377,6 +383,19 @@
   .user-menu-panel .um-btn.um-danger { background: #a33; }
   .user-menu-panel .um-btn.um-plain { background: none; color: var(--ink-soft); text-decoration: underline; padding: 6px 0; }
   .user-menu-panel .um-btn.um-warn { color: #a33; font-weight: 700; }
+  /* Pasos de "Instalación" (agregar a pantalla de inicio en iPhone) — lista
+     numerada simple, mismo look que el resto del panel (sin íconos de
+     fantasía, para no meter CSS nuevo de más). */
+  .user-menu-panel .um-steps { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .user-menu-panel .um-steps li {
+    display: flex; align-items: flex-start; gap: 8px;
+    font-size: 0.85rem; line-height: 1.4; color: var(--ink);
+  }
+  .user-menu-panel .um-steps .um-step-num {
+    flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
+    background: var(--gold); color: #FBF6EA; font-size: 0.72rem; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
   .user-menu-panel .um-msg { font-size: 0.8rem; min-height: 1.1em; margin: 6px 0 0; color: var(--moss); }
   .user-menu-panel .um-msg.um-error { color: #a33; }
 
@@ -650,6 +669,32 @@
              <button class="um-btn" id="umFontIncBtn" type="button" aria-label="Agrandar la letra">A+</button>
            </div>
            <p class="um-hint">Cambia el tamaño de la letra en toda la app — se recuerda la próxima vez que entres.</p>
+         </div>
+
+         <!-- Guardar la app como un ícono en la pantalla de inicio, desde
+              Cuenta — antes esto solo existía para quien entraba con el
+              enlace permanente de un subperfil (ver #accesoDirectoRow /
+              activarAccesoDirecto más abajo); esta sección lo ofrece
+              también a la cuenta dueña normal. Reutiliza el mismo
+              "promptDeInstalacion" capturado por el listener de
+              beforeinstallprompt (ver más abajo) en vez de duplicar esa
+              lógica. En iPhone, Apple no da ninguna forma de disparar este
+              paso con código — por eso ahí siempre se muestra una guía en
+              vez de un botón, sea Safari o Chrome (ver
+              configurarSeccionInstalacion). -->
+         <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecInstalacion">Instalación <span class="um-chevron" aria-hidden="true">›</span></button>
+         <div class="um-section-body" id="umSecInstalacion" hidden>
+           <p class="um-hint">Guarda esta charla como un ícono propio en tu pantalla de inicio, para abrirla directo sin buscarla en el navegador.</p>
+
+           <div id="umInstalIOS" hidden>
+             <ol class="um-steps" id="umInstalIOSPasos"></ol>
+             <p class="um-hint" id="umInstalIOSNota"></p>
+           </div>
+
+           <div id="umInstalOtros" hidden>
+             <button class="um-btn" id="umInstalarBtn" type="button" hidden>📲 Instalar app</button>
+             <p class="um-hint" id="umInstalarFallback">Para guardarla: toca el menú ⋮ (arriba a la derecha) y elige "Agregar a pantalla de inicio" o "Instalar app".</p>
+           </div>
          </div>
 
          <!-- BACKLOG #12: subperfiles — varias bitácoras (ej. la de tu papá,
@@ -1764,6 +1809,15 @@
   // de un subperfil (sin cuenta, sin favoritos de navegador de por medio).
   const agregarInicioBtn = document.getElementById('agregarInicioBtn');
   const agregarInicioTexto = document.getElementById('agregarInicioTexto');
+  // "Instalación" en Cuenta (mismo mecanismo, para la cuenta dueña normal
+  // en vez del enlace de subperfil) — ver configurarSeccionInstalacion.
+  const umInstalIOS = document.getElementById('umInstalIOS');
+  const umInstalIOSPasos = document.getElementById('umInstalIOSPasos');
+  const umInstalIOSNota = document.getElementById('umInstalIOSNota');
+  const umInstalOtros = document.getElementById('umInstalOtros');
+  const umInstalarBtn = document.getElementById('umInstalarBtn');
+  const umInstalarFallback = document.getElementById('umInstalarFallback');
+  const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
   let promptDeInstalacion = null;
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
@@ -1776,6 +1830,10 @@
       agregarInicioBtn.style.display = 'inline-flex';
       agregarInicioTexto.style.display = 'none';
     }
+    if (!esIOS) {
+      umInstalarBtn.hidden = false;
+      umInstalarFallback.hidden = true;
+    }
   });
   agregarInicioBtn.addEventListener('click', async () => {
     if (!promptDeInstalacion) return;
@@ -1784,6 +1842,62 @@
     promptDeInstalacion = null;
     agregarInicioBtn.style.display = 'none';
   });
+  umInstalarBtn.addEventListener('click', async () => {
+    if (!promptDeInstalacion) return;
+    promptDeInstalacion.prompt();
+    await promptDeInstalacion.userChoice;
+    promptDeInstalacion = null;
+    umInstalarBtn.hidden = true;
+    umInstalarFallback.hidden = false;
+  });
+
+  // Arma la sección "Instalación" del panel de Cuenta — a diferencia de
+  // #accesoDirectoRow (arriba), acá no hace falta esperar a saber si la
+  // sesión es de subperfil o no: la cuenta dueña y las colaboradoras
+  // clásicas ya tienen el manifest genérico (/api/manifest.json, sin
+  // parámetros) andando desde que carga la página.
+  function crearPasoInstalacion(numero, texto) {
+    const li = document.createElement('li');
+    const num = document.createElement('span');
+    num.className = 'um-step-num';
+    num.setAttribute('aria-hidden', 'true');
+    num.textContent = String(numero);
+    li.appendChild(num);
+    const span = document.createElement('span');
+    span.textContent = texto;
+    li.appendChild(span);
+    return li;
+  }
+  function configurarSeccionInstalacion() {
+    if (esIOS) {
+      umInstalIOS.hidden = false;
+      umInstalOtros.hidden = true;
+      umInstalIOSPasos.innerHTML = '';
+      // Chrome en iPhone usa WebKit por dentro (Apple obliga a todos los
+      // navegadores de iOS a eso) pero NO tiene el mismo camino que
+      // Safari — su menú es distinto y el resultado final también:
+      // detectado por "CriOS" en el user agent.
+      const esChromeIOS = /CriOS/i.test(navigator.userAgent);
+      if (esChromeIOS) {
+        umInstalIOSPasos.appendChild(crearPasoInstalacion(1, 'Toca el menú (los tres puntos), abajo o arriba de la pantalla según la versión.'));
+        umInstalIOSPasos.appendChild(crearPasoInstalacion(2, 'Elige "Añadir a pantalla de inicio" y confirma.'));
+        umInstalIOSNota.textContent = 'En Chrome para iPhone queda el ícono, pero al abrirla se sigue viendo la barra de direcciones de Chrome — no es pantalla completa. Para la app completa conviene usar Safari.';
+      } else {
+        umInstalIOSPasos.appendChild(crearPasoInstalacion(1, 'Toca el ícono de compartir, arriba de la pantalla.'));
+        umInstalIOSPasos.appendChild(crearPasoInstalacion(2, 'Si no ves la opción, toca "Ver más" para desplegar el resto.'));
+        umInstalIOSPasos.appendChild(crearPasoInstalacion(3, 'Elige "Añadir a pantalla de inicio" y confirma.'));
+        umInstalIOSNota.textContent = 'Con Safari queda como una app de verdad, en pantalla completa. En iPhone este paso siempre es manual — Apple no permite que ninguna app web lo haga automático.';
+      }
+    } else {
+      umInstalOtros.hidden = false;
+      umInstalIOS.hidden = true;
+      if (promptDeInstalacion) {
+        umInstalarBtn.hidden = false;
+        umInstalarFallback.hidden = true;
+      }
+    }
+  }
+  configurarSeccionInstalacion();
 
   function activarAccesoDirecto(codigo, nombre) {
     const manifestLink = document.getElementById('appManifestLink');
@@ -1807,8 +1921,8 @@
     // una — si el evento llega más tarde, el listener de arriba la
     // reemplaza por el botón de un solo toque. iOS Safari nunca dispara
     // este evento (no tiene ninguna API para esto), así que ahí la
-    // instrucción manual es la única opción posible, siempre.
-    const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    // instrucción manual es la única opción posible, siempre. (esIOS ya
+    // está declarada más arriba, junto con configurarSeccionInstalacion.)
     agregarInicioTexto.textContent = esIOS
       ? 'Para guardar esta charla en tu pantalla de inicio: toca compartir ⬆️ y luego "Agregar a pantalla de inicio".'
       : 'Para guardar esta charla en tu pantalla de inicio: toca el menú ⋮ (arriba a la derecha) y elige "Agregar a pantalla de inicio" o "Instalar app".';

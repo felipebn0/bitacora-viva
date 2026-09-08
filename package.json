@@ -17,6 +17,8 @@
     "test:colaborar-sticky": "node test/colaborar-sticky.playwright.js",
     "test:login-vacio": "node test/login-vacio.playwright.js",
     "test:cancion": "node test/cancion-aporte.playwright.js",
+    "test:instalacion": "node test/instalacion-cuenta.playwright.js",
+    "test:arbol-colab-link": "node test/arbol-colaboraciones-link.playwright.js",
     "eval:conversacion": "node test/eval-conversacion.js"
   },
   "dependencies": {
