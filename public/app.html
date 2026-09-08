@@ -2088,11 +2088,22 @@
   function stopRecordingAudio() {
     return new Promise((resolve) => {
       if (!mediaRecorder || mediaRecorder.state === 'inactive') { resolve(null); return; }
-      mediaRecorder.onstop = () => {
+      let resuelto = false;
+      const terminar = () => {
+        if (resuelto) return;
+        resuelto = true;
         lastRecordingDurationMs = recordingStartedAt ? Date.now() - recordingStartedAt : 0;
-        resolve(new Blob(audioChunks, { type: lastRecordingMimeType || 'audio/webm' }));
+        resolve(audioChunks.length ? new Blob(audioChunks, { type: lastRecordingMimeType || 'audio/webm' }) : null);
       };
-      mediaRecorder.stop();
+      mediaRecorder.onstop = terminar;
+      try { mediaRecorder.stop(); } catch (e) { terminar(); return; }
+      // Red de seguridad: en iPhone, si el micrófono se interrumpió (una
+      // llamada, otra app lo tomó, la pantalla se apagó), mediaRecorder.stop()
+      // a veces NO dispara "onstop" nunca — y sin esto finalizeSpokenAnswer()
+      // se quedaba esperando esa promesa para siempre, con la pantalla pegada
+      // en "Escuchando…". A los 2s resolvemos igual con lo que haya en
+      // audioChunks (o null), y la charla sigue.
+      setTimeout(terminar, 2000);
     });
   }
 
@@ -2244,6 +2255,15 @@
   document.addEventListener('visibilitychange', () => {
     const enCharla = state !== 'idle' && state !== 'ended' && state !== 'paused';
     if (document.visibilityState === 'visible' && enCharla) requestWakeLock();
+    // Si la pantalla se apaga / se cambia de app justo mientras está
+    // escuchando, el navegador congela el detector de silencio y suspende
+    // el audio del micrófono — al volver, quedaba pegado en "Escuchando…".
+    // Cerramos el turno ahí mismo con lo que se haya grabado hasta ese
+    // momento, en vez de dejarlo colgado.
+    if (document.visibilityState === 'hidden' && state === 'listening') {
+      stopVoiceActivityDetection();
+      finalizeSpokenAnswer();
+    }
   });
 
   async function speak(text, onEnd, logEntry, index) {
@@ -2308,13 +2328,33 @@
   let vadActive = false;
   let lastLoudTime = 0;
 
+  let vadSource = null;
   function startVoiceActivityDetection() {
     if (!mediaStream) return;
+    // El AudioContext se comparte entre turnos, pero en el celular el
+    // navegador lo "suspende" solo cuando la pantalla se apaga o hay una
+    // interrupción — y un contexto suspendido devuelve SILENCIO constante al
+    // medidor de abajo, así que el corte por silencio se disparaba a cada
+    // rato con audio vacío y la charla quedaba en un bucle de "Escuchando…".
+    // Si no está corriendo, se intenta reanudar; si aun así no arranca (iOS
+    // no siempre deja sin un gesto nuevo), se descarta y se crea uno nuevo.
+    if (audioContext && audioContext.state === 'closed') { audioContext = null; }
     if (!audioContext) {
       audioContext = new (window.AudioContext || window.webkitAudioContext)();
     }
-    if (audioContext.state === 'suspended') audioContext.resume();
+    if (audioContext.state === 'suspended') {
+      audioContext.resume().catch(() => {});
+      if (audioContext.state === 'suspended') {
+        try { audioContext.close(); } catch (e) {}
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        audioContext.resume().catch(() => {});
+      }
+    }
+    // Desconectar el nodo del turno anterior — si no, se van apilando
+    // fuentes sobre el mismo contexto en cada turno.
+    if (vadSource) { try { vadSource.disconnect(); } catch (e) {} }
     const source = audioContext.createMediaStreamSource(mediaStream);
+    vadSource = source;
     analyser = audioContext.createAnalyser();
     analyser.fftSize = 512;
     source.connect(analyser);
@@ -2386,7 +2426,56 @@
   // igual por si la persona prefiere escribir en vez de seguir hablando,
   // pero sin robarle el foco (que en el celular abriría el teclado encima
   // de la charla que sigue en curso).
+  // Cuántas veces seguidas un turno de escucha terminó sin nada usable
+  // (audio vacío o transcripción vacía). Si el micrófono quedó en un estado
+  // roto (permiso revocado a mitad, AudioContext que no reanuda, otra app
+  // usando el mic), reintentar en bucle deja la pantalla pegada en
+  // "Escuchando…" para siempre. Tras MAX_VACIOS seguidos se deja de
+  // reintentar solo y se le pasa el control a la persona (cuadro de texto
+  // enfocado). Se pone en 0 en cuanto un turno SÍ trae texto (handleAnswer).
+  let finalizacionesVacias = 0;
+  const MAX_VACIOS = 3;
+  // Evita que dos disparos casi simultáneos (el tick del detector de
+  // silencio y el handler de "pantalla oculta", más abajo) entren los dos
+  // a finalizar el mismo turno.
+  let finalizandoTurno = false;
+
+  function reintentarOEscribir() {
+    finalizacionesVacias++;
+    writeRow.classList.add('visible');
+    if (finalizacionesVacias >= MAX_VACIOS) {
+      // 3 turnos seguidos sin nada usable: el micrófono quedó en mal estado
+      // (permiso revocado, otra app lo tomó, AudioContext que no reanuda).
+      // En vez de seguir en un bucle invisible de "Escuchando…", se suelta
+      // el micro y se deja en pausa: la persona puede escribir abajo, o
+      // tocar el botón para reintentar hablar (ese toque es un gesto nuevo,
+      // que suele destrabar el audio del navegador).
+      finalizacionesVacias = 0;
+      stopVoiceActivityDetection();
+      releaseMic();
+      if (fallbackRecognition) { try { fallbackRecognition.abort(); } catch (e) {} }
+      pausedFromState = 'listening';
+      sessionId += 1;
+      setState('paused', 'No logré escucharte. Escribe tu respuesta abajo, o presiona el botón para hablar de nuevo.');
+      orbLabel.innerHTML = 'Presiona<br>para hablar';
+      try { writeInput.focus(); } catch (e) {}
+      return;
+    }
+    stateLabel.textContent = 'No te escuché bien — te sigo escuchando (o escribe tu respuesta).';
+    listenForAnswer();
+  }
+
   async function finalizeSpokenAnswer() {
+    if (finalizandoTurno) return;
+    finalizandoTurno = true;
+    try {
+      await finalizeSpokenAnswerInterno();
+    } finally {
+      finalizandoTurno = false;
+    }
+  }
+
+  async function finalizeSpokenAnswerInterno() {
     if (fallbackRecognition) { try { fallbackRecognition.stop(); } catch (e) {} }
     const audioBlob = await stopRecordingAudio();
     // history.length===0 = la prueba de micrófono (primer turno de la
@@ -2395,9 +2484,7 @@
     // turno en adelante.
     const demasiadoCorta = history.length > 0 && lastRecordingDurationMs < MIN_RESPUESTA_MS;
     if (!audioBlob || audioBlob.size < 800 || demasiadoCorta) {
-      writeRow.classList.add('visible');
-      stateLabel.textContent = 'No te escuché bien — te sigo escuchando (o escribe tu respuesta).';
-      listenForAnswer();
+      reintentarOEscribir();
       return;
     }
     setState('thinking', 'Transcribiendo…');
@@ -2406,11 +2493,10 @@
       text = fallbackTranscript.trim(); // el servidor no pudo: usamos lo que captó el navegador
     }
     if (text) {
+      finalizacionesVacias = 0;
       handleAnswer(text, audioBlob);
     } else {
-      writeRow.classList.add('visible');
-      stateLabel.textContent = 'No te escuché bien — te sigo escuchando (o escribe tu respuesta).';
-      listenForAnswer();
+      reintentarOEscribir();
     }
   }
 
@@ -2666,6 +2752,7 @@
   // 'thinking') quien pida la pregunta nueva recién cuando de verdad vuelve.
   async function handleAnswer(text, audioBlob, { seguir = true } = {}) {
     if (!text || !text.trim()) return;
+    finalizacionesVacias = 0; // hubo una respuesta de verdad: se reinicia el contador de intentos vacíos
     if (audioBlob === undefined && mediaRecorder && mediaRecorder.state !== 'inactive') {
       stopVoiceActivityDetection();
       await stopRecordingAudio(); // vino de "escribir": se descarta la grabación en curso
@@ -2726,6 +2813,7 @@
     ofrecioPausa = false;
     pausedFromState = null;
     currentSessionDbId = null;
+    finalizacionesVacias = 0;
     greeting.style.display = 'none';
     mostrarMediaMomento(null);
     mediaUrlsLocal = [];
