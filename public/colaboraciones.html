@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Aportes de la familia — Los recuerdos de mis viejos</title>
+<title>Aportes de tu círculo — Los recuerdos de mis viejos</title>
 <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/images/favicon-192.png">
 <link rel="apple-touch-icon" href="/images/favicon-192.png">
@@ -94,7 +94,7 @@
 <body>
   <header>
     <div>
-      <h1>Aportes de la familia</h1>
+      <h1>Aportes de tu círculo</h1>
       <p>Quiénes te ayudaron a construir tu bitácora, y lo que contaron.</p>
     </div>
     <a class="volver" href="/app.html">← volver a la bitácora</a>
@@ -233,10 +233,10 @@
       // Si arriba (colaboradores) también está vacío, esa sección ya
       // muestra "Invitar familiares →" — repetirlo acá es el mismo CTA
       // dos veces en la misma pantalla, sin agregar nada nuevo.
-      aportesStatus.textContent = 'Todavía no hay historias aportadas por la familia.';
+      aportesStatus.textContent = 'Todavía no hay historias aportadas por tu círculo.';
       aportesLista.innerHTML = colaboradoresVacios
-        ? '<p class="empty">Todavía no hay historias aportadas por la familia.</p>'
-        : '<p class="empty">Todavía no hay historias aportadas por la familia.</p><a class="empty-cta" href="/app.html#inviteToggle">Invitar familiares →</a>';
+        ? '<p class="empty">Todavía no hay historias aportadas por tu círculo.</p>'
+        : '<p class="empty">Todavía no hay historias aportadas por tu círculo.</p><a class="empty-cta" href="/app.html#inviteToggle">Invitar familiares →</a>';
       return;
     }
     aportesStatus.textContent = notes.length === 1 ? 'Se cargó 1 aporte.' : `Se cargaron ${notes.length} aportes.`;

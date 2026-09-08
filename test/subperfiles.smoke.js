@@ -71,7 +71,7 @@ function fakeSql(strings, ...values) {
   if (text.includes('INSERT INTO bitacoras (admin_user_id, nombre, fecha_nacimiento)')) {
     const [adminUserId, nombre, fechaNacimiento] = values;
     const id = nextBitacoraId++;
-    bitacoras[id] = { id, admin_user_id: adminUserId, nombre, fecha_nacimiento: fechaNacimiento, narrador_code: null, invite_code: null, aportes_pending_names: null };
+    bitacoras[id] = { id, admin_user_id: adminUserId, nombre, fecha_nacimiento: fechaNacimiento, narrador_code: null, invite_code: null, aportes_pending_names: null, pin_hash: null };
     return Promise.resolve([{ id }]);
   }
   if (text.includes('SELECT id, nombre FROM bitacoras WHERE admin_user_id')) {
@@ -104,13 +104,18 @@ function fakeSql(strings, ...values) {
     if (bitacoras[id]) bitacoras[id].narrador_code = code || null;
     return Promise.resolve([]);
   }
-  if (text.includes('SELECT nombre FROM bitacoras WHERE narrador_code')) {
+  if (text.includes('SELECT nombre, pin_hash FROM bitacoras WHERE narrador_code')) {
     const bit = Object.values(bitacoras).find((b) => b.narrador_code && b.narrador_code === values[0]);
-    return Promise.resolve(bit ? [{ nombre: bit.nombre }] : []);
+    return Promise.resolve(bit ? [{ nombre: bit.nombre, pin_hash: bit.pin_hash || null }] : []);
   }
-  if (text.includes('SELECT id, nombre FROM bitacoras WHERE narrador_code')) {
+  if (text.includes('SELECT id, nombre, pin_hash FROM bitacoras WHERE narrador_code')) {
     const bit = Object.values(bitacoras).find((b) => b.narrador_code && b.narrador_code === values[0]);
-    return Promise.resolve(bit ? [{ id: bit.id, nombre: bit.nombre }] : []);
+    return Promise.resolve(bit ? [{ id: bit.id, nombre: bit.nombre, pin_hash: bit.pin_hash || null }] : []);
+  }
+  if (text.includes('UPDATE bitacoras SET pin_hash = ')) {
+    const [hash, id] = values;
+    if (bitacoras[id]) bitacoras[id].pin_hash = hash;
+    return Promise.resolve([]);
   }
 
   // requireAuth: revalidar en cada request la sesión de un invitado clásico
@@ -312,7 +317,7 @@ function check(nombre, cond) {
     const treeTrasBorrar = await request(server, { path: '/api/tree' }, cookieComoPapa);
     check('si el subperfil ya no existe, el siguiente pedido -> 401 (no cae en silencio a la propia)', treeTrasBorrar.status === 401);
     // Se restaura para el resto de los tests.
-    bitacoras[papaId] = { id: papaId, admin_user_id: 1, nombre: 'papá', fecha_nacimiento: null, narrador_code: null };
+    bitacoras[papaId] = { id: papaId, admin_user_id: 1, nombre: 'papá', fecha_nacimiento: null, narrador_code: null, pin_hash: null };
 
     // --- Link permanente de narrador: generar, narrar de verdad ---------
     const linkGet = await request(server, { path: `/api/subprofiles/${papaId}/narrador-link` }, cookieFelipe);
@@ -320,11 +325,28 @@ function check(nombre, cond) {
     const codigoNarrador = JSON.parse(linkGet.body).code;
 
     const infoOk = await request(server, { path: `/api/narrador-code-info?codigo=${codigoNarrador}` });
-    check('el código del narrador resuelve al nombre del subperfil -> 200', infoOk.status === 200 && JSON.parse(infoOk.body).bitacoraNombre === 'Papá');
+    const infoOkBody = JSON.parse(infoOk.body);
+    check('el código del narrador resuelve al nombre del subperfil -> 200', infoOk.status === 200 && infoOkBody.bitacoraNombre === 'Papá');
+    check('todavía no hay clave configurada -> pinYaConfigurado false', infoOkBody.pinYaConfigurado === false);
 
-    const narradorStart = await request(server, { path: '/api/narrador-start', method: 'POST', body: { codigo: codigoNarrador, name: 'Papá' } });
-    check('entrar como narrador con el código -> 200', narradorStart.status === 200);
+    const pinInvalido = await request(server, { path: '/api/narrador-start', method: 'POST', body: { codigo: codigoNarrador, pin: 'ab' } });
+    check('una clave que no son 4 números -> 400', pinInvalido.status === 400);
+
+    // El nombre ya no se pregunta (lo puso quien creó el subperfil) — la
+    // primera vez, la clave que mande queda guardada como la suya.
+    const narradorStart = await request(server, { path: '/api/narrador-start', method: 'POST', body: { codigo: codigoNarrador, pin: '1234' } });
+    check('entrar como narrador con el código, define su clave -> 200', narradorStart.status === 200);
+    check('la respuesta trae el nombre del subperfil (nunca preguntado)', JSON.parse(narradorStart.body).bitacoraNombre === 'Papá');
     const cookieNarrador = narradorStart.headers['set-cookie'][0].split(';')[0];
+
+    const infoTrasDefinir = await request(server, { path: `/api/narrador-code-info?codigo=${codigoNarrador}` });
+    check('ya con clave definida -> pinYaConfigurado true', JSON.parse(infoTrasDefinir.body).pinYaConfigurado === true);
+
+    const pinIncorrecto = await request(server, { path: '/api/narrador-start', method: 'POST', body: { codigo: codigoNarrador, pin: '9999' } });
+    check('con clave ya definida, un PIN incorrecto -> 401', pinIncorrecto.status === 401);
+
+    const pinCorrectoOtraVez = await request(server, { path: '/api/narrador-start', method: 'POST', body: { codigo: codigoNarrador, pin: '1234' } });
+    check('volver a entrar con la misma clave -> 200', pinCorrectoOtraVez.status === 200);
 
     pushAnthropicResponse('¿Y cómo era tu barrio de niño?');
     const nextComoNarrador = await request(server, {

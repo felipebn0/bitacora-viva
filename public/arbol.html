@@ -948,7 +948,7 @@
   async function editarPersona(id, nombreActual, relacionActual, padresActuales) {
     const nuevoNombre = prompt('Nombre:', nombreActual);
     if (nuevoNombre === null) return;
-    const nuevaRelacion = prompt('Parentesco (con la persona principal):', relacionActual);
+    const nuevaRelacion = prompt('Relación o vínculo (con la persona principal):', relacionActual);
     if (nuevaRelacion === null) return;
     const otros = nombresConocidos.filter((n) => n !== nombreActual);
     const nuevosPadresRaw = prompt(

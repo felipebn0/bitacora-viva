@@ -595,20 +595,23 @@
 
   <!-- BACKLOG #12: entrada del narrador de un subperfil — llega con
        ?codigo=XXXXXXXX (link permanente compartido desde el panel de Cuenta
-       de quien administra el subperfil). Sin cuenta, sin clave, solo el
-       nombre — mismo patrón que #guestScreen en colaborar.html, pero esto
-       narra SU PROPIA bitácora (ver /api/narrador-start), no un aporte a
-       la de otro. -->
+       de quien administra el subperfil). Sin cuenta, sin clave de cuenta —
+       el nombre ya lo puso quien creó el subperfil (no se vuelve a pedir
+       acá), y en su lugar se pide una clave de 4 dígitos que la persona
+       misma define la PRIMERA vez que entra (pedido de Felipe/Diego,
+       2026-09-08) y confirma en las siguientes. Mismo patrón que
+       #guestScreen en colaborar.html, pero esto narra SU PROPIA bitácora
+       (ver /api/narrador-start), no un aporte a la de otro. -->
   <div class="login" id="narradorScreen">
-    <h1>Los recuerdos de mis viejos</h1>
-    <p class="sub" id="narradorBitacoraLine">Vas a contar tus historias acá.</p>
+    <h1 id="narradorBitacoraLine">Los recuerdos de mis viejos</h1>
+    <p class="sub" id="narradorSubLine">Vas a contar tus historias acá.</p>
     <div class="login-field">
-      <label for="narradorName">Tu nombre</label>
-      <input type="text" id="narradorName" placeholder="¿Cómo te llamas?" autocomplete="given-name" maxlength="60">
+      <label for="narradorPin" id="narradorPinLabel">Tu clave de 4 números</label>
+      <input type="tel" inputmode="numeric" pattern="[0-9]*" id="narradorPin" placeholder="••••" autocomplete="off" maxlength="4">
     </div>
     <button id="narradorStartBtn" type="button">Empezar</button>
     <p class="error" id="narradorError" role="alert"></p>
-    <p class="sub pc-53425f7d">No hace falta crear cuenta ni clave — solo tu nombre.</p>
+    <p class="sub pc-53425f7d" id="narradorHint">No hace falta crear cuenta — elige una clave de 4 números para entrar la próxima vez.</p>
   </div>
 
   <div id="appContent">
@@ -698,7 +701,7 @@
          <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecCopia">Tu copia <span class="um-chevron" aria-hidden="true">›</span></button>
          <div class="um-section-body" id="umSecCopia" hidden>
            <a class="um-btn um-plain" id="umExportLink" href="/api/export" download>⬇️ Descargar mi historia</a>
-           <p class="um-hint">Un archivo .zip con todas tus historias, aportes de la familia, árbol genealógico y capítulos — para que tengas tu propia copia, aparte de esta app.</p>
+           <p class="um-hint">Un archivo .zip con todas tus historias, aportes de tu círculo, árbol genealógico y capítulos — para que tengas tu propia copia, aparte de esta app.</p>
          </div>
 
          <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecPlan">Plan <span class="um-chevron" aria-hidden="true">›</span></button>
@@ -789,7 +792,7 @@
      </div>
      <div class="icon-nav-item">
        <div class="icon-btn-wrap">
-         <a class="icon-btn" href="/colaboraciones.html" title="Aportes de la familia" aria-label="Aportes de la familia">💬</a>
+         <a class="icon-btn" href="/colaboraciones.html" title="Aportes de tu círculo" aria-label="Aportes de tu círculo">💬</a>
          <span class="icon-badge" id="aportesBadge"></span>
        </div>
        <span class="icon-label" aria-hidden="true">Aportes</span>
@@ -1599,7 +1602,7 @@
   async function reiniciarBitacora() {
     const password = umResetPassword.value;
     if (!password) return;
-    if (!confirm('¿Seguro que quieres reiniciar tu bitácora? Se borran todas tus charlas, el resumen, el árbol genealógico, los capítulos y los aportes de la familia (con sus audios y fotos) — tu usuario y clave siguen sirviendo, pero no se puede deshacer.')) return;
+    if (!confirm('¿Seguro que quieres reiniciar tu bitácora? Se borran todas tus charlas, el resumen, el árbol genealógico, los capítulos y los aportes de tu círculo (con sus audios y fotos) — tu usuario y clave siguen sirviendo, pero no se puede deshacer.')) return;
     umResetConfirm.disabled = true;
     umResetError.textContent = '';
     try {
@@ -1862,31 +1865,49 @@
 
   const narradorScreen = document.getElementById('narradorScreen');
   const narradorBitacoraLine = document.getElementById('narradorBitacoraLine');
-  const narradorName = document.getElementById('narradorName');
+  const narradorSubLine = document.getElementById('narradorSubLine');
+  const narradorPinLabel = document.getElementById('narradorPinLabel');
+  const narradorPin = document.getElementById('narradorPin');
   const narradorStartBtn = document.getElementById('narradorStartBtn');
   const narradorError = document.getElementById('narradorError');
+  const narradorHint = document.getElementById('narradorHint');
   const codigoNarradorUrl = new URLSearchParams(location.search).get('codigo');
 
-  function showNarradorScreen(bitacoraNombre) {
+  // Solo dígitos, máximo 4 — evita que en un teclado numérico de celular
+  // se cuele algo que no sea la clave.
+  narradorPin.addEventListener('input', () => {
+    narradorPin.value = narradorPin.value.replace(/\D/g, '').slice(0, 4);
+  });
+
+  function showNarradorScreen(bitacoraNombre, pinYaConfigurado) {
     checkingScreen.style.display = 'none';
     loginScreen.style.display = 'none';
     appContent.style.display = 'none';
     narradorScreen.style.display = 'flex';
-    if (bitacoraNombre) narradorBitacoraLine.textContent = `Vas a contar tus historias para la bitácora de ${bitacoraNombre}.`;
-    narradorName.focus();
+    if (bitacoraNombre) narradorBitacoraLine.textContent = `¡Hola, ${bitacoraNombre}!`;
+    if (pinYaConfigurado) {
+      narradorSubLine.textContent = 'Ingresa tu clave para entrar.';
+      narradorPinLabel.textContent = 'Tu clave de 4 números';
+      narradorHint.textContent = 'La misma clave que elegiste la primera vez.';
+    } else {
+      narradorSubLine.textContent = 'Vas a contar tus historias acá.';
+      narradorPinLabel.textContent = 'Elige una clave de 4 números';
+      narradorHint.textContent = 'La vas a necesitar la próxima vez que entres — no hace falta crear cuenta.';
+    }
+    narradorPin.focus();
   }
 
   async function doNarradorStart() {
-    const nombre = narradorName.value.trim();
-    if (!nombre) { narradorError.textContent = 'Falta tu nombre.'; return; }
+    const pin = narradorPin.value.trim();
+    if (!/^\d{4}$/.test(pin)) { narradorError.textContent = 'La clave tiene que ser de 4 números.'; return; }
     narradorStartBtn.disabled = true;
     narradorError.textContent = '';
     try {
       const resp = await fetch('/api/narrador-start', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codigo: codigoNarradorUrl, name: nombre }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codigo: codigoNarradorUrl, pin }),
       });
       const data = await resp.json();
-      if (!resp.ok) { narradorError.textContent = data.error || 'No se pudo entrar.'; narradorStartBtn.disabled = false; return; }
+      if (!resp.ok) { narradorError.textContent = data.error || 'No se pudo entrar.'; narradorStartBtn.disabled = false; narradorPin.focus(); return; }
       // El ?codigo= ya cumplió su función (quedó guardado en la cookie de
       // sesión) — se saca de la URL antes de recargar para que un refresh
       // normal no dependa de que siga ahí.
@@ -1898,7 +1919,7 @@
     }
   }
   narradorStartBtn.addEventListener('click', doNarradorStart);
-  narradorName.addEventListener('keydown', (e) => { if (e.key === 'Enter') doNarradorStart(); });
+  narradorPin.addEventListener('keydown', (e) => { if (e.key === 'Enter') doNarradorStart(); });
 
   fetch('/api/me')
     .then((resp) => (resp.ok ? resp.json() : Promise.reject()))
@@ -1916,8 +1937,8 @@
       if (codigoNarradorUrl) {
         fetch(`/api/narrador-code-info?codigo=${encodeURIComponent(codigoNarradorUrl)}`)
           .then((resp) => (resp.ok ? resp.json() : Promise.reject()))
-          .then((data) => showNarradorScreen(data.bitacoraNombre))
-          .catch(() => showNarradorScreen(null));
+          .then((data) => showNarradorScreen(data.bitacoraNombre, data.pinYaConfigurado))
+          .catch(() => showNarradorScreen(null, false));
         return;
       }
       showLogin();

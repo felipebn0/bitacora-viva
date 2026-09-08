@@ -702,7 +702,7 @@
         <div class="section-head center reveal">
           <div class="eyebrow pc-9b54a373">Una historia de todos</div>
           <h2>Esta historia la construimos entre todos.</h2>
-          <p>No hace falta que una sola persona cuente todo. Manda tu código de familia por WhatsApp: quien lo recibe puede sumar sus propios recuerdos, y también volver cuando quiera a escuchar y leer los que ya se guardaron — así esta historia se arma y se disfruta entre todos.</p>
+          <p>No hace falta que una sola persona cuente todo. Manda tu código de invitación por WhatsApp: quien lo recibe puede sumar sus propios recuerdos, y también volver cuando quiera a escuchar y leer los que ya se guardaron — así esta historia se arma y se disfruta entre todos.</p>
         </div>
         <div class="family-cards reveal">
           <div class="family-card">
@@ -718,7 +718,7 @@
           <div class="family-card">
             <div class="pc-6899e93a">🔒</div>
             <b class="pc-f3b0f625">Nunca se cuela nadie de afuera</b>
-            <p class="pc-166017f1">Solo entra quien tenga tu código — nadie ajeno a tu familia puede crearse una cuenta y llegar a tu bitácora.</p>
+            <p class="pc-166017f1">Solo entran las personas que invites — nadie más puede crearse una cuenta y llegar a tu bitácora.</p>
           </div>
           <div class="family-card">
             <div class="pc-6899e93a">🤝</div>
@@ -792,7 +792,7 @@
               <p class="field-hint">Mínimo 6 caracteres.</p>
 
               <div class="field pc-93b8ea5b" id="familyCodeField">
-                <label for="suCode">Código de familia</label>
+                <label for="suCode">Código de invitación</label>
                 <input class="pc-39ddb588" id="suCode" name="inviteCode" type="text" placeholder="Ej: B46NWEC7" maxlength="8" pattern="[A-Za-z0-9]{8}" aria-describedby="suCodeError">
                 <p class="field-error pc-81e00bde" id="suCodeError" role="alert"></p>
               </div>
@@ -884,7 +884,7 @@
         <div class="faq pc-d3a18014">
           <details class="faq-item">
             <summary>¿Quién puede escuchar o leer las historias que se guardan acá?</summary>
-            <p>Solo tu círculo de confianza: tú, y la familia que invites con tu propio código. Cualquiera de ellos puede entrar cuando quiera a escuchar, leer y disfrutar lo que se fue guardando — <strong>ese es justo el sentido de la aplicación</strong>, que esas historias no se pierdan y se puedan volver a visitar. Nadie por fuera de ese círculo puede entrar, ni creando una cuenta nueva por su cuenta.</p>
+            <p>Solo tu círculo de confianza: tú, y las personas que invites con tu propio código. Cualquiera de ellos puede entrar cuando quiera a escuchar, leer y disfrutar lo que se fue guardando — <strong>ese es justo el sentido de la aplicación</strong>, que esas historias no se pierdan y se puedan volver a visitar. Nadie por fuera de ese círculo puede entrar, ni creando una cuenta nueva por su cuenta.</p>
           </details>
           <details class="faq-item">
             <summary>¿Mis audios y fotos están protegidos, o cualquiera con el link los puede abrir?</summary>
@@ -1112,7 +1112,7 @@
       // un mensaje pegado al campo (no solo el globo nativo del navegador,
       // que en letra chica es fácil de no ver) y el foco puesto ahí mismo.
       if (modoColaborador && !inviteCode) {
-        mostrarErrorCodigo('Falta el código de familia — pídeselo a quien te invitó.');
+        mostrarErrorCodigo('Falta el código de invitación — pídeselo a quien te invitó.');
         suCode.focus();
         return;
       }

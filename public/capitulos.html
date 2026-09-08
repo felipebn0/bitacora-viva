@@ -146,7 +146,7 @@
        pantalla no tiene forma de saltar directo al contenido. -->
   <main class="wrap">
     <div class="aportes-section pc-93b8ea5b" id="aportesSection">
-      <h2>Aportes de la familia</h2>
+      <h2>Aportes de tu círculo</h2>
       <p class="sub">Historias que colaboradores agregaron con su propia voz.</p>
       <!-- El anuncio corto va aparte del contenido: si aria-live estuviera
          en #aportesLista directamente, un lector de pantalla leería TODOS
@@ -204,7 +204,7 @@
       const data = await resp.json();
       const notes = data.notes || [];
       if (!notes.length) return;
-      aportesListaStatus.textContent = notes.length === 1 ? 'Se cargó 1 aporte de la familia.' : `Se cargaron ${notes.length} aportes de la familia.`;
+      aportesListaStatus.textContent = notes.length === 1 ? 'Se cargó 1 aporte de tu círculo.' : `Se cargaron ${notes.length} aportes de tu círculo.`;
       aportesLista.innerHTML = '';
       notes.forEach((n) => {
         const item = document.createElement('div');
