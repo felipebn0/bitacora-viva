@@ -1048,6 +1048,15 @@
         agregarBurbuja('a', mensajeDeErrorDeTurno(resp, data));
         return;
       }
+      // El primer llamado a enviarTurno() (el saludo inicial, ver
+      // iniciarAporte más abajo) corre SOLO, apenas carga la página — sin
+      // que la persona haya tocado nada todavía. Pedir el micrófono ahí
+      // (sin ningún click de por medio) lo rechazan varios navegadores
+      // (Safari en particular) o dispara el permiso de la nada, antes de
+      // que alcance a leer el saludo. Por eso la escucha automática de
+      // más abajo solo arranca de la SEGUNDA respuesta en adelante — la
+      // primera vez, sigue haciendo falta tocar el orbe una vez.
+      const yaHuboUnTurnoHumano = historyLocal.some((m) => m.role === 'user');
       if (data.draftId) draftIdLocal = data.draftId;
       historyLocal.push({ role: 'assistant', content: data.message });
       agregarBurbuja('a', data.message);
@@ -1064,6 +1073,16 @@
         aporteMsg.textContent = data.saved ? '✓ Historia guardada. Gracias.' : '⚠️ La charla terminó, pero hubo un problema para guardarla.';
         otraHistoriaBtn.style.display = 'inline-block';
         if (data.saved) { cargarAportes(); }
+      } else if (!micNoDisponible && yaHuboUnTurnoHumano) {
+        // Conversacional, igual que la charla principal de app.html
+        // (fetchNext -> listenForAnswer tras cada respuesta): antes había
+        // que tocar "Presiona para hablar" después de CADA turno, uno por
+        // uno, hasta el final de la historia — acá se retoma la escucha
+        // sola apenas se ve la respuesta, sin esperar un nuevo toque
+        // (pedido de Felipe, 2026-09-07). Si el micrófono falla acá (por
+        // ejemplo, se bloqueó el permiso entre turnos), empezarGrabacion()
+        // ya cae sola al modo escribir, con su propio mensaje de error.
+        empezarGrabacion();
       }
     } catch (e) {
       thinking.remove();
@@ -1245,13 +1264,28 @@
     if (nombre === 'NotReadableError' || nombre === 'TrackStartError') {
       return 'Otra app está usando el micrófono ahora mismo — puedes escribir tu historia.';
     }
+    if (nombre === 'TimeoutError') {
+      return 'El micrófono está tardando demasiado en responder — puedes intentar tocando el botón de nuevo, o escribir tu historia mientras tanto.';
+    }
     return 'No se pudo acceder al micrófono — puedes escribir tu historia en su lugar.';
   }
 
   async function empezarGrabacion() {
     if (charlaTerminada || grabando) return;
     try {
-      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Carrera contra un timeout: en algunos navegadores, sobre todo
+      // después de interactuar con el selector nativo de fotos (subir una
+      // foto/video de esta historia), getUserMedia() puede quedarse
+      // colgado sin resolver ni fallar nunca — el orbe seguía diciendo
+      // "Presiona para hablar" para siempre, como si nada hubiera pasado
+      // al tocarlo (reportado por Felipe, 2026-09-07). 8s alcanza de sobra
+      // para un permiso real (con o sin cartel de permiso de por medio);
+      // pasado eso, se cae al mismo mensaje de error y modo escribir que
+      // ya existía para cualquier otra falla del micrófono.
+      mediaStream = await Promise.race([
+        navigator.mediaDevices.getUserMedia({ audio: true }),
+        new Promise((_, reject) => setTimeout(() => reject(Object.assign(new Error('timeout'), { name: 'TimeoutError' })), 8000)),
+      ]);
     } catch (e) {
       recStatus.textContent = mensajeErrorMicrofono(e);
       mostrarEscribirColab(true);
