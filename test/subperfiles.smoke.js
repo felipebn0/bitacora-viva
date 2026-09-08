@@ -71,12 +71,12 @@ function fakeSql(strings, ...values) {
   if (text.includes('INSERT INTO bitacoras (admin_user_id, nombre, fecha_nacimiento, relacion)')) {
     const [adminUserId, nombre, fechaNacimiento, relacion] = values;
     const id = nextBitacoraId++;
-    bitacoras[id] = { id, admin_user_id: adminUserId, nombre, fecha_nacimiento: fechaNacimiento, relacion: relacion || null, narrador_code: null, invite_code: null, aportes_pending_names: null, pin_hash: null };
+    bitacoras[id] = { id, admin_user_id: adminUserId, nombre, fecha_nacimiento: fechaNacimiento, relacion: relacion || null, narrador_code: null, invite_code: null, aportes_pending_names: null, pin_hash: null, contexto_onboarding: null };
     return Promise.resolve([{ id }]);
   }
-  if (text.includes('SELECT id, nombre, relacion FROM bitacoras WHERE admin_user_id')) {
+  if (text.includes('SELECT id, nombre, relacion, contexto_onboarding FROM bitacoras WHERE admin_user_id')) {
     const lista = Object.values(bitacoras).filter((b) => b.admin_user_id === values[0]);
-    return Promise.resolve(lista.map((b) => ({ id: b.id, nombre: b.nombre, relacion: b.relacion || null })));
+    return Promise.resolve(lista.map((b) => ({ id: b.id, nombre: b.nombre, relacion: b.relacion || null, contexto_onboarding: b.contexto_onboarding || null })));
   }
   if (text.includes('SELECT id FROM bitacoras WHERE id') && text.includes('admin_user_id')) {
     const bit = bitacoras[values[0]];

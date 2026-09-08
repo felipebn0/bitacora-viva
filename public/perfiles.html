@@ -206,6 +206,9 @@
       ? `<span class="activo-tag">Bitácora activa ahora</span>`
       : `<button class="btn small" data-cambiar="${p.id}" type="button">Ingresar a perfil</button>`;
     const enlaceToggleBtn = p.esPropia ? '' : `<button class="btn small plain" data-enlace="${p.id}" type="button">${enlaceAbiertoId === p.id ? 'Ocultar enlace' : 'Compartir enlace'}</button>`;
+    // Onboarding hablado (item 15, pedido de Felipe 2026-09-08): contarle
+    // a la IA gustos/contexto de esta persona antes de su primera charla.
+    const onboardingBtn = p.esPropia ? '' : `<a class="btn small plain" href="/perfilar.html?id=${p.id}">${p.tieneOnboarding ? 'Editar lo que sabemos de ella' : 'Contarle a la IA sobre ella'}</a>`;
     // Archivar (pedido de Felipe, 2026-09-08): no borra nada, solo lo saca
     // de esta lista y corta sus enlaces — ver POST /api/subprofiles/:id/archive.
     // No se ofrece para "vos" (esPropia) ni para el perfil activo ahora
@@ -222,7 +225,7 @@
             ${tagPrincipal}
           </div>
         </div>
-        <div class="acciones-fila">${cambiarBtn}${enlaceToggleBtn}${archivarBtn}</div>
+        <div class="acciones-fila">${cambiarBtn}${enlaceToggleBtn}${onboardingBtn}${archivarBtn}</div>
       </div>
       ${enlaceBox}
     </div>`;

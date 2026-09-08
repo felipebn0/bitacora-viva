@@ -885,6 +885,14 @@ function ensureSchema() {
       // enum en la base) porque el selector en el frontend ya ofrece las
       // opciones más comunes más una casilla de "otro".
       sql`ALTER TABLE bitacoras ADD COLUMN IF NOT EXISTS relacion TEXT`,
+      // Onboarding hablado (item 15, pedido de Felipe 2026-09-08): quien
+      // crea el subperfil (le "regala" la cuenta a otra persona) puede
+      // contarle a la IA, de forma hablada, gustos/contexto de esa persona
+      // ANTES de que ella empiece a charlar — ver POST/GET
+      // /api/subprofiles/:id/onboarding y public/perfilar.html. Texto ya
+      // compilado (no JSON de preguntas sueltas) porque lo único que hace
+      // falta después es pegarlo como contexto en loadFamilyContext().
+      sql`ALTER TABLE bitacoras ADD COLUMN IF NOT EXISTS contexto_onboarding TEXT`,
 
       // Las 8 tablas de contenido de arriba declaraban su "user_id" como
       // REFERENCES users(id) — correcto mientras cada bitácora era siempre
@@ -1394,7 +1402,7 @@ async function resolveProfileUserId(req) {
 async function leerPerfilBitacora(profileUserId, esPropia) {
   const rows = esPropia
     ? await sql`SELECT name AS nombre, fecha_nacimiento, created_at FROM users WHERE id = ${profileUserId}`
-    : await sql`SELECT nombre, fecha_nacimiento, created_at FROM bitacoras WHERE id = ${profileUserId}`;
+    : await sql`SELECT nombre, fecha_nacimiento, created_at, contexto_onboarding FROM bitacoras WHERE id = ${profileUserId}`;
   return rows[0] || null;
 }
 
@@ -2170,11 +2178,11 @@ app.get('/api/subprofiles', requireAuth, bloquearColaborador, bloquearInvitado, 
     await ensureSchema();
     const propia = await sql`SELECT name FROM users WHERE id = ${req.userId}`;
     const nombrePropio = capitalizarNombre((propia[0] && propia[0].name) || '') || req.username;
-    const subperfiles = await sql`SELECT id, nombre, relacion FROM bitacoras WHERE admin_user_id = ${req.userId} AND archived_at IS NULL ORDER BY created_at ASC`;
+    const subperfiles = await sql`SELECT id, nombre, relacion, contexto_onboarding FROM bitacoras WHERE admin_user_id = ${req.userId} AND archived_at IS NULL ORDER BY created_at ASC`;
     res.json({
       perfiles: [
         { id: req.userId, nombre: nombrePropio, esPropia: true },
-        ...subperfiles.map((s) => ({ id: s.id, nombre: capitalizarNombre(s.nombre), relacion: s.relacion || null, esPropia: false })),
+        ...subperfiles.map((s) => ({ id: s.id, nombre: capitalizarNombre(s.nombre), relacion: s.relacion || null, tieneOnboarding: !!s.contexto_onboarding, esPropia: false })),
       ],
     });
   } catch (err) {
@@ -2287,6 +2295,48 @@ app.post('/api/subprofiles/:id/archive', requireAuth, bloquearColaborador, bloqu
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo archivar el subperfil.' });
+  }
+});
+
+// Item 15 (pedido de Felipe, 2026-09-08): onboarding hablado al crear un
+// subperfil -- quien lo administra le cuenta a la IA gustos/contexto de esa
+// persona ANTES de su primera charla (ver public/perfilar.html). GET trae
+// el nombre (para la pantalla) y el contexto ya guardado, si vuelve a
+// entrar a corregirlo.
+app.get('/api/subprofiles/:id/onboarding', requireAuth, bloquearColaborador, bloquearInvitado, async (req, res) => {
+  try {
+    await ensureSchema();
+    const id = parseInt(req.params.id, 10);
+    const bit = await bitacoraDelAdmin(id, req.userId);
+    if (!bit) return res.status(404).json({ error: 'No se encontró ese subperfil.' });
+    const rows = await sql`SELECT nombre, contexto_onboarding FROM bitacoras WHERE id = ${id}`;
+    res.json({ nombre: capitalizarNombre(rows[0].nombre), contextoOnboarding: rows[0].contexto_onboarding || null });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo cargar el onboarding.' });
+  }
+});
+
+app.post('/api/subprofiles/:id/onboarding', requireAuth, bloquearColaborador, bloquearInvitado, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    const id = parseInt(req.params.id, 10);
+    const bit = await bitacoraDelAdmin(id, req.userId);
+    if (!bit) return res.status(404).json({ error: 'No se encontró ese subperfil.' });
+    const respuestas = Array.isArray(req.body && req.body.respuestas) ? req.body.respuestas : [];
+    // Se compila a un solo texto acá (no se guarda el JSON crudo) — es
+    // exactamente lo que loadFamilyContext() necesita pegar en el prompt,
+    // sin tener que volver a armarlo cada vez que arranca una charla.
+    const compilado = respuestas
+      .filter((r) => r && r.pregunta && r.respuesta && String(r.respuesta).trim())
+      .map((r) => `- ${String(r.pregunta).slice(0, 200)}: ${String(r.respuesta).trim().slice(0, 600)}`)
+      .join('\n');
+    if (!compilado) return res.status(400).json({ error: 'No hay ninguna respuesta para guardar.' });
+    await sql`UPDATE bitacoras SET contexto_onboarding = ${compilado} WHERE id = ${id}`;
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo guardar el onboarding.' });
   }
 });
 
@@ -2768,6 +2818,14 @@ async function loadFamilyContext(profileUserId, esPropia) {
     // (por ejemplo, en qué año tenía 20 años) sin tener que preguntarle la
     // edad ni hacer ella misma la cuenta con fechas.
     text += `\n\nEsta persona nació el ${describirFechaNacimiento(fechaNacimiento)}. Puedes usar este dato como contexto para entender mejor en qué época pasó lo que te cuenta, pero no hace falta que lo menciones ni que hagas cálculos de fechas en voz alta.`;
+  }
+  // Item 15: contexto que quien creó este subperfil (le "regaló" la cuenta
+  // a esta persona) contó de ella ANTES de su primera charla — ver
+  // POST /api/subprofiles/:id/onboarding. Es contexto de fondo para
+  // conocerla mejor, no una lista de temas a repetirle ni a preguntarle
+  // como si fuera un cuestionario.
+  if (perfil && perfil.contexto_onboarding) {
+    text += `\n\nAntes de esta charla, quien le regaló esta cuenta a esta persona contó esto sobre ella (es un reporte de esa otra persona, no algo que la persona con la que hablas te haya dicho a ti; puedes usarlo para entenderla mejor y hacer preguntas más naturales, pero no se lo repitas literal ni le digas que "ya sabías" esto de ella):` + envolverDatoNoConfiable('contexto_onboarding', perfil.contexto_onboarding);
   }
   if (notes.length) {
     const listado = notes
