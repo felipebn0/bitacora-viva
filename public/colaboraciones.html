@@ -142,6 +142,10 @@
     </div>
 
     <div id="tabRecibidos" role="tabpanel">
+      <div class="dados-select-row" id="recibidosSelectRow" hidden>
+        <label for="recibidosSelect">¿De cuál bitácora?</label>
+        <select id="recibidosSelect"></select>
+      </div>
       <section id="colaboradoresSection">
         <h2>Quiénes han colaborado</h2>
         <p class="sub">Familiares que aportaron historias con tu código de invitación.</p>
@@ -311,9 +315,9 @@
   // recién decidir el CTA de "Invitar familiares" cuando las dos
   // respuestas ya están — así no se repite el mismo CTA dos veces sin
   // pagar el viaje extra al servidor que costaba encadenarlas.
-  async function pedirColaboradores() {
+  async function pedirColaboradores(ownerId) {
     try {
-      const resp = await fetch('/api/tree/colaboradores');
+      const resp = await fetch('/api/tree/colaboradores' + (ownerId ? '?owner=' + encodeURIComponent(ownerId) : ''));
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) return { error: mensajeDeError(resp, data, 'No se pudo cargar quiénes colaboraron.') };
       return { colaboradores: data.colaboradores || [] };
@@ -322,9 +326,9 @@
     }
   }
 
-  async function pedirAportes() {
+  async function pedirAportes(ownerId) {
     try {
-      const resp = await fetch('/api/contributions');
+      const resp = await fetch('/api/contributions' + (ownerId ? '?owner=' + encodeURIComponent(ownerId) : ''));
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) return { error: mensajeDeError(resp, data, 'No se pudieron cargar los aportes.') };
       return { notes: data.notes || [] };
@@ -495,26 +499,60 @@
   }
 
 
-  // Campanita del ícono "Aportes" (💬) en app.html: se apaga la primera vez
-  // que esta página termina de cargar los aportes sin error — mismo
-  // criterio que arbolVisto en arbol.html (una sola vez, no en cada
+  // Campanita del ícono "Colaboración" (🤝) en app.html: se apaga la
+  // primera vez que esta página termina de cargar los aportes sin error —
+  // mismo criterio que arbolVisto en arbol.html (una sola vez, no en cada
   // reintento fallido, para no perder el aviso si la carga real todavía no
-  // se vio).
+  // se vio). Solo se dispara para la bitácora ACTIVA de la sesión (la que
+  // arranca elegida en el selector) — la campanita del topbar es de esa
+  // bitácora puntual, no tiene sentido apagarla si se está mirando otro
+  // subperfil desde el selector.
   let aportesVistos = false;
+  const recibidosSelect = document.getElementById('recibidosSelect');
+  const recibidosSelectRow = document.getElementById('recibidosSelectRow');
+  let idActivoSesion = null; // el que arranca elegido -- solo ese dispara mark-seen
 
-  async function cargarTodo() {
+  async function cargarTodo(ownerId, marcarVistos) {
     colaboradoresLista.innerHTML = '<p class="empty">Cargando…</p>';
     aportesLista.innerHTML = '<p class="empty">Cargando…</p>';
-    const [colabResultado, aportesResultado] = await Promise.all([pedirColaboradores(), pedirAportes()]);
+    const [colabResultado, aportesResultado] = await Promise.all([pedirColaboradores(ownerId), pedirAportes(ownerId)]);
     const colaboradoresVacios = pintarColaboradores(colabResultado);
     pintarAportes(aportesResultado, colaboradoresVacios);
-    if (!aportesResultado.error && !aportesVistos) {
+    if (marcarVistos && !aportesResultado.error && !aportesVistos) {
       aportesVistos = true;
       fetch('/api/aportes/mark-seen', { method: 'POST' }).catch(() => {});
     }
   }
 
-  cargarTodo();
+  // Item: "Lo que dijeron de mí" con el mismo selector que "Lo que yo dije
+  // de otros" (pedido de Felipe, 2026-09-08) -- si administras subperfiles
+  // (papá, mamá...), podés ver los aportes que RECIBIÓ cada uno sin tener
+  // que cambiarte de bitácora primero (ver puedeAdministrarBitacora en
+  // server.js).
+  async function cargarSelectorRecibidos() {
+    try {
+      const [perfilesResp, meResp] = await Promise.all([fetch('/api/subprofiles'), fetch('/api/me')]);
+      const perfilesData = await perfilesResp.json().catch(() => ({}));
+      const meData = await meResp.json().catch(() => ({}));
+      const perfiles = (perfilesResp.ok && perfilesData.perfiles) || [];
+      idActivoSesion = (meResp.ok && meData.bitacoraActiva && meData.bitacoraActiva.id) || null;
+      if (perfiles.length > 1) {
+        recibidosSelectRow.hidden = false;
+        recibidosSelect.innerHTML = '';
+        perfiles.forEach((p) => {
+          const opt = document.createElement('option');
+          opt.value = p.id;
+          opt.textContent = p.esPropia ? `${p.nombre} (vos)` : p.nombre;
+          if (idActivoSesion ? p.id === idActivoSesion : p.esPropia) opt.selected = true;
+          recibidosSelect.appendChild(opt);
+        });
+      }
+    } catch (e) {}
+    cargarTodo(idActivoSesion, true);
+  }
+  recibidosSelect.addEventListener('change', () => cargarTodo(Number(recibidosSelect.value), Number(recibidosSelect.value) === idActivoSesion));
+
+  cargarSelectorRecibidos();
 })();
 </script>
 </body>

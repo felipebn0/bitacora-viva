@@ -1387,6 +1387,20 @@ function bloquearSiNoPuedeNarrar(req, res, next) {
 // persona), se valida contra collaborations o el owner_user_id fijo; si no
 // viene, se usa el req.profileUserId de siempre (cuenta 100% colaboradora,
 // o el propio usuario). Devuelve null si no está autorizado.
+// Item 14/colaboraciones (ajustado 2026-09-08, pedido de Felipe): el
+// administrador de un subperfil puede ver y administrar SUS aportes
+// (colaboradores, lo que contaron, privado/archivar) sin necesidad de
+// cambiarse a esa bitácora primero — mismo espíritu que ya puede ver su
+// árbol/capítulos/historias con /api/subprofiles/switch, pero para esto
+// no hace falta ni siquiera ese paso. Devuelve true tanto para "es mi
+// propia cuenta" como para "administro este subperfil".
+async function puedeAdministrarBitacora(ownerId, req) {
+  if (ownerId === req.userId) return true;
+  await ensureSchema();
+  const rows = await sql`SELECT 1 FROM bitacoras WHERE id = ${ownerId} AND admin_user_id = ${req.userId}`;
+  return rows.length > 0;
+}
+
 async function resolveProfileUserId(req) {
   const raw = (req.query && req.query.owner) || (req.body && req.body.owner);
   const requestedOwner = parseInt(raw, 10);
@@ -1395,9 +1409,8 @@ async function resolveProfileUserId(req) {
   // trabajar para la única bitácora de su sesión — nunca para otra, ni
   // aunque el pedido mande un "owner" distinto.
   if (req.isGuest) return requestedOwner === req.profileUserId ? req.profileUserId : null;
-  if (requestedOwner === req.userId) return req.userId;
+  if (await puedeAdministrarBitacora(requestedOwner, req)) return requestedOwner;
 
-  await ensureSchema();
   const rows = await sql`SELECT owner_user_id FROM users WHERE id = ${req.userId}`;
   if (rows[0] && rows[0].owner_user_id === requestedOwner) return requestedOwner;
 
@@ -4358,14 +4371,17 @@ app.get('/api/contributions', requireAuth, async (req, res) => {
     const ownerId = await resolveProfileUserId(req);
     if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
     await ensureSchema();
-    // El dueño ve todos los aportes de su bitácora; un colaborador solo ve
-    // los que él mismo aportó, nunca los de otros colaboradores. Un
-    // invitado sin cuenta (ver /api/guest-start) no tiene id numérico
-    // propio — contributed_by queda NULL en sus aportes — así que se
-    // identifica por nombre en vez de por id; si dos invitados de la misma
-    // bitácora comparten nombre, verían el aporte del otro (limitación
-    // conocida, no un hueco de privacidad hacia afuera de la familia).
-    const esDueño = ownerId === req.userId;
+    // El dueño (o quien administra ese subperfil, ajustado 2026-09-08 para
+    // que colaboraciones.html pueda ver los aportes de cada subperfil sin
+    // tener que cambiarse a esa bitácora primero) ve todos los aportes;
+    // un colaborador solo ve los que él mismo aportó, nunca los de otros
+    // colaboradores. Un invitado sin cuenta (ver /api/guest-start) no
+    // tiene id numérico propio — contributed_by queda NULL en sus
+    // aportes — así que se identifica por nombre en vez de por id; si dos
+    // invitados de la misma bitácora comparten nombre, verían el aporte
+    // del otro (limitación conocida, no un hueco de privacidad hacia
+    // afuera de la familia).
+    const esDueño = await puedeAdministrarBitacora(ownerId, req);
     // archived_at IS NULL en las 3: un aporte archivado (item 14) deja de
     // aparecer para TODOS, incluido quien lo aportó — mismo criterio que
     // bitacoras.archived_at con los subperfiles.
@@ -4408,7 +4424,9 @@ async function aporteAdministrable(id, ownerId, req) {
   const rows = await sql`SELECT id, user_id, contributed_by, contributor FROM family_notes WHERE id = ${id} AND archived_at IS NULL`;
   const nota = rows[0];
   if (!nota || nota.user_id !== ownerId) return null;
-  if (ownerId === req.userId) return nota; // el dueño administra cualquier aporte a su bitácora
+  // El dueño (o quien administra ese subperfil) administra cualquier
+  // aporte a esa bitácora.
+  if (await puedeAdministrarBitacora(ownerId, req)) return nota;
   if (req.isGuest) return (nota.contributed_by == null && nota.contributor === req.guestName) ? nota : null;
   return nota.contributed_by === req.userId ? nota : null;
 }
@@ -5141,10 +5159,15 @@ app.post('/api/aportes/mark-seen', requireAuth, bloquearColaborador, rateLimit, 
 app.get('/api/tree/colaboradores', requireAuth, bloquearColaborador, async (req, res) => {
   try {
     await ensureSchema();
+    // ?owner=: para que colaboraciones.html pueda ver quiénes colaboraron
+    // con un subperfil que administras sin tener que cambiarte a esa
+    // bitácora primero (mismo mecanismo que ya usa GET /api/contributions).
+    const ownerId = await resolveProfileUserId(req);
+    if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa bitácora.' });
     const rows = await sql`
       SELECT contributor, parentesco, COUNT(*) AS historias
       FROM family_notes
-      WHERE user_id = ${req.profileUserId} AND contributor IS NOT NULL
+      WHERE user_id = ${ownerId} AND contributor IS NOT NULL
       GROUP BY contributor, parentesco
       ORDER BY MIN(created_at) ASC
     `;
