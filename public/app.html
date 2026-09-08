@@ -1570,7 +1570,9 @@
   const umResetError = document.getElementById('umResetError');
 
   umResetToggle.addEventListener('click', () => {
-    const visible = umResetRow.style.display !== 'none';
+    // getComputedStyle: mismo bug de doble clic que inviteToggle -- el
+    // oculto inicial es por CSS (.pc-1f5ad18c), no por style inline.
+    const visible = getComputedStyle(umResetRow).display !== 'none';
     umResetRow.style.display = visible ? 'none' : 'block';
     umResetError.textContent = '';
     if (!visible) umResetPassword.focus();
@@ -1617,7 +1619,9 @@
   const umDeleteError = document.getElementById('umDeleteError');
 
   umDeleteToggle.addEventListener('click', () => {
-    const visible = umDeleteRow.style.display !== 'none';
+    // getComputedStyle: mismo bug de doble clic que inviteToggle -- el
+    // oculto inicial es por CSS (.pc-1f5ad18c), no por style inline.
+    const visible = getComputedStyle(umDeleteRow).display !== 'none';
     umDeleteRow.style.display = visible ? 'none' : 'block';
     umDeleteError.textContent = '';
     if (!visible) umDeletePassword.focus();
@@ -1676,7 +1680,12 @@
   }
 
   inviteToggle.addEventListener('click', async () => {
-    const visible = inviteRow.style.display !== 'none';
+    // getComputedStyle, no inviteRow.style.display: el oculto inicial viene
+    // de la clase CSS ".pc-71494e54" (display:none), no de un style inline
+    // -- por eso inviteRow.style.display arrancaba en '' ("" !== 'none' ->
+    // se leía como "ya visible") y hacía falta un segundo clic para que
+    // el primero de verdad abriera la fila.
+    const visible = getComputedStyle(inviteRow).display !== 'none';
     if (visible) {
       inviteRow.style.display = 'none';
       inviteToggle.setAttribute('aria-expanded', 'false');

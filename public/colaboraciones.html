@@ -89,6 +89,14 @@
   .aporte-item .media-adjunta img, .aporte-item .media-adjunta video {
     max-width: 220px; max-height: 220px; border-radius: 10px; display: block;
   }
+  /* Item 14 (ajustado 2026-09-08): administrar (privado/archivar) un aporte
+     que le hicieron a MI historia va acá, no en colaborar.html. */
+  .aporte-item .aporte-acciones { margin-top: 10px; display: flex; gap: 14px; }
+  .aporte-item .aporte-acciones button {
+    background: none; border: none; color: var(--gold-deep); text-decoration: underline;
+    cursor: pointer; font-family: var(--font-body); font-size: 0.8rem; padding: 4px 0;
+  }
+  .aporte-item .aporte-acciones .archivar-btn { color: #a33; }
 </style>
 </head>
 <body>
@@ -221,6 +229,23 @@
     return false;
   }
 
+  async function cambiarPrivacidadAporte(id, privada) {
+    try {
+      await fetch(`/api/contributions/${id}/privacy`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ private: privada }),
+      });
+    } catch (e) {}
+    cargarTodo();
+  }
+
+  async function archivarAporte(id) {
+    if (!confirm('¿Archivar este aporte? Deja de verse (tuyo y de quien lo mandó) — no se borra nada.')) return;
+    try {
+      await fetch(`/api/contributions/${id}/archive`, { method: 'POST' });
+    } catch (e) {}
+    cargarTodo();
+  }
+
   function pintarAportes(resultado, colaboradoresVacios) {
     if (resultado.error) {
       aportesStatus.textContent = resultado.error;
@@ -286,6 +311,23 @@
         });
         item.appendChild(grid);
       }
+      // Item 14 (ajustado 2026-09-08, pedido de Felipe): quien administra
+      // la bitácora puede esconder o archivar CUALQUIER aporte que le
+      // hicieron a su historia -- ver aporteAdministrable en server.js.
+      const acciones = document.createElement('div');
+      acciones.className = 'aporte-acciones';
+      const privBtn = document.createElement('button');
+      privBtn.type = 'button';
+      privBtn.textContent = n.is_private ? 'Quitar privado' : 'Marcar privado';
+      privBtn.addEventListener('click', () => cambiarPrivacidadAporte(n.id, !n.is_private));
+      const archBtn = document.createElement('button');
+      archBtn.type = 'button';
+      archBtn.className = 'archivar-btn';
+      archBtn.textContent = 'Archivar';
+      archBtn.addEventListener('click', () => archivarAporte(n.id));
+      acciones.appendChild(privBtn);
+      acciones.appendChild(archBtn);
+      item.appendChild(acciones);
       aportesLista.appendChild(item);
     });
   }

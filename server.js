@@ -2290,41 +2290,6 @@ app.post('/api/subprofiles/:id/archive', requireAuth, bloquearColaborador, bloqu
   }
 });
 
-// Trae (o genera de una) el código para que el CÍRCULO de esa persona le
-// aporte historias en colaborar.html?codigo=... — es el mismo mecanismo que
-// GET /api/invite-code, pero apuntado a un subperfil en vez de a la propia
-// cuenta (pedido de Felipe: el link para "que le aporten" iba a app.html por
-// error, en vez de a colaborar.html).
-app.get('/api/subprofiles/:id/invite-link', requireAuth, bloquearColaborador, bloquearInvitado, async (req, res) => {
-  try {
-    await ensureSchema();
-    const id = parseInt(req.params.id, 10);
-    const bit = await bitacoraDelAdmin(id, req.userId);
-    if (!bit) return res.status(404).json({ error: 'No se encontró ese subperfil.' });
-    const code = (await leerInviteCodeActivo(id, false)) || (await asignarInviteCodeActivo(id, false));
-    res.json({ code });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'No se pudo generar el enlace.' });
-  }
-});
-
-// Mismo motivo que /api/invite-code/regenerate: cerrar el acceso de un link
-// que se compartió de más, sin afectar a quienes ya colaboraron.
-app.post('/api/subprofiles/:id/invite-link/regenerate', requireAuth, bloquearColaborador, bloquearInvitado, rateLimit, async (req, res) => {
-  try {
-    await ensureSchema();
-    const id = parseInt(req.params.id, 10);
-    const bit = await bitacoraDelAdmin(id, req.userId);
-    if (!bit) return res.status(404).json({ error: 'No se encontró ese subperfil.' });
-    const code = await asignarInviteCodeActivo(id, false);
-    res.json({ code });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'No se pudo generar el enlace.' });
-  }
-});
-
 // --- Entrar como narrador de un subperfil, sin crear cuenta (BACKLOG #12) ---
 // Mismo espíritu que /api/guest-code-info + /api/guest-start (BACKLOG #5),
 // pero esto narra SU PROPIA bitácora (story_log, árbol, capítulos) en vez de
@@ -4318,37 +4283,44 @@ app.get('/api/contributions', requireAuth, async (req, res) => {
       media_urls: parseJsonArray(n.media_urls),
     }));
     const media = mediaRaw.map((m) => ({ ...m, contributor: capitalizarNombre(m.contributor) }));
-    // puedeAdministrar: solo quien aportó puede marcar privado/archivar lo
-    // suyo (nunca el dueño de la bitácora) — acá se sabe de una porque las
-    // ramas "no dueño" de arriba YA filtran solo por lo propio.
-    res.json({ notes, media, puedeAdministrar: !esDueño });
+    // puedeAdministrar: el dueño administra cualquier aporte a su bitácora
+    // (colaboraciones.html); quien no es dueño solo ve lo propio en esta
+    // misma respuesta (ver las ramas de arriba), así que también puede
+    // administrarlo — ver aporteAdministrable.
+    res.json({ notes, media, puedeAdministrar: true });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudieron cargar los aportes.' });
   }
 });
 
-// Confirma que quien pide la acción es de verdad quien aportó esa nota
-// (nunca el dueño de la bitácora, aunque también tenga acceso a leerla) --
-// usado por los dos endpoints de abajo. Devuelve la nota o null.
-async function aporteDelColaborador(id, ownerId, req) {
+// Confirma que quien pide la acción puede administrar esa nota — ajuste del
+// 2026-09-08 sobre el diseño original: Felipe aclaró que esto no va del
+// lado de "mis colaboraciones hacia los demás" (colaborar.html), sino del
+// lado de "cuando me aportan a MI historia" (colaboraciones.html) — así
+// que ahora es el DUEÑO de la bitácora quien administra lo que le
+// aportaron (útil incluso si el colaborador nunca vuelve a este aporte),
+// más quien lo aportó, que lo sigue pudiendo hacer sobre lo suyo. Devuelve
+// la nota o null.
+async function aporteAdministrable(id, ownerId, req) {
   const rows = await sql`SELECT id, user_id, contributed_by, contributor FROM family_notes WHERE id = ${id} AND archived_at IS NULL`;
   const nota = rows[0];
   if (!nota || nota.user_id !== ownerId) return null;
+  if (ownerId === req.userId) return nota; // el dueño administra cualquier aporte a su bitácora
   if (req.isGuest) return (nota.contributed_by == null && nota.contributor === req.guestName) ? nota : null;
   return nota.contributed_by === req.userId ? nota : null;
 }
 
-// Item 14 (pedido de Felipe, 2026-09-08): quien aportó una historia puede
-// esconderla del resto del círculo que también colabora acá -- el dueño de
-// la bitácora la sigue viendo siempre (ver el filtro de GET /api/contributions).
+// Item 14 (pedido de Felipe, 2026-09-08): esconder un aporte del resto del
+// círculo que también colabora acá -- el dueño de la bitácora la sigue
+// viendo siempre (ver el filtro de GET /api/contributions).
 app.post('/api/contributions/:id/privacy', requireAuth, rateLimit, async (req, res) => {
   try {
     await ensureSchema();
     const id = parseInt(req.params.id, 10);
     const ownerId = await resolveProfileUserId(req);
     if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
-    const nota = await aporteDelColaborador(id, ownerId, req);
+    const nota = await aporteAdministrable(id, ownerId, req);
     if (!nota) return res.status(404).json({ error: 'No se encontró ese aporte.' });
     const privada = !!(req.body && req.body.private);
     await sql`UPDATE family_notes SET is_private = ${privada} WHERE id = ${id}`;
@@ -4367,7 +4339,7 @@ app.post('/api/contributions/:id/archive', requireAuth, rateLimit, async (req, r
     const id = parseInt(req.params.id, 10);
     const ownerId = await resolveProfileUserId(req);
     if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
-    const nota = await aporteDelColaborador(id, ownerId, req);
+    const nota = await aporteAdministrable(id, ownerId, req);
     if (!nota) return res.status(404).json({ error: 'No se encontró ese aporte.' });
     await sql`UPDATE family_notes SET archived_at = now() WHERE id = ${id}`;
     res.json({ ok: true });
