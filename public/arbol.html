@@ -197,6 +197,18 @@
     opacity: 0 !important;
     pointer-events: none;
   }
+  /* Item 23 (pedido de Felipe, 2026-09-08): etiqueta de generación
+     ("Abuelos", "Padres", "Yo"...) arriba de cada fila -- solo en modo
+     "Editar árbol", para ayudar a ubicarse mientras se corrige a alguien,
+     sin sumarle texto de más a la vista normal del árbol. Margen negativo
+     abajo: el gap de 52px entre filas de .tree-graphic ya deja espacio de
+     sobra, la etiqueta solo necesita "pegarse" a SU fila, no a las dos. */
+  .tree-row-label {
+    display: none; text-align: center; margin: 0 0 -38px;
+    font-family: var(--font-display); font-size: 0.95rem; font-weight: 700;
+    color: var(--gold-deep); letter-spacing: 0.02em;
+  }
+  body.modo-editar-arbol .tree-row-label { display: block; }
   .avatar {
     width: 68px; height: 68px; border-radius: 50%;
     background: var(--bubble-user);
@@ -579,6 +591,25 @@
     return people;
   }
 
+  // Item 23 (pedido de Felipe, 2026-09-08): etiqueta cada fila del árbol
+  // relativa a quién está marcado como "Yo" (es_principal) — no a la
+  // profundidad absoluta, que puede arrancar en un bisabuelo si el árbol
+  // llega tan atrás. relDepth negativo = ascendientes, positivo =
+  // descendientes; más allá de bisabuelos/bisnietos se generaliza, porque
+  // no hay una palabra corta de uso común para tatarabuelos en adelante
+  // que valga la pena mostrar como etiqueta.
+  const ETIQUETAS_ASCENDENTES = ['Padres', 'Abuelos', 'Bisabuelos'];
+  const ETIQUETAS_DESCENDIENTES = ['Hijos', 'Nietos', 'Bisnietos'];
+  function etiquetaGeneracion(relDepth) {
+    if (relDepth === 0) return 'Yo';
+    if (relDepth < 0) {
+      const i = -relDepth - 1;
+      return ETIQUETAS_ASCENDENTES[i] || 'Ascendientes más lejanos';
+    }
+    const i = relDepth - 1;
+    return ETIQUETAS_DESCENDIENTES[i] || 'Descendientes más lejanos';
+  }
+
   function renderTree(people) {
     wrap.innerHTML = '';
     if (scrollHint) scrollHint.classList.remove('visible');
@@ -636,8 +667,20 @@
     const avatarByName = new Map();
     const rowElDeNombre = new Map();
     const rowElPorFila = []; // mismo índice que filasOrdenadas (filas vacías -> null)
-    filasOrdenadas.forEach((grupo) => {
+    // Item 23: si hay alguien marcado como "Yo", cada fila se etiqueta
+    // relativa a esa persona (ver etiquetaGeneracion) — si por lo que sea
+    // no hay nadie marcado todavía, se omiten las etiquetas en vez de
+    // adivinar mal.
+    const principal = people.find((p) => p.es_principal);
+    const principalDepth = principal ? profundidad.get(principal.id) : null;
+    filasOrdenadas.forEach((grupo, d) => {
       if (!grupo.length) { rowElPorFila.push(null); return; }
+      if (principalDepth != null) {
+        const label = document.createElement('p');
+        label.className = 'tree-row-label';
+        label.textContent = etiquetaGeneracion(d - principalDepth);
+        graphic.appendChild(label);
+      }
       const row = document.createElement('div');
       row.className = 'tree-row';
       grupo.forEach((p) => {
