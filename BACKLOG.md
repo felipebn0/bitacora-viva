@@ -114,3 +114,17 @@ Pendiente/fuera de alcance de esta vuelta (no adivinado, dejado explícito):
 - Reiniciar (`/api/reset-bitacora`) o borrar un subperfil no tiene ruta propia todavía — se bloqueó explícitamente en vez de adivinar si la administradora debería poder hacerlo.
 - Recordatorios por correo (`notification_preferences`) quedaron por LOGIN, no por bitácora — no fue reconfirmado explícitamente con Felipe.
 - Probado con `test/subperfiles.smoke.js` + toda la suite existente (26 archivos, 0 fallos) — falta la prueba manual real en `pruebas` (crear un subperfil, generar el link, narrar desde otro navegador/dispositivo).
+
+## 13. Canciones (Spotify/YouTube) como aporte de la familia — hecho, pero solo en `pruebas`
+
+**Qué es:** que una colaboradora pueda dejar el link "para compartir" de una canción (ej. "La guirnalda" de Rocío Dúrcal, que la abuela y la mamá cantan juntas) como parte de un recuerdo, y que la bitácora la traiga a colación en el chat cuando la persona vuelve a abrir la app — igual que ya pasa con una foto/video, pero sin subir ningún archivo: se guarda el link para EMBEBER esa plataforma (Spotify o YouTube), la canción en sí nunca pasa por el servidor.
+
+**Estado:** implementado y probado de punta a punta en la rama `pruebas` (commit `a56c64d`, 2026-09-08) — no está en `main` todavía, a propósito (Felipe pidió dejarlo en el backlog por ahora, 2026-09-08).
+
+**Lo que trae, para cuando se retome:**
+- `server.js`: `extraerEmbedDeCancion()`/`urlEmbedCancionValida()` — allowlist cerrada de hosts (`open.spotify.com`, `youtube.com`/`youtu.be`/`music.youtube.com` para el link que se pega; `open.spotify.com` y `youtube-nocookie.com` para el link de embeber que de verdad se guarda). Nuevo `POST /api/contribute-song`. `limpiarMediaAdjunta()` gana el tipo `'cancion'` con su propia validación. CSP: nuevo `frame-src` acotado a esos dos hosts de embeber.
+- `colaborar.html`: botón "🎵 agregar una canción de este recuerdo" junto al de foto/video.
+- `app.html` / `colaboraciones.html`: el visor de "media del momento" y la galería de aportes pintan un `<iframe>` para `type:'cancion'` en vez de `<img>`/`<video>`.
+- Tests: `test/contribute-song.smoke.js`, `test/contribute-draft.smoke.js` extendido, `test/cancion-aporte.playwright.js` (las 3 pantallas de punta a punta).
+
+**Para retomarlo:** traer ese commit a `main` (`git merge origin/pruebas` o cherry-pick de `a56c64d`) — va a pedir resolver conflictos a mano en `server.js`, `app.html`, `colaboraciones.html`, `colaborar.html`, `package.json` y `vercel.json`, porque para esa fecha `main` ya tenía cambios propios en esos mismos archivos (auditoría de Diego, 2026-09-08). Correr toda la batería de tests después de resolver.
