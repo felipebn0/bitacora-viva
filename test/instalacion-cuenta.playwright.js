@@ -1,28 +1,32 @@
 // Verifica la sección "Instalación" del panel de Cuenta en app.html
 // (agregar la charla a la pantalla de inicio) — antes esto solo existía
 // para quien entraba con el enlace permanente de un subperfil
-// (#accesoDirectoRow); ahora también aparece dentro de Cuenta para la
-// cuenta dueña normal, reusando el mismo "promptDeInstalacion" capturado
-// por el listener de beforeinstallprompt (ver configurarSeccionInstalacion
-// en app.html).
+// (#accesoDirectoRow); ahora también aparece dentro de Cuenta (en
+// "Opciones avanzadas") para la cuenta dueña normal.
 //
-// Cuatro escenarios, cada uno con su propio user agent (Playwright permite
+// Es siempre una guía manual, para iPhone y para el resto por igual — en
+// iPhone porque Apple no da ninguna forma de disparar este paso con
+// código, y en Android/Chrome porque esta app todavía no tiene un
+// "service worker" registrado (requisito de Chrome para que llegue a
+// disparar beforeinstallprompt), así que no se ofrece ningún botón de un
+// solo toque acá que en la práctica nunca aparecería (ver
+// configurarSeccionInstalacion en app.html).
+//
+// Tres escenarios, cada uno con su propio user agent (Playwright permite
 // fijar el user agent por contexto de navegador):
 //   1. iPhone + Safari: 3 pasos (compartir → "Ver más" → "Añadir a
 //      pantalla de inicio"), con la nota de que queda en pantalla completa.
 //   2. iPhone + Chrome (CriOS en el user agent): 2 pasos distintos (menú ⋮
 //      → "Añadir a pantalla de inicio"), con la nota de que Chrome NO deja
 //      pantalla completa.
-//   3. Android/escritorio SIN beforeinstallprompt: se ve la instrucción
-//      manual (menú ⋮), no el botón.
-//   4. Android/escritorio CON beforeinstallprompt: aparece el botón de un
-//      solo toque, y tocarlo llama a prompt() del evento capturado.
+//   3. Android/escritorio: se ve siempre la instrucción manual (menú ⋮),
+//      incluso si el navegador llega a disparar beforeinstallprompt (ese
+//      evento solo se usa en #accesoDirectoRow, no acá).
 //
 // No usa server.js: app.html se sirve estático y todas las llamadas a
 // /api/* se interceptan con page.route() (mismo patrón que
 // test/pause-resume.playwright.js) — esta sección no depende de ningún
-// dato del servidor, solo del user agent y de si beforeinstallprompt llega
-// o no.
+// dato del servidor, solo del user agent.
 //
 //   node test/instalacion-cuenta.playwright.js   (o: npm run test:instalacion)
 
@@ -123,47 +127,34 @@ async function scenarioIphoneChrome(browser, base) {
   await context.close();
 }
 
-async function scenarioAndroidSinPrompt(browser, base) {
-  console.log('\n--- Escenario 3: Android sin beforeinstallprompt — solo instrucción manual ---');
+async function scenarioAndroidSiempreManual(browser, base) {
+  console.log('\n--- Escenario 3: Android — siempre instrucción manual, incluso si llega beforeinstallprompt ---');
   const { context, page } = await abrirPanelDeCuenta(browser, base, UA_ANDROID_CHROME);
 
   const iosOculto = await page.isHidden('#umInstalIOS');
-  const otrosVisible = await page.isVisible('#umInstalOtros');
+  let otrosVisible = await page.isVisible('#umInstalOtros');
+  let fallbackVisible = await page.isVisible('#umInstalarFallback');
   assert(iosOculto, 'en Android no se muestra el bloque de instrucciones de iPhone');
   assert(otrosVisible, 'se muestra el bloque de Android/otros');
+  assert(fallbackVisible, 'se ve la instrucción manual (menú ⋮ → Agregar a pantalla de inicio)');
+  assert((await page.$('#umInstalarBtn')) === null, 'no existe ningún botón de "un solo toque" en esta sección — prometerlo sería mentir: la app no tiene service worker, así que Chrome nunca dispara beforeinstallprompt acá');
 
-  const botonOculto = await page.isHidden('#umInstalarBtn');
-  const fallbackVisible = await page.isVisible('#umInstalarFallback');
-  assert(botonOculto, 'sin que el navegador dispare beforeinstallprompt, el botón de un toque queda oculto');
-  assert(fallbackVisible, 'se ve la instrucción manual (menú ⋮ → Agregar a pantalla de inicio) como respaldo');
-
-  await context.close();
-}
-
-async function scenarioAndroidConPrompt(browser, base) {
-  console.log('\n--- Escenario 4: Android CON beforeinstallprompt — botón real de un toque ---');
-  const { context, page } = await abrirPanelDeCuenta(browser, base, UA_ANDROID_CHROME);
-
-  // Simula el evento que dispara Chrome/Android cuando decide que la
-  // página es instalable — no hay forma de que Playwright lo dispare de
-  // verdad, así que se arma a mano con prompt()/userChoice fakes, igual
-  // que lo consume el código real (ver configurarSeccionInstalacion).
+  // Aunque el navegador SÍ llegue a ofrecer instalar (simulado, ya que
+  // Playwright no puede disparar el heurístico real de Chrome), la sección
+  // "Instalación" de Cuenta no cambia — ese evento solo lo consume
+  // #accesoDirectoRow (enlace de subperfil), un mecanismo aparte.
   await page.evaluate(() => {
-    window.__promptLlamado = false;
     const ev = new Event('beforeinstallprompt', { cancelable: true });
-    ev.prompt = () => { window.__promptLlamado = true; return Promise.resolve(); };
+    ev.prompt = () => Promise.resolve();
     ev.userChoice = Promise.resolve({ outcome: 'accepted' });
     window.dispatchEvent(ev);
   });
+  await page.waitForTimeout(100);
 
-  await page.waitForSelector('#umInstalarBtn', { state: 'visible' });
-  const fallbackOculto = await page.isHidden('#umInstalarFallback');
-  assert(fallbackOculto, 'al llegar beforeinstallprompt, la instrucción manual se reemplaza por el botón');
-
-  await page.click('#umInstalarBtn');
-  await page.waitForFunction(() => window.__promptLlamado === true, { timeout: 5000 });
-  const promptLlamado = await page.evaluate(() => window.__promptLlamado);
-  assert(promptLlamado, 'tocar el botón llama a prompt() del evento capturado — un solo toque, sin pasos manuales');
+  otrosVisible = await page.isVisible('#umInstalOtros');
+  fallbackVisible = await page.isVisible('#umInstalarFallback');
+  assert(otrosVisible, 'después de beforeinstallprompt, la sección de Cuenta sigue mostrando el bloque de Android/otros');
+  assert(fallbackVisible, 'después de beforeinstallprompt, la instrucción manual sigue ahí — no aparece ningún botón nuevo');
 
   await context.close();
 }
@@ -176,8 +167,7 @@ async function scenarioAndroidConPrompt(browser, base) {
   try {
     await scenarioIphoneSafari(browser, base);
     await scenarioIphoneChrome(browser, base);
-    await scenarioAndroidSinPrompt(browser, base);
-    await scenarioAndroidConPrompt(browser, base);
+    await scenarioAndroidSiempreManual(browser, base);
   } finally {
     await browser.close();
     server.close();

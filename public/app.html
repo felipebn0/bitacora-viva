@@ -856,16 +856,16 @@
            </div>
 
            <!-- Guardar la app como un ícono en la pantalla de inicio, desde
-                Cuenta — antes esto solo existía para quien entraba con el
-                enlace permanente de un subperfil (ver #accesoDirectoRow /
-                activarAccesoDirecto más abajo); esta sección lo ofrece
-                también a la cuenta dueña normal. Reutiliza el mismo
-                "promptDeInstalacion" capturado por el listener de
-                beforeinstallprompt (ver más abajo) en vez de duplicar esa
-                lógica. En iPhone, Apple no da ninguna forma de disparar este
-                paso con código — por eso ahí siempre se muestra una guía en
-                vez de un botón, sea Safari o Chrome (ver
-                configurarSeccionInstalacion). -->
+                Cuenta. Siempre son instrucciones manuales, para iPhone y
+                para el resto por igual: en iPhone porque Apple no da
+                ninguna forma de disparar este paso con código, y en
+                Android/Chrome porque esta app todavía no tiene un "service
+                worker" registrado — sin eso, Chrome nunca ofrece su botón
+                de instalar con un toque (evento beforeinstallprompt), así
+                que prometerlo sería mostrar un botón que jamás aparece. Si
+                en el futuro se agrega un service worker, ahí sí tendría
+                sentido sumar el botón acá (ver "Backlog de funcionalidades"
+                en la documentación del repo). -->
            <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecInstalacion">Instalación <span class="um-chevron" aria-hidden="true">›</span></button>
            <div class="um-section-body" id="umSecInstalacion" hidden>
              <p class="um-hint">Guarda esta charla como un ícono propio en tu pantalla de inicio, para abrirla directo sin buscarla en el navegador.</p>
@@ -876,7 +876,6 @@
              </div>
 
              <div id="umInstalOtros" hidden>
-               <button class="um-btn" id="umInstalarBtn" type="button" hidden>📲 Instalar app</button>
                <p class="um-hint" id="umInstalarFallback">Para guardarla: toca el menú ⋮ (arriba a la derecha) y elige "Agregar a pantalla de inicio" o "Instalar app".</p>
              </div>
            </div>
@@ -1804,8 +1803,6 @@
   const umInstalIOSPasos = document.getElementById('umInstalIOSPasos');
   const umInstalIOSNota = document.getElementById('umInstalIOSNota');
   const umInstalOtros = document.getElementById('umInstalOtros');
-  const umInstalarBtn = document.getElementById('umInstalarBtn');
-  const umInstalarFallback = document.getElementById('umInstalarFallback');
   const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
   let promptDeInstalacion = null;
   window.addEventListener('beforeinstallprompt', (e) => {
@@ -1814,14 +1811,13 @@
     // Este evento es de Chrome/Android y NO es confiable: depende de sus
     // propios criterios internos (a veces tarda, a veces no llega nunca en
     // esta sesión) — cuando SÍ llega, el botón de un solo toque es mejor
-    // que la instrucción manual, así que la reemplaza.
+    // que la instrucción manual, así que la reemplaza. Solo se usa acá
+    // para #accesoDirectoRow (enlace de subperfil) — la sección
+    // "Instalación" de Cuenta, más abajo, muestra siempre la guía manual
+    // (ver configurarSeccionInstalacion).
     if (agregarInicioBtn.dataset.modoNarrador === 'true') {
       agregarInicioBtn.style.display = 'inline-flex';
       agregarInicioTexto.style.display = 'none';
-    }
-    if (!esIOS) {
-      umInstalarBtn.hidden = false;
-      umInstalarFallback.hidden = true;
     }
   });
   agregarInicioBtn.addEventListener('click', async () => {
@@ -1830,14 +1826,6 @@
     await promptDeInstalacion.userChoice;
     promptDeInstalacion = null;
     agregarInicioBtn.style.display = 'none';
-  });
-  umInstalarBtn.addEventListener('click', async () => {
-    if (!promptDeInstalacion) return;
-    promptDeInstalacion.prompt();
-    await promptDeInstalacion.userChoice;
-    promptDeInstalacion = null;
-    umInstalarBtn.hidden = true;
-    umInstalarFallback.hidden = false;
   });
 
   // Arma la sección "Instalación" del panel de Cuenta — a diferencia de
@@ -1878,12 +1866,13 @@
         umInstalIOSNota.textContent = 'Con Safari queda como una app de verdad, en pantalla completa. En iPhone este paso siempre es manual — Apple no permite que ninguna app web lo haga automático.';
       }
     } else {
+      // Sin excepción: siempre la guía manual. Esta app todavía no tiene
+      // un "service worker" registrado, que es requisito de Chrome para
+      // que llegue a dispararse beforeinstallprompt — sin eso, un botón
+      // de un toque acá nunca aparecería, así que no se ofrece (ver nota
+      // más arriba, junto al HTML de esta sección).
       umInstalOtros.hidden = false;
       umInstalIOS.hidden = true;
-      if (promptDeInstalacion) {
-        umInstalarBtn.hidden = false;
-        umInstalarFallback.hidden = true;
-      }
     }
   }
   configurarSeccionInstalacion();
