@@ -241,7 +241,16 @@
 
     .hero-device-wrap{position:relative;display:grid;place-items:center;min-height:620px}
     .hero-device-wrap:before{content:"";position:absolute;width:520px;height:520px;border-radius:50%;background:radial-gradient(circle, rgba(201,138,60,.20), rgba(201,138,60,0) 68%);filter:blur(4px)}
-    .device{width:min(430px,100%);background:var(--paper-2);border:1px solid rgba(229,219,198,.9);border-radius:34px;box-shadow:var(--shadow);padding:28px;position:relative;z-index:1}
+    .device{width:min(430px,100%);background:var(--paper-2);border:1px solid rgba(229,219,198,.9);border-radius:34px;box-shadow:var(--shadow);padding:12px;position:relative;z-index:1}
+    /* Capturas REALES de la app (datos de ejemplo). Reemplazaron a los
+       mockups en HTML del hero, la ventana de producto y la sección de voz. */
+    .app-shot{display:block;width:100%;height:auto;border-radius:20px}
+    .product-window .app-shot{border-radius:0}
+    .voice-art .app-shot{width:min(460px,100%);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow)}
+    .voice-art{min-height:0}
+    .shot-figure{margin:44px 0 0;text-align:center}
+    .shot-figure .app-shot{max-width:900px;margin:0 auto;border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow)}
+    .shot-figure figcaption{margin-top:14px;color:var(--ink-soft);font-size:.92rem}
     .device-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
     .device-title{font-family:var(--serif);font-size:1.1rem;font-weight:600}
     .device-icons{display:flex;gap:8px}
@@ -627,17 +636,8 @@
           <div class="memory-chip chip-a"><strong>Nuevo recuerdo</strong>“Mi primer trabajo...”</div>
           <div class="memory-chip chip-b"><strong>Historia guardada</strong>Viajes · 4 min de audio</div>
           <div class="device">
-            <div class="device-top">
-              <div class="device-title">Los recuerdos de mis viejos</div>
-              <div class="device-icons"><span class="mini-icon">🌳</span><span class="mini-icon">📖</span></div>
-            </div>
-            <div class="demo-panel">
-              <span class="demo-badge">Demostración visual</span>
-              <div class="demo-kicker">Una conversación. Un recuerdo que queda.</div>
-              <button class="orb" id="demoOrb" aria-label="Probar demostración visual (no graba audio real)"><span id="orbText">Presiona<br>para hablar</span></button>
-              <div class="demo-state" id="demoState">Prueba el botón — es solo un ejemplo</div>
-              <div class="demo-question" id="demoQuestion">“Quiero guardar una historia de mi vida.”</div>
-            </div>
+            <img class="app-shot app-shot-phone" src="/images/lp-charla.png" width="430" height="880"
+                 alt="La pantalla de charla de la app: el saludo por el nombre y el botón grande para empezar a hablar.">
           </div>
         </div>
       </div>
@@ -684,23 +684,9 @@
           <p>Las conversaciones pueden convertirse en recuerdos consultables, capítulos y conexiones familiares.</p>
         </div>
         <div class="product-window reveal">
-          <div class="window-bar"><div class="traffic"><i></i><i></i><i></i></div><span class="quiet">Charla familiar</span><span>•••</span></div>
-          <div class="window-content">
-            <div class="conversation">
-              <div class="bubble q">Cuéntame de tu primer trabajo.</div>
-              <div class="bubble a">Era en una tienda pequeña del centro, mi primer sueldo lo gasté casi todo el mismo día. Ahí conocí a la que después fue mi mejor amiga...</div>
-              <div class="bubble q">¿Hay algo de esos días que recuerdes especialmente?</div>
-              <div class="bubble a">Sí. El día que me tocó cerrar sola por primera vez y me sentí grande de verdad.</div>
-              <div class="audio-card"><button class="play" id="playDemo" aria-label="Vista previa visual — este ejemplo no tiene audio real">▶</button><div><strong>Así se guarda un recuerdo con audio</strong><div class="quiet pc-1e28117f">Vista previa · sin audio</div></div><div class="wave" id="waveDemo"></div></div>
-            </div>
-            <aside class="story-side">
-              <h3>Libro de la historia</h3>
-              <div class="chapter"><small>Capítulo 01</small><b>Los años del colegio</b></div>
-              <div class="chapter"><small>Capítulo 02</small><b>El primer trabajo</b></div>
-              <div class="chapter"><small>Capítulo 03</small><b>El viaje que cambió todo</b></div>
-              <div class="tree-mini"><div class="quiet pc-fa3e1c7d">Árbol familiar</div><div class="tree-row"><span class="person">Abuelo</span><span class="arrow">→</span><span class="person">Papá</span><span class="arrow">→</span><span class="person">Hijos</span></div></div>
-            </aside>
-          </div>
+          <div class="window-bar"><div class="traffic"><i></i><i></i><i></i></div><span class="quiet">Mi libro</span><span>•••</span></div>
+          <img class="app-shot" src="/images/lp-libro.png" width="1180" height="900"
+               alt="La pantalla &quot;Mi libro&quot;: capítulos generados con IA a partir de las historias contadas en las charlas.">
         </div>
       </div>
     </section>
@@ -708,8 +694,8 @@
     <section>
       <div class="wrap voice-grid">
         <div class="voice-art reveal">
-          <div class="portrait" role="img" aria-label="Representación abstracta de un retrato familiar"></div>
-          <div class="voice-wave"><button class="play" aria-label="Vista previa visual — este ejemplo no tiene audio real">▶</button><div class="wave"></div></div>
+          <img class="app-shot voice-shot" src="/images/lp-historias.png" width="900" height="980"
+               alt="La pantalla de historias detectadas: cada historia queda anotada con su audio, para volver a escucharla con la voz real.">
         </div>
         <div class="voice-copy reveal">
           <div class="eyebrow">Más que palabras</div>
@@ -749,6 +735,11 @@
             <p class="pc-166017f1">Tu propia bitácora y, con un código, colaborar en la historia de alguien más — sin cerrar sesión ni crear otra cuenta.</p>
           </div>
         </div>
+        <figure class="shot-figure reveal">
+          <img class="app-shot" src="/images/lp-arbol.png" width="1180" height="980"
+               alt="El árbol genealógico de la app: se va armando solo con los nombres y parentescos que aparecen en las charlas.">
+          <figcaption>El árbol se va armando solo, con lo que cada quien cuenta.</figcaption>
+        </figure>
       </div>
     </section>
 
@@ -1008,44 +999,50 @@
       actualizar();
     })();
 
-    // Demo orb (decorativo, no llama al backend)
+    // Demo orb (decorativo) — el hero ahora muestra una captura real de la
+    // app en vez del orbe de ejemplo, así que estos elementos pueden no
+    // existir; se deja el código por si vuelve el mockup.
     const orb = document.getElementById('demoOrb');
-    const orbText = document.getElementById('orbText');
-    const state = document.getElementById('demoState');
-    const question = document.getElementById('demoQuestion');
-    let active = false;
-    const demoQuestions = [
-      '“¿Cuál es uno de tus primeros recuerdos de infancia?”',
-      '“¿Quién era la persona que más te hacía reír en tu familia?”',
-      '“¿Qué lugar de tu infancia todavía puedes imaginar perfectamente?”'
-    ];
-    let qIndex = 0;
-    orb.addEventListener('click', () => {
-      active = !active;
-      orb.classList.toggle('listening', active);
-      if (active) {
-        orbText.innerHTML = 'Ejemplo:<br>escuchando…';
-        state.textContent = 'Así te escucharía la app — cuéntale el recuerdo con tus propias palabras';
-        question.textContent = demoQuestions[qIndex % demoQuestions.length];
-        qIndex++;
-      } else {
-        orbText.innerHTML = 'Presiona<br>para hablar';
-        state.textContent = 'Así se vería un recuerdo guardado';
-        question.textContent = '“La historia queda lista para volver a encontrarla.”';
-      }
-    });
+    if (orb) {
+      const orbText = document.getElementById('orbText');
+      const state = document.getElementById('demoState');
+      const question = document.getElementById('demoQuestion');
+      let active = false;
+      const demoQuestions = [
+        '“¿Cuál es uno de tus primeros recuerdos de infancia?”',
+        '“¿Quién era la persona que más te hacía reír en tu familia?”',
+        '“¿Qué lugar de tu infancia todavía puedes imaginar perfectamente?”'
+      ];
+      let qIndex = 0;
+      orb.addEventListener('click', () => {
+        active = !active;
+        orb.classList.toggle('listening', active);
+        if (active) {
+          orbText.innerHTML = 'Ejemplo:<br>escuchando…';
+          state.textContent = 'Así te escucharía la app — cuéntale el recuerdo con tus propias palabras';
+          question.textContent = demoQuestions[qIndex % demoQuestions.length];
+          qIndex++;
+        } else {
+          orbText.innerHTML = 'Presiona<br>para hablar';
+          state.textContent = 'Así se vería un recuerdo guardado';
+          question.textContent = '“La historia queda lista para volver a encontrarla.”';
+        }
+      });
+    }
 
-    // Reproducción decorativa (sin audio real)
+    // Reproducción decorativa (sin audio real) — igual que arriba, puede no existir.
     const playDemo = document.getElementById('playDemo');
     const waveDemo = document.getElementById('waveDemo');
-    let playing = false;
-    playDemo.addEventListener('click', () => {
-      playing = !playing;
-      playDemo.textContent = playing ? '❚❚' : '▶';
-      waveDemo.style.opacity = playing ? '.95' : '.55';
-      waveDemo.style.transform = playing ? 'scaleY(1.18)' : 'scaleY(1)';
-      waveDemo.style.transition = 'all .25s ease';
-    });
+    if (playDemo && waveDemo) {
+      let playing = false;
+      playDemo.addEventListener('click', () => {
+        playing = !playing;
+        playDemo.textContent = playing ? '❚❚' : '▶';
+        waveDemo.style.opacity = playing ? '.95' : '.55';
+        waveDemo.style.transform = playing ? 'scaleY(1.18)' : 'scaleY(1)';
+        waveDemo.style.transition = 'all .25s ease';
+      });
+    }
 
     // Registro: crea la cuenta contra POST /api/signup y, si sale bien,
     // ya queda la sesión iniciada (la respuesta pone la cookie), así que
