@@ -4701,12 +4701,23 @@ async function classifyStoriesByTheme(stories) {
   return toolUse.input.grupos.slice(0, 12); // tope defensivo de temas por corrida
 }
 
-async function writeChapterFromStories(theme, stories, persona) {
+async function writeChapterFromStories(theme, stories, persona, aportes) {
   const fuente = stories.map((s) => `- ${s.texto}`).join('\n\n');
   const indicacionPersona = persona === 'primera'
     ? 'narrado en PRIMERA persona ("yo", "mi", "me"), como si la propia persona estuviera contando su historia directamente'
     : 'narrado en tercera persona, como un libro de memorias que cuenta sobre ella';
-  const prompt = `Estas son transcripciones textuales de historias que esta persona contó sobre el tema "${theme}":${envolverDatoNoConfiable('historias', fuente)}\n\nArma un capítulo narrativo corto (2 a 4 párrafos), ${indicacionPersona}, con un tono cálido de libro de memorias familiares, que hilvane estas historias. USA SOLO lo que está en las transcripciones de arriba — nunca inventes ni completes fechas, nombres, lugares o eventos que no estén ahí. Si falta contexto para que un párrafo fluya elegante, prefiere una frase más simple pero fiel a lo dicho, antes que una elegante pero inventada. Ponle también un título corto al capítulo. Usa la herramienta para responder.`;
+  // Items 20/21 (pedido de Felipe, 2026-09-08): el libro incluye lo que
+  // aportó el círculo (family_notes), pero SOLO cuando de verdad tiene que
+  // ver con este tema puntual — se le pasan TODOS los aportes de la
+  // bitácora a CADA capítulo (no hay clasificación previa por tema) y es
+  // la propia IA la que decide, acá mismo, si alguno encaja o si los
+  // ignora todos. Cuando un aporte cuenta el MISMO recuerdo que ya contó
+  // el narrador, su propia versión manda — el aporte queda como un detalle
+  // agregado, nunca reemplazando ni contradiciendo lo que él mismo dijo.
+  const bloqueAportes = (aportes && aportes.length)
+    ? `\n\nAdemás, esto es lo que familiares o amigos aportaron sobre esta persona (puede no tener nada que ver con el tema "${theme}" — en ese caso, ignóralo por completo):${envolverDatoNoConfiable('aportes', aportes.map((a) => `- ${a.contributor || 'Familia'}: ${a.texto}`).join('\n\n'))}`
+    : '';
+  const prompt = `Estas son transcripciones textuales de historias que esta persona contó sobre el tema "${theme}":${envolverDatoNoConfiable('historias', fuente)}${bloqueAportes}\n\nArma un capítulo narrativo corto (2 a 4 párrafos), ${indicacionPersona}, con un tono cálido de libro de memorias familiares, que hilvane estas historias. USA SOLO lo que está en las transcripciones de arriba — nunca inventes ni completes fechas, nombres, lugares o eventos que no estén ahí. Si falta contexto para que un párrafo fluya elegante, prefiere una frase más simple pero fiel a lo dicho, antes que una elegante pero inventada. Si un aporte de la familia encaja con este tema, súmalo como un detalle cálido y breve (por ejemplo "como también recuerda su hija Ana..."), PERO si un aporte cuenta el mismo momento que ya contó la propia persona, prioriza siempre la versión de la propia persona — nunca la contradigas ni la reemplaces. Ponle también un título corto al capítulo. Usa la herramienta para responder.`;
 
   const response = await anthropic.messages.create({
     model: MODEL,
@@ -4735,6 +4746,12 @@ app.post('/api/chapters/generate', requireAuth, bloquearColaborador, rateLimit, 
     if (!stories.length) {
       return res.json({ ok: true, message: 'Todavía no hay historias detectadas en la charla para armar capítulos.', chapters: [] });
     }
+    // Items 20/21: lo que aportó el círculo entra como material de apoyo
+    // para escribir cada capítulo (ver writeChapterFromStories) — el libro
+    // sigue armándose a partir de las historias PROPIAS (story_log), nunca
+    // solo de aportes; is_private no se filtra acá porque esta ruta la usa
+    // el propio dueño de la bitácora, que siempre ve todos sus aportes.
+    const aportes = await sql`SELECT contributor, texto FROM family_notes WHERE user_id = ${req.profileUserId} AND archived_at IS NULL AND en_progreso = false ORDER BY created_at ASC`;
 
     const grupos = await classifyStoriesByTheme(stories);
     if (!grupos.length) {
@@ -4747,7 +4764,7 @@ app.post('/api/chapters/generate', requireAuth, bloquearColaborador, rateLimit, 
       if (!g || !g.theme) continue;
       const ids = Array.isArray(g.story_ids) ? g.story_ids.filter((id) => byId.has(id)) : [];
       if (!ids.length) continue;
-      const capitulo = await writeChapterFromStories(g.theme, ids.map((id) => byId.get(id)), persona);
+      const capitulo = await writeChapterFromStories(g.theme, ids.map((id) => byId.get(id)), persona, aportes);
       if (!capitulo) continue;
       nuevos.push({ theme: String(g.theme).slice(0, 120), ids, ...capitulo });
     }
