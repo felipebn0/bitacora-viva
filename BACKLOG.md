@@ -128,3 +128,21 @@ Pendiente/fuera de alcance de esta vuelta (no adivinado, dejado explícito):
 - Tests: `test/contribute-song.smoke.js`, `test/contribute-draft.smoke.js` extendido, `test/cancion-aporte.playwright.js` (las 3 pantallas de punta a punta).
 
 **Para retomarlo:** traer ese commit a `main` (`git merge origin/pruebas` o cherry-pick de `a56c64d`) — va a pedir resolver conflictos a mano en `server.js`, `app.html`, `colaboraciones.html`, `colaborar.html`, `package.json` y `vercel.json`, porque para esa fecha `main` ya tenía cambios propios en esos mismos archivos (auditoría de Diego, 2026-09-08). Correr toda la batería de tests después de resolver.
+
+## 14. Completar los perfiles de los familiares desde el árbol genealógico
+
+**Qué es** (pedido de Felipe, 2026-09-08): hoy el árbol solo guarda nombre, parentesco y de quién es hijo/a cada persona — lo mínimo para dibujar las líneas. La idea es poder entrar a cada persona del árbol y sumarle más contexto (a qué se dedicaba, cómo era, fechas importantes, anécdotas sueltas) directamente ahí, en vez de que ese detalle solo pueda salir mencionado de pasada en una charla grabada.
+
+**Para retomarlo:** definir primero qué campos tiene sentido guardar por persona (¿texto libre tipo nota, o campos estructurados?) y si ese contexto debería usarse como pista para la IA en las charlas (parecido a como ya se usa `family_members` hoy) antes de tocar el esquema de `family_members`.
+
+## 15. API para canciones (en vez de pegar el link a mano)
+
+**Qué es** (pedido de Felipe, 2026-09-08): sigue del ítem 13 de este backlog — hoy, para sumar una canción como aporte, hay que pegar el link "para compartir" de Spotify/YouTube a mano. La idea es poder buscar la canción por nombre/artista (una API de búsqueda, ej. la API de Spotify) y elegirla de una lista, en vez de tener que ir a buscar y copiar el link en otra pestaña.
+
+**Para retomarlo:** primero traer el ítem 13 a `main` (es la base sobre la que esto se construye). Después, sumar credenciales de la API elegida (ej. Spotify Web API — requiere client id/secret) y un endpoint de búsqueda del lado del servidor (nunca exponer las credenciales al navegador).
+
+## 16. "Tenés un mensaje nuevo" — notas de voz cortas, distintas de una historia
+
+**Qué es** (pedido de Felipe, 2026-09-08): hoy la única forma de dejarle algo a la bitácora de otra persona es "aportar una historia" (la charla completa con la entrevistadora). La idea es un camino más liviano: grabar y mandar una nota de voz corta, tipo saludo o mensaje puntual ("te quiero", "feliz cumpleaños"), que le llegue a la persona como una sorpresa — sin pasar por toda la charla de aportar.
+
+**Para retomarlo:** definir cómo se le avisa a la persona que tiene "un mensaje nuevo" (¿un ícono con notificación, como ya existe para Aportes/Árbol? ¿se reproduce dentro de la charla, como ya pasa con una foto pendiente?) y si esto necesita una tabla nueva o puede apoyarse en `family_notes`/`media` con un campo que distinga "mensaje corto" de "historia".
