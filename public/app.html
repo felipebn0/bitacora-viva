@@ -212,6 +212,7 @@
   .subperfil-banner p { margin: 0; color: var(--ink); font-size: 0.95rem; }
   .perfil-fila { border-bottom: 1px solid #E7DFCC; padding: 8px 0; }
   .perfil-wa-btn { display: inline-block; width: auto; }
+  .perfil-enlace-texto { word-break: break-all; }
   /* #checkingScreen: se ve DESDE el primer frame (a diferencia de login y
      app, que arrancan ocultos) y es lo único visible mientras se espera la
      respuesta de fetch('/api/me'). Sin esto la página quedaba en blanco
@@ -1271,7 +1272,13 @@
       umNuevoSubperfilNombre.value = '';
       umNuevoSubperfilFecha.value = '';
       umPerfilesMsg.textContent = `✓ Se creó la bitácora de ${data.nombre}.`;
+      // Deja el enlace ya abierto y cargado — sin esto, había que ubicar la
+      // fila recién creada y tocar "Compartir enlace" aparte para poder
+      // copiarlo y probarlo (por ejemplo, abrirlo en una ventana de
+      // incógnito para simular al narrador).
+      umNarradorLinkAbierto = data.id;
       await pintarPerfiles();
+      await cargarYMostrarEnlace(data.id);
     } catch (e) {
       umPerfilesMsg.textContent = 'No se pudo conectar. Intenta de nuevo.';
     } finally {
@@ -1305,6 +1312,16 @@
       if (umNarradorLinkAbierto === enlaceId) await cargarYMostrarEnlace(enlaceId);
       return;
     }
+    const linkACopiar = e.target.dataset.copiarLink;
+    if (linkACopiar) {
+      try {
+        await navigator.clipboard.writeText(linkACopiar);
+        const textoOriginal = e.target.textContent;
+        e.target.textContent = 'copiado ✓';
+        setTimeout(() => { e.target.textContent = textoOriginal; }, 1800);
+      } catch (e5) {}
+      return;
+    }
     const regenId = Number(e.target.dataset.regenerar);
     if (regenId) {
       if (!confirm('¿Generar un enlace nuevo? El que ya compartiste deja de servir.')) return;
@@ -1333,7 +1350,13 @@
     const link = `${location.origin}/app.html?codigo=${encodeURIComponent(code)}`;
     const mensaje = `Con este enlace puedes contar tus historias sin necesitar usuario ni clave — entra acá y guárdalo en tu celular: ${link}`;
     const wa = `https://wa.me/?text=${encodeURIComponent(mensaje)}`;
-    box.innerHTML = `<a href="${wa}" target="_blank" rel="noopener" class="um-btn perfil-wa-btn">Compartir por WhatsApp</a>
+    // data-link (no data-copiar="id"): el link cambia si se regenera el
+    // código, así que conviene que el botón lleve el valor ya armado
+    // encima, en vez de tener que rearmarlo a partir del id en el momento
+    // del click.
+    box.innerHTML = `<p class="um-hint perfil-enlace-texto">${link}</p>
+      <button class="um-btn" type="button" data-copiar-link="${link.replace(/"/g, '&quot;')}">Copiar enlace</button>
+      <a href="${wa}" target="_blank" rel="noopener" class="um-btn perfil-wa-btn">Compartir por WhatsApp</a>
       <button class="um-btn um-plain" type="button" data-regenerar="${id}">Generar uno nuevo</button>
       <button class="um-btn um-plain" type="button" data-revocar="${id}">Quitar acceso</button>`;
   }
@@ -1756,12 +1779,17 @@
   }
 
   function aplicarSesionSubperfil(data) {
+    // "Presiona el botón para empezar a charlar" vive en #greeting, en un
+    // <script> aparte (el que maneja el orbe) — no comparte variables con
+    // este, así que se agarra fresco acá en vez de duplicar esa constante.
+    const greetingBox = document.getElementById('greeting');
     if (data.isGuest && data.isNarradorLink) {
       if (colaborarNavItem) colaborarNavItem.style.display = 'none';
       if (cuentaNavItem) cuentaNavItem.style.display = 'none';
       greetingName.textContent = data.guestName || data.bitacoraNombre || '';
       subperfilBanner.hidden = true;
       orbZone.style.display = '';
+      if (greetingBox) greetingBox.style.display = '';
       activarAccesoDirecto(codigoNarradorUrl, data.bitacoraNombre);
       return;
     }
@@ -1770,9 +1798,14 @@
       subperfilBannerTexto.textContent = `Viendo la bitácora de ${data.bitacoraActiva.nombre || 'esa persona'} — puedes ver y pagar, pero no narrar en su nombre.`;
       subperfilBanner.hidden = false;
       orbZone.style.display = 'none';
+      // Sin esto, "Presiona el botón para empezar a charlar" quedaba
+      // visible arriba del aviso de "no puedes narrar en su nombre" —
+      // contradictorio, ya que el botón de hablar está oculto ahí abajo.
+      if (greetingBox) greetingBox.style.display = 'none';
     } else {
       subperfilBanner.hidden = true;
       orbZone.style.display = '';
+      if (greetingBox) greetingBox.style.display = '';
     }
   }
 
