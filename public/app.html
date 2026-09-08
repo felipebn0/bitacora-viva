@@ -43,6 +43,13 @@
      los <input> tenían :focus). :focus-visible solo aparece al navegar con
      Tab, no al hacer clic con mouse/dedo. */
   :focus-visible { outline: 3px solid var(--gold-deep); outline-offset: 2px; }
+  /* Mismas hojitas que arbol.html/index.html — acá solo se ven en desktop
+     (.desktop-leaf, ver la media query de escritorio más abajo). */
+  .leaf { position: fixed; font-size: 2.4rem; opacity: 0.25; pointer-events: none; z-index: 0; }
+  .leaf.tl { top: 10px; left: 10px; transform: rotate(-15deg); }
+  .leaf.tr { top: 10px; right: 10px; transform: rotate(20deg) scaleX(-1); }
+  .leaf.bl { bottom: 10px; left: 10px; transform: rotate(160deg) scaleX(-1); }
+  .leaf.br { bottom: 10px; right: 10px; transform: rotate(-160deg); }
   /* Link "saltar al contenido" — mismo patrón que la landing (index.html):
      invisible y afuera del flujo normal, solo aparece al navegar con Tab
      (primer elemento enfocable de la página), para no pasar por el saludo
@@ -252,9 +259,28 @@
 
   .main-layout { display: flex; flex-direction: column; align-items: center; }
   .device-col { display: flex; flex-direction: column; align-items: center; width: 100%; }
+  .desktop-leaf { display: none; }
 
+  /* Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe): antes,
+     en una pantalla de escritorio, esto quedaba con el mismo ancho angosto
+     de celular (440px) flotando en medio de un montón de fondo vacío — se
+     notaba que era un diseño de mobile estirado, no pensado para desktop.
+     Acá se agranda toda la columna (tarjeta, orbe, letra, barra de
+     íconos) en conjunto, y se suman las hojitas del árbol genealógico
+     (mismo motivo que ya usan arbol.html/index.html) en las esquinas para
+     que el espacio de los costados se sienta compuesto a propósito, no
+     como un recorte de celular que sobró. */
   @media (min-width: 980px) {
-    .device-col { width: min(440px, 100%); }
+    .device-col { width: min(640px, 100%); }
+    .device { width: min(640px, 100%); padding: 44px 52px; border-radius: 32px; gap: 24px; }
+    .greeting-bar { max-width: 640px; }
+    .greeting-bar .brand-logo { height: 72px; width: 72px; }
+    .greeting-bar .greeting-text .greeting-name { font-size: 2.05rem; }
+    .greeting-bar .greeting-text .brand-tag { font-size: 0.74rem; }
+    .topbar { max-width: 640px; gap: 22px; }
+    .orb { width: 196px; height: 196px; font-size: 1.3rem; }
+    .greeting .sub { font-size: 1.25rem; max-width: 32ch; }
+    .desktop-leaf { display: block; }
   }
 
   .greeting-bar {
@@ -349,12 +375,22 @@
   .user-menu-panel .um-chevron { flex-shrink: 0; margin-left: 10px; color: var(--ink-soft); transition: transform 0.15s ease; }
   .user-menu-panel .um-section-toggle[aria-expanded="true"] .um-chevron { transform: rotate(90deg); }
   .user-menu-panel .um-section-body { padding: 4px 0 10px; }
-  /* Experimento UX (rama ux-pruebas, 2026-09-08): "Opciones avanzadas" y
-     las secciones de Perfil quedan anidadas un nivel — esta sangría chica
-     es la única pista visual de que son sub-opciones, sin duplicar todo el
-     estilo del acordeón para un segundo nivel. */
-  .user-menu-panel .um-section-body .um-section-toggle,
-  .user-menu-panel .um-section-body .um-section-body { padding-left: 14px; }
+  /* Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe): antes
+     la única pista de que algo era un sub-nivel (dentro de "Perfil" o de
+     "Opciones avanzadas") era 14px de sangría — se confundía fácil con el
+     resto. Ahora ese grupo entero tiene su propio fondo (el mismo tono
+     cálido que ya se usa para los globos de charla, --bubble-user) y
+     borde, como una tarjeta metida adentro del menú. */
+  .user-menu-panel .um-nested-group {
+    background: var(--bubble-user);
+    border: 1px solid #DECBA0;
+    border-radius: 12px;
+    padding: 2px 14px 10px;
+    margin: 8px 0 4px;
+  }
+  .user-menu-panel .um-nested-group .um-section-toggle { border-top-color: #DECBA0; }
+  .user-menu-panel .um-nested-group .um-section-toggle:first-of-type { border-top: none; }
+  .user-menu-panel .um-nested-group .um-section-body { padding-left: 0; }
   .user-menu-panel .um-field-label { display: block; font-size: 0.8rem; color: var(--ink-soft); margin: 0 0 4px; }
   /* Se muestra solo cuando el nombre/correo no entra completo en el
      cuadro a tamaño normal — en vez de achicar la letra del campo
@@ -395,11 +431,15 @@
   .topbar {
     width: 100%;
     max-width: 460px;
-    margin: 0 auto 10px;
+    /* Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe): más
+       aire arriba (separación real del orbe/tarjeta de arriba) y abajo
+       (separación de "Invitar a mi círculo"), y un poco más de gap entre
+       los 5 íconos mismos — antes de esto se sentían todos pegados. */
+    margin: 22px auto 22px;
     display: flex;
     justify-content: center;
     flex-wrap: wrap;
-    gap: 14px;
+    gap: 20px;
   }
   .icon-btn-wrap { position: relative; display: inline-flex; }
   /* En móvil no hay ":hover" — el title/aria-label ya existían, pero sin
@@ -584,6 +624,14 @@
 </style>
 </head>
 <body>
+  <!-- Experimento UX (rama ux-pruebas, 2026-09-08): solo se ven en desktop
+       (.desktop-leaf, ver la media query de ancho grande) — mismas hojitas
+       que ya usan arbol.html/index.html, para que el fondo de los costados
+       en una pantalla ancha se sienta parte del diseño, no vacío. -->
+  <span class="leaf tl desktop-leaf" aria-hidden="true">🌿</span>
+  <span class="leaf tr desktop-leaf" aria-hidden="true">🌿</span>
+  <span class="leaf bl desktop-leaf" aria-hidden="true">🌿</span>
+  <span class="leaf br desktop-leaf" aria-hidden="true">🌿</span>
   <div id="checkingScreen" role="status" aria-live="polite">
     <img src="/images/logo-icon.png" alt="">
     <span>Comprobando tu sesión…</span>
@@ -700,36 +748,48 @@
            <button class="um-btn" id="umProfileSaveBtn" type="button">Guardar perfil</button>
            <p class="um-msg" id="umProfileMsg" role="status" aria-live="polite" aria-atomic="true"></p>
 
-           <hr>
-           <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecClave">Cambiar clave <span class="um-chevron" aria-hidden="true">›</span></button>
-           <div class="um-section-body" id="umSecClave" hidden>
-             <input type="password" id="umCurrentPassword" placeholder="Clave actual" autocomplete="current-password" aria-label="Clave actual">
-             <input type="password" id="umNewPassword" placeholder="Clave nueva" autocomplete="new-password" aria-label="Clave nueva">
-             <button class="um-btn" id="umChangePasswordBtn" type="button">Cambiar clave</button>
-             <p class="um-msg" id="umPasswordMsg" role="status" aria-live="polite" aria-atomic="true"></p>
-           </div>
+           <!-- Experimento UX (rama ux-pruebas, 2026-09-08, pedido de
+                Felipe): antes la única pista de que Cambiar clave/Zona de
+                riesgo son un nivel más adentro era el sangrado — se
+                confundía con las secciones de primer nivel. Este panel con
+                fondo propio (ver .um-nested-group) hace evidente que todo
+                esto está DENTRO de "Perfil". -->
+           <div class="um-nested-group">
+             <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecClave">Cambiar clave <span class="um-chevron" aria-hidden="true">›</span></button>
+             <div class="um-section-body" id="umSecClave" hidden>
+               <input type="password" id="umCurrentPassword" placeholder="Clave actual" autocomplete="current-password" aria-label="Clave actual">
+               <input type="password" id="umNewPassword" placeholder="Clave nueva" autocomplete="new-password" aria-label="Clave nueva">
+               <button class="um-btn" id="umChangePasswordBtn" type="button">Cambiar clave</button>
+               <p class="um-msg" id="umPasswordMsg" role="status" aria-live="polite" aria-atomic="true"></p>
+             </div>
 
-           <button type="button" class="um-section-toggle um-section-toggle-warn" aria-expanded="false" aria-controls="umSecRiesgo">Zona de riesgo <span class="um-chevron" aria-hidden="true">›</span></button>
-           <div class="um-section-body" id="umSecRiesgo" hidden>
-             <div class="danger-zone">
-               <button class="um-btn um-plain um-warn" id="umResetToggle" type="button">🔄 Reiniciar mi bitácora</button>
-               <div class="pc-1f5ad18c" id="umResetRow">
-                 <input type="password" id="umResetPassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para reiniciar la bitácora">
-                 <button class="um-btn um-danger" id="umResetConfirm" type="button">Reiniciar bitácora</button>
-                 <p class="um-msg um-error" id="umResetError" role="alert"></p>
-               </div>
-               <button class="um-btn um-plain um-warn" id="umDeleteToggle" type="button">⚠️ Borrar mi cuenta permanentemente</button>
-               <div class="pc-1f5ad18c" id="umDeleteRow">
-                 <input type="password" id="umDeletePassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para borrar la cuenta">
-                 <button class="um-btn um-danger" id="umDeleteConfirm" type="button">Borrar cuenta</button>
-                 <p class="um-msg um-error" id="umDeleteError" role="alert"></p>
+             <button type="button" class="um-section-toggle um-section-toggle-warn" aria-expanded="false" aria-controls="umSecRiesgo">Zona de riesgo <span class="um-chevron" aria-hidden="true">›</span></button>
+             <div class="um-section-body" id="umSecRiesgo" hidden>
+               <div class="danger-zone">
+                 <button class="um-btn um-plain um-warn" id="umResetToggle" type="button">🔄 Reiniciar mi bitácora</button>
+                 <div class="pc-1f5ad18c" id="umResetRow">
+                   <input type="password" id="umResetPassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para reiniciar la bitácora">
+                   <button class="um-btn um-danger" id="umResetConfirm" type="button">Reiniciar bitácora</button>
+                   <p class="um-msg um-error" id="umResetError" role="alert"></p>
+                 </div>
+                 <button class="um-btn um-plain um-warn" id="umDeleteToggle" type="button">⚠️ Borrar mi cuenta permanentemente</button>
+                 <div class="pc-1f5ad18c" id="umDeleteRow">
+                   <input type="password" id="umDeletePassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para borrar la cuenta">
+                   <button class="um-btn um-danger" id="umDeleteConfirm" type="button">Borrar cuenta</button>
+                   <p class="um-msg um-error" id="umDeleteError" role="alert"></p>
+                 </div>
                </div>
              </div>
            </div>
          </div>
 
          <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecAvanzadas">Opciones avanzadas <span class="um-chevron" aria-hidden="true">›</span></button>
-         <div class="um-section-body" id="umSecAvanzadas" hidden>
+         <!-- Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe):
+              "um-nested-group" le da un fondo propio a todo lo de acá
+              adentro, para que se note de un vistazo que está un nivel más
+              profundo que Perfiles/Perfil — antes la única pista era el
+              sangrado de 14px, que se confundía fácil. -->
+         <div class="um-section-body um-nested-group" id="umSecAvanzadas" hidden>
            <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecVoz">Voz <span class="um-chevron" aria-hidden="true">›</span></button>
            <div class="um-section-body" id="umSecVoz" hidden>
              <select id="voiceSelect" aria-label="Elegir voz"></select>
