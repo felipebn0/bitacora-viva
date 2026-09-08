@@ -273,6 +273,15 @@
      misma clase) disparaba el zoom automático de iOS Safari al tocarlo. */
   .write-row input { flex: 1; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 12px; font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink); }
   .write-row button { border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px; padding: 0 14px; font-weight: 700; cursor: pointer; }
+  /* Agregar una canción (2026-09-08): a diferencia de .write-row (una fila,
+     un input, pensada para foto/audio/texto) acá van DOS campos (el link y
+     el recuerdo) uno debajo del otro, así que es columna en vez de fila —
+     mismo ancho/gap/colores que .write-row para que se vea parte del mismo
+     grupo de controles. */
+  .cancion-row { display: none; flex-direction: column; gap: 8px; width: 100%; max-width: 280px; margin: 0 auto; }
+  .cancion-row.visible { display: flex; }
+  .cancion-row input { border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 12px; font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink); }
+  .cancion-row button { border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px; padding: 9px 14px; font-weight: 700; cursor: pointer; }
 
     /* Extraído de atributos style="" inline -- ronda 4 del camino a CSP en enforce (2026-09-06).
        Nombradas por hash del valor (mismo valor => misma clase). Cada declaración lleva
@@ -425,6 +434,18 @@
           <input type="text" id="fotoCaptionInput" placeholder="¿Quién aparece? (opcional)" aria-label="Descripción de la foto o video">
           <button id="fotoCaptionSend" type="button">Subir</button>
         </div>
+        <!-- Agregar una canción de este recuerdo (2026-09-08): no se sube
+             ningún archivo — se pega el link "para compartir" de Spotify o
+             YouTube y el backend arma el link para embeber esa canción (ver
+             /api/contribute-song en server.js). Viaja junto con la
+             historia igual que fotoPendiente, ver cancionSend más abajo. -->
+        <button class="write-toggle" id="cancionToggleBtn" type="button" aria-expanded="false" aria-controls="cancionRow">🎵 agregar una canción de este recuerdo</button>
+        <div class="cancion-row" id="cancionRow">
+          <input type="url" id="cancionLinkInput" placeholder="Link de Spotify o YouTube" aria-label="Link de la canción (Spotify o YouTube)">
+          <input type="text" id="cancionCaptionInput" placeholder="¿Qué recuerdo tienen con ella? (opcional)" aria-label="Recuerdo asociado a la canción">
+          <button id="cancionSend" type="button">Agregar</button>
+        </div>
+        <p class="state-label" id="cancionMsg"></p>
         <button class="write-toggle" id="writeToggleColab" type="button" aria-expanded="false" aria-controls="writeRowColab">o prefiero escribir mi historia</button>
         <div class="write-row pc-accd6151" id="writeRowColab">
           <input type="text" id="writeInputColab" placeholder="Escribe tu historia…" aria-label="Escribir historia">
@@ -1451,6 +1472,61 @@
   }
   fotoCaptionSend.addEventListener('click', subirFotoPendiente);
   fotoCaptionInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') subirFotoPendiente(); });
+
+  // --- Agregar una canción que acompañe esta historia. Mismo patrón que
+  // la foto (queda atada a la historia vía mediaUrlsLocal, no suelta), pero
+  // acá no hay ningún archivo que elegir: se pega un link y el backend
+  // (/api/contribute-song) valida que sea de Spotify o YouTube antes de
+  // devolver el link ya armado para embeber esa canción.
+  const cancionToggleBtn = document.getElementById('cancionToggleBtn');
+  const cancionRow = document.getElementById('cancionRow');
+  const cancionLinkInput = document.getElementById('cancionLinkInput');
+  const cancionCaptionInput = document.getElementById('cancionCaptionInput');
+  const cancionSend = document.getElementById('cancionSend');
+  const cancionMsg = document.getElementById('cancionMsg');
+
+  cancionToggleBtn.addEventListener('click', () => {
+    if (charlaTerminada) return;
+    const visible = cancionRow.classList.toggle('visible');
+    cancionToggleBtn.setAttribute('aria-expanded', String(visible));
+    cancionMsg.textContent = '';
+    if (visible) cancionLinkInput.focus();
+  });
+
+  async function agregarCancion() {
+    const link = cancionLinkInput.value.trim();
+    if (!link) {
+      cancionMsg.textContent = 'Pega primero el link de la canción.';
+      return;
+    }
+    const caption = cancionCaptionInput.value.trim();
+    cancionSend.disabled = true;
+    cancionMsg.textContent = 'Agregando…';
+    try {
+      const resp = await fetch(conOwner('/api/contribute-song'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: link }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (resp.ok && data.url) {
+        mediaUrlsLocal.push({ url: data.url, type: 'cancion', caption });
+        cancionMsg.textContent = '✓ Se agregó a esta historia.';
+        cancionLinkInput.value = '';
+        cancionCaptionInput.value = '';
+        cancionRow.classList.remove('visible');
+        cancionToggleBtn.setAttribute('aria-expanded', 'false');
+      } else {
+        cancionMsg.textContent = data.error || 'Ese link no parece ser de Spotify o YouTube.';
+      }
+    } catch (e) {
+      cancionMsg.textContent = 'Hubo un problema para conectar.';
+    }
+    cancionSend.disabled = false;
+  }
+  cancionSend.addEventListener('click', agregarCancion);
+  cancionLinkInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') agregarCancion(); });
+  cancionCaptionInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') agregarCancion(); });
 
   async function cargarAportes() {
     try {

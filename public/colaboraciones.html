@@ -89,6 +89,9 @@
   .aporte-item .media-adjunta img, .aporte-item .media-adjunta video {
     max-width: 220px; max-height: 220px; border-radius: 10px; display: block;
   }
+  .aporte-item .media-adjunta iframe {
+    width: 280px; max-width: 100%; height: 152px; border: 0; border-radius: 10px; display: block;
+  }
 </style>
 </head>
 <body>
@@ -274,6 +277,20 @@
         grid.className = 'media-adjunta';
         mediaAdjunta.forEach((m) => {
           if (!m || typeof m.url !== 'string' || !/^https?:\/\//.test(m.url)) return;
+          // Una canción es un link externo A PROPÓSITO (Spotify/YouTube) —
+          // no pasa por /api/media-file (ese proxy solo sirve nuestro
+          // propio Blob): el servidor ya validó que m.url sea uno de los
+          // dos links de EMBEBER permitidos (ver urlEmbedCancionValida en
+          // server.js), así que se usa directo como src del iframe.
+          if (m.type === 'cancion') {
+            const iframe = document.createElement('iframe');
+            iframe.src = m.url;
+            iframe.title = m.caption || 'Canción de la historia';
+            iframe.loading = 'lazy';
+            iframe.setAttribute('allow', 'encrypted-media; fullscreen');
+            grid.appendChild(iframe);
+            return;
+          }
           const src = '/api/media-file?u=' + encodeURIComponent(m.url);
           const el = m.type === 'video' ? document.createElement('video') : document.createElement('img');
           if (m.type === 'video') { el.controls = true; el.src = src; }

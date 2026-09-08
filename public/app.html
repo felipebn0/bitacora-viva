@@ -118,6 +118,13 @@
     max-width: 100%; max-height: 260px; border-radius: 16px;
     box-shadow: 0 10px 26px -10px rgba(0,0,0,0.35);
   }
+  /* Canción compartida por la familia (2026-09-08): reproductor embebido
+     de Spotify/YouTube, nunca uno de nuestros archivos (ver
+     mostrarMediaMomento) — border:0 porque el iframe trae su propio marco. */
+  .media-momento iframe {
+    width: 100%; max-width: 400px; height: 152px; border: 0; border-radius: 16px;
+    box-shadow: 0 10px 26px -10px rgba(0,0,0,0.35);
+  }
   .orb-zone { display: grid; justify-items: center; gap: 12px; }
   .orb {
     width: 168px; height: 168px; border-radius: 50%; border: none; cursor: pointer;
@@ -741,6 +748,7 @@
         <div class="media-momento" id="mediaMomento" hidden>
           <img id="mediaMomentoImg" alt="Foto que compartió tu familia" hidden>
           <video id="mediaMomentoVideo" controls hidden></video>
+          <iframe id="mediaMomentoCancion" title="Canción que compartió tu familia" allow="encrypted-media; fullscreen" loading="lazy" hidden></iframe>
         </div>
         <div class="orb-zone">
           <button class="orb" id="orb" data-state="idle" aria-label="Presionar para comenzar la charla">
@@ -1477,6 +1485,7 @@
   const mediaMomento = document.getElementById('mediaMomento');
   const mediaMomentoImg = document.getElementById('mediaMomentoImg');
   const mediaMomentoVideo = document.getElementById('mediaMomentoVideo');
+  const mediaMomentoCancion = document.getElementById('mediaMomentoCancion');
   const writeToggle = document.getElementById('writeToggle');
   const writeRow = document.getElementById('writeRow');
   const writeInput = document.getElementById('writeInput');
@@ -1954,8 +1963,26 @@
       mediaMomentoVideo.hidden = true;
       mediaMomentoVideo.pause();
       mediaMomentoVideo.removeAttribute('src');
+      mediaMomentoCancion.hidden = true;
+      mediaMomentoCancion.removeAttribute('src');
       return;
     }
+    // Una canción NO pasa por /api/media-file (ese proxy solo sirve
+    // nuestro propio Blob) — media.url ya viene del servidor como uno de
+    // los dos links de EMBEBER permitidos (ver urlEmbedCancionValida en
+    // server.js), así que se usa directo como src del iframe.
+    if (media.type === 'cancion') {
+      mediaMomentoImg.hidden = true;
+      mediaMomentoVideo.hidden = true;
+      mediaMomentoVideo.pause();
+      mediaMomentoVideo.removeAttribute('src');
+      mediaMomentoCancion.src = media.url;
+      mediaMomentoCancion.hidden = false;
+      mediaMomento.hidden = false;
+      return;
+    }
+    mediaMomentoCancion.hidden = true;
+    mediaMomentoCancion.removeAttribute('src');
     const src = '/api/media-file?u=' + encodeURIComponent(media.url);
     if (media.type === 'video') {
       mediaMomentoImg.hidden = true;

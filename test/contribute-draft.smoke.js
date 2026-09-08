@@ -168,10 +168,19 @@ function check(nombre, cond) {
     check('turno 1 no crea borrador (nada contado aún)', !d1.draftId);
     check('todavía no hay ninguna fila en family_notes', familyNotesTable.length === 0);
 
-    // Turno 2: el colaborador ya contó su historia (y agregó una foto) -> se guarda un borrador.
+    // Turno 2: el colaborador ya contó su historia (y agregó una foto y una
+    // canción -- ver /api/contribute-song, 2026-09-08) -> se guarda un borrador.
+    // "cancionInventada" simula un link que jamás salió de /api/contribute-song
+    // (host que no es ni Spotify ni YouTube) -- limpiarMediaAdjunta tiene que
+    // descartarla entera, nunca guardarla disfrazada de "foto" (antes de este
+    // cambio, cualquier media con type !== 'video' caía en 'foto' a ciegas, así
+    // que una canción se guardaba con ese tipo mal puesto y una url que
+    // urlHttpValida rechazaba de todos modos -- el bug quedaba oculto).
     const historial2 = [{ role: 'user', content: 'Recuerdo que en la finca de mi abuela nos íbamos a bañar al río todos los veranos.' }];
     const fotoDelRio = { url: 'https://fake.blob.vercel-storage.com/media/1/foto-1.jpg', type: 'foto', caption: 'El río de la finca' };
-    const t2 = await request(server, { path: '/api/contribute-chat', method: 'POST', body: { history: historial2, draftId: null, mediaUrls: [fotoDelRio] } }, cookie);
+    const cancionValida = { url: 'https://open.spotify.com/embed/track/3n3Ppam7vgaVa1iaRUc9Lp', type: 'cancion', caption: 'La guirnalda, de Rocío Dúrcal' };
+    const cancionInventada = { url: 'https://evil.example.com/embed/track/x', type: 'cancion', caption: 'no debería sobrevivir' };
+    const t2 = await request(server, { path: '/api/contribute-chat', method: 'POST', body: { history: historial2, draftId: null, mediaUrls: [fotoDelRio, cancionValida, cancionInventada] } }, cookie);
     check('turno 2 -> 200', t2.status === 200);
     const d2 = JSON.parse(t2.body);
     check('turno 2 crea un borrador (draftId)', Number.isInteger(d2.draftId));
@@ -179,7 +188,10 @@ function check(nombre, cond) {
     check('la fila quedó marcada en_progreso=true', familyNotesTable[0].en_progreso === true);
     check('el texto crudo del borrador es lo que contó, no está vacío', familyNotesTable[0].texto.includes('bañar al río'));
     check('pidió el dato que faltaba (needsBasicInfo)', d2.needsBasicInfo === true);
-    check('la foto quedó guardada junto con el borrador', JSON.parse(familyNotesTable[0].media_urls)[0].url === fotoDelRio.url);
+    const mediaTurno2 = JSON.parse(familyNotesTable[0].media_urls);
+    check('la foto quedó guardada junto con el borrador', mediaTurno2[0].url === fotoDelRio.url && mediaTurno2[0].type === 'foto');
+    check('la canción de un link real (Spotify/YouTube) queda guardada tal cual, con type "cancion"', mediaTurno2[1] && mediaTurno2[1].url === cancionValida.url && mediaTurno2[1].type === 'cancion' && mediaTurno2[1].caption === cancionValida.caption);
+    check('la canción de un host inventado se descarta entera (no se cuela como "foto" ni con ningún otro tipo)', mediaTurno2.length === 2);
     check('un borrador en_progreso todavía NO prende la campanita de "Aportes" del dueño', !(aportesPendingByOwner[1] || []).length);
 
     // Turno 3: responde la aclaración -> se actualiza el MISMO borrador, no uno nuevo.
@@ -190,7 +202,7 @@ function check(nombre, cond) {
     // El cliente real (colaborar.html) reenvía SIEMPRE el "mediaUrls"
     // acumulado en cada turno (igual que "audioUrls") — se repite acá para
     // simular eso, no porque el servidor lo pida de nuevo.
-    const t3 = await request(server, { path: '/api/contribute-chat', method: 'POST', body: { history: historial3, draftId: d2.draftId, mediaUrls: [fotoDelRio] } }, cookie);
+    const t3 = await request(server, { path: '/api/contribute-chat', method: 'POST', body: { history: historial3, draftId: d2.draftId, mediaUrls: [fotoDelRio, cancionValida, cancionInventada] } }, cookie);
     const d3 = JSON.parse(t3.body);
     check('turno 3 sigue con el mismo draftId (no crea uno nuevo)', d3.draftId === d2.draftId);
     check('sigue habiendo una sola fila en family_notes', familyNotesTable.length === 1);
@@ -201,14 +213,16 @@ function check(nombre, cond) {
       { role: 'assistant', content: d3.message },
       { role: 'user', content: 'No, eso fue todo.' },
     ]);
-    const t4 = await request(server, { path: '/api/contribute-chat', method: 'POST', body: { history: historial4, draftId: d3.draftId, mediaUrls: [fotoDelRio] } }, cookie);
+    const t4 = await request(server, { path: '/api/contribute-chat', method: 'POST', body: { history: historial4, draftId: d3.draftId, mediaUrls: [fotoDelRio, cancionValida, cancionInventada] } }, cookie);
     const d4 = JSON.parse(t4.body);
     check('turno final -> done y saved', d4.done === true && d4.saved === true);
     check('sigue habiendo una sola fila (se actualizó, no se duplicó)', familyNotesTable.length === 1);
     check('la fila final quedó en_progreso=false', familyNotesTable[0].en_progreso === false);
     check('la fila final tiene el texto pulido por la IA (guardar_aporte)', familyNotesTable[0].texto.includes('pulido por la IA'));
     check('la fila final tiene el parentesco extraído', familyNotesTable[0].parentesco === 'Hija');
-    check('la foto sigue ahí en la fila final (no se pierde al pulir el texto)', JSON.parse(familyNotesTable[0].media_urls)[0].url === fotoDelRio.url);
+    const mediaFinal = JSON.parse(familyNotesTable[0].media_urls);
+    check('la foto sigue ahí en la fila final (no se pierde al pulir el texto)', mediaFinal[0].url === fotoDelRio.url);
+    check('la canción sigue ahí en la fila final, con su tipo intacto', mediaFinal[1] && mediaFinal[1].url === cancionValida.url && mediaFinal[1].type === 'cancion');
     check('el aporte terminado SÍ prende la campanita de "Aportes" del dueño, con el nombre de quien aportó', (aportesPendingByOwner[1] || []).includes('Colab'));
   } finally {
     server.close();
