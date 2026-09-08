@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Aportes de tu círculo — Los recuerdos de mis viejos</title>
+<title>Colaboración — Los recuerdos de mis viejos</title>
 <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/images/favicon-192.png">
 <link rel="apple-touch-icon" href="/images/favicon-192.png">
@@ -97,37 +97,83 @@
     cursor: pointer; font-family: var(--font-body); font-size: 0.8rem; padding: 4px 0;
   }
   .aporte-item .aporte-acciones .archivar-btn { color: #a33; }
+
+  /* Items 18/19 (pedido de Felipe, 2026-09-08): antes esta página solo
+     mostraba "lo que le aportaron" al dueño -- ahora es el punto de
+     entrada único para colaboración (ver app.html), así que suma un CTA
+     para grabar un aporte nuevo y dos pestañas para separar "lo que me
+     dijeron" de "lo que yo dije en otras bitácoras". */
+  .aportar-ahora {
+    display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;
+    text-decoration: none; background: var(--gold-deep); color: #FBF6EA; border-radius: 10px;
+    padding: 12px 20px; font-weight: 700; font-family: var(--font-body); font-size: 0.95rem;
+    min-height: 44px; margin-bottom: 24px;
+  }
+  .tabs-row { display: flex; gap: 8px; margin-bottom: 24px; border-bottom: 1px solid #E7DFCC; }
+  .tab-btn {
+    border: none; background: none; cursor: pointer; font-family: var(--font-body); font-size: 0.95rem;
+    color: var(--ink-soft); padding: 10px 4px; min-height: 44px; border-bottom: 3px solid transparent;
+  }
+  .tab-btn.active { color: var(--gold-deep); font-weight: 700; border-bottom-color: var(--gold-deep); }
+  .dados-select-row { margin-bottom: 20px; }
+  .dados-select-row label { display: block; font-size: 0.85rem; color: var(--ink-soft); margin: 0 0 6px; }
+  .dados-select-row select {
+    width: 100%; max-width: 320px; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 12px;
+    font-family: var(--font-body); font-size: 0.95rem; background: #fff; color: var(--ink); min-height: 44px;
+  }
 </style>
 </head>
 <body>
   <header>
     <div>
-      <h1>Aportes de tu círculo</h1>
-      <p>Quiénes te ayudaron a construir tu bitácora, y lo que contaron.</p>
+      <h1>Colaboración</h1>
+      <p>Lo que tu círculo aportó a tu historia, y lo que vos aportaste en otras.</p>
     </div>
     <a class="volver" href="/app.html">← volver a la bitácora</a>
   </header>
   <!-- <main>, no <div>: mismo criterio que app.html — sin esto un lector de
        pantalla no tiene forma de saltar directo al contenido. -->
   <main class="wrap">
-    <section id="colaboradoresSection">
-      <h2>Quiénes han colaborado</h2>
-      <p class="sub">Familiares que aportaron historias con tu código de invitación.</p>
-      <!-- El anuncio corto (aria-live) va aparte del contenido visual: si
-         aria-live estuviera en #colaboradoresLista directamente, un lector
-         de pantalla anunciaría TODAS las tarjetas de golpe cada vez que la
-         lista cambia — acá solo se avisa algo corto como "Se cargaron 3
-         colaboradores.", y la lista se explora aparte, a su ritmo. -->
-      <p id="colaboradoresStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
-      <div id="colaboradoresLista"><p class="empty">Cargando…</p></div>
-    </section>
+    <a class="aportar-ahora" href="/colaborar.html">🎙️ Aportar una historia ahora</a>
 
-    <section id="aportesSection">
-      <h2>Lo que contaron</h2>
-      <p class="sub">Las historias completas, con su audio y fotos si las agregaron.</p>
-      <p id="aportesStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
-      <div id="aportesLista"><p class="empty">Cargando…</p></div>
-    </section>
+    <div class="tabs-row" role="tablist" aria-label="Colaboración">
+      <button class="tab-btn active" id="tabRecibidosBtn" type="button" role="tab" aria-selected="true" aria-controls="tabRecibidos">Lo que dijeron de mí</button>
+      <button class="tab-btn" id="tabDadosBtn" type="button" role="tab" aria-selected="false" aria-controls="tabDados">Lo que yo dije de otros</button>
+    </div>
+
+    <div id="tabRecibidos" role="tabpanel">
+      <section id="colaboradoresSection">
+        <h2>Quiénes han colaborado</h2>
+        <p class="sub">Familiares que aportaron historias con tu código de invitación.</p>
+        <!-- El anuncio corto (aria-live) va aparte del contenido visual: si
+           aria-live estuviera en #colaboradoresLista directamente, un lector
+           de pantalla anunciaría TODAS las tarjetas de golpe cada vez que la
+           lista cambia — acá solo se avisa algo corto como "Se cargaron 3
+           colaboradores.", y la lista se explora aparte, a su ritmo. -->
+        <p id="colaboradoresStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
+        <div id="colaboradoresLista"><p class="empty">Cargando…</p></div>
+      </section>
+
+      <section id="aportesSection">
+        <h2>Lo que contaron</h2>
+        <p class="sub">Las historias completas, con su audio y fotos si las agregaron.</p>
+        <p id="aportesStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
+        <div id="aportesLista"><p class="empty">Cargando…</p></div>
+      </section>
+    </div>
+
+    <div id="tabDados" role="tabpanel" hidden>
+      <section>
+        <h2>Lo que aportaste en otras bitácoras</h2>
+        <p class="sub">Las historias que contaste colaborando con otra persona.</p>
+        <div class="dados-select-row" id="dadosSelectRow" hidden>
+          <label for="dadosSelect">¿De cuál bitácora?</label>
+          <select id="dadosSelect"></select>
+        </div>
+        <p id="dadosStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
+        <div id="dadosLista"><p class="empty">Cargando…</p></div>
+      </section>
+    </div>
   </main>
 
 <script>
@@ -136,12 +182,128 @@
   const colaboradoresStatus = document.getElementById('colaboradoresStatus');
   const aportesLista = document.getElementById('aportesLista');
   const aportesStatus = document.getElementById('aportesStatus');
+  const tabRecibidosBtn = document.getElementById('tabRecibidosBtn');
+  const tabDadosBtn = document.getElementById('tabDadosBtn');
+  const tabRecibidos = document.getElementById('tabRecibidos');
+  const tabDados = document.getElementById('tabDados');
+  const dadosSelectRow = document.getElementById('dadosSelectRow');
+  const dadosSelect = document.getElementById('dadosSelect');
+  const dadosLista = document.getElementById('dadosLista');
+  const dadosStatus = document.getElementById('dadosStatus');
 
   // Mismo criterio que el resto de las páginas: si la sesión venció, decirlo
   // claro en vez de mostrar un error genérico de conexión.
   function mensajeDeError(resp, data, fallback) {
     if (resp && resp.status === 401) return 'Tu sesión venció — actualiza la página para volver a iniciar sesión.';
     return (data && data.error) || fallback;
+  }
+
+  // Items 18/19: pestañas "Lo que dijeron de mí" / "Lo que yo dije de
+  // otros" -- la segunda carga sus datos recién la primera vez que se
+  // abre (cargaDadosHecha), no de entrada, para no pagar un viaje al
+  // servidor de más si la persona nunca la toca.
+  let cargaDadosHecha = false;
+  function activarTab(cual) {
+    const esRecibidos = cual === 'recibidos';
+    tabRecibidosBtn.classList.toggle('active', esRecibidos);
+    tabRecibidosBtn.setAttribute('aria-selected', String(esRecibidos));
+    tabDadosBtn.classList.toggle('active', !esRecibidos);
+    tabDadosBtn.setAttribute('aria-selected', String(!esRecibidos));
+    tabRecibidos.hidden = !esRecibidos;
+    tabDados.hidden = esRecibidos;
+    if (!esRecibidos && !cargaDadosHecha) {
+      cargaDadosHecha = true;
+      cargarMisColaboraciones();
+    }
+  }
+  tabRecibidosBtn.addEventListener('click', () => activarTab('recibidos'));
+  tabDadosBtn.addEventListener('click', () => activarTab('dados'));
+
+  // --- "Lo que yo dije de otros": primero elegís la bitácora (igual que
+  // el selector de colaborar.html), después se carga esa sola. ---
+  async function cargarMisColaboraciones() {
+    dadosLista.innerHTML = '<p class="empty">Cargando…</p>';
+    try {
+      const resp = await fetch('/api/my-collaborations');
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        dadosStatus.textContent = mensajeDeError(resp, data, 'No se pudieron cargar tus colaboraciones.');
+        dadosLista.innerHTML = '<p class="empty">' + dadosStatus.textContent + '</p>';
+        return;
+      }
+      const historias = data.historias || [];
+      if (!historias.length) {
+        dadosStatus.textContent = 'Todavía no colaboras con ninguna otra bitácora.';
+        dadosLista.innerHTML = '<p class="empty">Todavía no colaboras con ninguna otra bitácora.</p><a class="empty-cta" href="/colaborar.html">Aportar a una bitácora →</a>';
+        return;
+      }
+      dadosSelectRow.hidden = historias.length < 2;
+      dadosSelect.innerHTML = '';
+      historias.forEach((h) => {
+        const opt = document.createElement('option');
+        opt.value = h.ownerId;
+        opt.textContent = h.ownerName;
+        dadosSelect.appendChild(opt);
+      });
+      cargarAportesDados(historias[0].ownerId);
+    } catch (e) {
+      dadosStatus.textContent = 'No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.';
+      dadosLista.innerHTML = '<p class="empty">' + dadosStatus.textContent + '</p>';
+    }
+  }
+  dadosSelect.addEventListener('change', () => cargarAportesDados(dadosSelect.value));
+
+  // Misma forma de pintar un aporte que ya usan colaborar.html/
+  // colaboraciones.html -- acá SIN botones de administrar (item 14: eso
+  // vive del lado de "lo que me dijeron a mí", no acá).
+  function pintarAporteSimple(container, it) {
+    const div = document.createElement('div');
+    div.className = 'aporte-item';
+    const urls = (it.audio_urls && it.audio_urls.length) ? it.audio_urls : (it.audio_url ? [it.audio_url] : []);
+    const quien = it.contributor ? it.contributor + (it.parentesco ? ` (${it.parentesco})` : '') : 'Familia';
+    const etiqueta = it.protagonista ? `Historia de ${it.protagonista} — compartida por ${quien}` : quien;
+    const quienP = document.createElement('p');
+    quienP.className = 'quien';
+    quienP.textContent = etiqueta + (it.is_private ? ' (privado)' : '');
+    div.appendChild(quienP);
+    const textoDiv = document.createElement('div');
+    textoDiv.className = 'texto';
+    textoDiv.textContent = it.texto;
+    div.appendChild(textoDiv);
+    urls.forEach((u) => {
+      if (typeof u === 'string' && /^https?:\/\//.test(u)) {
+        const audio = document.createElement('audio');
+        audio.controls = true;
+        audio.src = '/api/media-file?u=' + encodeURIComponent(u);
+        div.appendChild(audio);
+      }
+    });
+    container.appendChild(div);
+  }
+
+  async function cargarAportesDados(ownerId) {
+    dadosLista.innerHTML = '<p class="empty">Cargando…</p>';
+    try {
+      const resp = await fetch('/api/contributions?owner=' + encodeURIComponent(ownerId));
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        dadosStatus.textContent = mensajeDeError(resp, data, 'No se pudieron cargar tus aportes.');
+        dadosLista.innerHTML = '<p class="empty">' + dadosStatus.textContent + '</p>';
+        return;
+      }
+      const items = data.notes || [];
+      dadosLista.innerHTML = '';
+      if (!items.length) {
+        dadosStatus.textContent = 'Todavía no le aportaste ninguna historia.';
+        dadosLista.innerHTML = '<p class="empty">Todavía no le aportaste ninguna historia.</p>';
+        return;
+      }
+      dadosStatus.textContent = items.length === 1 ? 'Se cargó 1 aporte.' : `Se cargaron ${items.length} aportes.`;
+      items.forEach((it) => pintarAporteSimple(dadosLista, it));
+    } catch (e) {
+      dadosStatus.textContent = 'No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.';
+      dadosLista.innerHTML = '<p class="empty">' + dadosStatus.textContent + '</p>';
+    }
   }
 
   // Separado en "pedir" (async, solo trae los datos) y "pintar" (sync, ya

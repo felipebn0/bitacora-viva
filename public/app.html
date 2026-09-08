@@ -985,21 +985,20 @@
          barra de 5 íconos ya no va arriba de todo — se mueve acá, debajo
          del orbe y arriba de "invitar a mi círculo", para que la pantalla
          principal empiece solo con lo que hace falta para narrar. -->
+    <!-- Items 18/19 (pedido de Felipe, 2026-09-08): antes había 5 íconos acá
+         (Colaborar, Aportes, Historias, Árbol, Libro) -- "Colaborar" y
+         "Aportes" se juntan en uno solo (colaboraciones.html pasa a tener
+         las 2 pestañas "Lo que dijeron de mí"/"Lo que yo dije de otros",
+         con un botón "Aportar ahora" adentro que lleva a colaborar.html
+         para grabar); "Historias" se saca de acá y pasa a ser un botón
+         DENTRO de "Mi libro" (capitulos.html), no un ícono aparte. -->
     <nav class="topbar" aria-label="Secciones de tu bitácora">
       <div class="icon-nav-item">
-        <a class="icon-btn" href="/colaborar.html" title="Colaborar con otra historia" aria-label="Colaborar con otra historia">🤝</a>
-        <span class="icon-label" aria-hidden="true">Colaborar</span>
-      </div>
-      <div class="icon-nav-item">
         <div class="icon-btn-wrap">
-          <a class="icon-btn" href="/colaboraciones.html" title="Aportes de tu círculo" aria-label="Aportes de tu círculo">💬</a>
+          <a class="icon-btn" href="/colaboraciones.html" title="Colaboración" aria-label="Colaboración">🤝</a>
           <span class="icon-badge" id="aportesBadge"></span>
         </div>
-        <span class="icon-label" aria-hidden="true">Aportes</span>
-      </div>
-      <div class="icon-nav-item">
-        <a class="icon-btn" href="/historias.html" title="Historias detectadas en la charla" aria-label="Historias detectadas en la charla">🗒️</a>
-        <span class="icon-label" aria-hidden="true">Historias</span>
+        <span class="icon-label" aria-hidden="true">Colaboración</span>
       </div>
       <div class="icon-nav-item">
         <div class="icon-btn-wrap">
@@ -1009,8 +1008,8 @@
         <span class="icon-label" aria-hidden="true">Árbol</span>
       </div>
       <div class="icon-nav-item">
-        <a class="icon-btn" href="/capitulos.html" title="Libro de la historia" aria-label="Libro de la historia">📖</a>
-        <span class="icon-label" aria-hidden="true">Libro</span>
+        <a class="icon-btn" href="/capitulos.html" title="Mi libro" aria-label="Mi libro">📖</a>
+        <span class="icon-label" aria-hidden="true">Mi libro</span>
       </div>
     </nav>
 

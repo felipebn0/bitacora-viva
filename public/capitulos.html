@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Libro de la historia — Los recuerdos de mis viejos</title>
+<title>Mi libro — Los recuerdos de mis viejos</title>
 <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/images/favicon-192.png">
 <link rel="apple-touch-icon" href="/images/favicon-192.png">
@@ -109,35 +109,19 @@
     min-height: 44px; padding: 8px 14px; margin-top: 4px;
   }
 
-  .aportes-section { margin-bottom: 40px; }
-  .aportes-section h2 { font-family: var(--font-display); font-size: 1.2rem; margin: 0 0 4px; }
-  .aportes-section .sub { color: var(--ink-soft); font-size: 0.9rem; margin: 0 0 16px; }
-  .aporte-item {
-    background: #FBF6EA; border: 1px solid #E7DFCC; border-radius: 14px;
-    padding: 14px 18px; margin-bottom: 12px; font-size: 0.92rem;
-  }
-  .aporte-item .quien { color: var(--gold-deep); font-weight: 700; font-size: 0.875rem; margin: 0 0 4px; }
-  .aporte-item .texto { line-height: 1.5; }
-  .aporte-item audio { width: 100%; margin-top: 8px; }
-
     /* Extraído de atributos style="" inline -- ronda 4 del camino a CSP en enforce (2026-09-06).
-       Nombradas por hash del valor (mismo valor => misma clase). Cada declaración lleva
-       !important a propósito -- EXCEPTO "display" -- para reproducir lo que hacía el
-       atributo style="" inline, que le ganaba a cualquier otra regla (comprobado con un caso
-       real: .login p.sub tiene más especificidad que una clase sola y sin esto perdía el
-       margin-top que el inline sí forzaba). "display" queda sin !important porque este
-       código alterna la visibilidad de varios de estos mismos elementos en runtime con
-       elemento.style.display = "block"/"none" (ver server.js/estas páginas) -- un inline
-       plano puesto por JS no le gana a una regla con !important, así que esos toggles se
-       hubieran roto. No es una clase de uso general para reutilizar en HTML nuevo. */
-    .pc-93b8ea5b{display:none;}
+       Nombradas por hash del valor (mismo valor => misma clase). !important a propósito, para
+       reproducir lo que hacía el atributo style="" inline, que le ganaba a cualquier otra regla
+       (comprobado con un caso real: .login p.sub tiene más especificidad que una clase sola y
+       sin esto perdía el margin-top que el inline sí forzaba). No es una clase de uso general
+       para reutilizar en HTML nuevo. */
     .pc-46dcee64{margin:0 !important;}
 </style>
 </head>
 <body>
   <header>
     <div>
-      <h1>Libro de la historia</h1>
+      <h1>Mi libro</h1>
       <p>Capítulos armados con IA a partir de las historias detectadas en las charlas.</p>
     </div>
     <a class="volver" href="/app.html">← volver a la bitácora</a>
@@ -145,15 +129,12 @@
   <!-- <main>, no <div>: mismo criterio que app.html — sin esto un lector de
        pantalla no tiene forma de saltar directo al contenido. -->
   <main class="wrap">
-    <div class="aportes-section pc-93b8ea5b" id="aportesSection">
-      <h2>Aportes de tu círculo</h2>
-      <p class="sub">Historias que colaboradores agregaron con su propia voz.</p>
-      <!-- El anuncio corto va aparte del contenido: si aria-live estuviera
-         en #aportesLista directamente, un lector de pantalla leería TODOS
-         los aportes de golpe cada vez que la lista cambia. -->
-      <p id="aportesListaStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
-      <div id="aportesLista"></div>
-    </div>
+    <!-- Items 18/19 (pedido de Felipe, 2026-09-08): "en libro solo dejar
+         generar y un botón arriba que diga ver mis historias" -- la
+         sección de aportes del círculo que vivía acá se saca (ya está en
+         colaboraciones.html, que ahora es el punto de entrada único de
+         colaboración) y se suma este botón hacia historias.html. -->
+    <a class="volver" href="/historias.html">Ver mis historias →</a>
 
     <div class="toolbar">
       <label class="sub pc-46dcee64" for="personaSelect">Narrado en</label>
@@ -185,9 +166,6 @@
   const status = document.getElementById('status');
   const generarBtn = document.getElementById('generarBtn');
   const personaSelect = document.getElementById('personaSelect');
-  const aportesSection = document.getElementById('aportesSection');
-  const aportesLista = document.getElementById('aportesLista');
-  const aportesListaStatus = document.getElementById('aportesListaStatus');
 
   // Antes cualquier falla acá (sesión vencida, error del servidor) mostraba
   // el mismo "Hubo un problema para conectar" sin distinguir si hacía
@@ -195,45 +173,6 @@
   function mensajeDeError(resp, data, fallback) {
     if (resp && resp.status === 401) return 'Tu sesión venció — actualiza la página para volver a iniciar sesión.';
     return (data && data.error) || fallback;
-  }
-
-  async function cargarAportes() {
-    try {
-      const resp = await fetch('/api/contributions');
-      if (!resp.ok) return;
-      const data = await resp.json();
-      const notes = data.notes || [];
-      if (!notes.length) return;
-      aportesListaStatus.textContent = notes.length === 1 ? 'Se cargó 1 aporte de tu círculo.' : `Se cargaron ${notes.length} aportes de tu círculo.`;
-      aportesLista.innerHTML = '';
-      notes.forEach((n) => {
-        const item = document.createElement('div');
-        item.className = 'aporte-item';
-        const quien = n.contributor ? n.contributor + (n.parentesco ? ` (${n.parentesco})` : '') : 'Familia';
-        const etiqueta = n.protagonista ? `Historia de ${n.protagonista} — compartida por ${quien}` : quien;
-        const urls = (n.audio_urls && n.audio_urls.length) ? n.audio_urls : (n.audio_url ? [n.audio_url] : []);
-        const quienP = document.createElement('p');
-        quienP.className = 'quien';
-        quienP.textContent = etiqueta;
-        item.appendChild(quienP);
-        const textoDiv = document.createElement('div');
-        textoDiv.className = 'texto';
-        textoDiv.textContent = n.texto;
-        item.appendChild(textoDiv);
-        urls.forEach((u) => {
-          if (typeof u === 'string' && /^https?:\/\//.test(u)) {
-            const audio = document.createElement('audio');
-            audio.controls = true;
-            // Acceso privado en Blob — /api/media-file confirma el permiso
-            // antes de traerlo (ver server.js).
-            audio.src = '/api/media-file?u=' + encodeURIComponent(u);
-            item.appendChild(audio);
-          }
-        });
-        aportesLista.appendChild(item);
-      });
-      aportesSection.style.display = 'block';
-    } catch (e) {}
   }
 
   function renderChapters(chapters) {
@@ -390,7 +329,6 @@
   });
 
   cargar();
-  cargarAportes();
   chequearMaterialDisponible();
 })();
 </script>
