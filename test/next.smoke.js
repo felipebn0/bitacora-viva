@@ -91,8 +91,9 @@ function fakeSql(strings, ...values) {
     mediaMarkedDiscussed.push(values[0]);
     return Promise.resolve([]);
   }
-  if (text.includes('SELECT fecha_nacimiento FROM users WHERE id')) {
-    if (values[0] === user.id) return Promise.resolve([{ fecha_nacimiento: user.fecha_nacimiento }]);
+  // leerPerfilBitacora (BACKLOG #12): para la bitácora propia lee "users".
+  if (text.includes('SELECT name AS nombre, fecha_nacimiento, created_at FROM users WHERE id')) {
+    if (values[0] === user.id) return Promise.resolve([{ nombre: user.username, fecha_nacimiento: user.fecha_nacimiento, created_at: null }]);
     return Promise.resolve([]);
   }
 

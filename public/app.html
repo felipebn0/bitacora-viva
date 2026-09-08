@@ -7,6 +7,18 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/images/favicon-192.png">
 <link rel="apple-touch-icon" href="/images/favicon-192.png">
+<!-- BACKLOG #12: para que el enlace permanente de un subperfil se pueda
+     "agregar a la pantalla de inicio" con ícono y nombre propios (en vez de
+     abrir siempre como una pestaña más del navegador) — apple-mobile-web-
+     app-* es lo que usa iOS Safari (no tiene API para dispararlo solo, la
+     persona lo hace a mano desde Compartir); el manifest dinámico
+     (/manifest.json, ver server.js) es lo que usa Android/Chrome para el
+     cartel de "Instalar". Sin ?codigo=, /manifest.json devuelve el genérico
+     de la app entera — agregarlo acá de forma fija no rompe nada para quien
+     nunca use un enlace de subperfil. -->
+<link rel="manifest" href="/manifest.json" id="appManifestLink">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Los recuerdos de mis viejos" id="appleTitleMeta">
 <!-- Fuentes autoalojadas (ronda 2 del camino a CSP en enforce, 2026-09-06):
      antes venían de fonts.googleapis.com/fonts.gstatic.com, lo que además
      de la violación de CSP (font-src 'self') mandaba la IP de cada visita
@@ -190,6 +202,16 @@
      especificidad a .login (clase) y lo mantiene oculto hasta que ese
      fetch resuelve — ni el login ni la app se ven de más. */
   #loginScreen { display: none; }
+  #narradorScreen { display: none; }
+  #agregarInicioBtn { display: none; }
+  #agregarInicioTexto { display: none; margin: 0; font-size: 0.78rem; }
+  .subperfil-banner {
+    width: min(420px, 100%); background: #FBF6EA; border: 1px solid #E7DFCC; border-radius: 20px;
+    padding: 22px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px;
+  }
+  .subperfil-banner p { margin: 0; color: var(--ink); font-size: 0.95rem; }
+  .perfil-fila { border-bottom: 1px solid #E7DFCC; padding: 8px 0; }
+  .perfil-wa-btn { display: inline-block; width: auto; }
   /* #checkingScreen: se ve DESDE el primer frame (a diferencia de login y
      app, que arrancan ocultos) y es lo único visible mientras se espera la
      respuesta de fetch('/api/me'). Sin esto la página quedaba en blanco
@@ -558,6 +580,24 @@
     <p class="sub pc-53425f7d">¿No tienes cuenta? <a class="pc-07135648" href="/">Crea una</a>.</p>
   </div>
 
+  <!-- BACKLOG #12: entrada del narrador de un subperfil — llega con
+       ?codigo=XXXXXXXX (link permanente compartido desde el panel de Cuenta
+       de quien administra el subperfil). Sin cuenta, sin clave, solo el
+       nombre — mismo patrón que #guestScreen en colaborar.html, pero esto
+       narra SU PROPIA bitácora (ver /api/narrador-start), no un aporte a
+       la de otro. -->
+  <div class="login" id="narradorScreen">
+    <h1>Los recuerdos de mis viejos</h1>
+    <p class="sub" id="narradorBitacoraLine">Vas a contar tus historias acá.</p>
+    <div class="login-field">
+      <label for="narradorName">Tu nombre</label>
+      <input type="text" id="narradorName" placeholder="¿Cómo te llamas?" autocomplete="given-name" maxlength="60">
+    </div>
+    <button id="narradorStartBtn" type="button">Empezar</button>
+    <p class="error" id="narradorError" role="alert"></p>
+    <p class="sub pc-53425f7d">No hace falta crear cuenta ni clave — solo tu nombre.</p>
+  </div>
+
   <div id="appContent">
    <!-- Mismo patrón que la landing (public/index.html): invisible hasta que
         se navega con Tab, para no obligar a pasar por el saludo y los 5
@@ -574,6 +614,12 @@
    <div class="greeting-bar">
      <img class="brand-logo" src="/images/logo-icon.png" alt="Los recuerdos de mis viejos">
      <h1 class="greeting-text"><span class="brand-tag">Los recuerdos de mis viejos</span>Hola, <span class="greeting-name" id="greetingName"></span></h1>
+     <!-- BACKLOG #12: solo se muestra para quien entró con el enlace
+          permanente de un subperfil (sin cuenta) — ver aplicarSesionSubperfil.
+          Deja instalar esta charla como un ícono propio en la pantalla de
+          inicio, para no depender de encontrar el link de nuevo. -->
+     <button class="icon-btn" id="agregarInicioBtn" type="button" title="Agregar a la pantalla de inicio">➕📱</button>
+     <p class="sub" id="agregarInicioTexto"></p>
      <div class="user-menu">
        <div class="icon-nav-item">
          <button class="icon-btn" id="userMenuBtn" type="button" title="Mi cuenta" aria-label="Mi cuenta" aria-expanded="false" aria-controls="userMenuPanel">👤</button>
@@ -590,6 +636,22 @@
              <button class="um-btn" id="umFontIncBtn" type="button" aria-label="Agrandar la letra">A+</button>
            </div>
            <p class="um-hint">Cambia el tamaño de la letra en toda la app — se recuerda la próxima vez que entres.</p>
+         </div>
+
+         <!-- BACKLOG #12: subperfiles — varias bitácoras (ej. la de tu papá,
+              la de tu mamá) administradas desde este mismo login, estilo
+              selector de perfiles. Podés verlas/pagarlas, pero no narrar en
+              su nombre — para eso existe el link permanente de cada una. -->
+         <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecPerfiles">Perfiles <span class="um-chevron" aria-hidden="true">›</span></button>
+         <div class="um-section-body" id="umSecPerfiles" hidden>
+           <p class="um-msg" id="umPerfilesLista">Cargando…</p>
+           <div class="um-fontsize-row">
+             <input type="text" id="umNuevoSubperfilNombre" placeholder="Nombre (ej: Papá)" maxlength="100" aria-label="Nombre de la persona">
+           </div>
+           <input type="date" id="umNuevoSubperfilFecha" aria-label="Fecha de nacimiento (opcional)">
+           <button class="um-btn" id="umCrearSubperfilBtn" type="button">+ Agregar bitácora de otra persona</button>
+           <p class="um-msg" id="umPerfilesMsg" role="status" aria-live="polite" aria-atomic="true"></p>
+           <p class="um-hint">La persona que administras no necesita usuario ni clave — le compartes un enlace permanente para que cuente sus propias historias, sin crear cuenta.</p>
          </div>
 
          <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecVoz">Voz <span class="um-chevron" aria-hidden="true">›</span></button>
@@ -751,7 +813,16 @@
           <img id="mediaMomentoImg" alt="Foto que compartió tu familia" hidden>
           <video id="mediaMomentoVideo" controls hidden></video>
         </div>
-        <div class="orb-zone">
+        <!-- BACKLOG #12: se ve en vez del orbe cuando cambiaste a un
+             subperfil que administras — podés ver/pagar esa bitácora, pero
+             no narrar en su nombre (ver bloquearSiNoPuedeNarrar en el
+             servidor); esto es solo para que no llegues a tocar el orbe y
+             te encuentres con un error confuso. -->
+        <div class="subperfil-banner" id="subperfilBanner" hidden>
+          <p id="subperfilBannerTexto"></p>
+          <button class="write-toggle" id="subperfilVolverBtn" type="button">Volver a mi bitácora</button>
+        </div>
+        <div class="orb-zone" id="orbZone">
           <button class="orb" id="orb" data-state="idle" aria-label="Presionar para comenzar la charla">
             <span id="orbLabel">Presiona<br>para hablar</span>
           </button>
@@ -1143,6 +1214,140 @@
     window.location.href = '/';
   });
 
+  // --- Subperfiles (BACKLOG #12) ------------------------------------
+  const umPerfilesLista = document.getElementById('umPerfilesLista');
+  const umPerfilesMsg = document.getElementById('umPerfilesMsg');
+  const umNuevoSubperfilNombre = document.getElementById('umNuevoSubperfilNombre');
+  const umNuevoSubperfilFecha = document.getElementById('umNuevoSubperfilFecha');
+  const umCrearSubperfilBtn = document.getElementById('umCrearSubperfilBtn');
+  let umPerfilesCargados = false;
+  // id (número) del subperfil cuyo enlace está desplegado ahora mismo, o
+  // null — para no tener que guardar un <div> por cada uno.
+  let umNarradorLinkAbierto = null;
+
+  function filaPerfil(p) {
+    const esActivo = p.esPropia ? !window.bitacoraActivaId : window.bitacoraActivaId === p.id;
+    const cambiarBtn = esActivo
+      ? `<span class="um-hint">(perfil activo)</span>`
+      : `<button class="um-btn" data-cambiar="${p.id}" type="button">Cambiar acá</button>`;
+    const enlaceBtn = p.esPropia ? '' : `<button class="um-btn um-plain" data-enlace="${p.id}" type="button">Compartir enlace para narrar</button>`;
+    const enlaceBox = umNarradorLinkAbierto === p.id ? `<div class="um-fontsize-row" id="umEnlaceBox-${p.id}"><span class="um-msg" id="umEnlaceTexto-${p.id}">Cargando…</span></div>` : '';
+    return `<div class="perfil-fila">
+      <strong>${p.nombre || '(sin nombre)'}</strong> ${cambiarBtn}
+      ${enlaceBtn}
+      ${enlaceBox}
+    </div>`;
+  }
+
+  async function pintarPerfiles() {
+    try {
+      const resp = await fetch('/api/subprofiles');
+      const data = await resp.json();
+      if (!resp.ok) { umPerfilesLista.textContent = data.error || 'No se pudieron cargar tus perfiles.'; return; }
+      umPerfilesLista.innerHTML = data.perfiles.map(filaPerfil).join('');
+    } catch (e) {
+      umPerfilesLista.textContent = 'No se pudieron cargar tus perfiles.';
+    }
+  }
+
+  async function cargarPerfiles() {
+    if (umPerfilesCargados) return;
+    umPerfilesCargados = true;
+    await pintarPerfiles();
+  }
+
+  umCrearSubperfilBtn.addEventListener('click', async () => {
+    const nombre = umNuevoSubperfilNombre.value.trim();
+    if (!nombre) { umPerfilesMsg.textContent = 'Falta el nombre.'; return; }
+    umCrearSubperfilBtn.disabled = true;
+    umPerfilesMsg.textContent = '';
+    try {
+      const resp = await fetch('/api/subprofiles', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre, fechaNacimiento: umNuevoSubperfilFecha.value || null }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) { umPerfilesMsg.textContent = data.error || 'No se pudo crear el subperfil.'; return; }
+      umNuevoSubperfilNombre.value = '';
+      umNuevoSubperfilFecha.value = '';
+      umPerfilesMsg.textContent = `✓ Se creó la bitácora de ${data.nombre}.`;
+      await pintarPerfiles();
+    } catch (e) {
+      umPerfilesMsg.textContent = 'No se pudo conectar. Intenta de nuevo.';
+    } finally {
+      umCrearSubperfilBtn.disabled = false;
+    }
+  });
+
+  // Un solo listener con delegación (en vez de uno por fila) — las filas se
+  // reemplazan enteras cada vez que se repinta la lista.
+  umPerfilesLista.addEventListener('click', async (e) => {
+    const cambiarId = e.target.dataset.cambiar;
+    if (cambiarId) {
+      try {
+        const resp = await fetch('/api/subprofiles/switch', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: Number(cambiarId) }),
+        });
+        if (!resp.ok) { umPerfilesMsg.textContent = 'No se pudo cambiar de perfil.'; return; }
+        // Recarga entera: cada sección de la app (árbol, capítulos,
+        // historias, la charla misma) lee la bitácora activa de la cookie —
+        // más simple y confiable que invalidar cada pedacito por separado.
+        window.location.href = '/app.html';
+      } catch (e2) {
+        umPerfilesMsg.textContent = 'No se pudo conectar. Intenta de nuevo.';
+      }
+      return;
+    }
+    const enlaceId = Number(e.target.dataset.enlace);
+    if (enlaceId) {
+      umNarradorLinkAbierto = umNarradorLinkAbierto === enlaceId ? null : enlaceId;
+      await pintarPerfiles();
+      if (umNarradorLinkAbierto === enlaceId) await cargarYMostrarEnlace(enlaceId);
+      return;
+    }
+    const regenId = Number(e.target.dataset.regenerar);
+    if (regenId) {
+      if (!confirm('¿Generar un enlace nuevo? El que ya compartiste deja de servir.')) return;
+      try {
+        const resp = await fetch(`/api/subprofiles/${regenId}/narrador-link/regenerate`, { method: 'POST' });
+        const data = await resp.json();
+        if (resp.ok) await mostrarEnlace(regenId, data.code);
+      } catch (e3) {}
+      return;
+    }
+    const revokId = Number(e.target.dataset.revocar);
+    if (revokId) {
+      if (!confirm('¿Quitarle el acceso a ese enlace? Podrás generar uno nuevo cuando quieras.')) return;
+      try {
+        await fetch(`/api/subprofiles/${revokId}/narrador-link/revoke`, { method: 'POST' });
+        umNarradorLinkAbierto = null;
+        await pintarPerfiles();
+      } catch (e4) {}
+      return;
+    }
+  });
+
+  function mostrarEnlace(id, code) {
+    const box = document.getElementById(`umEnlaceTexto-${id}`);
+    if (!box) return;
+    const link = `${location.origin}/app.html?codigo=${encodeURIComponent(code)}`;
+    const mensaje = `Con este enlace puedes contar tus historias sin necesitar usuario ni clave — entra acá y guárdalo en tu celular: ${link}`;
+    const wa = `https://wa.me/?text=${encodeURIComponent(mensaje)}`;
+    box.innerHTML = `<a href="${wa}" target="_blank" rel="noopener" class="um-btn perfil-wa-btn">Compartir por WhatsApp</a>
+      <button class="um-btn um-plain" type="button" data-regenerar="${id}">Generar uno nuevo</button>
+      <button class="um-btn um-plain" type="button" data-revocar="${id}">Quitar acceso</button>`;
+  }
+
+  async function cargarYMostrarEnlace(id) {
+    try {
+      const resp = await fetch(`/api/subprofiles/${id}/narrador-link`);
+      const data = await resp.json();
+      if (resp.ok) mostrarEnlace(id, data.code);
+    } catch (e) {}
+  }
+
+  document.querySelector('[aria-controls="umSecPerfiles"]').addEventListener('click', cargarPerfiles);
+
   // --- Plan y pagos ---
   const umPlanEstado = document.getElementById('umPlanEstado');
   const umPlanOpciones = document.getElementById('umPlanOpciones');
@@ -1487,16 +1692,152 @@
     }
   });
 
+  // BACKLOG #12 (subperfiles): dos casos nuevos, además de "cuenta dueña
+  // normal" y "colaboradora clásica" (ambos ya cubiertos arriba):
+  // - isNarradorLink: entró con el enlace permanente de un subperfil — ve
+  //   la misma pantalla de charla, pero sin nada de Cuenta/facturación (no
+  //   tiene una cuenta detrás) ni el ícono "Colaborar" (no aplica sin cuenta).
+  // - bitacoraActiva: la cuenta que loguea cambió a un subperfil que
+  //   administra — ve/exporta esa bitácora, pero no puede narrar (el orbe
+  //   se reemplaza por un aviso, ver subperfilBanner).
+  const orbZone = document.getElementById('orbZone');
+  const subperfilBanner = document.getElementById('subperfilBanner');
+  const subperfilBannerTexto = document.getElementById('subperfilBannerTexto');
+  const subperfilVolverBtn = document.getElementById('subperfilVolverBtn');
+  const colaborarNavLink = document.querySelector('nav.topbar a[href="/colaborar.html"]');
+  const colaborarNavItem = colaborarNavLink ? colaborarNavLink.closest('.icon-nav-item') : null;
+  const cuentaNavItem = userMenuBtn.closest('.icon-nav-item');
+  window.bitacoraActivaId = null;
+
+  subperfilVolverBtn.addEventListener('click', async () => {
+    try { await fetch('/api/subprofiles/switch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }); } catch (e) {}
+    window.location.href = '/app.html';
+  });
+
+  // --- Acceso directo a la pantalla de inicio (BACKLOG #12, pedido de
+  // Felipe) — solo tiene sentido para quien entró con el enlace permanente
+  // de un subperfil (sin cuenta, sin favoritos de navegador de por medio).
+  const agregarInicioBtn = document.getElementById('agregarInicioBtn');
+  const agregarInicioTexto = document.getElementById('agregarInicioTexto');
+  let promptDeInstalacion = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    promptDeInstalacion = e;
+    if (agregarInicioBtn.dataset.modoNarrador === 'true') agregarInicioBtn.style.display = 'inline-flex';
+  });
+  agregarInicioBtn.addEventListener('click', async () => {
+    if (!promptDeInstalacion) return;
+    promptDeInstalacion.prompt();
+    await promptDeInstalacion.userChoice;
+    promptDeInstalacion = null;
+    agregarInicioBtn.style.display = 'none';
+  });
+
+  function activarAccesoDirecto(codigo, nombre) {
+    const manifestLink = document.getElementById('appManifestLink');
+    const appleTitleMeta = document.getElementById('appleTitleMeta');
+    const params = new URLSearchParams();
+    if (codigo) params.set('codigo', codigo);
+    if (nombre) params.set('nombre', nombre);
+    manifestLink.href = `/manifest.json?${params.toString()}`;
+    appleTitleMeta.setAttribute('content', nombre ? `Los recuerdos de ${nombre}` : 'Los recuerdos de mis viejos');
+    agregarInicioBtn.dataset.modoNarrador = 'true';
+    if (promptDeInstalacion) { agregarInicioBtn.style.display = 'inline-flex'; return; }
+    // iOS Safari no tiene ningún evento/API para disparar el cartel de
+    // instalación solo — la única forma es que la persona lo haga a mano
+    // desde el botón de Compartir. Se detecta por user-agent (no hay
+    // feature-detection real para esto) y se muestra la instrucción en vez
+    // del botón, que ahí no serviría de nada.
+    const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    if (esIOS && !window.navigator.standalone) {
+      agregarInicioTexto.textContent = 'Para guardar esta charla en tu pantalla de inicio: toca compartir ⬆️ y luego "Agregar a pantalla de inicio".';
+      agregarInicioTexto.style.display = 'block';
+    }
+  }
+
+  function aplicarSesionSubperfil(data) {
+    if (data.isGuest && data.isNarradorLink) {
+      if (colaborarNavItem) colaborarNavItem.style.display = 'none';
+      if (cuentaNavItem) cuentaNavItem.style.display = 'none';
+      greetingName.textContent = data.guestName || data.bitacoraNombre || '';
+      subperfilBanner.hidden = true;
+      orbZone.style.display = '';
+      activarAccesoDirecto(codigoNarradorUrl, data.bitacoraNombre);
+      return;
+    }
+    window.bitacoraActivaId = data.bitacoraActiva ? data.bitacoraActiva.id : null;
+    if (data.bitacoraActiva) {
+      subperfilBannerTexto.textContent = `Viendo la bitácora de ${data.bitacoraActiva.nombre || 'esa persona'} — puedes ver y pagar, pero no narrar en su nombre.`;
+      subperfilBanner.hidden = false;
+      orbZone.style.display = 'none';
+    } else {
+      subperfilBanner.hidden = true;
+      orbZone.style.display = '';
+    }
+  }
+
+  const narradorScreen = document.getElementById('narradorScreen');
+  const narradorBitacoraLine = document.getElementById('narradorBitacoraLine');
+  const narradorName = document.getElementById('narradorName');
+  const narradorStartBtn = document.getElementById('narradorStartBtn');
+  const narradorError = document.getElementById('narradorError');
+  const codigoNarradorUrl = new URLSearchParams(location.search).get('codigo');
+
+  function showNarradorScreen(bitacoraNombre) {
+    checkingScreen.style.display = 'none';
+    loginScreen.style.display = 'none';
+    appContent.style.display = 'none';
+    narradorScreen.style.display = 'flex';
+    if (bitacoraNombre) narradorBitacoraLine.textContent = `Vas a contar tus historias para la bitácora de ${bitacoraNombre}.`;
+    narradorName.focus();
+  }
+
+  async function doNarradorStart() {
+    const nombre = narradorName.value.trim();
+    if (!nombre) { narradorError.textContent = 'Falta tu nombre.'; return; }
+    narradorStartBtn.disabled = true;
+    narradorError.textContent = '';
+    try {
+      const resp = await fetch('/api/narrador-start', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codigo: codigoNarradorUrl, name: nombre }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) { narradorError.textContent = data.error || 'No se pudo entrar.'; narradorStartBtn.disabled = false; return; }
+      // El ?codigo= ya cumplió su función (quedó guardado en la cookie de
+      // sesión) — se saca de la URL antes de recargar para que un refresh
+      // normal no dependa de que siga ahí.
+      history.replaceState(null, '', location.pathname);
+      window.location.reload();
+    } catch (e) {
+      narradorError.textContent = 'No se pudo conectar. Intenta de nuevo.';
+      narradorStartBtn.disabled = false;
+    }
+  }
+  narradorStartBtn.addEventListener('click', doNarradorStart);
+  narradorName.addEventListener('keydown', (e) => { if (e.key === 'Enter') doNarradorStart(); });
+
   fetch('/api/me')
     .then((resp) => (resp.ok ? resp.json() : Promise.reject()))
     .then((data) => {
-      // Las cuentas colaboradoras (se unieron con un código de familia) no
-      // tienen esta app — solo aportan historias y le preguntan a la
-      // bitácora de quien las invitó.
+      // Las cuentas colaboradoras clásicas (se unieron con un código de
+      // familia) no tienen esta app — solo aportan historias y le
+      // preguntan a la bitácora de quien las invitó. El narrador de un
+      // subperfil (isNarradorLink) es un invitado DISTINTO: sí se queda
+      // acá, narrando su propia bitácora (ver aplicarSesionSubperfil).
       if (data.isCollaborator) { window.location.href = '/colaborar.html'; return; }
       showApp(data.username, data.name, data.email, data.fechaNacimiento);
+      aplicarSesionSubperfil(data);
     })
-    .catch(() => showLogin());
+    .catch(() => {
+      if (codigoNarradorUrl) {
+        fetch(`/api/narrador-code-info?codigo=${encodeURIComponent(codigoNarradorUrl)}`)
+          .then((resp) => (resp.ok ? resp.json() : Promise.reject()))
+          .then((data) => showNarradorScreen(data.bitacoraNombre))
+          .catch(() => showNarradorScreen(null));
+        return;
+      }
+      showLogin();
+    });
 })();
 </script>
 
