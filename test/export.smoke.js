@@ -73,9 +73,17 @@ function fakeSql(strings, ...values) {
     const u = users[values[0]];
     return Promise.resolve(u ? [{ owner_user_id: u.owner_user_id, token_version: u.token_version }] : []);
   }
-  if (text.includes('SELECT name, username, email, fecha_nacimiento, created_at FROM users WHERE id')) {
+  // Perfil de la bitácora activa (leerPerfilBitacora, BACKLOG #12): para la
+  // bitácora propia, el nombre/fecha/created_at salen de "users".
+  if (text.includes('SELECT name AS nombre, fecha_nacimiento, created_at FROM users WHERE id')) {
     const u = users[values[0]];
-    return Promise.resolve(u ? [{ name: u.name, username: u.username, email: u.email, fecha_nacimiento: u.fecha_nacimiento, created_at: u.created_at }] : []);
+    return Promise.resolve(u ? [{ nombre: u.name, fecha_nacimiento: u.fecha_nacimiento, created_at: u.created_at }] : []);
+  }
+  // Datos de la CUENTA (no de la bitácora) que /api/export suma aparte —
+  // username/email, que un subperfil (bitacoras) no tiene.
+  if (text.includes('SELECT username, email FROM users WHERE id')) {
+    const u = users[values[0]];
+    return Promise.resolve(u ? [{ username: u.username, email: u.email }] : []);
   }
   if (text.includes('SELECT id, texto, audio_url, created_at FROM story_log')) {
     return Promise.resolve(storyLog[values[0]] || []);

@@ -7,6 +7,18 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/images/favicon-192.png">
 <link rel="apple-touch-icon" href="/images/favicon-192.png">
+<!-- BACKLOG #12: para que el enlace permanente de un subperfil se pueda
+     "agregar a la pantalla de inicio" con ícono y nombre propios (en vez de
+     abrir siempre como una pestaña más del navegador) — apple-mobile-web-
+     app-* es lo que usa iOS Safari (no tiene API para dispararlo solo, la
+     persona lo hace a mano desde Compartir); el manifest dinámico
+     (/api/manifest.json, ver server.js) es lo que usa Android/Chrome para el
+     cartel de "Instalar". Sin ?codigo=, /api/manifest.json devuelve el genérico
+     de la app entera — agregarlo acá de forma fija no rompe nada para quien
+     nunca use un enlace de subperfil. -->
+<link rel="manifest" href="/api/manifest.json" id="appManifestLink">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Los recuerdos de mis viejos" id="appleTitleMeta">
 <!-- Fuentes autoalojadas (ronda 2 del camino a CSP en enforce, 2026-09-06):
      antes venían de fonts.googleapis.com/fonts.gstatic.com, lo que además
      de la violación de CSP (font-src 'self') mandaba la IP de cada visita
@@ -197,6 +209,29 @@
      especificidad a .login (clase) y lo mantiene oculto hasta que ese
      fetch resuelve — ni el login ni la app se ven de más. */
   #loginScreen { display: none; }
+  #narradorScreen { display: none; }
+  .acceso-directo-row {
+    width: 100%; max-width: 900px; margin: 0 auto 8px; box-sizing: border-box;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  #agregarInicioBtn { display: none; flex-shrink: 0; }
+  #agregarInicioTexto { display: none; margin: 0; font-size: 0.78rem; flex: 1; min-width: 0; }
+  /* #subperfilBanner (id, no la clase) empieza oculto -- mismo motivo que
+     #loginScreen/#narradorScreen más arriba: una clase con "display:flex"
+     le sigue ganando al atributo hidden (misma especificidad que un
+     selector de clase, y el estilo de autor siempre le gana al default del
+     navegador para [hidden]) — por eso el aviso de "no puedes narrar en su
+     nombre" quedaba visible de más para el narrador de un subperfil, que sí
+     puede narrar. Se togglea con .style.display, no con .hidden. */
+  #subperfilBanner { display: none; }
+  .subperfil-banner {
+    width: min(420px, 100%); background: #FBF6EA; border: 1px solid #E7DFCC; border-radius: 20px;
+    padding: 22px; text-align: center; flex-direction: column; align-items: center; gap: 12px;
+  }
+  .subperfil-banner p { margin: 0; color: var(--ink); font-size: 0.95rem; }
+  .perfil-fila { border-bottom: 1px solid #E7DFCC; padding: 8px 0; }
+  .perfil-wa-btn { display: inline-block; width: auto; }
+  .perfil-enlace-texto { word-break: break-all; }
   /* #checkingScreen: se ve DESDE el primer frame (a diferencia de login y
      app, que arrancan ocultos) y es lo único visible mientras se espera la
      respuesta de fetch('/api/me'). Sin esto la página quedaba en blanco
@@ -319,10 +354,11 @@
      Safari hace zoom automático al enfocar el campo (nombre, correo,
      fecha de nacimiento, cambio de clave, confirmar clave para
      reiniciar/borrar la cuenta — todos pasan por esta regla). */
-  .user-menu-panel input, .user-menu-panel select {
+  .user-menu-panel input, .user-menu-panel select, .user-menu-panel textarea {
     width: 100%; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 10px;
     font-family: var(--font-body); background: #fff; color: var(--ink); font-size: 1rem; margin-bottom: 8px;
   }
+  .user-menu-panel textarea { resize: vertical; min-height: 60px; box-sizing: border-box; }
   /* min-height:44px + flex (en vez de block): quedaba en ~35px de alto —
      el texto centrado horizontal ya estaba, pero faltaba alto real. */
   .user-menu-panel .um-btn {
@@ -564,6 +600,24 @@
     <p class="sub pc-53425f7d">¿No tienes cuenta? <a class="pc-07135648" href="/">Crea una</a>.</p>
   </div>
 
+  <!-- BACKLOG #12: entrada del narrador de un subperfil — llega con
+       ?codigo=XXXXXXXX (link permanente compartido desde el panel de Cuenta
+       de quien administra el subperfil). Sin cuenta, sin clave, solo el
+       nombre — mismo patrón que #guestScreen en colaborar.html, pero esto
+       narra SU PROPIA bitácora (ver /api/narrador-start), no un aporte a
+       la de otro. -->
+  <div class="login" id="narradorScreen">
+    <h1>Los recuerdos de mis viejos</h1>
+    <p class="sub" id="narradorBitacoraLine">Vas a contar tus historias acá.</p>
+    <div class="login-field">
+      <label for="narradorName">Tu nombre</label>
+      <input type="text" id="narradorName" placeholder="¿Cómo te llamas?" autocomplete="given-name" maxlength="60">
+    </div>
+    <button id="narradorStartBtn" type="button">Empezar</button>
+    <p class="error" id="narradorError" role="alert"></p>
+    <p class="sub pc-53425f7d">No hace falta crear cuenta ni clave — solo tu nombre.</p>
+  </div>
+
   <div id="appContent">
    <!-- Mismo patrón que la landing (public/index.html): invisible hasta que
         se navega con Tab, para no obligar a pasar por el saludo y los 5
@@ -596,6 +650,22 @@
              <button class="um-btn" id="umFontIncBtn" type="button" aria-label="Agrandar la letra">A+</button>
            </div>
            <p class="um-hint">Cambia el tamaño de la letra en toda la app — se recuerda la próxima vez que entres.</p>
+         </div>
+
+         <!-- BACKLOG #12: subperfiles — varias bitácoras (ej. la de tu papá,
+              la de tu mamá) administradas desde este mismo login, estilo
+              selector de perfiles. Podés verlas/pagarlas, pero no narrar en
+              su nombre — para eso existe el link permanente de cada una. -->
+         <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecPerfiles">Perfiles <span class="um-chevron" aria-hidden="true">›</span></button>
+         <div class="um-section-body" id="umSecPerfiles" hidden>
+           <p class="um-msg" id="umPerfilesLista">Cargando…</p>
+           <div class="um-fontsize-row">
+             <input type="text" id="umNuevoSubperfilNombre" placeholder="Nombre (ej: Papá)" maxlength="100" aria-label="Nombre de la persona">
+           </div>
+           <input type="date" id="umNuevoSubperfilFecha" aria-label="Fecha de nacimiento (opcional)">
+           <button class="um-btn" id="umCrearSubperfilBtn" type="button">+ Agregar bitácora de otra persona</button>
+           <p class="um-msg" id="umPerfilesMsg" role="status" aria-live="polite" aria-atomic="true"></p>
+           <p class="um-hint">La persona que administras no necesita usuario ni clave — le compartes un enlace permanente para que cuente sus propias historias, sin crear cuenta.</p>
          </div>
 
          <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecVoz">Voz <span class="um-chevron" aria-hidden="true">›</span></button>
@@ -644,8 +714,16 @@
            <div class="pc-cb458930" id="umPlanOpciones">
              <button class="um-btn" id="umPlanPersonalBtn" type="button">Legado personal — $399.000/año</button>
              <button class="um-btn" id="umPlanFamiliarBtn" type="button">Legado familiar — $649.000/año</button>
-             <button class="um-btn um-plain" id="umPlanRegalarBtn" type="button">🎁 Comprar un regalo para otra persona — $449.000</button>
+             <button class="um-btn um-plain" id="umPlanRegalarBtn" type="button" aria-expanded="false" aria-controls="umRegaloDetalles">🎁 Comprar un regalo para otra persona — $449.000</button>
              <p class="um-hint">Te lleva a una página de pago segura de Wava — tarjeta, Nequi, Daviplata o Bre-B.</p>
+           </div>
+           <div id="umRegaloDetalles" hidden>
+             <label class="um-field-label" for="umRegaloFecha">¿Cuándo quieres que llegue el código? (opcional)</label>
+             <input type="date" id="umRegaloFecha" aria-label="Fecha para recibir el código del regalo">
+             <p class="um-hint">Si lo dejas vacío, te llega por correo ya mismo, apenas se confirme el pago.</p>
+             <label class="um-field-label" for="umRegaloNota">Un mensaje para acompañarlo (opcional)</label>
+             <textarea id="umRegaloNota" maxlength="300" rows="3" placeholder="Ej: Para que sigas contando tus historias, papá..."></textarea>
+             <button class="um-btn" id="umRegaloConfirmarBtn" type="button">Continuar al pago →</button>
            </div>
            <p class="um-msg" id="umPlanMsg" role="status" aria-live="polite" aria-atomic="true"></p>
 
@@ -694,6 +772,17 @@
          </div>
        </div>
      </div>
+   </div>
+   <!-- BACKLOG #12: solo se muestra para quien entró con el enlace
+        permanente de un subperfil (sin cuenta) — ver aplicarSesionSubperfil.
+        Deja instalar esta charla como un ícono propio en la pantalla de
+        inicio, para no depender de encontrar el link de nuevo. Fuera de
+        .greeting-bar (no adentro): esa barra es una fila flex angosta
+        pensada solo para logo+saludo+cuenta — meter acá un texto largo la
+        rompía entera, empujando el saludo a una columna angosta. -->
+   <div class="acceso-directo-row" id="accesoDirectoRow">
+     <button class="icon-btn" id="agregarInicioBtn" type="button" title="Agregar a la pantalla de inicio">➕📱</button>
+     <p class="sub" id="agregarInicioTexto"></p>
    </div>
    </header>
    <!-- <nav>, no <div>: son los enlaces a las otras secciones de la
@@ -750,7 +839,16 @@
           <video id="mediaMomentoVideo" controls hidden></video>
           <iframe id="mediaMomentoCancion" title="Canción que compartió tu familia" allow="encrypted-media; fullscreen" loading="lazy" hidden></iframe>
         </div>
-        <div class="orb-zone">
+        <!-- BACKLOG #12: se ve en vez del orbe cuando cambiaste a un
+             subperfil que administras — podés ver/pagar esa bitácora, pero
+             no narrar en su nombre (ver bloquearSiNoPuedeNarrar en el
+             servidor); esto es solo para que no llegues a tocar el orbe y
+             te encuentres con un error confuso. -->
+        <div class="subperfil-banner" id="subperfilBanner">
+          <p id="subperfilBannerTexto"></p>
+          <button class="write-toggle" id="subperfilVolverBtn" type="button">Volver a mi bitácora</button>
+        </div>
+        <div class="orb-zone" id="orbZone">
           <button class="orb" id="orb" data-state="idle" aria-label="Presionar para comenzar la charla">
             <span id="orbLabel">Presiona<br>para hablar</span>
           </button>
@@ -763,6 +861,12 @@
           <div class="state-label" id="stateLabel" role="status" aria-live="polite" aria-atomic="true"></div>
           <button class="write-toggle end-toggle pc-93b8ea5b" id="endBtn" type="button">terminar la charla</button>
           <button class="write-toggle" id="treeModeBtn" type="button">armar árbol genealógico</button>
+          <button class="write-toggle pc-93b8ea5b" id="subirFotoBtn" type="button">📷 agregar una foto o video de esta historia</button>
+          <input class="pc-93b8ea5b" type="file" id="subirFotoInput" accept="image/*,video/*">
+          <div class="write-row" id="fotoCaptionRow">
+            <input type="text" id="fotoCaptionInput" placeholder="¿Quién aparece? (opcional)" aria-label="Descripción de la foto o video">
+            <button id="fotoCaptionSend" type="button">Subir</button>
+          </div>
           <!-- Oculto a pedido: el botón manual "prefiero escribir" ya no se
                muestra. El cuadro para escribir (writeRow) sigue apareciendo
                solo, automáticamente, cuando el micrófono falla o no se
@@ -1136,6 +1240,162 @@
     window.location.href = '/';
   });
 
+  // --- Subperfiles (BACKLOG #12) ------------------------------------
+  const umPerfilesLista = document.getElementById('umPerfilesLista');
+  const umPerfilesMsg = document.getElementById('umPerfilesMsg');
+  const umNuevoSubperfilNombre = document.getElementById('umNuevoSubperfilNombre');
+  const umNuevoSubperfilFecha = document.getElementById('umNuevoSubperfilFecha');
+  const umCrearSubperfilBtn = document.getElementById('umCrearSubperfilBtn');
+  let umPerfilesCargados = false;
+  // id (número) del subperfil cuyo enlace está desplegado ahora mismo, o
+  // null — para no tener que guardar un <div> por cada uno.
+  let umNarradorLinkAbierto = null;
+
+  function filaPerfil(p) {
+    const esActivo = p.esPropia ? !window.bitacoraActivaId : window.bitacoraActivaId === p.id;
+    const cambiarBtn = esActivo
+      ? `<span class="um-hint">(perfil activo)</span>`
+      : `<button class="um-btn" data-cambiar="${p.id}" type="button">Cambiar acá</button>`;
+    const enlaceBtn = p.esPropia ? '' : `<button class="um-btn um-plain" data-enlace="${p.id}" type="button">Compartir enlace para narrar</button>`;
+    const enlaceBox = umNarradorLinkAbierto === p.id ? `<div class="um-fontsize-row" id="umEnlaceBox-${p.id}"><span class="um-msg" id="umEnlaceTexto-${p.id}">Cargando…</span></div>` : '';
+    return `<div class="perfil-fila">
+      <strong>${p.nombre || '(sin nombre)'}</strong> ${cambiarBtn}
+      ${enlaceBtn}
+      ${enlaceBox}
+    </div>`;
+  }
+
+  async function pintarPerfiles() {
+    try {
+      const resp = await fetch('/api/subprofiles');
+      const data = await resp.json();
+      if (!resp.ok) { umPerfilesLista.textContent = data.error || 'No se pudieron cargar tus perfiles.'; return; }
+      umPerfilesLista.innerHTML = data.perfiles.map(filaPerfil).join('');
+    } catch (e) {
+      umPerfilesLista.textContent = 'No se pudieron cargar tus perfiles.';
+    }
+  }
+
+  async function cargarPerfiles() {
+    if (umPerfilesCargados) return;
+    umPerfilesCargados = true;
+    await pintarPerfiles();
+  }
+
+  umCrearSubperfilBtn.addEventListener('click', async () => {
+    const nombre = umNuevoSubperfilNombre.value.trim();
+    if (!nombre) { umPerfilesMsg.textContent = 'Falta el nombre.'; return; }
+    umCrearSubperfilBtn.disabled = true;
+    umPerfilesMsg.textContent = '';
+    try {
+      const resp = await fetch('/api/subprofiles', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre, fechaNacimiento: umNuevoSubperfilFecha.value || null }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) { umPerfilesMsg.textContent = data.error || 'No se pudo crear el subperfil.'; return; }
+      umNuevoSubperfilNombre.value = '';
+      umNuevoSubperfilFecha.value = '';
+      umPerfilesMsg.textContent = `✓ Se creó la bitácora de ${data.nombre}.`;
+      // Deja el enlace ya abierto y cargado — sin esto, había que ubicar la
+      // fila recién creada y tocar "Compartir enlace" aparte para poder
+      // copiarlo y probarlo (por ejemplo, abrirlo en una ventana de
+      // incógnito para simular al narrador).
+      umNarradorLinkAbierto = data.id;
+      await pintarPerfiles();
+      await cargarYMostrarEnlace(data.id);
+    } catch (e) {
+      umPerfilesMsg.textContent = 'No se pudo conectar. Intenta de nuevo.';
+    } finally {
+      umCrearSubperfilBtn.disabled = false;
+    }
+  });
+
+  // Un solo listener con delegación (en vez de uno por fila) — las filas se
+  // reemplazan enteras cada vez que se repinta la lista.
+  umPerfilesLista.addEventListener('click', async (e) => {
+    const cambiarId = e.target.dataset.cambiar;
+    if (cambiarId) {
+      try {
+        const resp = await fetch('/api/subprofiles/switch', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: Number(cambiarId) }),
+        });
+        if (!resp.ok) { umPerfilesMsg.textContent = 'No se pudo cambiar de perfil.'; return; }
+        // Recarga entera: cada sección de la app (árbol, capítulos,
+        // historias, la charla misma) lee la bitácora activa de la cookie —
+        // más simple y confiable que invalidar cada pedacito por separado.
+        window.location.href = '/app.html';
+      } catch (e2) {
+        umPerfilesMsg.textContent = 'No se pudo conectar. Intenta de nuevo.';
+      }
+      return;
+    }
+    const enlaceId = Number(e.target.dataset.enlace);
+    if (enlaceId) {
+      umNarradorLinkAbierto = umNarradorLinkAbierto === enlaceId ? null : enlaceId;
+      await pintarPerfiles();
+      if (umNarradorLinkAbierto === enlaceId) await cargarYMostrarEnlace(enlaceId);
+      return;
+    }
+    const linkACopiar = e.target.dataset.copiarLink;
+    if (linkACopiar) {
+      try {
+        await navigator.clipboard.writeText(linkACopiar);
+        const textoOriginal = e.target.textContent;
+        e.target.textContent = 'copiado ✓';
+        setTimeout(() => { e.target.textContent = textoOriginal; }, 1800);
+      } catch (e5) {}
+      return;
+    }
+    const regenId = Number(e.target.dataset.regenerar);
+    if (regenId) {
+      if (!confirm('¿Generar un enlace nuevo? El que ya compartiste deja de servir.')) return;
+      try {
+        const resp = await fetch(`/api/subprofiles/${regenId}/narrador-link/regenerate`, { method: 'POST' });
+        const data = await resp.json();
+        if (resp.ok) await mostrarEnlace(regenId, data.code);
+      } catch (e3) {}
+      return;
+    }
+    const revokId = Number(e.target.dataset.revocar);
+    if (revokId) {
+      if (!confirm('¿Quitarle el acceso a ese enlace? Podrás generar uno nuevo cuando quieras.')) return;
+      try {
+        await fetch(`/api/subprofiles/${revokId}/narrador-link/revoke`, { method: 'POST' });
+        umNarradorLinkAbierto = null;
+        await pintarPerfiles();
+      } catch (e4) {}
+      return;
+    }
+  });
+
+  function mostrarEnlace(id, code) {
+    const box = document.getElementById(`umEnlaceTexto-${id}`);
+    if (!box) return;
+    const link = `${location.origin}/app.html?codigo=${encodeURIComponent(code)}`;
+    const mensaje = `Con este enlace puedes contar tus historias sin necesitar usuario ni clave — entra acá y guárdalo en tu celular: ${link}`;
+    const wa = `https://wa.me/?text=${encodeURIComponent(mensaje)}`;
+    // data-link (no data-copiar="id"): el link cambia si se regenera el
+    // código, así que conviene que el botón lleve el valor ya armado
+    // encima, en vez de tener que rearmarlo a partir del id en el momento
+    // del click.
+    box.innerHTML = `<p class="um-hint perfil-enlace-texto">${link}</p>
+      <button class="um-btn" type="button" data-copiar-link="${link.replace(/"/g, '&quot;')}">Copiar enlace</button>
+      <a href="${wa}" target="_blank" rel="noopener" class="um-btn perfil-wa-btn">Compartir por WhatsApp</a>
+      <button class="um-btn um-plain" type="button" data-regenerar="${id}">Generar uno nuevo</button>
+      <button class="um-btn um-plain" type="button" data-revocar="${id}">Quitar acceso</button>`;
+  }
+
+  async function cargarYMostrarEnlace(id) {
+    try {
+      const resp = await fetch(`/api/subprofiles/${id}/narrador-link`);
+      const data = await resp.json();
+      if (resp.ok) mostrarEnlace(id, data.code);
+    } catch (e) {}
+  }
+
+  document.querySelector('[aria-controls="umSecPerfiles"]').addEventListener('click', cargarPerfiles);
+
   // --- Plan y pagos ---
   const umPlanEstado = document.getElementById('umPlanEstado');
   const umPlanOpciones = document.getElementById('umPlanOpciones');
@@ -1189,16 +1449,33 @@
   // Regalo: quien compra acá no tiene por qué ser quien narra — el link de
   // pago es el mismo, pero el código que llega después por correo se
   // canjea desde CUALQUIER cuenta (ver umRegaloCanjearBtn más abajo), no
-  // necesariamente esta.
-  document.getElementById('umPlanRegalarBtn').addEventListener('click', async () => {
+  // necesariamente esta. El botón principal solo despliega los detalles
+  // (fecha de envío + mensaje); el pago se dispara recién desde
+  // umRegaloConfirmarBtn, ya con esos datos en mano.
+  const umPlanRegalarBtn = document.getElementById('umPlanRegalarBtn');
+  const umRegaloDetalles = document.getElementById('umRegaloDetalles');
+  const umRegaloFecha = document.getElementById('umRegaloFecha');
+  const umRegaloNota = document.getElementById('umRegaloNota');
+  umRegaloFecha.min = new Date().toISOString().slice(0, 10);
+  umPlanRegalarBtn.addEventListener('click', () => {
+    const abrir = umRegaloDetalles.hidden;
+    umRegaloDetalles.hidden = !abrir;
+    umPlanRegalarBtn.setAttribute('aria-expanded', String(abrir));
+  });
+  document.getElementById('umRegaloConfirmarBtn').addEventListener('click', async () => {
     umPlanMsg.textContent = 'Generando el link de pago…';
     try {
-      const resp = await fetch('/api/billing/gift-checkout', { method: 'POST' });
+      const resp = await fetch('/api/billing/gift-checkout', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sendOn: umRegaloFecha.value || null, message: umRegaloNota.value.trim() || null }),
+      });
       const data = await resp.json();
       if (!resp.ok) { umPlanMsg.textContent = data.error || 'No se pudo iniciar el pago.'; return; }
       if (data.dummy) {
         // Sin Wava conectada todavía: acá ya está el código, sin pasar por
-        // ningún link externo ni esperar un correo.
+        // ningún link externo. Si se programó una fecha futura, el correo
+        // todavía no se mandó (lo manda el cron cuando llegue el día) — el
+        // código igual se muestra acá para poder probar el resto del flujo.
         umPlanMsg.textContent = `(Modo de prueba) Código de regalo: ${data.code} — cánjealo desde la cuenta que va a narrar (Cuenta → Plan → Canjear un regalo).`;
         return;
       }
@@ -1463,16 +1740,187 @@
     }
   });
 
+  // BACKLOG #12 (subperfiles): dos casos nuevos, además de "cuenta dueña
+  // normal" y "colaboradora clásica" (ambos ya cubiertos arriba):
+  // - isNarradorLink: entró con el enlace permanente de un subperfil — ve
+  //   la misma pantalla de charla, pero sin nada de Cuenta/facturación (no
+  //   tiene una cuenta detrás) ni el ícono "Colaborar" (no aplica sin cuenta).
+  // - bitacoraActiva: la cuenta que loguea cambió a un subperfil que
+  //   administra — ve/exporta esa bitácora, pero no puede narrar (el orbe
+  //   se reemplaza por un aviso, ver subperfilBanner).
+  const orbZone = document.getElementById('orbZone');
+  const subperfilBanner = document.getElementById('subperfilBanner');
+  const subperfilBannerTexto = document.getElementById('subperfilBannerTexto');
+  const subperfilVolverBtn = document.getElementById('subperfilVolverBtn');
+  window.bitacoraActivaId = null;
+
+  subperfilVolverBtn.addEventListener('click', async () => {
+    try { await fetch('/api/subprofiles/switch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }); } catch (e) {}
+    window.location.href = '/app.html';
+  });
+
+  // --- Acceso directo a la pantalla de inicio (BACKLOG #12, pedido de
+  // Felipe) — solo tiene sentido para quien entró con el enlace permanente
+  // de un subperfil (sin cuenta, sin favoritos de navegador de por medio).
+  const agregarInicioBtn = document.getElementById('agregarInicioBtn');
+  const agregarInicioTexto = document.getElementById('agregarInicioTexto');
+  let promptDeInstalacion = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    promptDeInstalacion = e;
+    // Este evento es de Chrome/Android y NO es confiable: depende de sus
+    // propios criterios internos (a veces tarda, a veces no llega nunca en
+    // esta sesión) — cuando SÍ llega, el botón de un solo toque es mejor
+    // que la instrucción manual, así que la reemplaza.
+    if (agregarInicioBtn.dataset.modoNarrador === 'true') {
+      agregarInicioBtn.style.display = 'inline-flex';
+      agregarInicioTexto.style.display = 'none';
+    }
+  });
+  agregarInicioBtn.addEventListener('click', async () => {
+    if (!promptDeInstalacion) return;
+    promptDeInstalacion.prompt();
+    await promptDeInstalacion.userChoice;
+    promptDeInstalacion = null;
+    agregarInicioBtn.style.display = 'none';
+  });
+
+  function activarAccesoDirecto(codigo, nombre) {
+    const manifestLink = document.getElementById('appManifestLink');
+    const appleTitleMeta = document.getElementById('appleTitleMeta');
+    const params = new URLSearchParams();
+    if (codigo) params.set('codigo', codigo);
+    if (nombre) params.set('nombre', nombre);
+    manifestLink.href = `/api/manifest.json?${params.toString()}`;
+    appleTitleMeta.setAttribute('content', nombre ? `Los recuerdos de ${nombre}` : 'Los recuerdos de mis viejos');
+    agregarInicioBtn.dataset.modoNarrador = 'true';
+    // Si ya se está usando instalada (agregada antes), no hace falta
+    // ofrecer nada de esto de nuevo.
+    const yaInstalada = window.navigator.standalone || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+    if (yaInstalada) return;
+    if (promptDeInstalacion) { agregarInicioBtn.style.display = 'inline-flex'; return; }
+    // beforeinstallprompt (Chrome/Android) es un evento poco confiable —
+    // depende de criterios internos del navegador y puede no llegar nunca
+    // en esta sesión, aunque el navegador sí soporte instalar la página.
+    // En vez de dejar todo esto vacío mientras se espera un evento que
+    // quizás nunca llegue, se muestra SIEMPRE la instrucción manual de
+    // una — si el evento llega más tarde, el listener de arriba la
+    // reemplaza por el botón de un solo toque. iOS Safari nunca dispara
+    // este evento (no tiene ninguna API para esto), así que ahí la
+    // instrucción manual es la única opción posible, siempre.
+    const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    agregarInicioTexto.textContent = esIOS
+      ? 'Para guardar esta charla en tu pantalla de inicio: toca compartir ⬆️ y luego "Agregar a pantalla de inicio".'
+      : 'Para guardar esta charla en tu pantalla de inicio: toca el menú ⋮ (arriba a la derecha) y elige "Agregar a pantalla de inicio" o "Instalar app".';
+    agregarInicioTexto.style.display = 'block';
+  }
+
+  function aplicarSesionSubperfil(data) {
+    // "Presiona el botón para empezar a charlar" vive en #greeting, en un
+    // <script> aparte (el que maneja el orbe) — no comparte variables con
+    // este, así que se agarra fresco acá en vez de duplicar esa constante.
+    const greetingBox = document.getElementById('greeting');
+    if (data.isGuest && data.isNarradorLink) {
+      // Pedido de Felipe (2026-09-07): el perfil del narrador se ve y
+      // funciona igual que uno normal — Colaborar (unirse a la historia de
+      // OTRA persona, ver unirseDesdeHub en colaborar.html) y Cuenta
+      // quedan visibles. Dentro de Cuenta, sí se ocultan las secciones que
+      // no tienen sentido sin una cuenta real detrás (nombre/correo/clave,
+      // facturación, recordatorios, administrar subperfiles, borrar/
+      // reiniciar la cuenta) — mostrarlas solo llevaría a un error al
+      // tocarlas. Tamaño de letra, Voz y Tu copia (exportar) sí funcionan
+      // igual que siempre.
+      ['umSecPerfiles', 'umSecPerfil', 'umSecClave', 'umSecPlan', 'umSecRecordatorios', 'umSecRiesgo'].forEach((controlId) => {
+        const toggle = document.querySelector(`[aria-controls="${controlId}"]`);
+        const body = document.getElementById(controlId);
+        if (toggle) toggle.style.display = 'none';
+        if (body) body.hidden = true;
+      });
+      greetingName.textContent = data.guestName || data.bitacoraNombre || '';
+      subperfilBanner.style.display = 'none';
+      orbZone.style.display = '';
+      if (greetingBox) greetingBox.style.display = '';
+      activarAccesoDirecto(codigoNarradorUrl, data.bitacoraNombre);
+      return;
+    }
+    window.bitacoraActivaId = data.bitacoraActiva ? data.bitacoraActiva.id : null;
+    if (data.bitacoraActiva) {
+      subperfilBannerTexto.textContent = `Viendo la bitácora de ${data.bitacoraActiva.nombre || 'esa persona'} — puedes ver y pagar, pero no narrar en su nombre.`;
+      subperfilBanner.style.display = 'flex';
+      orbZone.style.display = 'none';
+      // Sin esto, "Presiona el botón para empezar a charlar" quedaba
+      // visible arriba del aviso de "no puedes narrar en su nombre" —
+      // contradictorio, ya que el botón de hablar está oculto ahí abajo.
+      if (greetingBox) greetingBox.style.display = 'none';
+    } else {
+      subperfilBanner.style.display = 'none';
+      orbZone.style.display = '';
+      if (greetingBox) greetingBox.style.display = '';
+    }
+  }
+
+  const narradorScreen = document.getElementById('narradorScreen');
+  const narradorBitacoraLine = document.getElementById('narradorBitacoraLine');
+  const narradorName = document.getElementById('narradorName');
+  const narradorStartBtn = document.getElementById('narradorStartBtn');
+  const narradorError = document.getElementById('narradorError');
+  const codigoNarradorUrl = new URLSearchParams(location.search).get('codigo');
+
+  function showNarradorScreen(bitacoraNombre) {
+    checkingScreen.style.display = 'none';
+    loginScreen.style.display = 'none';
+    appContent.style.display = 'none';
+    narradorScreen.style.display = 'flex';
+    if (bitacoraNombre) narradorBitacoraLine.textContent = `Vas a contar tus historias para la bitácora de ${bitacoraNombre}.`;
+    narradorName.focus();
+  }
+
+  async function doNarradorStart() {
+    const nombre = narradorName.value.trim();
+    if (!nombre) { narradorError.textContent = 'Falta tu nombre.'; return; }
+    narradorStartBtn.disabled = true;
+    narradorError.textContent = '';
+    try {
+      const resp = await fetch('/api/narrador-start', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codigo: codigoNarradorUrl, name: nombre }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) { narradorError.textContent = data.error || 'No se pudo entrar.'; narradorStartBtn.disabled = false; return; }
+      // El ?codigo= ya cumplió su función (quedó guardado en la cookie de
+      // sesión) — se saca de la URL antes de recargar para que un refresh
+      // normal no dependa de que siga ahí.
+      history.replaceState(null, '', location.pathname);
+      window.location.reload();
+    } catch (e) {
+      narradorError.textContent = 'No se pudo conectar. Intenta de nuevo.';
+      narradorStartBtn.disabled = false;
+    }
+  }
+  narradorStartBtn.addEventListener('click', doNarradorStart);
+  narradorName.addEventListener('keydown', (e) => { if (e.key === 'Enter') doNarradorStart(); });
+
   fetch('/api/me')
     .then((resp) => (resp.ok ? resp.json() : Promise.reject()))
     .then((data) => {
-      // Las cuentas colaboradoras (se unieron con un código de familia) no
-      // tienen esta app — solo aportan historias y le preguntan a la
-      // bitácora de quien las invitó.
+      // Las cuentas colaboradoras clásicas (se unieron con un código de
+      // familia) no tienen esta app — solo aportan historias y le
+      // preguntan a la bitácora de quien las invitó. El narrador de un
+      // subperfil (isNarradorLink) es un invitado DISTINTO: sí se queda
+      // acá, narrando su propia bitácora (ver aplicarSesionSubperfil).
       if (data.isCollaborator) { window.location.href = '/colaborar.html'; return; }
       showApp(data.username, data.name, data.email, data.fechaNacimiento);
+      aplicarSesionSubperfil(data);
     })
-    .catch(() => showLogin());
+    .catch(() => {
+      if (codigoNarradorUrl) {
+        fetch(`/api/narrador-code-info?codigo=${encodeURIComponent(codigoNarradorUrl)}`)
+          .then((resp) => (resp.ok ? resp.json() : Promise.reject()))
+          .then((data) => showNarradorScreen(data.bitacoraNombre))
+          .catch(() => showNarradorScreen(null));
+        return;
+      }
+      showLogin();
+    });
 })();
 </script>
 
@@ -1493,9 +1941,20 @@
   const voiceSelect = document.getElementById('voiceSelect');
   const endBtn = document.getElementById('endBtn');
   const treeModeBtn = document.getElementById('treeModeBtn');
+  const subirFotoBtn = document.getElementById('subirFotoBtn');
+  const subirFotoInput = document.getElementById('subirFotoInput');
+  const fotoCaptionRow = document.getElementById('fotoCaptionRow');
+  const fotoCaptionInput = document.getElementById('fotoCaptionInput');
+  const fotoCaptionSend = document.getElementById('fotoCaptionSend');
 
   let history = [];       // lo que se le manda a Claude (solo role/content)
   let sessionLog = [];    // lo que se guarda en la bitácora (incluye audio)
+  // Fotos/video agregados para la respuesta que se está por guardar — se
+  // manda con el turno actual (ver fetchNext) y se vacía después, porque acá
+  // cada turno es una historia distinta (a diferencia de colaborar.html,
+  // donde toda una charla arma UNA sola historia).
+  let mediaUrlsLocal = [];
+  let subidaFotoEnCurso = null; // ver el comentario igual en colaborar.html
   let sessionKey = null;  // carpeta de audio de esta charla
   let currentSessionDbId = null;  // fila de "sessions" de esta charla, para actualizar en vez de duplicar
   let sessionMode = 'historia';  // 'historia' (charla normal) o 'arbol' (armar árbol genealógico)
@@ -1712,6 +2171,7 @@
     orb.setAttribute('aria-label', orbHint);
     endBtn.style.display = resting ? 'none' : 'inline';
     treeModeBtn.style.display = resting ? 'inline' : 'none';
+    subirFotoBtn.style.display = (resting || sessionMode === 'arbol') ? 'none' : 'inline';
   }
 
   function speakWithSystemVoice(text, onEnd) {
@@ -2000,9 +2460,16 @@
 
   async function fetchNext() {
     const mySession = sessionId;
+    // Ver el comentario junto a subidaFotoEnCurso: si hay una foto
+    // subiéndose todavía, esperamos a que termine antes de armar este
+    // turno — así mediaUrlsLocal ya la tiene adentro.
+    if (subidaFotoEnCurso) { try { await subidaFotoEnCurso; } catch (e) {} }
+    if (mySession !== sessionId) return;
     setState('thinking', 'Pensando…');
     orbLabel.innerHTML = '···';
     try {
+      const mediaUrls = mediaUrlsLocal;
+      mediaUrlsLocal = []; // las fotos de este turno ya se van a mandar; el próximo empieza vacío
       const lastEntry = sessionLog.length ? sessionLog[sessionLog.length - 1] : null;
       const lastAudioUrl = lastEntry && lastEntry.role === 'user' ? lastEntry.audioFile || null : null;
       // Si el turno anterior ofreció la pausa, este turno tiene que avisarle
@@ -2024,7 +2491,7 @@
       const resp = await fetch('/api/next', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ history, lastAudioUrl, mode: sessionMode, ofrecerPausa, interpretarRespuestaPausa }),
+        body: JSON.stringify({ history, lastAudioUrl, mode: sessionMode, ofrecerPausa, interpretarRespuestaPausa, mediaUrls }),
       });
       if (mySession !== sessionId) return;
       if (!resp.ok) {
@@ -2262,6 +2729,8 @@
     currentSessionDbId = null;
     greeting.style.display = 'none';
     mostrarMediaMomento(null);
+    mediaUrlsLocal = [];
+    fotoCaptionRow.classList.remove('visible');
     history = [];
     sessionLog = [];
     turnIndex = 0;
@@ -2319,6 +2788,61 @@
   if (!window.MediaRecorder || !navigator.mediaDevices) {
     writeToggle.textContent = 'escribir respuesta';
   }
+
+  // --- Agregar una foto o video a la historia que se está contando ---
+  // Mismo mecanismo que en colaborar.html (subirFotoPendiente/mediaUrlsLocal).
+  const MAX_MEDIA_FILE_BYTES = 4 * 1024 * 1024; // Vercel corta pedidos de más de ~4.5MB
+  let fotoPendiente = null;
+
+  subirFotoBtn.addEventListener('click', () => subirFotoInput.click());
+
+  subirFotoInput.addEventListener('change', () => {
+    const file = subirFotoInput.files[0];
+    subirFotoInput.value = '';
+    if (!file) return;
+    if (file.size > MAX_MEDIA_FILE_BYTES) {
+      stateLabel.textContent = 'El archivo pesa más de 4MB — prueba con uno más liviano por ahora.';
+      return;
+    }
+    fotoPendiente = file;
+    fotoCaptionInput.value = '';
+    fotoCaptionRow.classList.add('visible');
+    fotoCaptionInput.focus();
+  });
+
+  function subirFotoPendiente() {
+    if (!fotoPendiente) return;
+    const file = fotoPendiente;
+    const caption = fotoCaptionInput.value.trim();
+    fotoPendiente = null;
+    fotoCaptionRow.classList.remove('visible');
+    subirFotoBtn.disabled = true;
+    stateLabel.textContent = 'Subiendo…';
+    const promesa = (async () => {
+      try {
+        const resp = await fetch('/api/contribute-media', {
+          method: 'POST',
+          headers: { 'Content-Type': file.type || 'application/octet-stream' },
+          body: file,
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.url) mediaUrlsLocal.push({ url: data.url, type: data.type, caption });
+          stateLabel.textContent = '✓ Se agregó a esta historia.';
+        } else {
+          stateLabel.textContent = 'No se pudo subir el archivo. Intenta de nuevo.';
+        }
+      } catch (e) {
+        stateLabel.textContent = 'Hubo un problema para conectar.';
+      }
+      subirFotoBtn.disabled = false;
+    })();
+    subidaFotoEnCurso = promesa;
+    promesa.then(() => { if (subidaFotoEnCurso === promesa) subidaFotoEnCurso = null; });
+    return promesa;
+  }
+  fotoCaptionSend.addEventListener('click', subirFotoPendiente);
+  fotoCaptionInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') subirFotoPendiente(); });
 
   // El árbol genealógico y la línea de tiempo ahora viven en /arbol.html
   // (se llega por el ícono 🌳 de arriba) — ya no hay un mini-árbol acá. Lo

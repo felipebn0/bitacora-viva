@@ -31,6 +31,7 @@ let nextSubId = 1;
 let billingOrders = {}; // order_key -> { id, subscription_id, user_id, status, monto_cop, ... }
 let nextOrderId = 1;
 let giftRedemptions = {}; // code -> { code, billing_order_id, bought_by_user_id, plan_id, meses, redeemed_by_user_id, redeemed_at }
+let nextGiftId = 1;
 const correosEnviados = [];
 
 function fakeSql(strings, ...values) {
@@ -88,10 +89,10 @@ function fakeSql(strings, ...values) {
     return Promise.resolve([{ id }]);
   }
   if (text.includes('INSERT INTO billing_orders') && text.includes('VALUES (NULL,')) {
-    // Regalo: subscription_id, status y plan_id van todos como literales -> 6 values.
-    const [userId, orderKey, wavaHash, wavaLink, concepto, montoCop] = values;
+    // Regalo: subscription_id, status y plan_id van todos como literales -> 8 values (incluye send_on/gift_message).
+    const [userId, orderKey, wavaHash, wavaLink, concepto, montoCop, sendOn, giftMessage] = values;
     const id = nextOrderId++;
-    billingOrders[orderKey] = { id, subscription_id: null, user_id: userId, order_key: orderKey, wava_hash: wavaHash, wava_link: wavaLink, concepto, monto_cop: montoCop, status: 'pending', plan_id: 'regalo', paid_at: null };
+    billingOrders[orderKey] = { id, subscription_id: null, user_id: userId, order_key: orderKey, wava_hash: wavaHash, wava_link: wavaLink, concepto, monto_cop: montoCop, status: 'pending', plan_id: 'regalo', paid_at: null, send_on: sendOn, gift_message: giftMessage };
     return Promise.resolve([]);
   }
   if (text.includes('INSERT INTO billing_orders')) {
@@ -101,19 +102,32 @@ function fakeSql(strings, ...values) {
     billingOrders[orderKey] = { id, subscription_id: subscriptionId, user_id: userId, order_key: orderKey, wava_hash: wavaHash, wava_link: wavaLink, concepto, monto_cop: montoCop, status: 'pending', plan_id: planId, paid_at: null };
     return Promise.resolve([]);
   }
-  if (text.includes('SELECT id, subscription_id, status, plan_id, user_id FROM billing_orders WHERE order_key')) {
+  if (text.includes('SELECT id, subscription_id, status, plan_id, user_id, send_on, gift_message FROM billing_orders WHERE order_key')) {
     const o = billingOrders[values[0]];
-    return Promise.resolve(o ? [{ id: o.id, subscription_id: o.subscription_id, status: o.status, plan_id: o.plan_id, user_id: o.user_id }] : []);
+    return Promise.resolve(o ? [{ id: o.id, subscription_id: o.subscription_id, status: o.status, plan_id: o.plan_id, user_id: o.user_id, send_on: o.send_on, gift_message: o.gift_message }] : []);
   }
   // --- Regalo: comprador y narrador distintos (P0.5) ---
   if (text.includes('SELECT 1 FROM gift_redemptions WHERE code')) {
     return Promise.resolve(giftRedemptions[values[0]] ? [{ '?column?': 1 }] : []);
   }
-  if (text.includes('INSERT INTO gift_redemptions (code, billing_order_id, bought_by_user_id, plan_id, meses)')) {
-    // plan_id ('regalo') y meses (12) van como literales -> 3 values: code, billing_order_id, bought_by_user_id.
-    const [code, billingOrderId, boughtByUserId] = values;
-    giftRedemptions[code] = { code, billing_order_id: billingOrderId, bought_by_user_id: boughtByUserId, plan_id: 'regalo', meses: 12, redeemed_by_user_id: null, redeemed_at: null };
-    return Promise.resolve([]);
+  if (text.includes('INSERT INTO gift_redemptions (code, billing_order_id, bought_by_user_id, plan_id, meses, send_on, gift_message)')) {
+    // plan_id ('regalo') y meses (12) van como literales -> 5 values: code, billing_order_id, bought_by_user_id, send_on, gift_message.
+    const [code, billingOrderId, boughtByUserId, sendOn, giftMessage] = values;
+    const id = nextGiftId++;
+    giftRedemptions[code] = { id, code, billing_order_id: billingOrderId, bought_by_user_id: boughtByUserId, plan_id: 'regalo', meses: 12, redeemed_by_user_id: null, redeemed_at: null, send_on: sendOn, gift_message: giftMessage, email_sent_at: null };
+    return Promise.resolve([{ id }]);
+  }
+  if (text.includes('UPDATE gift_redemptions SET email_sent_at = now()')) {
+    const [id] = values;
+    const g = Object.values(giftRedemptions).find((x) => x.id === id);
+    if (!g || g.email_sent_at) return Promise.resolve([]);
+    g.email_sent_at = new Date().toISOString();
+    return Promise.resolve([{ id }]);
+  }
+  if (text.includes('SELECT id, code, bought_by_user_id, gift_message FROM gift_redemptions')) {
+    const hoy = new Date().toISOString().slice(0, 10);
+    const pendientes = Object.values(giftRedemptions).filter((g) => g.send_on && g.send_on <= hoy && !g.email_sent_at);
+    return Promise.resolve(pendientes.map((g) => ({ id: g.id, code: g.code, bought_by_user_id: g.bought_by_user_id, gift_message: g.gift_message })));
   }
   // El claim atómico (arregla la carrera de dos canjes simultáneos con el
   // mismo código, P1 de seguridad 2026-09-05): un solo UPDATE con el
@@ -433,6 +447,36 @@ function firmarWava(bodyBuffer) {
     const giftWebhookEnCarrera = await request(server, { path: '/api/webhooks/wava', method: 'POST', body: giftEvento2, headers: { 'x-wava-signature': giftFirma2 } });
     check('webhook para una orden ya "paid" por otra entrega -> sigue respondiendo 200 (idempotente)', giftWebhookEnCarrera.status === 200);
     check('...pero NO generó un segundo código para esa orden (se cortó en el UPDATE atómico, nunca llegó a generarCodigoDeRegaloUnico)', Object.keys(giftRedemptions).length === codigosAntesDeLaCarrera);
+
+    // --- Regalo con fecha de envío programada + mensaje (P0.6): se propaga
+    // de billing_orders (donde se guarda ANTES de pagar) a gift_redemptions
+    // (recién al confirmarse el pago vía webhook), y el correo NO sale de
+    // una si la fecha es futura.
+    const manana = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const giftCheckout3 = await request(server, {
+      path: '/api/billing/gift-checkout', method: 'POST',
+      body: { sendOn: manana, message: 'Para que sigas contando tus historias, papá' },
+    }, cookieA);
+    check('gift-checkout con fecha programada -> 200', giftCheckout3.status === 200);
+    const giftOrderKey3 = Object.keys(billingOrders).find((k) => billingOrders[k].plan_id === 'regalo' && billingOrders[k].status === 'pending');
+    check('la orden guardó la fecha programada y el mensaje ANTES de pagar', billingOrders[giftOrderKey3].send_on === manana && billingOrders[giftOrderKey3].gift_message === 'Para que sigas contando tus historias, papá');
+
+    const giftEvento3 = Buffer.from(JSON.stringify({ event: 'link_paid', id_external: giftOrderKey3, status: 'paid' }));
+    const giftFirma3 = firmarWava(giftEvento3);
+    const correosAntesDeProgramado = correosEnviados.length;
+    const giftWebhook3 = await request(server, { path: '/api/webhooks/wava', method: 'POST', body: giftEvento3, headers: { 'x-wava-signature': giftFirma3 } });
+    check('webhook del regalo programado -> 200', giftWebhook3.status === 200);
+    const codigoProgramado = Object.keys(giftRedemptions).find((c) => giftRedemptions[c].billing_order_id === billingOrders[giftOrderKey3].id);
+    check('el webhook copió la fecha y el mensaje a gift_redemptions', giftRedemptions[codigoProgramado].send_on === manana && giftRedemptions[codigoProgramado].gift_message === 'Para que sigas contando tus historias, papá');
+    check('con fecha futura, el webhook NO manda el correo de una', correosEnviados.length === correosAntesDeProgramado && !giftRedemptions[codigoProgramado].email_sent_at);
+
+    // --- Llegó el día (simulado): el cron de facturación manda el correo pendiente ---
+    giftRedemptions[codigoProgramado].send_on = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const cronBillingConRegalo = await request(server, { path: '/api/cron/billing', headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` } });
+    check('cron/billing con un regalo programado ya vencido -> 200', cronBillingConRegalo.status === 200);
+    check('el cron mandó ese correo pendiente', JSON.parse(cronBillingConRegalo.body).regalosMandados === 1);
+    check('email_sent_at quedó marcado', !!giftRedemptions[codigoProgramado].email_sent_at);
+    check('el mensaje personalizado llegó al correo', correosEnviados[correosEnviados.length - 1].html.includes('Para que sigas contando tus historias, papá'));
   } finally {
     server.close();
   }

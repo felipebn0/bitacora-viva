@@ -69,13 +69,17 @@
   }
   .item audio { width: 100%; margin-bottom: 8px; }
   .item strong { color: var(--gold-deep); }
+  .item .media-adjunta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+  .item .media-adjunta img, .item .media-adjunta video {
+    max-width: 220px; max-height: 220px; border-radius: 10px; display: block;
+  }
 </style>
 </head>
 <body>
   <header>
     <div>
       <h1>Historias detectadas</h1>
-      <p>Cuando lo que cuentas parece una historia completa (no un dato corto), queda anotada acá junto con su audio.</p>
+      <p>Cuando lo que cuentas parece una historia completa (no un dato corto), queda anotada acá junto con su audio y sus fotos si agregaste alguna.</p>
     </div>
     <a class="volver" href="/app.html">← volver a la bitácora</a>
   </header>
@@ -155,6 +159,22 @@
         textoWrap.appendChild(strong);
         textoWrap.appendChild(document.createTextNode(' ' + s.texto));
         div.appendChild(textoWrap);
+        // Fotos/video que se subieron mientras se contaba esta historia
+        // (ver "agregar una foto o video" en app.html).
+        const mediaAdjunta = Array.isArray(s.media_urls) ? s.media_urls : [];
+        if (mediaAdjunta.length) {
+          const grid = document.createElement('div');
+          grid.className = 'media-adjunta';
+          mediaAdjunta.forEach((m) => {
+            if (!m || typeof m.url !== 'string' || !/^https?:\/\//.test(m.url)) return;
+            const src = '/api/media-file?u=' + encodeURIComponent(m.url);
+            const el = m.type === 'video' ? document.createElement('video') : document.createElement('img');
+            if (m.type === 'video') { el.controls = true; el.src = src; }
+            else { el.src = src; el.alt = m.caption || 'Foto de la historia'; }
+            grid.appendChild(el);
+          });
+          div.appendChild(grid);
+        }
         storyLogLista.appendChild(div);
       });
     } catch (e) {

@@ -198,6 +198,35 @@ app.use((req, res, next) => {
 });
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Manifest dinámico (Web App Manifest) — para que el link permanente de un
+// subperfil (BACKLOG #12, ?codigo= en app.html) se pueda "agregar a la
+// pantalla de inicio" del celular con un ícono y un nombre propios, y
+// reabra directo en esa charla (start_url con el ?codigo= adentro) en vez
+// de la app pelada. Sin ?codigo=, es el manifest genérico de la app. No
+// hace falta autenticación ni tocar la base — solo arma el JSON a partir de
+// query params ya públicos (el mismo código que ya viaja en la URL que se
+// comparte por WhatsApp).
+// Va bajo /api/ (no /manifest.json pelado) porque vercel.json enruta TODO
+// lo que no empiece con /api/ directo a un archivo estático de public/ (ver
+// la última regla de "routes" ahí) — una ruta fuera de /api/ nunca llega a
+// este servidor Express en producción/preview, solo en local (npm run dev).
+app.get('/api/manifest.json', (req, res) => {
+  const codigo = typeof req.query.codigo === 'string' ? req.query.codigo.replace(/[^A-Za-z0-9]/g, '').slice(0, 8) : '';
+  const nombre = typeof req.query.nombre === 'string' ? req.query.nombre.replace(/[^\p{L}\p{N} ]/gu, '').slice(0, 60) : '';
+  res.set('Content-Type', 'application/manifest+json');
+  res.json({
+    name: nombre ? `Los recuerdos de ${nombre}` : 'Los recuerdos de mis viejos',
+    short_name: nombre || 'Mis recuerdos',
+    start_url: codigo ? `/app.html?codigo=${codigo}` : '/app.html',
+    display: 'standalone',
+    background_color: '#FBF6EA',
+    theme_color: '#5B6B45',
+    icons: [
+      { src: '/images/favicon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
+  });
+});
+
 // Las respuestas de /api/ pueden traer datos privados (historias, datos de
 // sesión, árbol familiar) — se marcan como no cacheables para que no queden
 // guardadas en el navegador ni en un proxy/CDN intermedio (por ejemplo, si
@@ -663,6 +692,9 @@ function ensureSchema() {
         audio_url TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`,
+      // Fotos/video que se suben mientras se cuenta esta historia (ver
+      // mediaUrls en /api/next) — mismo patrón que family_notes.media_urls.
+      sql`ALTER TABLE story_log ADD COLUMN IF NOT EXISTS media_urls TEXT`,
       sql`CREATE INDEX IF NOT EXISTS idx_story_log_user ON story_log(user_id)`,
 
       // Historial de versiones: cuando se edita una historia (aportada o
@@ -739,6 +771,74 @@ function ensureSchema() {
       sql`ALTER TABLE timeline_events ADD COLUMN IF NOT EXISTS categoria TEXT`,
       sql`CREATE INDEX IF NOT EXISTS idx_timeline_events_user ON timeline_events(user_id)`,
 
+      // --- Subperfiles (BACKLOG #12): varias bitácoras administradas desde
+      // un solo login, estilo selector de perfiles de Netflix — el papá no
+      // necesita usuario/clave propio, ver /api/narrador-start más abajo.
+      // "id" toma su valor de la MISMA secuencia que users.id (no un SERIAL
+      // propio arrancando en 1): las 8 tablas de arriba usan "user_id" para
+      // señalar a qué bitácora pertenece cada fila, y hoy ese valor siempre
+      // es un users.id real (una cuenta = una bitácora). Para la bitácora
+      // PROPIA de cada cuenta no hace falta ninguna fila nueva acá — sigue
+      // siendo, como siempre, el mismo users.id (cero filas existentes
+      // cambian, cero backfill). Para un SUBPERFIL (sin fila en "users")
+      // hace falta un id que jamás choque con ningún users.id ya emitido NI
+      // con uno futuro — si esta tabla tuviera su propio SERIAL, un
+      // subperfil nuevo podría terminar con el mismo id que una cuenta real
+      // de OTRA familia, mezclando sin darse cuenta el contenido de las
+      // dos. Tomar el próximo valor de la secuencia de users.id garantiza
+      // que nunca se repite, porque es el mismo contador.
+      sql`CREATE TABLE IF NOT EXISTS bitacoras (
+        id INTEGER PRIMARY KEY DEFAULT nextval(pg_get_serial_sequence('users','id')),
+        admin_user_id INT NOT NULL REFERENCES users(id),
+        nombre TEXT NOT NULL,
+        fecha_nacimiento DATE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      sql`CREATE INDEX IF NOT EXISTS idx_bitacoras_admin ON bitacoras(admin_user_id)`,
+      // Contraparte de users.tree_pending_names/aportes_pending_names (las
+      // campanitas de aviso) para un subperfil, que no tiene fila en "users"
+      // donde vivir esas columnas — ver leerNombresPendientesArbol más abajo.
+      sql`ALTER TABLE bitacoras ADD COLUMN IF NOT EXISTS tree_pending_names TEXT`,
+      sql`ALTER TABLE bitacoras ADD COLUMN IF NOT EXISTS aportes_pending_names TEXT`,
+      // Link permanente y sin cuenta para que la persona del subperfil narre
+      // su PROPIA bitácora — mismo mecanismo que users.invite_code +
+      // /api/guest-start, pero apuntado a esta fila en vez de a una cuenta.
+      // NULL = todavía no se generó ninguno, o se revocó a mano sin generar
+      // uno nuevo. Regenerar invalida cualquier sesión de narrador ya
+      // emitida con el código viejo, porque requireAuth revalida "code"
+      // contra esta columna EN CADA REQUEST — mismo patrón que ya usa el
+      // invitado clásico contra users.invite_code, ver requireAuth más abajo.
+      sql`ALTER TABLE bitacoras ADD COLUMN IF NOT EXISTS narrador_code TEXT`,
+      sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_bitacoras_narrador_code ON bitacoras(narrador_code) WHERE narrador_code IS NOT NULL`,
+      // Contraparte de users.invite_code — un subperfil debe funcionar
+      // igual que una bitácora normal en esto (pedido de Felipe,
+      // 2026-09-07): otros familiares tienen que poder aportarle historias
+      // igual que a cualquier cuenta, no solo la persona del narrador_code
+      // de arriba (que es distinto: ese es para que ELLA narre SU PROPIA
+      // bitácora sin cuenta; este es para que OTROS le aporten cosas, como
+      // ya funciona en una cuenta dueña normal). Mismo mecanismo que
+      // users.invite_code: /api/guest-code-info y /api/guest-start ahora
+      // también buscan acá.
+      sql`ALTER TABLE bitacoras ADD COLUMN IF NOT EXISTS invite_code TEXT`,
+      sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_bitacoras_invite_code ON bitacoras(invite_code) WHERE invite_code IS NOT NULL`,
+
+      // Las 8 tablas de contenido de arriba declaraban su "user_id" como
+      // REFERENCES users(id) — correcto mientras cada bitácora era siempre
+      // también una fila de "users", pero un subperfil (fila en "bitacoras",
+      // nunca en "users") ahora puede aparecer legítimamente ahí. Se suelta
+      // la FK (metadata-only, no toca ninguna fila existente) en vez de
+      // dejar que Postgres rechace esos inserts; la integridad real la
+      // sigue garantizando la app (siempre se valida antes contra "users" o
+      // "bitacoras" según corresponda, nunca se confía en el valor crudo).
+      sql`ALTER TABLE sessions DROP CONSTRAINT IF EXISTS sessions_user_id_fkey`,
+      sql`ALTER TABLE resumen DROP CONSTRAINT IF EXISTS resumen_user_id_fkey`,
+      sql`ALTER TABLE family_notes DROP CONSTRAINT IF EXISTS family_notes_user_id_fkey`,
+      sql`ALTER TABLE media DROP CONSTRAINT IF EXISTS media_user_id_fkey`,
+      sql`ALTER TABLE story_log DROP CONSTRAINT IF EXISTS story_log_user_id_fkey`,
+      sql`ALTER TABLE chapters DROP CONSTRAINT IF EXISTS chapters_user_id_fkey`,
+      sql`ALTER TABLE family_members DROP CONSTRAINT IF EXISTS family_members_user_id_fkey`,
+      sql`ALTER TABLE timeline_events DROP CONSTRAINT IF EXISTS timeline_events_user_id_fkey`,
+
       // Contador del limitador de pedidos (ver rateLimit más arriba) —
       // vive en la base porque la función corre serverless: cada instancia
       // en paralelo tendría su propia memoria, así que un contador en
@@ -814,6 +914,13 @@ function ensureSchema() {
       // el webhook usa para reconocer ese caso y generar el código de
       // canje en vez de extender una suscripción que no existe.
       sql`ALTER TABLE billing_orders ADD COLUMN IF NOT EXISTS plan_id TEXT`,
+      // send_on/gift_message: lo que se llena en /api/billing/gift-checkout
+      // ANTES de que exista ninguna fila en gift_redemptions (esa recién se
+      // crea cuando se confirma el pago) — el webhook los copia de acá para
+      // allá. NULL en send_on significa "mandar apenas se confirme el pago",
+      // igual que el comportamiento de siempre.
+      sql`ALTER TABLE billing_orders ADD COLUMN IF NOT EXISTS send_on DATE`,
+      sql`ALTER TABLE billing_orders ADD COLUMN IF NOT EXISTS gift_message TEXT`,
 
       // --- Regalo: comprador y narrador son cuentas distintas -----------
       // Una fila por cada regalo comprado. redeemed_by_user_id queda NULL
@@ -830,6 +937,14 @@ function ensureSchema() {
         redeemed_at TIMESTAMPTZ,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`,
+      // send_on: copiado de billing_orders al crear esta fila — si es una
+      // fecha futura, el correo con el código NO se manda de una, lo manda
+      // el cron de /api/cron/billing cuando llegue el día (ver más abajo).
+      // email_sent_at es lo que evita mandarlo dos veces (acá o desde el
+      // cron) — NULL significa "todavía no se mandó".
+      sql`ALTER TABLE gift_redemptions ADD COLUMN IF NOT EXISTS send_on DATE`,
+      sql`ALTER TABLE gift_redemptions ADD COLUMN IF NOT EXISTS gift_message TEXT`,
+      sql`ALTER TABLE gift_redemptions ADD COLUMN IF NOT EXISTS email_sent_at TIMESTAMPTZ`,
       sql`CREATE INDEX IF NOT EXISTS idx_gift_redemptions_bought_by ON gift_redemptions(bought_by_user_id)`,
       // Respaldo a nivel de base para el UPDATE atómico de más abajo (ver
       // /api/webhooks/wava): aunque ese código ya evita que dos entregas
@@ -969,17 +1084,64 @@ async function requireAuth(req, res, next) {
   if (!session) {
     return res.status(401).json({ error: 'No autenticado.' });
   }
-  // Sesión de invitado (ver /api/guest-start): entró con el código de
-  // familia y su nombre, sin crear cuenta ni clave. No hay fila en "users"
-  // para esta sesión — req.userId queda null a propósito, así que
+  // Sesión de invitado (ver /api/guest-start y /api/narrador-start): entró
+  // con un código y su nombre, sin crear cuenta ni clave. No hay fila en
+  // "users" para esta sesión — req.userId queda null a propósito, así que
   // cualquier ruta que solo tenga sentido para una cuenta real (borrar
-  // cuenta, cambiar clave, editar perfil) tiene que rechazarla mirando
-  // req.isGuest. req.isCollaborator=true de paso hace que
-  // bloquearColaborador ya la excluya sola de las rutas solo-dueño.
+  // cuenta, cambiar clave, editar perfil, facturación) tiene que rechazarla
+  // mirando req.isGuest (ver bloquearInvitado). Hay DOS clases de invitado,
+  // distinguidas por session.narrador:
+  // - Clásico (session.narrador ausente): aporta una historia a la
+  //   bitácora de OTRA persona (ver /api/contribute-chat) — nunca puede
+  //   narrar como si fuera el dueño, por eso isCollaborator=true (así
+  //   bloquearColaborador ya lo excluye solo de las rutas de dueño:
+  //   charlar, árbol, capítulos, etc.).
+  // - Narrador de un subperfil (session.narrador=true, BACKLOG #12): narra
+  //   SU PROPIA bitácora (un subperfil sin cuenta, ver /api/subprofiles) —
+  //   tiene que poder charlar/ver su árbol/sus capítulos como cualquier
+  //   dueño, así que isCollaborator=false A PROPÓSITO (si fuera true,
+  //   bloquearColaborador lo bloquearía de lo único que existe para
+  //   hacer). Justo por eso, cualquier ruta que asuma "si no es
+  //   colaborador, es una cuenta real con req.userId" (facturación, código
+  //   de invitación propio, borrar cuenta) necesita el guard aparte
+  //   bloquearInvitado — bloquearColaborador no alcanza para este caso.
+  if (session.guest && session.narrador) {
+    try {
+      await ensureSchema();
+      const rows = await sql`SELECT id, narrador_code FROM bitacoras WHERE id = ${session.bitacoraId}`;
+      if (!rows.length) return res.status(401).json({ error: 'No autenticado.' });
+      // Mismo motivo que la revalidación del invitado clásico de más abajo:
+      // si se regeneró o revocó el link (ver /api/subprofiles/:id/narrador-link),
+      // esta sesión tiene que caer acá, no seguir viva hasta que expire sola.
+      if (!rows[0].narrador_code || session.code !== rows[0].narrador_code) {
+        return res.status(401).json({ error: 'Ese enlace ya no es válido — pide uno nuevo a quien te lo compartió.' });
+      }
+    } catch (err) {
+      console.error('No se pudo validar la sesión de narrador:', err);
+      return res.status(401).json({ error: 'No se pudo validar la sesión, intenta de nuevo.' });
+    }
+    req.userId = null;
+    req.username = null;
+    req.isGuest = true;
+    req.isCollaborator = false;
+    req.profileUserId = session.bitacoraId;
+    req.bitacoraEsPropia = false;
+    req.puedeNarrar = true;
+    req.isNarradorLink = true;
+    req.guestName = session.guestName || null;
+    return next();
+  }
   if (session.guest) {
     try {
       await ensureSchema();
-      const rows = await sql`SELECT id, invite_code FROM users WHERE id = ${session.ownerId} AND owner_user_id IS NULL`;
+      // BACKLOG #12: el dueño de este código puede ser una cuenta normal
+      // (users) o un subperfil (bitacoras) — session.ownerEsBitacora (viajó
+      // firmado desde /api/guest-start) dice en cuál de las dos revalidar.
+      // Sesiones firmadas ANTES de este cambio no traen ese campo (queda
+      // undefined = falsy = "es de users", el comportamiento de siempre).
+      const rows = session.ownerEsBitacora
+        ? await sql`SELECT id, invite_code FROM bitacoras WHERE id = ${session.ownerId}`
+        : await sql`SELECT id, invite_code FROM users WHERE id = ${session.ownerId} AND owner_user_id IS NULL`;
       if (!rows.length) return res.status(401).json({ error: 'No autenticado.' });
       // El código quedó firmado adentro del token en /api/guest-start — si
       // el dueño lo rotó desde entonces (/api/invite-code/regenerate), esta
@@ -998,7 +1160,13 @@ async function requireAuth(req, res, next) {
     req.isGuest = true;
     req.isCollaborator = true;
     req.profileUserId = session.ownerId;
+    req.bitacoraEsPropia = false;
+    req.puedeNarrar = false;
     req.guestName = session.guestName || null;
+    // A quién le está aportando este invitado: una cuenta normal (users) o
+    // un subperfil (bitacoras) — /api/me lo necesita para saber en cuál de
+    // las dos buscar el nombre del "dueño" a mostrar.
+    req.ownerEsBitacora = !!session.ownerEsBitacora;
     return next();
   }
   if (!session.userId) {
@@ -1014,6 +1182,8 @@ async function requireAuth(req, res, next) {
   // logueado en realidad.
   req.isCollaborator = false;
   req.profileUserId = session.userId;
+  req.bitacoraEsPropia = true;
+  req.puedeNarrar = true;
   try {
     await ensureSchema();
     const rows = await sql`SELECT owner_user_id, token_version FROM users WHERE id = ${session.userId}`;
@@ -1027,6 +1197,28 @@ async function requireAuth(req, res, next) {
     if (rows[0].owner_user_id) {
       req.isCollaborator = true;
       req.profileUserId = rows[0].owner_user_id;
+      req.bitacoraEsPropia = false;
+      req.puedeNarrar = false;
+    } else if (session.activeBitacoraId && session.activeBitacoraId !== session.userId) {
+      // Subperfil activo (ver /api/subprofiles/switch, BACKLOG #12): la
+      // cuenta que loguea cambió de perfil a uno que administra — se
+      // revalida en CADA request (no solo al cambiar) que ese subperfil
+      // siga existiendo y que siga siendo de ESTA cuenta, igual que el
+      // token_version de arriba revalida que la cuenta siga siendo la
+      // misma. Fallar cerrado: si el subperfil ya no está disponible, se
+      // rechaza el pedido en vez de caer en silencio a "mi propia bitácora"
+      // (eso sería peor: la app seguiría funcionando pero mostrando datos
+      // de un perfil distinto al que la persona cree tener activo).
+      const bit = await sql`SELECT id, admin_user_id FROM bitacoras WHERE id = ${session.activeBitacoraId}`;
+      if (!bit.length || bit[0].admin_user_id !== req.userId) {
+        return res.status(401).json({ error: 'Ese perfil ya no está disponible — vuelve a elegir uno.' });
+      }
+      req.profileUserId = session.activeBitacoraId;
+      req.bitacoraEsPropia = false;
+      // Decisión de producto (BACKLOG #12): la cuenta administradora puede
+      // ver y pagar un subperfil, pero no narrar/grabar charlas como si
+      // fuera esa persona — ver bloquearSiNoPuedeNarrar más abajo.
+      req.puedeNarrar = false;
     }
   } catch (err) {
     // Fallar cerrado: si no se pudo confirmar que la sesión sigue siendo
@@ -1045,6 +1237,22 @@ async function requireAuth(req, res, next) {
 function bloquearColaborador(req, res, next) {
   if (req.isCollaborator) {
     return res.status(403).json({ error: 'Esta función no está disponible para cuentas colaboradoras.' });
+  }
+  next();
+}
+
+// Para rutas que son de la CUENTA que loguea (facturación, código de
+// invitación propio, borrar/reiniciar la cuenta, quiénes colaboran conmigo)
+// — ninguna de las dos clases de invitado (el clásico que aporta a otra
+// bitácora, ni el narrador de un subperfil, ver requireAuth) tiene una
+// cuenta real detrás con la que tenga sentido facturar, tener código propio
+// o borrarse. bloquearColaborador NO alcanza acá: el invitado narrador
+// tiene isCollaborator=false a propósito (para poder narrar, ver el
+// comentario largo en requireAuth), así que pasaría de largo sin este
+// chequeo aparte.
+function bloquearInvitado(req, res, next) {
+  if (req.isGuest) {
+    return res.status(403).json({ error: 'No disponible para invitados sin cuenta.' });
   }
   next();
 }
@@ -1070,6 +1278,22 @@ async function bloquearSiReadOnly(req, res, next) {
     console.error('No se pudo verificar el estado de la suscripción (se deja pasar):', err);
     next();
   }
+}
+
+// BACKLOG #12 (subperfiles): la cuenta administradora puede ver y pagar un
+// subperfil que no es el suyo, pero no narrar/grabar charlas como si fuera
+// esa persona — req.puedeNarrar ya lo decide requireAuth (false para un
+// subperfil activo o para el invitado clásico; true para la cuenta dueña de
+// su propia bitácora y para el invitado narrador de un subperfil, ver el
+// comentario largo ahí). A diferencia de bloquearSiReadOnly, acá no hay
+// ninguna consulta a la base (es solo un chequeo de una propiedad ya
+// resuelta) — no aplica la lógica de "fallar abierto ante un error
+// transitorio", así que falla cerrado sin más vueltas.
+function bloquearSiNoPuedeNarrar(req, res, next) {
+  if (!req.puedeNarrar) {
+    return res.status(403).json({ error: 'Esta cuenta puede ver y pagar esta bitácora, pero no puede narrar en su nombre.' });
+  }
+  next();
 }
 
 // Resuelve para qué bitácora debería trabajar esta request. Si viene un
@@ -1098,6 +1322,46 @@ async function resolveProfileUserId(req) {
   return null;
 }
 
+// BACKLOG #12 (subperfiles): nombre/fecha de nacimiento de la bitácora
+// ACTIVA — para la bitácora propia de una cuenta sigue viviendo en "users"
+// (cero cambios, cero backfill); para un subperfil vive en "bitacoras". Un
+// solo punto de ramificación en vez de repetir el if/esPropia en cada lugar
+// que hoy asumía que ambas cosas eran lo mismo (loadFamilyContext, /api/export).
+async function leerPerfilBitacora(profileUserId, esPropia) {
+  const rows = esPropia
+    ? await sql`SELECT name AS nombre, fecha_nacimiento, created_at FROM users WHERE id = ${profileUserId}`
+    : await sql`SELECT nombre, fecha_nacimiento, created_at FROM bitacoras WHERE id = ${profileUserId}`;
+  return rows[0] || null;
+}
+
+// Contraparte de users.tree_pending_names para un subperfil — mismo trío
+// leer/agregar/limpiar que ya usaba updateFamilyTree/tree/pending/mark-seen
+// contra "users", ahora ramificado según de qué bitácora se trata. No hace
+// falta el equivalente para aportes_pending_names: esa campanita solo se
+// escribe desde marcarAportePendiente(ownerId,...), y ownerId ahí SIEMPRE es
+// una cuenta real (resuelto vía resolveProfileUserId, que solo conoce
+// "users"/"collaborations") — un subperfil no tiene invite_code propio en
+// esta primera versión, así que nunca puede ser destino de un aporte (ver
+// BACKLOG.md #12); /api/aportes/pending y /api/aportes/mark-seen solo
+// necesitan devolver "vacío"/no-op cuando la bitácora activa es un subperfil.
+async function leerNombresPendientesArbol(profileUserId, esPropia) {
+  const rows = esPropia
+    ? await sql`SELECT tree_pending_names FROM users WHERE id = ${profileUserId}`
+    : await sql`SELECT tree_pending_names FROM bitacoras WHERE id = ${profileUserId}`;
+  return parseJsonArray(rows[0] && rows[0].tree_pending_names);
+}
+async function agregarNombresPendientesArbol(profileUserId, esPropia, nombresNuevos) {
+  const pendientes = new Set(await leerNombresPendientesArbol(profileUserId, esPropia));
+  nombresNuevos.forEach((n) => pendientes.add(n));
+  const json = JSON.stringify(Array.from(pendientes));
+  if (esPropia) await sql`UPDATE users SET tree_pending_names = ${json} WHERE id = ${profileUserId}`;
+  else await sql`UPDATE bitacoras SET tree_pending_names = ${json} WHERE id = ${profileUserId}`;
+}
+async function limpiarNombresPendientesArbol(profileUserId, esPropia) {
+  if (esPropia) await sql`UPDATE users SET tree_pending_names = NULL WHERE id = ${profileUserId}`;
+  else await sql`UPDATE bitacoras SET tree_pending_names = NULL WHERE id = ${profileUserId}`;
+}
+
 // Antes esta ruta verificaba la sesión a mano (en vez de usar requireAuth),
 // así que no chequeaba token_version ni si la cuenta seguía existiendo —
 // y encima, si fallaba la consulta a la base, respondía 200 con los datos
@@ -1124,9 +1388,24 @@ function fechaComoInputDate(valor) {
 
 app.get('/api/me', requireAuth, async (req, res) => {
   try {
+    if (req.isGuest && req.isNarradorLink) {
+      // BACKLOG #12: entró con el link permanente de un subperfil — narra
+      // SU PROPIA bitácora (no "un dueño" ajeno como el invitado clásico),
+      // así que no hay "ownerName" acá, sino el nombre de esa bitácora.
+      const bitRows = await sql`SELECT nombre FROM bitacoras WHERE id = ${req.profileUserId}`;
+      const bitacoraNombre = capitalizarNombre((bitRows[0] && bitRows[0].nombre) || '') || null;
+      return res.json({
+        username: null, name: null, email: null, fechaNacimiento: null,
+        isCollaborator: false, isGuest: true, isNarradorLink: true, guestName: req.guestName, bitacoraNombre,
+      });
+    }
     if (req.isGuest) {
-      const ownerRows = await sql`SELECT name, username FROM users WHERE id = ${req.profileUserId}`;
-      const ownerName = capitalizarNombre((ownerRows[0] && (ownerRows[0].name || ownerRows[0].username)) || '') || null;
+      // BACKLOG #12: el "dueño" al que le está aportando este invitado
+      // puede ser una cuenta normal o un subperfil (ver buscarDuenoPorInviteCode)
+      const ownerRows = req.ownerEsBitacora
+        ? await sql`SELECT nombre FROM bitacoras WHERE id = ${req.profileUserId}`
+        : await sql`SELECT name, username FROM users WHERE id = ${req.profileUserId}`;
+      const ownerName = capitalizarNombre((ownerRows[0] && (ownerRows[0].nombre || ownerRows[0].name || ownerRows[0].username)) || '') || null;
       return res.json({
         username: null, name: null, email: null, fechaNacimiento: null,
         isCollaborator: true, isGuest: true, guestName: req.guestName, ownerName,
@@ -1141,7 +1420,16 @@ app.get('/api/me', requireAuth, async (req, res) => {
       const ownerRows = await sql`SELECT name, username FROM users WHERE id = ${req.profileUserId}`;
       ownerName = capitalizarNombre((ownerRows[0] && (ownerRows[0].name || ownerRows[0].username)) || '') || null;
     }
-    res.json({ username: req.username, name, email, fechaNacimiento, isCollaborator: req.isCollaborator, isGuest: false, ownerName });
+    // BACKLOG #12: si esta cuenta cambió a un subperfil (ver
+    // /api/subprofiles/switch), el frontend necesita saber cuál está activo
+    // (para el banner "viendo la bitácora de X") y que puedeNarrar es
+    // false, para ocultar/deshabilitar el botón de hablar.
+    let bitacoraActiva = null;
+    if (!req.bitacoraEsPropia) {
+      const bit = await leerPerfilBitacora(req.profileUserId, false);
+      bitacoraActiva = { id: req.profileUserId, nombre: capitalizarNombre((bit && bit.nombre) || '') || null };
+    }
+    res.json({ username: req.username, name, email, fechaNacimiento, isCollaborator: req.isCollaborator, isGuest: false, ownerName, puedeNarrar: req.puedeNarrar, bitacoraActiva });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo cargar la cuenta.' });
@@ -1586,15 +1874,69 @@ async function asignarNuevoInviteCode(userId) {
   return code;
 }
 
+// BACKLOG #12: un subperfil funciona igual que una cuenta dueña normal para
+// esto — otros familiares le pueden aportar historias con SU PROPIO código
+// (bitacoras.invite_code), igual que a cualquier bitácora. Mismo par
+// leer/asignar que ya usa leerPerfilBitacora para nombre/fecha, ramificado
+// según de qué bitácora se trata.
+async function leerInviteCodeActivo(profileUserId, esPropia) {
+  const rows = esPropia
+    ? await sql`SELECT invite_code FROM users WHERE id = ${profileUserId}`
+    : await sql`SELECT invite_code FROM bitacoras WHERE id = ${profileUserId}`;
+  return (rows[0] && rows[0].invite_code) || null;
+}
+async function asignarInviteCodeActivo(profileUserId, esPropia) {
+  if (esPropia) return asignarNuevoInviteCode(profileUserId);
+  let code;
+  for (let intento = 0; intento < 5; intento++) {
+    code = randomInviteCode();
+    try {
+      await sql`UPDATE bitacoras SET invite_code = ${code} WHERE id = ${profileUserId}`;
+      return code;
+    } catch (err) {
+      if (err && err.code === '23505' && intento < 4) continue;
+      throw err;
+    }
+  }
+  return code;
+}
+
+// Mismo mecanismo que asignarNuevoInviteCode, pero para el link permanente
+// de un subperfil (ver bitacoras.narrador_code) — la persona del subperfil
+// lo usa para narrar su propia bitácora sin cuenta propia (/api/narrador-start).
+async function asignarNuevoNarradorCode(bitacoraId) {
+  let code;
+  for (let intento = 0; intento < 5; intento++) {
+    code = randomInviteCode();
+    try {
+      await sql`UPDATE bitacoras SET narrador_code = ${code} WHERE id = ${bitacoraId}`;
+      return code;
+    } catch (err) {
+      if (err && err.code === '23505' && intento < 4) continue; // colisión rarísima: reintentar
+      throw err;
+    }
+  }
+  return code;
+}
+
+// Ojo: opera sobre la BITÁCORA ACTIVA (req.profileUserId/req.bitacoraEsPropia),
+// no siempre sobre la cuenta que loguea — así, un subperfil (BACKLOG #12)
+// puede tener su propio código para que otros familiares le aporten
+// historias, igual que cualquier cuenta dueña normal. bloquearInvitado NO
+// se usa acá a propósito: el narrador de un subperfil (invitado sin
+// cuenta, pero con isCollaborator=false) sí tiene que poder generar y ver
+// el código de SU bitácora — solo el invitado clásico (isCollaborator=true,
+// aporta a la bitácora de otro) queda afuera, y de eso ya se encarga el
+// chequeo de abajo.
 app.get('/api/invite-code', requireAuth, async (req, res) => {
   try {
     if (req.isCollaborator) {
       return res.status(403).json({ error: 'Las cuentas colaboradoras no tienen código propio.' });
     }
     await ensureSchema();
-    const rows = await sql`SELECT invite_code FROM users WHERE id = ${req.userId}`;
-    if (rows[0] && rows[0].invite_code) return res.json({ code: rows[0].invite_code });
-    const code = await asignarNuevoInviteCode(req.userId);
+    const existente = await leerInviteCodeActivo(req.profileUserId, req.bitacoraEsPropia);
+    if (existente) return res.json({ code: existente });
+    const code = await asignarInviteCodeActivo(req.profileUserId, req.bitacoraEsPropia);
     res.json({ code });
   } catch (err) {
     console.error(err);
@@ -1613,7 +1955,7 @@ app.post('/api/invite-code/regenerate', requireAuth, rateLimit, async (req, res)
       return res.status(403).json({ error: 'Las cuentas colaboradoras no tienen código propio.' });
     }
     await ensureSchema();
-    const code = await asignarNuevoInviteCode(req.userId);
+    const code = await asignarInviteCodeActivo(req.profileUserId, req.bitacoraEsPropia);
     res.json({ code });
   } catch (err) {
     console.error(err);
@@ -1657,9 +1999,15 @@ app.get('/api/collaboration-info', requireAuth, async (req, res) => {
   try {
     const ownerId = await resolveProfileUserId(req);
     if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
-    const rows = await sql`SELECT name, username FROM users WHERE id = ${ownerId}`;
+    // BACKLOG #12: si es un invitado clásico y su código era de un
+    // subperfil (no de una cuenta), el "dueño" vive en bitacoras, no en
+    // users — una cuenta completa (join-collaboration/signup) nunca llega
+    // acá con un subperfil, porque esos dos caminos solo buscan en users.
+    const rows = req.isGuest && req.ownerEsBitacora
+      ? await sql`SELECT nombre FROM bitacoras WHERE id = ${ownerId}`
+      : await sql`SELECT name, username FROM users WHERE id = ${ownerId}`;
     if (!rows.length) return res.status(404).json({ error: 'No se encontró esa bitácora.' });
-    res.json({ ownerId, ownerName: capitalizarNombre(rows[0].name || rows[0].username) });
+    res.json({ ownerId, ownerName: capitalizarNombre(rows[0].nombre || rows[0].name || rows[0].username) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo cargar esa historia.' });
@@ -1678,14 +2026,27 @@ app.get('/api/collaboration-info', requireAuth, async (req, res) => {
 // todavía. rateLimit por IP alcanza acá: el código ya es aleatoriedad
 // criptográfica de 8 caracteres (~852 mil millones de combinaciones),
 // adivinarlo a fuerza bruta no es viable.
+// BACKLOG #12: el código de un invitado clásico puede apuntar a una cuenta
+// dueña normal (users, como siempre) o a un subperfil (bitacoras) — un
+// subperfil ahora acepta aportes de otros familiares igual que cualquier
+// bitácora. Se busca primero en users (el caso de siempre, más común) y
+// recién si no aparece ahí se busca en bitacoras.
+async function buscarDuenoPorInviteCode(cleanCode) {
+  const enUsers = await sql`SELECT id, name, username FROM users WHERE invite_code = ${cleanCode} AND owner_user_id IS NULL`;
+  if (enUsers.length) return { id: enUsers[0].id, nombre: enUsers[0].name || enUsers[0].username, esBitacora: false };
+  const enBitacoras = await sql`SELECT id, nombre FROM bitacoras WHERE invite_code = ${cleanCode}`;
+  if (enBitacoras.length) return { id: enBitacoras[0].id, nombre: enBitacoras[0].nombre, esBitacora: true };
+  return null;
+}
+
 app.get('/api/guest-code-info', rateLimit, async (req, res) => {
   try {
     const cleanCode = String(req.query.codigo || '').trim().toUpperCase();
     if (!cleanCode) return res.status(400).json({ error: 'Falta el código.' });
     await ensureSchema();
-    const rows = await sql`SELECT id, name, username FROM users WHERE invite_code = ${cleanCode} AND owner_user_id IS NULL`;
-    if (!rows.length) return res.status(404).json({ error: 'Ese código no existe.' });
-    res.json({ ownerName: capitalizarNombre(rows[0].name || rows[0].username) });
+    const owner = await buscarDuenoPorInviteCode(cleanCode);
+    if (!owner) return res.status(404).json({ error: 'Ese código no existe.' });
+    res.json({ ownerName: capitalizarNombre(owner.nombre) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo verificar el código.' });
@@ -1705,9 +2066,8 @@ app.post('/api/guest-start', rateLimit, async (req, res) => {
     if (!cleanName) return res.status(400).json({ error: 'Falta el nombre.' });
 
     await ensureSchema();
-    const rows = await sql`SELECT id, name, username FROM users WHERE invite_code = ${cleanCode} AND owner_user_id IS NULL`;
-    if (!rows.length) return res.status(404).json({ error: 'Ese código no existe.' });
-    const owner = rows[0];
+    const owner = await buscarDuenoPorInviteCode(cleanCode);
+    if (!owner) return res.status(404).json({ error: 'Ese código no existe.' });
 
     // El código va DENTRO del token firmado (no solo se usa para encontrar
     // al dueño y después olvidarse de él) para que rotar el código
@@ -1717,10 +2077,12 @@ app.post('/api/guest-start', rateLimit, async (req, res) => {
     // que se entró siguiera siendo el vigente, así que una sesión de
     // invitado de hasta 30 días sobrevivía intacta a la rotación pensada
     // justo para cortarle el acceso a quien tiene un código que se filtró.
-    const token = signSession({ guest: true, ownerId: owner.id, guestName: cleanName, code: cleanCode });
+    // ownerEsBitacora viaja también firmado — requireAuth necesita saber
+    // en qué tabla revalidar "code" en cada request (users o bitacoras).
+    const token = signSession({ guest: true, ownerId: owner.id, ownerEsBitacora: owner.esBitacora, guestName: cleanName, code: cleanCode });
     const secure = cookieEsSegura(req) ? '; Secure' : '';
     res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${token}; Max-Age=${SESSION_MAX_AGE}; Path=/; HttpOnly; SameSite=Lax${secure}`);
-    res.json({ ok: true, ownerName: capitalizarNombre(owner.name || owner.username) });
+    res.json({ ok: true, ownerName: capitalizarNombre(owner.nombre) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo entrar con ese código.' });
@@ -1759,7 +2121,7 @@ app.get('/api/my-collaborations', requireAuth, async (req, res) => {
 // Quiénes tienen acceso de colaborador a MI bitácora — cuentas 100%
 // colaboradoras (owner_user_id fijo) más las que se sumaron con el botón
 // "colaborar con otra historia" (tabla collaborations). Solo para el dueño.
-app.get('/api/my-collaborators', requireAuth, bloquearColaborador, async (req, res) => {
+app.get('/api/my-collaborators', requireAuth, bloquearColaborador, bloquearInvitado, async (req, res) => {
   try {
     await ensureSchema();
     const fijos = await sql`SELECT name, username, created_at FROM users WHERE owner_user_id = ${req.userId}`;
@@ -1776,6 +2138,184 @@ app.get('/api/my-collaborators', requireAuth, bloquearColaborador, async (req, r
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo cargar quiénes colaboran contigo.' });
+  }
+});
+
+// --- Subperfiles (BACKLOG #12): varias bitácoras administradas desde un
+// solo login, estilo selector de perfiles de Netflix — ver el comentario
+// largo en requireAuth y el bloque de esquema en ensureSchema (tabla
+// "bitacoras"). Todas estas rutas son de la CUENTA que loguea (no de la
+// bitácora activa): bloquearInvitado alcanza para las 6 — ni el invitado
+// clásico ni el narrador de un subperfil (ambos sin req.userId) tienen
+// sentido administrando subperfiles.
+
+app.post('/api/subprofiles', requireAuth, bloquearColaborador, bloquearInvitado, rateLimit, async (req, res) => {
+  try {
+    // Crear un subperfil desde ADENTRO de otro subperfil (viendo el de tu
+    // papá, crear ahí el de tu mamá) confundiría a cuál cuenta administradora
+    // termina apuntando — se pide volver primero a la propia bitácora.
+    if (!req.bitacoraEsPropia) {
+      return res.status(403).json({ error: 'Vuelve primero a tu propia bitácora antes de crear un subperfil nuevo.' });
+    }
+    const cleanNombre = capitalizarNombre(String((req.body && req.body.nombre) || '').trim().slice(0, 100));
+    if (!cleanNombre) return res.status(400).json({ error: 'Falta el nombre.' });
+    let cleanFecha = null;
+    if (req.body && req.body.fechaNacimiento) {
+      cleanFecha = fechaNacimientoValida(req.body.fechaNacimiento);
+      if (!cleanFecha) return res.status(400).json({ error: 'La fecha de nacimiento no es válida.' });
+    }
+    await ensureSchema();
+    const rows = await sql`INSERT INTO bitacoras (admin_user_id, nombre, fecha_nacimiento) VALUES (${req.userId}, ${cleanNombre}, ${cleanFecha}) RETURNING id`;
+    res.json({ ok: true, id: rows[0].id, nombre: cleanNombre });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo crear el subperfil.' });
+  }
+});
+
+// Lista "vos" (sintetizado desde tu propia cuenta, sin fila en "bitacoras")
+// más cada subperfil que administras — para el selector de perfiles.
+app.get('/api/subprofiles', requireAuth, bloquearColaborador, bloquearInvitado, async (req, res) => {
+  try {
+    await ensureSchema();
+    const propia = await sql`SELECT name FROM users WHERE id = ${req.userId}`;
+    const nombrePropio = capitalizarNombre((propia[0] && propia[0].name) || '') || req.username;
+    const subperfiles = await sql`SELECT id, nombre FROM bitacoras WHERE admin_user_id = ${req.userId} ORDER BY created_at ASC`;
+    res.json({
+      perfiles: [
+        { id: req.userId, nombre: nombrePropio, esPropia: true },
+        ...subperfiles.map((s) => ({ id: s.id, nombre: capitalizarNombre(s.nombre), esPropia: false })),
+      ],
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudieron cargar tus perfiles.' });
+  }
+});
+
+// Cambia cuál bitácora queda activa en ESTA sesión — re-firma la cookie con
+// el nuevo activeBitacoraId (ver requireAuth, que lo revalida en cada
+// request). Verificar la pertenencia en la MISMA consulta que la resuelve
+// (no confiar en el id que mandó el cliente sin cruzarlo antes), mismo
+// criterio que ya usan los "claim" atómicos de facturación.
+app.post('/api/subprofiles/switch', requireAuth, bloquearColaborador, bloquearInvitado, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    const idPedido = req.body && req.body.id != null ? parseInt(req.body.id, 10) : null;
+    let activeBitacoraId; // undefined = volver a la propia
+    if (idPedido && idPedido !== req.userId) {
+      const bit = await sql`SELECT id FROM bitacoras WHERE id = ${idPedido} AND admin_user_id = ${req.userId}`;
+      if (!bit.length) return res.status(404).json({ error: 'No se encontró ese perfil.' });
+      activeBitacoraId = idPedido;
+    }
+    const rows = await sql`SELECT token_version FROM users WHERE id = ${req.userId}`;
+    if (!rows.length) return res.status(404).json({ error: 'No se encontró la cuenta.' });
+    setSessionCookie(req, res, { userId: req.userId, username: req.username, tokenVersion: rows[0].token_version, activeBitacoraId });
+    res.json({ ok: true, activeBitacoraId: activeBitacoraId || req.userId });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo cambiar de perfil.' });
+  }
+});
+
+async function bitacoraDelAdmin(id, adminUserId) {
+  const rows = await sql`SELECT id, narrador_code FROM bitacoras WHERE id = ${id} AND admin_user_id = ${adminUserId}`;
+  return rows[0] || null;
+}
+
+// Trae (o genera de una, si todavía no existe) el link permanente y sin
+// cuenta para que la persona del subperfil narre su propia bitácora — ver
+// /api/narrador-start más abajo. Mismo patrón de creación perezosa que
+// GET /api/invite-code.
+app.get('/api/subprofiles/:id/narrador-link', requireAuth, bloquearColaborador, bloquearInvitado, async (req, res) => {
+  try {
+    await ensureSchema();
+    const id = parseInt(req.params.id, 10);
+    const bit = await bitacoraDelAdmin(id, req.userId);
+    if (!bit) return res.status(404).json({ error: 'No se encontró ese subperfil.' });
+    const code = bit.narrador_code || (await asignarNuevoNarradorCode(id));
+    res.json({ code });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo generar el enlace.' });
+  }
+});
+
+// Genera un código nuevo y descarta el anterior — mismo motivo que
+// /api/invite-code/regenerate (cerrar el acceso de un link que se compartió
+// de más, sin afectar el resto).
+app.post('/api/subprofiles/:id/narrador-link/regenerate', requireAuth, bloquearColaborador, bloquearInvitado, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    const id = parseInt(req.params.id, 10);
+    const bit = await bitacoraDelAdmin(id, req.userId);
+    if (!bit) return res.status(404).json({ error: 'No se encontró ese subperfil.' });
+    const code = await asignarNuevoNarradorCode(id);
+    res.json({ code });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo generar el enlace.' });
+  }
+});
+
+// Corta el acceso sin generar uno nuevo — para cuando, por ejemplo, se
+// compró un celular nuevo y no hace falta que el viejo siga sirviendo.
+app.post('/api/subprofiles/:id/narrador-link/revoke', requireAuth, bloquearColaborador, bloquearInvitado, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    const id = parseInt(req.params.id, 10);
+    const bit = await bitacoraDelAdmin(id, req.userId);
+    if (!bit) return res.status(404).json({ error: 'No se encontró ese subperfil.' });
+    await sql`UPDATE bitacoras SET narrador_code = NULL WHERE id = ${id}`;
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo revocar el enlace.' });
+  }
+});
+
+// --- Entrar como narrador de un subperfil, sin crear cuenta (BACKLOG #12) ---
+// Mismo espíritu que /api/guest-code-info + /api/guest-start (BACKLOG #5),
+// pero esto narra SU PROPIA bitácora (story_log, árbol, capítulos) en vez de
+// aportar una historia a la de otro — ver el discriminador session.narrador
+// en requireAuth.
+app.get('/api/narrador-code-info', rateLimit, async (req, res) => {
+  try {
+    const cleanCode = String(req.query.codigo || '').trim().toUpperCase();
+    if (!cleanCode) return res.status(400).json({ error: 'Falta el código.' });
+    await ensureSchema();
+    const rows = await sql`SELECT nombre FROM bitacoras WHERE narrador_code = ${cleanCode}`;
+    if (!rows.length) return res.status(404).json({ error: 'Ese código no existe.' });
+    res.json({ bitacoraNombre: capitalizarNombre(rows[0].nombre) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo verificar el código.' });
+  }
+});
+
+app.post('/api/narrador-start', rateLimit, async (req, res) => {
+  try {
+    const cleanCode = String((req.body && req.body.codigo) || '').trim().toUpperCase();
+    const cleanName = capitalizarNombre(String((req.body && req.body.name) || '').trim().slice(0, 60));
+    if (!cleanCode) return res.status(400).json({ error: 'Falta el código.' });
+    if (!cleanName) return res.status(400).json({ error: 'Falta el nombre.' });
+
+    await ensureSchema();
+    const rows = await sql`SELECT id, nombre FROM bitacoras WHERE narrador_code = ${cleanCode}`;
+    if (!rows.length) return res.status(404).json({ error: 'Ese código no existe.' });
+    const bit = rows[0];
+
+    // El código va DENTRO del token firmado (no solo se usa para encontrar
+    // la bitácora y después olvidarse de él) por el mismo motivo que el
+    // guest clásico: regenerar el link tiene que cortar el acceso de quien
+    // ya entró con el código viejo, no solo evitar que entren de nuevo.
+    const token = signSession({ guest: true, narrador: true, bitacoraId: bit.id, guestName: cleanName, code: cleanCode });
+    const secure = cookieEsSegura(req) ? '; Secure' : '';
+    res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${token}; Max-Age=${SESSION_MAX_AGE}; Path=/; HttpOnly; SameSite=Lax${secure}`);
+    res.json({ ok: true, bitacoraNombre: capitalizarNombre(bit.nombre) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo entrar con ese código.' });
   }
 });
 
@@ -1935,8 +2475,17 @@ app.post('/api/logout', async (req, res) => {
 // empezar de cero. No borra la cuenta en sí (usuario/clave siguen sirviendo).
 // Pide la clave de nuevo como confirmación, igual que /api/delete-account —
 // es irreversible, aunque menos grave (la cuenta en sí sigue existiendo).
-app.post('/api/reset-bitacora', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
+app.post('/api/reset-bitacora', requireAuth, bloquearColaborador, bloquearInvitado, rateLimit, async (req, res) => {
   try {
+    // BACKLOG #12: reiniciar un SUBPERFIL (borrar su contenido) no es "ver"
+    // ni "pagar" — es una acción destructiva que Felipe nunca terminó de
+    // decidir si la cuenta administradora puede hacer. Se bloquea acá a
+    // propósito en vez de adivinar: mejor un 403 claro que arriesgarse a
+    // borrar el contenido equivocado (o el propio, por accidente, si esto
+    // hubiera seguido atado a req.userId mientras se ve un subperfil).
+    if (!req.bitacoraEsPropia) {
+      return res.status(403).json({ error: 'No se puede reiniciar un subperfil desde acá todavía — pídeselo a quien construyó esto si lo necesitas.' });
+    }
     const { password } = req.body || {};
     if (!password) return res.status(400).json({ error: 'Falta la clave para confirmar.' });
 
@@ -2031,6 +2580,18 @@ app.post('/api/delete-account', requireAuth, rateLimit, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'No se encontró la cuenta.' });
     const ok = await bcrypt.compare(password, rows[0].password_hash);
     if (!ok) return res.status(401).json({ error: 'La clave no es correcta.' });
+
+    // BACKLOG #12: bitacoras.admin_user_id REFERENCES users(id) SIN
+    // ON DELETE CASCADE — si esta cuenta administra algún subperfil, borrar
+    // la fila de "users" de más abajo violaría esa referencia. En vez de
+    // borrar en cascada el contenido de un subperfil como efecto secundario
+    // silencioso de "borrar MI cuenta" (Felipe nunca decidió si eso debería
+    // pasar, y es demasiado destructivo para adivinarlo), se bloquea acá
+    // con un mensaje claro — mismo criterio que /api/reset-bitacora.
+    const subperfiles = await sql`SELECT id FROM bitacoras WHERE admin_user_id = ${req.userId}`;
+    if (subperfiles.length) {
+      return res.status(400).json({ error: 'No puedes borrar tu cuenta mientras administres subperfiles de otras personas — resuelve eso primero.' });
+    }
 
     // Antes eran 13 sentencias sueltas: una falla a mitad de camino podía
     // dejar la cuenta a medio borrar — por ejemplo, sin bitácora propia
@@ -2144,13 +2705,13 @@ async function loadMemorySummary(userId) {
 // entrevistadora las use como contexto (ver también loadPendingMedia, que
 // hace lo mismo para fotos/video pero como arranque estructurado de la
 // charla, no como contexto de fondo).
-async function loadFamilyContext(userId) {
+async function loadFamilyContext(profileUserId, esPropia) {
   await ensureSchema();
-  const notes = await sql`SELECT contributor, parentesco, texto FROM family_notes WHERE user_id = ${userId} AND en_progreso = false ORDER BY created_at DESC LIMIT 20`;
-  const perfil = await sql`SELECT fecha_nacimiento FROM users WHERE id = ${userId}`;
+  const notes = await sql`SELECT contributor, parentesco, texto FROM family_notes WHERE user_id = ${profileUserId} AND en_progreso = false ORDER BY created_at DESC LIMIT 20`;
+  const perfil = await leerPerfilBitacora(profileUserId, esPropia);
 
   let text = '';
-  const fechaNacimiento = fechaComoInputDate(perfil[0] && perfil[0].fecha_nacimiento);
+  const fechaNacimiento = fechaComoInputDate(perfil && perfil.fecha_nacimiento);
   if (fechaNacimiento) {
     // Dato de contexto, no una instrucción de qué preguntar — así la
     // entrevistadora entiende mejor las épocas que la persona menciona
@@ -2417,7 +2978,7 @@ function parseJsonArray(raw) {
   }
 }
 
-async function updateFamilyTree(userId, newExchanges) {
+async function updateFamilyTree(userId, esPropia, newExchanges) {
   try {
     const nuevaCharla = (newExchanges || [])
       .filter((m) => m.role === 'user' || m.role === 'assistant')
@@ -2486,10 +3047,7 @@ async function updateFamilyTree(userId, newExchanges) {
     const nombresPrevios = new Set(personasPrevias.map((p) => p.nombre));
     const nombresNuevos = personas.map((p) => p.nombre).filter((n) => !nombresPrevios.has(n));
     if (nombresNuevos.length) {
-      const rows = await sql`SELECT tree_pending_names FROM users WHERE id = ${userId}`;
-      const pendientes = new Set(parseJsonArray(rows[0] && rows[0].tree_pending_names));
-      nombresNuevos.forEach((n) => pendientes.add(n));
-      await sql`UPDATE users SET tree_pending_names = ${JSON.stringify(Array.from(pendientes))} WHERE id = ${userId}`;
+      await agregarNombresPendientesArbol(userId, esPropia, nombresNuevos);
     }
 
     // Antes, el borrado y cada inserción (de personas y de eventos, dos
@@ -2709,7 +3267,7 @@ async function dejarUnaSolaPregunta(texto) {
   return final;
 }
 
-app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiReadOnly, rateLimit, async (req, res) => {
+app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar, bloquearSiReadOnly, rateLimit, async (req, res) => {
   try {
     const history = Array.isArray(req.body.history) ? req.body.history.slice(0, 60) : [];
     for (const m of history) {
@@ -2719,20 +3277,20 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiReadOnly, rate
       if (m.content.length > 4000) m.content = m.content.slice(0, 4000);
     }
     const mode = req.body.mode === 'arbol' ? 'arbol' : 'historia';
-    const memoria = await loadMemorySummary(req.userId);
+    const memoria = await loadMemorySummary(req.profileUserId);
     const esPrimeraVez = mode === 'historia' && !memoria && !history.length;
     // Si un colaborador aportó una historia y todavía no se la contamos al
     // dueño de la bitácora, esta es la próxima charla nueva que arranca —
     // el momento justo para abrir con eso, no la primera vez (esa ya tiene
     // su propia bienvenida) ni en medio de una charla ya empezada.
     const notaPendiente = mode === 'historia' && !esPrimeraVez && !history.length
-      ? await loadPendingFamilyNote(req.userId)
+      ? await loadPendingFamilyNote(req.profileUserId)
       : null;
     // Solo se busca si no hay ya una nota pendiente (esa tiene prioridad) —
     // no hace falta resolver ambas a la vez porque solo una puede ser el
     // arranque de ESTA charla; la otra sigue esperando para la próxima.
     const mediaPendiente = mode === 'historia' && !esPrimeraVez && !history.length && !notaPendiente
-      ? await loadPendingMedia(req.userId)
+      ? await loadPendingMedia(req.profileUserId)
       : null;
     const startPrompt = mode === 'arbol'
       ? '(La persona acaba de presionar el botón para armar el árbol genealógico. Salúdala cálidamente por su nombre si lo sabes, cuéntale brevemente que hoy vas a preguntarle por su familia para armar el árbol, y arranca preguntando por la primera persona que falte — revisa la lista de "personas que ya se conocen" más abajo antes de preguntar, y si ya están sus papás, salta directo a hermanos, abuelos, tíos, pareja o hijos, lo que falte.)'
@@ -2766,10 +3324,10 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiReadOnly, rate
 
     let system;
     if (mode === 'arbol') {
-      const conocidos = await loadKnownFamilyMembers(req.userId);
+      const conocidos = await loadKnownFamilyMembers(req.profileUserId);
       system = ARBOL_SYSTEM_PROMPT + conocidos;
     } else {
-      const familia = await loadFamilyContext(req.userId);
+      const familia = await loadFamilyContext(req.profileUserId, req.bitacoraEsPropia);
       system =
         SYSTEM_PROMPT +
         (memoria ? `\n\nResumen de charlas anteriores (no repitas lo que ya está acá):` + envolverDatoNoConfiable('resumen_charlas_anteriores', memoria) : '') +
@@ -2839,6 +3397,8 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiReadOnly, rate
     const ultimaRespuesta = [...history].reverse().find((m) => m.role === 'user' && !/^\(.*\)$/.test(m.content.trim()));
     if (mode === 'historia' && ultimaRespuesta && ultimaRespuesta.content.length >= HISTORIA_MIN_CHARS) {
       const audioUrl = urlHttpValida(typeof req.body.lastAudioUrl === 'string' ? req.body.lastAudioUrl.slice(0, 1000) : null);
+      const mediaUrlsLimpias = limpiarMediaAdjunta(req.body.mediaUrls);
+      const mediaUrlsJson = mediaUrlsLimpias.length ? JSON.stringify(mediaUrlsLimpias) : null;
       const textoAGuardar = capitalizarInicio(ultimaRespuesta.content);
       try {
         // "history" trae TODOS los turnos de la sesión, así que si el
@@ -2849,15 +3409,19 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiReadOnly, rate
         // es exactamente la misma de la llamada anterior y se insertaba de
         // nuevo como una fila aparte. Antes de insertar, nos fijamos si esta
         // MISMA historia ya quedó guardada hace poco para esta cuenta — si
-        // sí, no la duplicamos; si esta vez sí llegó el audio y antes no,
-        // aprovechamos y se lo completamos a esa fila en vez de perderlo.
-        const previa = await sql`SELECT id, audio_url FROM story_log WHERE user_id = ${req.userId} AND texto = ${textoAGuardar} AND created_at > now() - interval '10 minutes' ORDER BY created_at DESC LIMIT 1`;
+        // sí, no la duplicamos; si esta vez sí llegó el audio (o la foto) y
+        // antes no, aprovechamos y se lo completamos a esa fila en vez de
+        // perderlo.
+        const previa = await sql`SELECT id, audio_url, media_urls FROM story_log WHERE user_id = ${req.profileUserId} AND texto = ${textoAGuardar} AND created_at > now() - interval '10 minutes' ORDER BY created_at DESC LIMIT 1`;
         if (previa.length) {
           if (audioUrl && !previa[0].audio_url) {
             await sql`UPDATE story_log SET audio_url = ${audioUrl} WHERE id = ${previa[0].id}`;
           }
+          if (mediaUrlsJson && !previa[0].media_urls) {
+            await sql`UPDATE story_log SET media_urls = ${mediaUrlsJson} WHERE id = ${previa[0].id}`;
+          }
         } else {
-          await sql`INSERT INTO story_log (user_id, texto, audio_url) VALUES (${req.userId}, ${textoAGuardar}, ${audioUrl})`;
+          await sql`INSERT INTO story_log (user_id, texto, audio_url, media_urls) VALUES (${req.profileUserId}, ${textoAGuardar}, ${audioUrl}, ${mediaUrlsJson})`;
         }
       } catch (err) {
         console.error('No se pudo guardar en story_log:', err);
@@ -3194,7 +3758,7 @@ app.get('/api/media-file', requireAuth, async (req, res) => {
 // Mismo ajuste que en /api/transcribe: 4mb en vez de 20mb, para que sea
 // esta ruta la que rechace con un mensaje claro un audio muy largo, en vez
 // de que lo rechace la plataforma con un error genérico.
-app.post('/api/save-audio', requireAuth, bloquearColaborador, rateLimit, express.raw({ type: '*/*', limit: '4mb' }), async (req, res) => {
+app.post('/api/save-audio', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar, rateLimit, express.raw({ type: '*/*', limit: '4mb' }), async (req, res) => {
   try {
     const { sessionId, index, role } = req.query;
     if (!sessionId || index === undefined || !role) {
@@ -3210,7 +3774,7 @@ app.post('/api/save-audio', requireAuth, bloquearColaborador, rateLimit, express
     }
     const real = await verificarArchivoReal(req.body, AUDIO_MIME_PERMITIDOS);
     if (!real) return res.status(400).json({ error: 'El archivo no parece ser un audio válido.' });
-    const filename = `audio/${req.userId}/${safeSession}/${safeRole}-${safeIndex}.${real.ext}`;
+    const filename = `audio/${req.profileUserId}/${safeSession}/${safeRole}-${safeIndex}.${real.ext}`;
 
     // TEMPORAL: vuelto a 'public' — el store de Vercel Blob conectado en
     // producción no está configurado para aceptar access:'private' todavía
@@ -3395,13 +3959,29 @@ async function guardarBorradorAporte(ownerId, draftId, historyHastaAhora, audioU
 // finalizarAporte (charla) y desde /api/contribute-story (formulario
 // corto, sin charla). Falla en silencio a propósito: que la campanita no
 // se actualice nunca debería tirar abajo el guardado real del aporte.
+// BACKLOG #12: "ownerId" acá puede ser una cuenta real (users) o un
+// subperfil (bitacoras) — a diferencia de otros lugares, acá no siempre se
+// sabe de antemano cuál de las dos es (puede llegar por resolveProfileUserId
+// desde varios caminos distintos), así que se prueba primero contra users
+// (el caso de siempre, más común) y solo si no hay fila ahí se prueba
+// contra bitacoras — en vez de exigir que cada llamador sepa y pase la
+// respuesta correcta.
 async function marcarAportePendiente(ownerId, contributorName) {
   try {
     const nombre = (contributorName || '').trim() || 'Un familiar';
-    const rows = await sql`SELECT aportes_pending_names FROM users WHERE id = ${ownerId}`;
-    const pendientes = new Set(parseJsonArray(rows[0] && rows[0].aportes_pending_names));
-    pendientes.add(nombre);
-    await sql`UPDATE users SET aportes_pending_names = ${JSON.stringify(Array.from(pendientes))} WHERE id = ${ownerId}`;
+    const enUsers = await sql`SELECT aportes_pending_names FROM users WHERE id = ${ownerId}`;
+    if (enUsers.length) {
+      const pendientes = new Set(parseJsonArray(enUsers[0].aportes_pending_names));
+      pendientes.add(nombre);
+      await sql`UPDATE users SET aportes_pending_names = ${JSON.stringify(Array.from(pendientes))} WHERE id = ${ownerId}`;
+      return;
+    }
+    const enBitacoras = await sql`SELECT aportes_pending_names FROM bitacoras WHERE id = ${ownerId}`;
+    if (enBitacoras.length) {
+      const pendientes = new Set(parseJsonArray(enBitacoras[0].aportes_pending_names));
+      pendientes.add(nombre);
+      await sql`UPDATE bitacoras SET aportes_pending_names = ${JSON.stringify(Array.from(pendientes))} WHERE id = ${ownerId}`;
+    }
   } catch (err) {
     console.error('No se pudo marcar el aporte pendiente:', err);
   }
@@ -3647,8 +4227,8 @@ app.get('/api/contributions', requireAuth, async (req, res) => {
 app.get('/api/story-log', requireAuth, bloquearColaborador, async (req, res) => {
   try {
     await ensureSchema();
-    const rows = await sql`SELECT id, texto, audio_url, created_at FROM story_log WHERE user_id = ${req.userId} ORDER BY created_at DESC LIMIT 50`;
-    res.json({ stories: rows.map((r) => ({ ...r, texto: capitalizarInicio(r.texto) })) });
+    const rows = await sql`SELECT id, texto, audio_url, media_urls, created_at FROM story_log WHERE user_id = ${req.profileUserId} ORDER BY created_at DESC LIMIT 50`;
+    res.json({ stories: rows.map((r) => ({ ...r, texto: capitalizarInicio(r.texto), media_urls: parseJsonArray(r.media_urls) })) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo cargar el log de historias.' });
@@ -3705,10 +4285,13 @@ async function embeberArchivosEnZip(archive, items, presupuestoInicial) {
 app.get('/api/export', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
   try {
     await ensureSchema();
-    const userId = req.userId;
+    const userId = req.profileUserId;
 
-    const [perfilRows, historias, resumenRows, aportesRaw, media, miembrosRaw, eventos, capitulosRaw] = await Promise.all([
-      sql`SELECT name, username, email, fecha_nacimiento, created_at FROM users WHERE id = ${userId}`,
+    // El perfil (nombre/fecha de nacimiento) se resuelve aparte con el
+    // mismo helper que usa loadFamilyContext — "users" para la bitácora
+    // propia, "bitacoras" para un subperfil (que no tiene username/email/
+    // created_at de cuenta, solo lo que se le puso al crearlo).
+    const [historias, resumenRows, aportesRaw, media, miembrosRaw, eventos, capitulosRaw] = await Promise.all([
       sql`SELECT id, texto, audio_url, created_at FROM story_log WHERE user_id = ${userId} ORDER BY created_at ASC`,
       sql`SELECT texto FROM resumen WHERE user_id = ${userId}`,
       sql`SELECT id, contributor, parentesco, protagonista, texto, audio_url, audio_urls, created_at FROM family_notes WHERE user_id = ${userId} ORDER BY created_at ASC`,
@@ -3717,8 +4300,17 @@ app.get('/api/export', requireAuth, bloquearColaborador, rateLimit, async (req, 
       sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${userId} ORDER BY anio NULLS LAST, id ASC`,
       sql`SELECT title, theme, generated_text, story_ids, created_at FROM chapters WHERE user_id = ${userId} ORDER BY created_at ASC`,
     ]);
-
-    const perfil = perfilRows[0] || {};
+    const perfilBitacora = await leerPerfilBitacora(userId, req.bitacoraEsPropia);
+    const perfilCuenta = req.bitacoraEsPropia
+      ? (await sql`SELECT username, email FROM users WHERE id = ${userId}`)[0]
+      : null;
+    const perfil = {
+      name: (perfilBitacora && perfilBitacora.nombre) || null,
+      username: (perfilCuenta && perfilCuenta.username) || null,
+      email: (perfilCuenta && perfilCuenta.email) || null,
+      fecha_nacimiento: perfilBitacora && perfilBitacora.fecha_nacimiento,
+      created_at: perfilBitacora && perfilBitacora.created_at,
+    };
     // Los audios/fotos/videos se guardan con acceso privado en Blob (ver
     // /api/media-file más arriba) — un link directo a Blob ya no sirve para
     // nada fuera de la app. En su lugar, el export lleva un link a la propia
@@ -3738,7 +4330,7 @@ app.get('/api/export', requireAuth, bloquearColaborador, rateLimit, async (req, 
     const capitulos = capitulosRaw.map((c) => ({ ...c, story_ids: parseJsonArray(c.story_ids) }));
 
     const fechaExport = new Date().toISOString().slice(0, 10);
-    const nombreArchivo = `bitacora-${String(perfil.username || 'export').replace(/[^a-zA-Z0-9_-]/g, '')}-${fechaExport}.zip`;
+    const nombreArchivo = `bitacora-${String(perfil.username || perfil.name || 'export').replace(/[^a-zA-Z0-9_-]/g, '')}-${fechaExport}.zip`;
 
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${nombreArchivo}"`);
@@ -3911,7 +4503,7 @@ app.post('/api/chapters/generate', requireAuth, bloquearColaborador, rateLimit, 
   try {
     const persona = req.body.persona === 'primera' ? 'primera' : 'tercera';
     await ensureSchema();
-    const stories = await sql`SELECT id, texto, created_at FROM story_log WHERE user_id = ${req.userId} ORDER BY created_at ASC`;
+    const stories = await sql`SELECT id, texto, created_at FROM story_log WHERE user_id = ${req.profileUserId} ORDER BY created_at ASC`;
     if (!stories.length) {
       return res.json({ ok: true, message: 'Todavía no hay historias detectadas en la charla para armar capítulos.', chapters: [] });
     }
@@ -3953,9 +4545,9 @@ app.post('/api/chapters/generate', requireAuth, bloquearColaborador, rateLimit, 
     // contra el mock de los tests (que ejecuta cada sql\`...\` apenas se
     // lo llama, no de forma perezosa como el driver real).
     const resultadosTransaccion = await sql.transaction([
-      sql`DELETE FROM chapters WHERE user_id = ${req.userId}`,
+      sql`DELETE FROM chapters WHERE user_id = ${req.profileUserId}`,
       ...nuevos.map((c) => sql`INSERT INTO chapters (user_id, title, theme, generated_text, story_ids, persona) VALUES (
-        ${req.userId}, ${c.title}, ${c.theme}, ${c.generated_text}, ${JSON.stringify(c.ids)}, ${persona}
+        ${req.profileUserId}, ${c.title}, ${c.theme}, ${c.generated_text}, ${JSON.stringify(c.ids)}, ${persona}
       ) RETURNING id, title, theme, generated_text, story_ids, persona, created_at`),
     ]);
     const guardados = resultadosTransaccion.slice(1).map((row) => ({ ...row[0], story_ids: parseJsonArray(row[0].story_ids) }));
@@ -3970,11 +4562,11 @@ app.post('/api/chapters/generate', requireAuth, bloquearColaborador, rateLimit, 
 app.get('/api/chapters', requireAuth, bloquearColaborador, async (req, res) => {
   try {
     await ensureSchema();
-    const rows = await sql`SELECT id, title, theme, generated_text, story_ids, persona, created_at FROM chapters WHERE user_id = ${req.userId} ORDER BY id`;
+    const rows = await sql`SELECT id, title, theme, generated_text, story_ids, persona, created_at FROM chapters WHERE user_id = ${req.profileUserId} ORDER BY id`;
     // Cada capítulo viene de una o más historias de story_log (story_ids) —
     // las que tengan audio guardado se mandan acá para poder escucharlas
     // junto al capítulo, no solo leerlo.
-    const audioRows = await sql`SELECT id, audio_url FROM story_log WHERE user_id = ${req.userId} AND audio_url IS NOT NULL`;
+    const audioRows = await sql`SELECT id, audio_url FROM story_log WHERE user_id = ${req.profileUserId} AND audio_url IS NOT NULL`;
     const audioPorId = new Map(audioRows.map((r) => [r.id, r.audio_url]));
     const chapters = rows.map((c) => {
       const storyIds = parseJsonArray(c.story_ids);
@@ -3993,7 +4585,7 @@ app.delete('/api/chapters/:id', requireAuth, bloquearColaborador, rateLimit, asy
     await ensureSchema();
     const id = parseInt(req.params.id, 10);
     if (!Number.isFinite(id)) return res.status(400).json({ error: 'Id inválido.' });
-    const rows = await sql`DELETE FROM chapters WHERE id = ${id} AND user_id = ${req.userId} RETURNING id`;
+    const rows = await sql`DELETE FROM chapters WHERE id = ${id} AND user_id = ${req.profileUserId} RETURNING id`;
     if (!rows.length) return res.status(404).json({ error: 'No se encontró ese capítulo.' });
     res.json({ ok: true });
   } catch (err) {
@@ -4005,14 +4597,14 @@ app.delete('/api/chapters/:id', requireAuth, bloquearColaborador, rateLimit, asy
 app.get('/api/tree', requireAuth, bloquearColaborador, async (req, res) => {
   try {
     await ensureSchema();
-    const peopleRaw = await sql`SELECT id, nombre, relacion, detalles, padres, es_principal FROM family_members WHERE user_id = ${req.userId} ORDER BY id`;
+    const peopleRaw = await sql`SELECT id, nombre, relacion, detalles, padres, es_principal FROM family_members WHERE user_id = ${req.profileUserId} ORDER BY id`;
     const people = peopleRaw.map((p) => ({
       ...p,
       nombre: capitalizarNombre(p.nombre),
       padres: parseJsonArray(p.padres).map(capitalizarNombre),
       es_principal: !!p.es_principal,
     }));
-    const events = await sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${req.userId} ORDER BY anio NULLS LAST, id`;
+    const events = await sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${req.profileUserId} ORDER BY anio NULLS LAST, id`;
     res.json({ people, events });
   } catch (err) {
     console.error(err);
@@ -4030,7 +4622,7 @@ app.put('/api/tree/person/:id', requireAuth, bloquearColaborador, rateLimit, asy
     const id = parseInt(req.params.id, 10);
     if (!id) return res.status(400).json({ error: 'Falta el id.' });
 
-    const rows = await sql`SELECT nombre, relacion, padres FROM family_members WHERE id = ${id} AND user_id = ${req.userId}`;
+    const rows = await sql`SELECT nombre, relacion, padres FROM family_members WHERE id = ${id} AND user_id = ${req.profileUserId}`;
     if (!rows.length) return res.status(404).json({ error: 'No se encontró esa persona.' });
     const nombreAnterior = rows[0].nombre;
     const relacionAnterior = rows[0].relacion;
@@ -4067,18 +4659,18 @@ app.put('/api/tree/person/:id', requireAuth, bloquearColaborador, rateLimit, asy
     }
 
     if (padresUpdate !== undefined) {
-      await sql`UPDATE family_members SET nombre = ${cleanNombre}, relacion = ${cleanRelacion}, padres = ${padresUpdate.length ? JSON.stringify(padresUpdate) : null} WHERE id = ${id} AND user_id = ${req.userId}`;
+      await sql`UPDATE family_members SET nombre = ${cleanNombre}, relacion = ${cleanRelacion}, padres = ${padresUpdate.length ? JSON.stringify(padresUpdate) : null} WHERE id = ${id} AND user_id = ${req.profileUserId}`;
     } else {
-      await sql`UPDATE family_members SET nombre = ${cleanNombre}, relacion = ${cleanRelacion} WHERE id = ${id} AND user_id = ${req.userId}`;
+      await sql`UPDATE family_members SET nombre = ${cleanNombre}, relacion = ${cleanRelacion} WHERE id = ${id} AND user_id = ${req.profileUserId}`;
     }
 
     if (cleanNombre !== nombreAnterior) {
-      const otros = await sql`SELECT id, padres FROM family_members WHERE user_id = ${req.userId} AND padres IS NOT NULL AND id != ${id}`;
+      const otros = await sql`SELECT id, padres FROM family_members WHERE user_id = ${req.profileUserId} AND padres IS NOT NULL AND id != ${id}`;
       for (const o of otros) {
         const lista = parseJsonArray(o.padres);
         if (!lista.includes(nombreAnterior)) continue;
         const actualizada = lista.map((n) => (n === nombreAnterior ? cleanNombre : n));
-        await sql`UPDATE family_members SET padres = ${JSON.stringify(actualizada)} WHERE id = ${o.id} AND user_id = ${req.userId}`;
+        await sql`UPDATE family_members SET padres = ${JSON.stringify(actualizada)} WHERE id = ${o.id} AND user_id = ${req.profileUserId}`;
       }
     }
 
@@ -4100,12 +4692,12 @@ app.post('/api/tree/person/:id/marcar-principal', requireAuth, bloquearColaborad
     const id = parseInt(req.params.id, 10);
     if (!id) return res.status(400).json({ error: 'Falta el id.' });
 
-    const rows = await sql`SELECT id FROM family_members WHERE id = ${id} AND user_id = ${req.userId}`;
+    const rows = await sql`SELECT id FROM family_members WHERE id = ${id} AND user_id = ${req.profileUserId}`;
     if (!rows.length) return res.status(404).json({ error: 'No se encontró esa persona.' });
 
     await sql.transaction([
-      sql`UPDATE family_members SET es_principal = false WHERE user_id = ${req.userId} AND es_principal = true`,
-      sql`UPDATE family_members SET es_principal = true WHERE id = ${id} AND user_id = ${req.userId}`,
+      sql`UPDATE family_members SET es_principal = false WHERE user_id = ${req.profileUserId} AND es_principal = true`,
+      sql`UPDATE family_members SET es_principal = true WHERE id = ${id} AND user_id = ${req.profileUserId}`,
     ]);
 
     res.json({ ok: true });
@@ -4130,7 +4722,7 @@ app.delete('/api/tree/person/:id', requireAuth, bloquearColaborador, rateLimit, 
     const id = parseInt(req.params.id, 10);
     if (!id) return res.status(400).json({ error: 'Falta el id.' });
 
-    const rows = await sql`SELECT nombre, relacion, padres, es_principal FROM family_members WHERE id = ${id} AND user_id = ${req.userId}`;
+    const rows = await sql`SELECT nombre, relacion, padres, es_principal FROM family_members WHERE id = ${id} AND user_id = ${req.profileUserId}`;
     if (!rows.length) return res.status(404).json({ error: 'No se encontró esa persona.' });
     if (rows[0].es_principal) return res.status(400).json({ error: 'Esta persona está marcada como "Yo" — marca a otra persona como principal antes de borrarla.' });
     const nombreBorrado = rows[0].nombre;
@@ -4139,18 +4731,18 @@ app.delete('/api/tree/person/:id', requireAuth, bloquearColaborador, rateLimit, 
     await sql`INSERT INTO historia_versiones (tabla, registro_id, texto_anterior, editado_por)
               VALUES ('family_members', ${id}, ${estadoAnterior}, ${req.userId})`;
 
-    await sql`DELETE FROM family_members WHERE id = ${id} AND user_id = ${req.userId}`;
+    await sql`DELETE FROM family_members WHERE id = ${id} AND user_id = ${req.profileUserId}`;
 
     // Nadie más se queda apuntando, en su "padres", a un nombre que ya no
     // existe — si no se limpia, esa persona queda "flotando" sin línea,
     // igual que con una referencia mal escrita (ver
     // resolverPadresPorNombreParecido).
-    const otros = await sql`SELECT id, padres FROM family_members WHERE user_id = ${req.userId} AND padres IS NOT NULL`;
+    const otros = await sql`SELECT id, padres FROM family_members WHERE user_id = ${req.profileUserId} AND padres IS NOT NULL`;
     for (const o of otros) {
       const lista = parseJsonArray(o.padres);
       if (!lista.includes(nombreBorrado)) continue;
       const actualizada = lista.filter((n) => n !== nombreBorrado);
-      await sql`UPDATE family_members SET padres = ${actualizada.length ? JSON.stringify(actualizada) : null} WHERE id = ${o.id} AND user_id = ${req.userId}`;
+      await sql`UPDATE family_members SET padres = ${actualizada.length ? JSON.stringify(actualizada) : null} WHERE id = ${o.id} AND user_id = ${req.profileUserId}`;
     }
 
     res.json({ ok: true });
@@ -4165,8 +4757,8 @@ app.delete('/api/tree/person/:id', requireAuth, bloquearColaborador, rateLimit, 
 app.get('/api/tree/pending', requireAuth, bloquearColaborador, async (req, res) => {
   try {
     await ensureSchema();
-    const rows = await sql`SELECT tree_pending_names FROM users WHERE id = ${req.userId}`;
-    res.json({ names: parseJsonArray(rows[0] && rows[0].tree_pending_names) });
+    const names = await leerNombresPendientesArbol(req.profileUserId, req.bitacoraEsPropia);
+    res.json({ names });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo consultar el árbol.' });
@@ -4176,7 +4768,7 @@ app.get('/api/tree/pending', requireAuth, bloquearColaborador, async (req, res) 
 app.post('/api/tree/mark-seen', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
   try {
     await ensureSchema();
-    await sql`UPDATE users SET tree_pending_names = NULL WHERE id = ${req.userId}`;
+    await limpiarNombresPendientesArbol(req.profileUserId, req.bitacoraEsPropia);
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -4187,11 +4779,16 @@ app.post('/api/tree/mark-seen', requireAuth, bloquearColaborador, rateLimit, asy
 // Campanita de aviso en el ícono de "Aportes" (💬): quién terminó de
 // aportar una historia desde la última vez que se abrió
 // /colaboraciones.html. Mismo mecanismo que /api/tree/pending de arriba,
-// aplicado a family_notes en vez del árbol (ver marcarAportePendiente()).
+// aplicado a family_notes en vez del árbol (ver marcarAportePendiente()). Un
+// subperfil (BACKLOG #12) ahora sí puede tener su propio invite_code y
+// recibir aportes igual que una cuenta normal, así que acá también hace
+// falta ramificar según req.bitacoraEsPropia (users vs. bitacoras).
 app.get('/api/aportes/pending', requireAuth, bloquearColaborador, async (req, res) => {
   try {
     await ensureSchema();
-    const rows = await sql`SELECT aportes_pending_names FROM users WHERE id = ${req.userId}`;
+    const rows = req.bitacoraEsPropia
+      ? await sql`SELECT aportes_pending_names FROM users WHERE id = ${req.profileUserId}`
+      : await sql`SELECT aportes_pending_names FROM bitacoras WHERE id = ${req.profileUserId}`;
     res.json({ names: parseJsonArray(rows[0] && rows[0].aportes_pending_names) });
   } catch (err) {
     console.error(err);
@@ -4202,7 +4799,8 @@ app.get('/api/aportes/pending', requireAuth, bloquearColaborador, async (req, re
 app.post('/api/aportes/mark-seen', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
   try {
     await ensureSchema();
-    await sql`UPDATE users SET aportes_pending_names = NULL WHERE id = ${req.userId}`;
+    if (req.bitacoraEsPropia) await sql`UPDATE users SET aportes_pending_names = NULL WHERE id = ${req.profileUserId}`;
+    else await sql`UPDATE bitacoras SET aportes_pending_names = NULL WHERE id = ${req.profileUserId}`;
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -4220,7 +4818,7 @@ app.get('/api/tree/colaboradores', requireAuth, bloquearColaborador, async (req,
     const rows = await sql`
       SELECT contributor, parentesco, COUNT(*) AS historias
       FROM family_notes
-      WHERE user_id = ${req.userId} AND contributor IS NOT NULL
+      WHERE user_id = ${req.profileUserId} AND contributor IS NOT NULL
       GROUP BY contributor, parentesco
       ORDER BY MIN(created_at) ASC
     `;
@@ -4242,19 +4840,19 @@ app.get('/api/tree/colaboradores', requireAuth, bloquearColaborador, async (req,
 app.post('/api/rebuild-tree', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
   try {
     await ensureSchema();
-    const sessions = await sql`SELECT intercambios FROM sessions WHERE user_id = ${req.userId} ORDER BY fecha ASC`;
+    const sessions = await sql`SELECT intercambios FROM sessions WHERE user_id = ${req.profileUserId} ORDER BY fecha ASC`;
     const todo = sessions.flatMap((s) => s.intercambios || []);
     if (!todo.length) return res.json({ ok: true, message: 'No hay charlas guardadas todavía.' });
 
-    await updateFamilyTree(req.userId, todo);
+    await updateFamilyTree(req.profileUserId, req.bitacoraEsPropia, todo);
 
-    const peopleRaw = await sql`SELECT nombre, relacion, detalles, padres FROM family_members WHERE user_id = ${req.userId} ORDER BY id`;
+    const peopleRaw = await sql`SELECT nombre, relacion, detalles, padres FROM family_members WHERE user_id = ${req.profileUserId} ORDER BY id`;
     const people = peopleRaw.map((p) => ({
       ...p,
       nombre: capitalizarNombre(p.nombre),
       padres: parseJsonArray(p.padres).map(capitalizarNombre),
     }));
-    const events = await sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${req.userId} ORDER BY anio NULLS LAST, id`;
+    const events = await sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${req.profileUserId} ORDER BY anio NULLS LAST, id`;
     res.json({ ok: true, people, events });
   } catch (err) {
     console.error(err);
@@ -4262,7 +4860,7 @@ app.post('/api/rebuild-tree', requireAuth, bloquearColaborador, rateLimit, async
   }
 });
 
-app.post('/api/save', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
+app.post('/api/save', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar, rateLimit, async (req, res) => {
   try {
     const history = Array.isArray(req.body.history) ? req.body.history.slice(0, 100) : [];
     for (const m of history) {
@@ -4284,11 +4882,11 @@ app.post('/api/save', requireAuth, bloquearColaborador, rateLimit, async (req, r
     let sessionDbId = null;
     if (existingId) {
       const updated = await sql`UPDATE sessions SET intercambios = ${JSON.stringify(history)}::jsonb
-                                 WHERE id = ${existingId} AND user_id = ${req.userId} RETURNING id`;
+                                 WHERE id = ${existingId} AND user_id = ${req.profileUserId} RETURNING id`;
       sessionDbId = updated.length ? updated[0].id : null;
     }
     if (!sessionDbId) {
-      const inserted = await sql`INSERT INTO sessions (user_id, intercambios) VALUES (${req.userId}, ${JSON.stringify(history)}::jsonb) RETURNING id`;
+      const inserted = await sql`INSERT INTO sessions (user_id, intercambios) VALUES (${req.profileUserId}, ${JSON.stringify(history)}::jsonb) RETURNING id`;
       sessionDbId = inserted[0].id;
     }
 
@@ -4296,8 +4894,8 @@ app.post('/api/save', requireAuth, bloquearColaborador, rateLimit, async (req, r
     // manda la respuesta — "en segundo plano" no garantiza que termine).
     // Las dos actualizaciones van en paralelo porque son independientes.
     await Promise.all([
-      updateMemorySummary(req.userId, history).catch((err) => console.error('No se pudo actualizar el resumen:', err)),
-      updateFamilyTree(req.userId, history).catch((err) => console.error('No se pudo actualizar el árbol:', err)),
+      updateMemorySummary(req.profileUserId, history).catch((err) => console.error('No se pudo actualizar el resumen:', err)),
+      updateFamilyTree(req.profileUserId, req.bitacoraEsPropia, history).catch((err) => console.error('No se pudo actualizar el árbol:', err)),
     ]);
 
     res.json({ ok: true, sessionDbId });
@@ -4377,7 +4975,7 @@ app.get('/api/magic-login', rateLimit, async (req, res) => {
 });
 
 // --- Preferencias de recordatorio --------------------------------------
-app.get('/api/notification-preferences', requireAuth, bloquearColaborador, async (req, res) => {
+app.get('/api/notification-preferences', requireAuth, bloquearColaborador, bloquearInvitado, async (req, res) => {
   try {
     await ensureSchema();
     const rows = await sql`SELECT recordatorios_activos, frecuencia_dias FROM notification_preferences WHERE user_id = ${req.userId}`;
@@ -4388,7 +4986,7 @@ app.get('/api/notification-preferences', requireAuth, bloquearColaborador, async
   }
 });
 
-app.post('/api/notification-preferences', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
+app.post('/api/notification-preferences', requireAuth, bloquearColaborador, bloquearInvitado, rateLimit, async (req, res) => {
   try {
     const activos = req.body.recordatorios_activos !== false;
     const frecuencia = [7, 14, 30].includes(parseInt(req.body.frecuencia_dias, 10)) ? parseInt(req.body.frecuencia_dias, 10) : 14;
@@ -4495,23 +5093,59 @@ async function generarCodigoDeRegaloUnico() {
   return code;
 }
 
-async function avisarCodigoDeRegaloPorCorreo(boughtByUserId, code) {
+// Fecha de envío programado del regalo: 'YYYY-MM-DD', ni en el pasado ni más
+// de un año hacia adelante (evita fechas absurdas por error de tipeo). null
+// o vacío es válido — significa "mandar el correo apenas se confirme el
+// pago", el comportamiento de siempre.
+function limpiarFechaEnvioRegalo(fecha) {
+  if (!fecha || typeof fecha !== 'string') return null;
+  const limpia = fecha.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(limpia)) return null;
+  const hoy = new Date().toISOString().slice(0, 10);
+  const maximo = new Date(Date.now() + 366 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  if (limpia < hoy || limpia > maximo) return null;
+  return limpia;
+}
+
+function limpiarMensajeRegalo(mensaje) {
+  if (!mensaje || typeof mensaje !== 'string') return null;
+  return mensaje.trim().slice(0, 300) || null;
+}
+
+async function avisarCodigoDeRegaloPorCorreo(boughtByUserId, code, mensaje) {
   try {
     const compradorRows = await sql`SELECT email, name, username FROM users WHERE id = ${boughtByUserId}`;
     const comprador = compradorRows[0];
     if (comprador && comprador.email) {
-      await enviarCorreo({ to: comprador.email, subject: '¡Tu regalo está listo! 🎁', html: plantillaRegaloListo(capitalizarNombre(comprador.name || comprador.username) || 'hola', code) });
+      await enviarCorreo({ to: comprador.email, subject: '¡Tu regalo está listo! 🎁', html: plantillaRegaloListo(capitalizarNombre(comprador.name || comprador.username) || 'hola', code, mensaje) });
     }
   } catch (err) {
     console.error('No se pudo avisar por correo el código de regalo (el pago y el código ya quedaron guardados igual):', err);
   }
 }
 
+// Decide si el correo con el código va ya mismo o si lo deja para el cron
+// (ver /api/cron/billing) — sendOn en el pasado/hoy/null manda de una,
+// igual que siempre; sendOn futuro lo deja pendiente. email_sent_at es la
+// marca que evita mandarlo dos veces (acá y desde el cron, o dos corridas
+// del cron entre sí).
+async function enviarRegaloSegunFecha(giftRedemptionId, boughtByUserId, code, sendOn, mensaje) {
+  const hoy = new Date().toISOString().slice(0, 10);
+  // sendOn puede llegar como string ('YYYY-MM-DD') o como Date (según cómo
+  // lo haya parseado el driver al leerlo de una columna DATE) — se normaliza
+  // a string antes de comparar para no depender de cuál sea.
+  const sendOnStr = sendOn ? (sendOn instanceof Date ? sendOn.toISOString().slice(0, 10) : String(sendOn).slice(0, 10)) : null;
+  if (sendOnStr && sendOnStr > hoy) return;
+  const claim = await sql`UPDATE gift_redemptions SET email_sent_at = now() WHERE id = ${giftRedemptionId} AND email_sent_at IS NULL RETURNING id`;
+  if (!claim.length) return;
+  await avisarCodigoDeRegaloPorCorreo(boughtByUserId, code, mensaje);
+}
+
 app.get('/api/billing/plans', (req, res) => {
   res.json({ planes: PLANES, pagosConfigurados: !!WAVA_MERCHANT_KEY });
 });
 
-app.get('/api/billing/status', requireAuth, bloquearColaborador, async (req, res) => {
+app.get('/api/billing/status', requireAuth, bloquearColaborador, bloquearInvitado, async (req, res) => {
   try {
     await ensureSchema();
     const rows = await sql`SELECT plan_id, periodo, status, current_period_end, cancel_at_period_end FROM subscriptions WHERE user_id = ${req.userId}`;
@@ -4525,7 +5159,7 @@ app.get('/api/billing/status', requireAuth, bloquearColaborador, async (req, res
 // Crea el link de pago (checkout alojado por Wava) para arrancar o renovar
 // una suscripción. La suscripción en sí queda "pending" hasta que el
 // webhook confirme el pago — nunca se activa acá, del lado del cliente.
-app.post('/api/billing/checkout', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
+app.post('/api/billing/checkout', requireAuth, bloquearColaborador, bloquearInvitado, rateLimit, async (req, res) => {
   try {
     const planId = String(req.body.planId || '');
     const plan = PLANES[planId];
@@ -4606,10 +5240,12 @@ app.post('/api/billing/checkout', requireAuth, bloquearColaborador, rateLimit, a
 // código de canje (ver gift_redemptions) y se le avisa por correo a quien
 // compró; ese código es lo que después activa el plan en la cuenta de
 // quien lo reciba, sea cual sea esa cuenta — ver /api/billing/redeem-gift.
-app.post('/api/billing/gift-checkout', requireAuth, rateLimit, async (req, res) => {
+app.post('/api/billing/gift-checkout', requireAuth, bloquearInvitado, rateLimit, async (req, res) => {
   try {
     const plan = PLANES.regalo;
     const monto = plan.precioAnual;
+    const sendOn = limpiarFechaEnvioRegalo(req.body && req.body.sendOn);
+    const gift_message = limpiarMensajeRegalo(req.body && req.body.message);
 
     await ensureSchema();
     const orderKey = `gift-${req.userId}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
@@ -4617,18 +5253,19 @@ app.post('/api/billing/gift-checkout', requireAuth, rateLimit, async (req, res) 
 
     if (PAGOS_DUMMY) {
       // Sin Wava configurada: se simula el pago y se genera el código de
-      // una — no hay link externo al que mandar, así que el código se
-      // devuelve directo en la respuesta (además de intentar el correo,
-      // por si ya está Resend configurado aparte).
+      // una. Si sendOn quedó en el futuro, el correo NO se manda acá — lo
+      // manda el cron de /api/cron/billing cuando llegue el día — pero el
+      // código igual se devuelve directo en la respuesta para probar el
+      // resto del flujo sin esperar.
       const link = `${base}/app.html?regalo=ok`;
       const [orden] = await sql`
-        INSERT INTO billing_orders (subscription_id, user_id, order_key, wava_hash, wava_link, concepto, monto_cop, status, plan_id)
-        VALUES (NULL, ${req.userId}, ${orderKey}, NULL, ${link}, ${plan.nombre + ' (simulado)'}, ${monto}, 'paid', 'regalo')
+        INSERT INTO billing_orders (subscription_id, user_id, order_key, wava_hash, wava_link, concepto, monto_cop, status, plan_id, send_on, gift_message)
+        VALUES (NULL, ${req.userId}, ${orderKey}, NULL, ${link}, ${plan.nombre + ' (simulado)'}, ${monto}, 'paid', 'regalo', ${sendOn}, ${gift_message})
         RETURNING id
       `;
       const code = await generarCodigoDeRegaloUnico();
-      await sql`INSERT INTO gift_redemptions (code, billing_order_id, bought_by_user_id, plan_id, meses) VALUES (${code}, ${orden.id}, ${req.userId}, 'regalo', 12)`;
-      await avisarCodigoDeRegaloPorCorreo(req.userId, code);
+      const [gift] = await sql`INSERT INTO gift_redemptions (code, billing_order_id, bought_by_user_id, plan_id, meses, send_on, gift_message) VALUES (${code}, ${orden.id}, ${req.userId}, 'regalo', 12, ${sendOn}, ${gift_message}) RETURNING id`;
+      await enviarRegaloSegunFecha(gift.id, req.userId, code, sendOn, gift_message);
       return res.json({ ok: true, link, dummy: true, code });
     }
 
@@ -4656,8 +5293,8 @@ app.post('/api/billing/gift-checkout', requireAuth, rateLimit, async (req, res) 
     if (!link) return res.status(502).json({ error: 'No se pudo generar el link de pago.' });
 
     await sql`
-      INSERT INTO billing_orders (subscription_id, user_id, order_key, wava_hash, wava_link, concepto, monto_cop, status, plan_id)
-      VALUES (NULL, ${req.userId}, ${orderKey}, ${hash || null}, ${link}, ${plan.nombre}, ${monto}, 'pending', 'regalo')
+      INSERT INTO billing_orders (subscription_id, user_id, order_key, wava_hash, wava_link, concepto, monto_cop, status, plan_id, send_on, gift_message)
+      VALUES (NULL, ${req.userId}, ${orderKey}, ${hash || null}, ${link}, ${plan.nombre}, ${monto}, 'pending', 'regalo', ${sendOn}, ${gift_message})
     `;
 
     res.json({ ok: true, link });
@@ -4673,7 +5310,7 @@ app.post('/api/billing/gift-checkout', requireAuth, rateLimit, async (req, res) 
 // el plan de precios: "empiezan cuando el destinatario activa el
 // regalo") — por eso el vencimiento no se toca hasta acá, ni en el
 // checkout ni en el webhook de pago.
-app.post('/api/billing/redeem-gift', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
+app.post('/api/billing/redeem-gift', requireAuth, bloquearColaborador, bloquearInvitado, rateLimit, async (req, res) => {
   try {
     const code = String(req.body.code || '').trim().toUpperCase();
     if (!code) return res.status(400).json({ error: 'Falta el código.' });
@@ -4757,7 +5394,7 @@ app.post('/api/webhooks/wava', express.raw({ type: '*/*', limit: '256kb' }), asy
     if (!orderKey) return res.status(200).json({ ok: true }); // evento sin nada que podamos ubicar — no es un error nuestro
 
     await ensureSchema();
-    const filas = await sql`SELECT id, subscription_id, status, plan_id, user_id FROM billing_orders WHERE order_key = ${orderKey}`;
+    const filas = await sql`SELECT id, subscription_id, status, plan_id, user_id, send_on, gift_message FROM billing_orders WHERE order_key = ${orderKey}`;
     if (!filas.length) {
       console.error('Webhook de Wava para un order_key que no existe acá:', orderKey);
       return res.status(200).json({ ok: true });
@@ -4804,8 +5441,8 @@ app.post('/api/webhooks/wava', express.raw({ type: '*/*', limit: '256kb' }), asy
       `;
       if (!claim.length) return res.status(200).json({ ok: true }); // otra entrega ya ganó la carrera — idempotente
       const code = await generarCodigoDeRegaloUnico();
-      await sql`INSERT INTO gift_redemptions (code, billing_order_id, bought_by_user_id, plan_id, meses) VALUES (${code}, ${orden.id}, ${orden.user_id}, 'regalo', 12)`;
-      await avisarCodigoDeRegaloPorCorreo(orden.user_id, code);
+      const [gift] = await sql`INSERT INTO gift_redemptions (code, billing_order_id, bought_by_user_id, plan_id, meses, send_on, gift_message) VALUES (${code}, ${orden.id}, ${orden.user_id}, 'regalo', 12, ${orden.send_on}, ${orden.gift_message}) RETURNING id`;
+      await enviarRegaloSegunFecha(gift.id, orden.user_id, code, orden.send_on, orden.gift_message);
       return res.status(200).json({ ok: true });
     }
 
@@ -4831,11 +5468,19 @@ app.post('/api/webhooks/wava', express.raw({ type: '*/*', limit: '256kb' }), asy
   }
 });
 
-function plantillaRegaloListo(nombre, code) {
+function escapeHtmlCorreo(texto) {
+  return String(texto).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function plantillaRegaloListo(nombre, code, mensaje) {
+  const notaPersonal = mensaje
+    ? `<p style="background:#EFEAD9;border-radius:10px;padding:12px 14px;font-style:italic">"${escapeHtmlCorreo(mensaje)}"</p>`
+    : '';
   return `<div style="font-family:Georgia,serif;max-width:480px;margin:0 auto;color:#2B241C">
     <h1 style="font-size:1.3rem">¡Gracias, ${nombre}! 🎁</h1>
     <p>Tu regalo ya está pago. Este es el código para que la persona que lo va a recibir lo active desde su cuenta (Cuenta → Plan → Canjear un regalo):</p>
     <p style="font-family:monospace;font-size:1.6rem;font-weight:bold;letter-spacing:0.1em;text-align:center;background:#F5EFE2;padding:14px;border-radius:10px">${code}</p>
+    ${notaPersonal}
     <p style="color:#706551;font-size:.85rem">Los 12 meses empiezan a contar recién cuando lo canjeen, no desde hoy — se lo puedes mandar cuando quieras, no vence por tu lado.</p>
   </div>`;
 }
@@ -4929,7 +5574,25 @@ app.get('/api/cron/billing', async (req, res) => {
       RETURNING id
     `;
 
-    res.json({ ok: true, avisosEnviados, pasaronAPastDue: vencidas.length, canceladas: canceladas.length, pasaronAReadOnly: sinGracia.length });
+    // 4) Regalos con fecha de envío programada que ya llegó — el código y
+    // el pago ya existen desde que se confirmó la compra (ver
+    // /api/billing/gift-checkout y /api/webhooks/wava); acá solo se manda el
+    // correo que había quedado pendiente. email_sent_at IS NULL es lo que
+    // filtra los que ya se mandaron (de una, o en una corrida anterior de
+    // este mismo cron).
+    const regalosPorMandar = await sql`
+      SELECT id, code, bought_by_user_id, gift_message FROM gift_redemptions
+      WHERE send_on IS NOT NULL AND send_on <= CURRENT_DATE AND email_sent_at IS NULL
+    `;
+    let regalosMandados = 0;
+    for (const g of regalosPorMandar) {
+      const claim = await sql`UPDATE gift_redemptions SET email_sent_at = now() WHERE id = ${g.id} AND email_sent_at IS NULL RETURNING id`;
+      if (!claim.length) continue; // otra corrida ya lo mandó — idempotente
+      await avisarCodigoDeRegaloPorCorreo(g.bought_by_user_id, g.code, g.gift_message);
+      regalosMandados++;
+    }
+
+    res.json({ ok: true, avisosEnviados, pasaronAPastDue: vencidas.length, canceladas: canceladas.length, pasaronAReadOnly: sinGracia.length, regalosMandados });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo correr el ciclo de facturación.' });
