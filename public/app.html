@@ -2001,11 +2001,15 @@
   const AUDIO_MIN_DURATION_MS = 50 * 1000;
   // Grabaciones muy cortas (un ruido, un carraspeo, el micrófono
   // captando algo apenas antes de cortar) no se procesan como una
-  // respuesta real — se descartan igual que "no te escuché bien", sin
-  // gastar una llamada a transcribir ni dejar que ese texto (a veces
-  // ruido mal transcrito) se cuele en la charla como si la persona
-  // hubiera dicho algo.
-  const MIN_RESPUESTA_MS = 5 * 1000;
+  // respuesta real. OJO: esto era 5000ms y descartaba respuestas normales
+  // — una persona mayor contesta "sí", "en Medellín", "tres hermanos" en
+  // 2-3 segundos, y con la cola de silencio de SILENCE_MS eso quedaba en
+  // ~4s, por debajo del piso, así que se tiraba TODO y (como app.html
+  // vuelve a escuchar solo) la charla caía en "No logré escucharte" apenas
+  // la persona dejaba de hablar. 1000ms alcanza para filtrar un blip: una
+  // grabación de puro silencio dura ~SILENCE_MS (1200), y si de verdad no
+  // se dijo nada la transcripción vuelve vacía y ahí sí se reintenta.
+  const MIN_RESPUESTA_MS = 1000;
   // Se guarda el motivo real del fallo (ver startRecordingAudio) para poder
   // avisar algo más útil que "no pude usar el micrófono" cuando el problema
   // es que el permiso quedó bloqueado — que es el caso más común y el único

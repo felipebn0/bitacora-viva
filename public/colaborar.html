@@ -1129,6 +1129,20 @@
       // apenas carga la página).
       if (!interaccionReal) { await manejarDesenlaceDeTurno(data); return; }
 
+      // Si esta fue la despedida (la historia YA quedó guardada en el
+      // servidor), mostrar "✓ guardada" y colapsar la UI PRIMERO, y hablar
+      // la despedida después como un extra best-effort. Antes esto iba al
+      // revés: se esperaba a que speak() terminara para recién ahí avisar
+      // que quedó guardada — y si speak() se colgaba (pasa en Safari: el
+      // <audio> reproduce pero "onended" no dispara nunca), la persona se
+      // quedaba mirando el orbe en "···" sin ningún aviso y terminaba
+      // cerrando todo, aunque la historia sí se había guardado.
+      if (data.done) {
+        await manejarDesenlaceDeTurno(data);
+        try { speak(data.message, () => {}); } catch (e) {}
+        return;
+      }
+
       orb.dataset.state = 'speaking';
       orb.innerHTML = '···';
       orb.disabled = true;
@@ -1218,12 +1232,13 @@
   // turno siguiente.
   const MAX_TURN_MS = 150 * 1000;
   // Grabaciones muy cortas (un ruido, un carraspeo, el micrófono captando
-  // algo apenas antes de cortar) no se procesan como una respuesta real —
-  // se descartan igual que si no se hubiera grabado nada, sin gastar una
-  // llamada a transcribir. No aplica mientras se está respondiendo la
-  // aclaración de parentesco/año (esperandoAclaracion): ahí una respuesta
-  // corta ("en 1985") es esperada y válida, no ruido.
-  const MIN_RESPUESTA_MS = 5 * 1000;
+  // algo apenas antes de cortar) no se procesan como una respuesta real.
+  // Bajado de 5000ms: descartaba respuestas cortas legítimas (una
+  // grabación de puro silencio ya dura ~SILENCE_MS, y una frase breve
+  // real un poco más). Si de verdad no se dijo nada, la transcripción
+  // vuelve vacía y se maneja ahí. No aplica mientras se responde la
+  // aclaración de parentesco/año (esperandoAclaracion).
+  const MIN_RESPUESTA_MS = 1000;
   let grabacionIniciadaEn = 0;
   let audioContext = null;
   let analyser = null;
