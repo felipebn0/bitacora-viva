@@ -65,8 +65,21 @@
   }
   .perfil-card .fila-principal { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
   .perfil-card .acciones-fila { display: flex; gap: 8px; flex-wrap: wrap; }
+  .perfil-card .identidad { display: flex; align-items: center; gap: 14px; }
+  /* Mismo círculo con inicial que ya usa arbol.html (.avatar) — pedido de
+     Felipe, 2026-09-08, para que se vea igual de un vistazo en las dos
+     pantallas. */
+  .perfil-card .avatar {
+    width: 52px; height: 52px; border-radius: 50%; border: 2px solid var(--gold-deep);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    font-family: var(--font-display); font-size: 1.3rem; color: var(--gold-deep); background: var(--bg);
+  }
   .perfil-card .nombre { font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; margin: 0; }
   .perfil-card .activo-tag { color: var(--ink-soft); font-size: 0.85rem; }
+  .perfil-card .principal-tag {
+    display: inline-block; color: var(--gold-deep); font-size: 0.75rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.03em; margin-top: 2px;
+  }
   .btn {
     display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;
     text-align: center; text-decoration: none; border: none; background: var(--moss);
@@ -75,6 +88,7 @@
   }
   .btn:disabled { opacity: 0.6; cursor: default; }
   .btn.plain { background: none; color: var(--gold-deep); text-decoration: underline; padding: 10px 4px; min-width: auto; }
+  .btn.plain.warn { color: #a33; }
   .btn.small { padding: 8px 14px; min-height: 40px; font-size: 0.85rem; }
   .enlace-box { margin-top: 14px; padding-top: 14px; border-top: 1px solid #E7DFCC; }
   .enlace-box .enlace-texto { word-break: break-all; color: var(--ink-soft); font-size: 0.85rem; margin: 0 0 10px; }
@@ -163,15 +177,29 @@
 
   function filaPerfil(p) {
     const esActivo = p.esPropia ? !activaId : activaId === p.id;
+    const inicial = (p.nombre || '?').trim().charAt(0).toUpperCase();
+    const tagPrincipal = p.esPropia ? `<span class="principal-tag">Usuario principal</span>` : '';
     const cambiarBtn = esActivo
       ? `<span class="activo-tag">Bitácora activa ahora</span>`
       : `<button class="btn small" data-cambiar="${p.id}" type="button">Cambiar acá</button>`;
     const enlaceToggleBtn = p.esPropia ? '' : `<button class="btn small plain" data-enlace="${p.id}" type="button">${enlaceAbiertoId === p.id ? 'Ocultar enlace' : 'Compartir enlace para narrar'}</button>`;
+    // Archivar (pedido de Felipe, 2026-09-08): no borra nada, solo lo saca
+    // de esta lista y corta sus enlaces — ver POST /api/subprofiles/:id/archive.
+    // No se ofrece para "vos" (esPropia) ni para el perfil activo ahora
+    // mismo (el servidor lo rechazaría igual, pero es más claro no
+    // ofrecer un botón que va a fallar).
+    const archivarBtn = (!p.esPropia && !esActivo) ? `<button class="btn small plain warn" data-archivar="${p.id}" type="button">Archivar</button>` : '';
     const enlaceBox = enlaceAbiertoId === p.id ? `<div class="enlace-box" id="enlaceBox-${p.id}"><p class="msg">Cargando…</p></div>` : '';
     return `<div class="perfil-card">
       <div class="fila-principal">
-        <p class="nombre">${escaparHtml(p.nombre) || '(sin nombre)'}</p>
-        <div class="acciones-fila">${cambiarBtn}${enlaceToggleBtn}</div>
+        <div class="identidad">
+          <div class="avatar">${escaparHtml(inicial)}</div>
+          <div>
+            <p class="nombre">${escaparHtml(p.nombre) || '(sin nombre)'}</p>
+            ${tagPrincipal}
+          </div>
+        </div>
+        <div class="acciones-fila">${cambiarBtn}${enlaceToggleBtn}${archivarBtn}</div>
       </div>
       ${enlaceBox}
     </div>`;
@@ -287,6 +315,21 @@
         enlaceAbiertoId = null;
         pintarPerfiles();
       } catch (e4) {}
+      return;
+    }
+    const archivarId = Number(e.target.dataset.archivar);
+    if (archivarId) {
+      const perfil = perfilesCache.find((p) => p.id === archivarId);
+      const nombre = (perfil && perfil.nombre) || 'este perfil';
+      if (!confirm(`¿Archivar la bitácora de ${nombre}? Deja de aparecer acá y se corta su enlace de narrador — sus historias y su árbol quedan guardados, no se borra nada.`)) return;
+      try {
+        const resp = await fetch(`/api/subprofiles/${archivarId}/archive`, { method: 'POST' });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) { listaStatus.textContent = mensajeDeError(resp, data, 'No se pudo archivar el subperfil.'); return; }
+        await cargarPerfiles();
+      } catch (e6) {
+        listaStatus.textContent = 'No se pudo conectar. Intenta de nuevo.';
+      }
       return;
     }
   });

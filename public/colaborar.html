@@ -74,6 +74,10 @@
     *, *::before, *::after { animation: none !important; transition: none !important; }
   }
   h1 { font-family: var(--font-display); font-size: 1.5rem; margin: 0 0 4px; text-align: center; }
+  .guest-owner-name {
+    font-family: var(--font-display); font-size: 1.8rem; font-weight: 700;
+    color: var(--gold-deep); text-align: center; margin: 0 0 14px; line-height: 1.2;
+  }
   p.sub { color: var(--ink-soft); font-size: 0.92rem; margin: 0; text-align: center; }
   /* El link "Crea una" del login solo tenía el alto del texto como zona
      táctil. inline-flex + min-height lo agranda sin alterar el texto. */
@@ -320,22 +324,31 @@
     </div>
     <button id="loginBtn" type="button">Entrar</button>
     <p class="error" id="loginError" role="alert"></p>
-    <p class="sub pc-53425f7d">¿No tienes cuenta? <a class="pc-07135648" href="/?modo=colaborar#registro">Crea una</a>.</p>
+    <!-- ?modo=colaborar ya no hace nada (ver index.html, 2026-09-08: se
+         sacó "unirme con un código" del registro) — el link ahora manda
+         directo al registro normal. -->
+    <p class="sub pc-53425f7d">¿No tienes cuenta? <a class="pc-07135648" href="/#registro">Crea una</a>.</p>
   </div>
 
   <!-- Entrada de invitado: llega con ?codigo=XXXXXXXX (link de WhatsApp
        compartido desde app.html) — sin cuenta, sin clave, solo el nombre.
        Ver /api/guest-start. Distinto de #loginScreen a propósito: no tiene
        sentido pedirle usuario/clave a alguien que nunca va a crear cuenta. -->
+  <!-- Pedido de Felipe (2026-09-08): antes esto era una sola frase chica
+       ("Te invitaron a sumar una historia a la bitácora de Fulano.") — el
+       nombre se perdía en el medio del texto. Ahora la frase explica a
+       quién va a colaborar, y el nombre en sí se ve grande y aparte, mismo
+       tratamiento que el saludo de app.html (.greeting-name). -->
   <div class="login pc-93b8ea5b" id="guestScreen">
     <h1>Los recuerdos de mis viejos</h1>
-    <p class="sub pc-1015cafb" id="guestOwnerLine">Te invitaron a sumar una historia.</p>
+    <p class="sub pc-1015cafb">Te invitaron a colaborar con la bitácora de:</p>
+    <p class="guest-owner-name" id="guestOwnerName"></p>
+    <p class="error" id="guestError" role="alert"></p>
     <div class="login-field">
       <label for="guestName">Tu nombre</label>
       <input type="text" id="guestName" placeholder="¿Cómo te llamas?" autocomplete="given-name" maxlength="60">
     </div>
     <button id="guestStartBtn" type="button">Empezar</button>
-    <p class="error" id="guestError" role="alert"></p>
     <p class="sub pc-53425f7d">No hace falta crear cuenta ni clave — solo tu nombre.</p>
   </div>
 
@@ -469,7 +482,7 @@
   const checkingScreen = document.getElementById('checkingScreen');
   const loginScreen = document.getElementById('loginScreen');
   const guestScreen = document.getElementById('guestScreen');
-  const guestOwnerLine = document.getElementById('guestOwnerLine');
+  const guestOwnerName = document.getElementById('guestOwnerName');
   const guestName = document.getElementById('guestName');
   const guestStartBtn = document.getElementById('guestStartBtn');
   const guestError = document.getElementById('guestError');
@@ -651,14 +664,17 @@
     hubScreen.style.display = 'none';
     guestScreen.style.display = 'flex';
     guestError.textContent = '';
+    guestOwnerName.textContent = '';
     try {
       const resp = await fetch('/api/guest-code-info?codigo=' + encodeURIComponent(codigoInvitado));
       const data = await resp.json();
-      guestOwnerLine.textContent = resp.ok
-        ? `Te invitaron a sumar una historia a la bitácora de ${data.ownerName}.`
-        : (data.error || 'Ese código no existe — revisa el link.');
+      if (resp.ok) {
+        guestOwnerName.textContent = data.ownerName;
+      } else {
+        guestError.textContent = data.error || 'Ese código no existe — revisa el link.';
+      }
     } catch (e) {
-      guestOwnerLine.textContent = 'Hubo un problema para conectar.';
+      guestError.textContent = 'Hubo un problema para conectar.';
     }
     guestName.focus();
   }

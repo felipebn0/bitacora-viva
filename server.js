@@ -774,6 +774,25 @@ function ensureSchema() {
       sql`ALTER TABLE family_members ADD COLUMN IF NOT EXISTS es_principal BOOLEAN NOT NULL DEFAULT false`,
       sql`CREATE INDEX IF NOT EXISTS idx_family_members_user ON family_members(user_id)`,
 
+      // Personas borradas a mano del árbol (pedido de Felipe, 2026-09-08):
+      // borrar en /api/tree/person/:id solo saca la fila de ESTA vez, pero
+      // updateFamilyTree() vuelve a extraer gente de CADA charla guardada
+      // (no solo las nuevas) cada vez que corre — así que sin esto, la
+      // misma persona podía "resucitar" apenas se reconstruyera el árbol o
+      // se mencionara de nuevo en otra charla. nombre_normalizado usa la
+      // MISMA función (normalizarNombreParaComparar) que ya usa el árbol
+      // para no duplicar gente — mismo criterio en los dos lados. Riesgo
+      // conocido y aceptado (Felipe, 2026-09-08): si hay dos personas
+      // reales con el mismo nombre, borrar una excluye también a la otra.
+      sql`CREATE TABLE IF NOT EXISTS family_members_excluidos (
+        id SERIAL PRIMARY KEY,
+        user_id INT NOT NULL REFERENCES users(id),
+        nombre_normalizado TEXT NOT NULL,
+        nombre_original TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_family_excluidos_unico ON family_members_excluidos(user_id, nombre_normalizado)`,
+
       sql`CREATE TABLE IF NOT EXISTS timeline_events (
         id SERIAL PRIMARY KEY,
         user_id INT NOT NULL REFERENCES users(id),
@@ -842,6 +861,14 @@ function ensureSchema() {
       // definió; /api/narrador-start la fija en el primer uso y la exige en
       // los siguientes (bcrypt, igual que la clave de una cuenta normal).
       sql`ALTER TABLE bitacoras ADD COLUMN IF NOT EXISTS pin_hash TEXT`,
+      // Archivar un subperfil (pedido de Felipe, 2026-09-08): NULL = activo
+      // de siempre. No es un borrado real — las historias/audio/árbol se
+      // quedan tal cual en la base, por si hace falta recuperarlo más
+      // adelante. Al archivar se cortan narrador_code/invite_code (ver
+      // POST /api/subprofiles/:id/archive), así que nadie puede seguir
+      // narrando ni aportando ahí; GET /api/subprofiles y el "cambiar de
+      // perfil" dejan de ofrecerlo.
+      sql`ALTER TABLE bitacoras ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ`,
 
       // Las 8 tablas de contenido de arriba declaraban su "user_id" como
       // REFERENCES users(id) — correcto mientras cada bitácora era siempre
@@ -1230,7 +1257,7 @@ async function requireAuth(req, res, next) {
       // rechaza el pedido en vez de caer en silencio a "mi propia bitácora"
       // (eso sería peor: la app seguiría funcionando pero mostrando datos
       // de un perfil distinto al que la persona cree tener activo).
-      const bit = await sql`SELECT id, admin_user_id FROM bitacoras WHERE id = ${session.activeBitacoraId}`;
+      const bit = await sql`SELECT id, admin_user_id FROM bitacoras WHERE id = ${session.activeBitacoraId} AND archived_at IS NULL`;
       if (!bit.length || bit[0].admin_user_id !== req.userId) {
         return res.status(401).json({ error: 'Ese perfil ya no está disponible — vuelve a elegir uno.' });
       }
@@ -2126,7 +2153,7 @@ app.get('/api/subprofiles', requireAuth, bloquearColaborador, bloquearInvitado, 
     await ensureSchema();
     const propia = await sql`SELECT name FROM users WHERE id = ${req.userId}`;
     const nombrePropio = capitalizarNombre((propia[0] && propia[0].name) || '') || req.username;
-    const subperfiles = await sql`SELECT id, nombre FROM bitacoras WHERE admin_user_id = ${req.userId} ORDER BY created_at ASC`;
+    const subperfiles = await sql`SELECT id, nombre FROM bitacoras WHERE admin_user_id = ${req.userId} AND archived_at IS NULL ORDER BY created_at ASC`;
     res.json({
       perfiles: [
         { id: req.userId, nombre: nombrePropio, esPropia: true },
@@ -2150,7 +2177,7 @@ app.post('/api/subprofiles/switch', requireAuth, bloquearColaborador, bloquearIn
     const idPedido = req.body && req.body.id != null ? parseInt(req.body.id, 10) : null;
     let activeBitacoraId; // undefined = volver a la propia
     if (idPedido && idPedido !== req.userId) {
-      const bit = await sql`SELECT id FROM bitacoras WHERE id = ${idPedido} AND admin_user_id = ${req.userId}`;
+      const bit = await sql`SELECT id FROM bitacoras WHERE id = ${idPedido} AND admin_user_id = ${req.userId} AND archived_at IS NULL`;
       if (!bit.length) return res.status(404).json({ error: 'No se encontró ese perfil.' });
       activeBitacoraId = idPedido;
     }
@@ -2217,6 +2244,32 @@ app.post('/api/subprofiles/:id/narrador-link/revoke', requireAuth, bloquearColab
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo revocar el enlace.' });
+  }
+});
+
+// Archivar un subperfil (pedido de Felipe, 2026-09-08): no es un borrado de
+// verdad — las historias/audio/árbol quedan en la base tal cual, por si hace
+// falta recuperarlo más adelante. Deja de aparecer en GET /api/subprofiles y
+// en "cambiar de perfil" (ver los AND archived_at IS NULL de arriba), y se
+// cortan los dos códigos (narrador y de invitación) para que nadie pueda
+// seguir narrando ni aportando ahí mientras está archivado.
+app.post('/api/subprofiles/:id/archive', requireAuth, bloquearColaborador, bloquearInvitado, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    const id = parseInt(req.params.id, 10);
+    const bit = await bitacoraDelAdmin(id, req.userId);
+    if (!bit) return res.status(404).json({ error: 'No se encontró ese subperfil.' });
+    // No archivar la bitácora que está activa AHORA MISMO en esta sesión —
+    // el próximo request se cortaría con un 401 confuso ("ese perfil ya no
+    // está disponible") en vez de un mensaje claro de qué pasó.
+    if (req.profileUserId === id && !req.bitacoraEsPropia) {
+      return res.status(400).json({ error: 'Primero vuelve a tu propia bitácora antes de archivar la que tienes activa.' });
+    }
+    await sql`UPDATE bitacoras SET archived_at = now(), narrador_code = NULL, invite_code = NULL WHERE id = ${id}`;
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo archivar el subperfil.' });
   }
 });
 
@@ -3001,6 +3054,11 @@ async function updateFamilyTree(userId, esPropia, newExchanges) {
 
     const toolUse = response.content.find((b) => b.type === 'tool_use');
     if (!toolUse || !toolUse.input) return;
+    // A quién NO hay que volver a agregar aunque la IA lo extraiga de nuevo
+    // — alguien que se borró a mano del árbol (ver /api/tree/person/:id y
+    // family_members_excluidos en ensureSchema).
+    const excluidosRows = await sql`SELECT nombre_normalizado FROM family_members_excluidos WHERE user_id = ${userId}`;
+    const nombresExcluidos = new Set(excluidosRows.map((r) => r.nombre_normalizado));
     // Filtro defensivo por si el modelo se cuela: nada de novio/novia en el árbol.
     // Orden importa: primero se capitalizan los nombres tal cual los trajo
     // la IA, después se fusionan los casilleros únicos (mamá/papá/abuelos/
@@ -3009,7 +3067,7 @@ async function updateFamilyTree(userId, esPropia, newExchanges) {
     // — así ambos pasos ya trabajan sobre la lista limpia, sin duplicados
     // compitiendo por la misma conexión.
     const personasCapitalizadas = (Array.isArray(toolUse.input.personas) ? toolUse.input.personas : [])
-      .filter((p) => p && p.nombre && p.relacion && !/\bnovi[oa]\b/i.test(p.relacion))
+      .filter((p) => p && p.nombre && p.relacion && !/\bnovi[oa]\b/i.test(p.relacion) && !nombresExcluidos.has(normalizarNombreParaComparar(p.nombre)))
       .slice(0, 60)
       .map((p) => ({
         ...p,
@@ -4795,6 +4853,13 @@ app.delete('/api/tree/person/:id', requireAuth, bloquearColaborador, rateLimit, 
               VALUES ('family_members', ${id}, ${estadoAnterior}, ${req.userId})`;
 
     await sql`DELETE FROM family_members WHERE id = ${id} AND user_id = ${req.profileUserId}`;
+
+    // Para que no "resucite" al reconstruir el árbol o si vuelve a salir
+    // mencionado en otra charla — ver el comentario largo en ensureSchema
+    // junto a family_members_excluidos.
+    await sql`INSERT INTO family_members_excluidos (user_id, nombre_normalizado, nombre_original)
+              VALUES (${req.profileUserId}, ${normalizarNombreParaComparar(nombreBorrado)}, ${nombreBorrado})
+              ON CONFLICT (user_id, nombre_normalizado) DO NOTHING`;
 
     // Nadie más se queda apuntando, en su "padres", a un nombre que ya no
     // existe — si no se limpia, esa persona queda "flotando" sin línea,

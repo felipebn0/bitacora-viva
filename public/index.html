@@ -373,7 +373,11 @@
     .signup-card{background:#FFFDF7;color:var(--ink);border-radius:26px;padding:30px;box-shadow:0 22px 54px rgba(0,0,0,.18)}
     .signup-card h3{font-size:1.85rem;margin:0 0 6px}
     .signup-card > p{margin:0 0 24px;color:var(--ink-soft);font-size:.94rem}
-    .signup-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px;background:var(--paper-2,#F5EFE2);border-radius:12px;padding:4px}
+    /* Experimento (rama pruebas, 2026-09-08, pedido de Felipe): "unirme con
+       un código" ya no va — se oculta la fila de tabs entera, el registro
+       queda siempre en modo "crear mi bitácora". Ver el comentario largo
+       junto al chequeo de ?modo=colaborar más abajo. */
+    .signup-tabs{display:none}
     /* min-height:44px: quedaba en ~41px pese al padding. */
     .signup-tab{border:none;background:none;border-radius:9px;padding:12px 10px;font-family:inherit;font-size:.86rem;font-weight:700;color:var(--ink-soft);cursor:pointer;line-height:1.25;display:flex;align-items:center;justify-content:center;min-height:44px;box-sizing:border-box}
     .signup-tab.active{background:#fff;color:var(--ink);box-shadow:0 4px 12px -4px rgba(0,0,0,.18)}
@@ -1084,12 +1088,13 @@
     tabNueva.addEventListener('click', () => setSignupMode(false));
     tabColaborar.addEventListener('click', () => setSignupMode(true));
 
-    // Si se llega con ?modo=colaborar (ej. desde el link "Crea una" en la
-    // pantalla de login de colaborar.html), arrancamos directo en la
-    // pestaña de "unirme con un código" en vez de la de crear bitácora.
-    if (new URLSearchParams(window.location.search).get('modo') === 'colaborar') {
-      setSignupMode(true);
-    }
+    // Experimento (rama pruebas, 2026-09-08, pedido de Felipe): "unirme con
+    // un código" (una cuenta COMPLETA sumándose como colaboradora fija) se
+    // saca de la pantalla de registro — es un feature que ya no va. El
+    // servidor sigue aceptando accountType:'collaborator' por compatibilidad
+    // (por si ya hay cuentas creadas así), pero ya no hay forma de llegar
+    // ahí desde acá. El ?modo=colaborar que mandaba colaborar.html quedó sin
+    // efecto a propósito, ver setSignupMode() y .signup-tabs más abajo.
 
     signupForm.addEventListener('submit', async (event) => {
       event.preventDefault();

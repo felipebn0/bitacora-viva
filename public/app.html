@@ -1830,7 +1830,9 @@
     }
     window.bitacoraActivaId = data.bitacoraActiva ? data.bitacoraActiva.id : null;
     if (data.bitacoraActiva) {
-      subperfilBannerTexto.textContent = `Viendo la bitácora de ${data.bitacoraActiva.nombre || 'esa persona'} — puedes ver y pagar, pero no narrar en su nombre.`;
+      // Pedido de Felipe (2026-09-08): texto más directo — "puedo
+      // administrar pero no puedo contar su historia".
+      subperfilBannerTexto.textContent = `Puedes administrar la bitácora de ${data.bitacoraActiva.nombre || 'esa persona'}, pero no puedes contar su historia por ella.`;
       subperfilBanner.style.display = 'flex';
       orbZone.style.display = 'none';
       // Sin esto, "Presiona el botón para empezar a charlar" quedaba
