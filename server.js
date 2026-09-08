@@ -702,6 +702,13 @@ function ensureSchema() {
       // Fotos/video que se suben mientras se cuenta esta historia (ver
       // mediaUrls en /api/next) — mismo patrón que family_notes.media_urls.
       sql`ALTER TABLE story_log ADD COLUMN IF NOT EXISTS media_urls TEXT`,
+      // Audios de más cuando se UNEN varias historias detectadas que en
+      // realidad eran la misma (pedido de Diego, 2026-09-08 — ver
+      // /api/story-log/merge): "audio_url" sigue siendo el primero/único
+      // audio para una historia sin unir (no cambia nada de lo que ya
+      // existía); esta columna solo se llena cuando una historia es el
+      // resultado de unir 2 o más, con el resto de los audios que traían.
+      sql`ALTER TABLE story_log ADD COLUMN IF NOT EXISTS audio_urls TEXT`,
       sql`CREATE INDEX IF NOT EXISTS idx_story_log_user ON story_log(user_id)`,
 
       // Historial de versiones: cuando se edita una historia (aportada o
@@ -4203,15 +4210,82 @@ app.get('/api/contributions', requireAuth, async (req, res) => {
   }
 });
 
-// Editar una historia (aportada por un familiar) — nunca se pisa sin dejar
+// Historias detectadas dentro de la charla (no las que la familia aporta a
+// mano, ver /api/contributions más arriba).
 app.get('/api/story-log', requireAuth, bloquearColaborador, async (req, res) => {
   try {
     await ensureSchema();
-    const rows = await sql`SELECT id, texto, audio_url, media_urls, created_at FROM story_log WHERE user_id = ${req.profileUserId} ORDER BY created_at DESC LIMIT 50`;
-    res.json({ stories: rows.map((r) => ({ ...r, texto: capitalizarInicio(r.texto), media_urls: parseJsonArray(r.media_urls) })) });
+    const rows = await sql`SELECT id, texto, audio_url, audio_urls, media_urls, created_at FROM story_log WHERE user_id = ${req.profileUserId} ORDER BY created_at DESC LIMIT 50`;
+    res.json({ stories: rows.map((r) => ({ ...r, texto: capitalizarInicio(r.texto), audio_urls: parseJsonArray(r.audio_urls), media_urls: parseJsonArray(r.media_urls) })) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo cargar el log de historias.' });
+  }
+});
+
+// Unir 2 o más historias detectadas que en realidad son la MISMA historia
+// (pedido de Diego, 2026-09-08): antes, una historia contada en varios
+// turnos de la misma charla (con preguntas de seguimiento entre medio)
+// quedaba como varias filas separadas en story_log, cada una con su propio
+// audio — esto las junta en una sola, con el texto de todas (en orden
+// cronológico) y TODOS los audios y fotos/videos que traían, y borra las
+// que sobran. La decisión de qué unir queda en manos de la familia (se
+// ven en historias.html) — acá no se intenta "adivinar" solo con IA cuáles
+// pertenecen juntas, porque una charla larga puede tener perfectamente dos
+// historias distintas seguidas y unirlas mal sería peor que dejarlas separadas.
+app.post('/api/story-log/merge', requireAuth, bloquearColaborador, async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body.ids)
+      ? [...new Set(req.body.ids.map((n) => parseInt(n, 10)).filter((n) => Number.isInteger(n)))]
+      : [];
+    if (ids.length < 2) return res.status(400).json({ error: 'Elige al menos 2 historias para unir.' });
+
+    await ensureSchema();
+    // Una consulta por id (la lista es corta, unas pocas historias elegidas
+    // a mano) en vez de un solo "WHERE id = ANY(...)" — mismo estilo simple
+    // que el resto del archivo, sin depender de cómo el driver serialice un
+    // array como parámetro.
+    const encontradas = await Promise.all(
+      ids.map((id) => sql`SELECT id, texto, audio_url, audio_urls, media_urls, created_at FROM story_log WHERE user_id = ${req.profileUserId} AND id = ${id}`)
+    );
+    const rows = encontradas.map((r) => r[0]).filter(Boolean);
+    if (rows.length !== ids.length) return res.status(404).json({ error: 'Alguna de esas historias ya no existe o no es de esta bitácora.' });
+
+    rows.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    const anchor = rows[0];
+    const otras = rows.slice(1);
+
+    const textoUnido = rows.map((r) => capitalizarInicio(r.texto)).join('\n\n');
+
+    const audiosUnidos = [];
+    for (const r of rows) {
+      if (r.audio_url && !audiosUnidos.includes(r.audio_url)) audiosUnidos.push(r.audio_url);
+      for (const u of parseJsonArray(r.audio_urls)) {
+        if (typeof u === 'string' && !audiosUnidos.includes(u)) audiosUnidos.push(u);
+      }
+    }
+    const audioUrlPrincipal = audiosUnidos[0] || null;
+    const audioUrlsExtra = audiosUnidos.slice(1);
+    const audioUrlsJson = audioUrlsExtra.length ? JSON.stringify(audioUrlsExtra) : null;
+
+    const mediaVistos = new Set();
+    const mediaUnida = [];
+    for (const r of rows) {
+      for (const m of parseJsonArray(r.media_urls)) {
+        if (!m || typeof m.url !== 'string' || mediaVistos.has(m.url)) continue;
+        mediaVistos.add(m.url);
+        mediaUnida.push(m);
+      }
+    }
+    const mediaUrlsJson = mediaUnida.length ? JSON.stringify(mediaUnida) : null;
+
+    await sql`UPDATE story_log SET texto = ${textoUnido}, audio_url = ${audioUrlPrincipal}, audio_urls = ${audioUrlsJson}, media_urls = ${mediaUrlsJson} WHERE id = ${anchor.id}`;
+    await Promise.all(otras.map((r) => sql`DELETE FROM story_log WHERE id = ${r.id} AND user_id = ${req.profileUserId}`));
+
+    res.json({ ok: true, id: anchor.id, texto: textoUnido, audio_url: audioUrlPrincipal, audio_urls: audioUrlsExtra, media_urls: mediaUnida });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudieron unir esas historias.' });
   }
 });
 
@@ -4272,7 +4346,7 @@ app.get('/api/export', requireAuth, bloquearColaborador, rateLimit, async (req, 
     // propia, "bitacoras" para un subperfil (que no tiene username/email/
     // created_at de cuenta, solo lo que se le puso al crearlo).
     const [historias, resumenRows, aportesRaw, media, miembrosRaw, eventos, capitulosRaw] = await Promise.all([
-      sql`SELECT id, texto, audio_url, created_at FROM story_log WHERE user_id = ${userId} ORDER BY created_at ASC`,
+      sql`SELECT id, texto, audio_url, audio_urls, created_at FROM story_log WHERE user_id = ${userId} ORDER BY created_at ASC`,
       sql`SELECT texto FROM resumen WHERE user_id = ${userId}`,
       sql`SELECT id, contributor, parentesco, protagonista, texto, audio_url, audio_urls, created_at FROM family_notes WHERE user_id = ${userId} ORDER BY created_at ASC`,
       sql`SELECT id, type, url, caption, contributor, created_at FROM media WHERE user_id = ${userId} ORDER BY created_at ASC`,
@@ -4299,7 +4373,11 @@ app.get('/api/export', requireAuth, bloquearColaborador, rateLimit, async (req, 
     // siempre (por eso el aviso en el LEEME de abajo). Es el respaldo para
     // lo que no haya entrado en el presupuesto de tamaño como archivo real.
     const linkArchivo = (valor) => (valor ? `${urlBase(req)}/api/media-file?u=${encodeURIComponent(valor)}` : null);
-    const historiasConLink = historias.map((h) => ({ ...h, audio_url: linkArchivo(h.audio_url) }));
+    const historiasConLink = historias.map((h) => ({
+      ...h,
+      audio_url: linkArchivo(h.audio_url),
+      audio_urls: parseJsonArray(h.audio_urls).map(linkArchivo),
+    }));
     const aportes = aportesRaw.map((a) => ({
       ...a,
       audio_url: linkArchivo(a.audio_url),
@@ -4325,7 +4403,10 @@ app.get('/api/export', requireAuth, bloquearColaborador, rateLimit, async (req, 
     // Arma la lista de archivos reales a intentar embeber, ANTES del
     // README (para poder contar cuántos entraron de verdad y decirlo ahí).
     const itemsAEmbeber = [];
-    historias.forEach((h) => { if (h.audio_url) itemsAEmbeber.push({ valorGuardado: h.audio_url, carpeta: 'audios', nombreBase: `historia-${h.id}` }); });
+    historias.forEach((h) => {
+      if (h.audio_url) itemsAEmbeber.push({ valorGuardado: h.audio_url, carpeta: 'audios', nombreBase: `historia-${h.id}` });
+      parseJsonArray(h.audio_urls).forEach((u, i) => { if (u) itemsAEmbeber.push({ valorGuardado: u, carpeta: 'audios', nombreBase: `historia-${h.id}-${i + 2}` }); });
+    });
     aportesRaw.forEach((a) => {
       if (a.audio_url) itemsAEmbeber.push({ valorGuardado: a.audio_url, carpeta: 'audios', nombreBase: `aporte-${a.id}` });
       parseJsonArray(a.audio_urls).forEach((u, i) => { if (u) itemsAEmbeber.push({ valorGuardado: u, carpeta: 'audios', nombreBase: `aporte-${a.id}-${i + 1}` }); });

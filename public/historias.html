@@ -66,13 +66,34 @@
   .item {
     background: #FBF6EA; border: 1px solid #E7DFCC; border-radius: 14px;
     padding: 14px 18px; margin-bottom: 12px; font-size: 0.92rem;
+    display: flex; gap: 12px; align-items: flex-start;
   }
-  .item audio { width: 100%; margin-bottom: 8px; }
+  .item audio { width: 100%; margin-bottom: 6px; }
+  .item .audios-extra { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
   .item strong { color: var(--gold-deep); }
   .item .media-adjunta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
   .item .media-adjunta img, .item .media-adjunta video {
     max-width: 220px; max-height: 220px; border-radius: 10px; display: block;
   }
+  .item .item-body { flex: 1; min-width: 0; }
+  /* La casilla para elegir qué unir solo aparece en modo "unir" — el resto
+     del tiempo la lista se ve exactamente igual que antes. */
+  .item input[type="checkbox"] {
+    display: none; width: 22px; height: 22px; margin-top: 2px; flex-shrink: 0; accent-color: var(--gold-deep);
+  }
+  body.modo-unir .item input[type="checkbox"] { display: block; }
+  .unir-barra {
+    max-width: 720px; margin: 0 auto 14px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+  }
+  .unir-btn, .unir-confirmar-btn {
+    color: var(--gold-deep); font-size: 0.9rem; font-weight: 700; text-decoration: none;
+    border: 1px solid var(--gold-deep); border-radius: 8px; background: none; cursor: pointer;
+    font-family: var(--font-body); display: inline-flex; align-items: center; justify-content: center;
+    min-height: 44px; padding: 8px 14px;
+  }
+  .unir-confirmar-btn { background: var(--gold-deep); color: #fff; }
+  .unir-confirmar-btn:disabled { opacity: 0.5; cursor: default; }
+  .unir-hint { color: var(--ink-soft); font-size: 0.85rem; margin: 0; }
 </style>
 </head>
 <body>
@@ -83,6 +104,16 @@
     </div>
     <a class="volver" href="/app.html">← volver a la bitácora</a>
   </header>
+  <!-- Unir historias (pedido de Diego, 2026-09-08): a veces una misma
+       historia queda contada en varios turnos y aparece como varias
+       tarjetas separadas acá — este modo deja elegir 2 o más y unirlas en
+       una sola, con todos sus audios y fotos juntos. -->
+  <div class="unir-barra">
+    <button class="unir-btn" id="unirToggleBtn" type="button">Unir historias</button>
+    <p class="unir-hint" id="unirHint" hidden>Elige 2 o más historias que en realidad son la misma.</p>
+    <button class="unir-confirmar-btn" id="unirConfirmarBtn" type="button" hidden disabled>Unir seleccionadas</button>
+    <button class="unir-btn" id="unirCancelarBtn" type="button" hidden>Cancelar</button>
+  </div>
   <!-- <main>, no <div>: mismo criterio que app.html — sin esto un lector de
        pantalla no tiene forma de saltar directo al contenido. -->
   <main class="wrap">
@@ -94,11 +125,69 @@
 (function () {
   const storyLogLista = document.getElementById('storyLogLista');
   const storyLogStatus = document.getElementById('storyLogStatus');
+  const unirToggleBtn = document.getElementById('unirToggleBtn');
+  const unirCancelarBtn = document.getElementById('unirCancelarBtn');
+  const unirConfirmarBtn = document.getElementById('unirConfirmarBtn');
+  const unirHint = document.getElementById('unirHint');
+
+  let modoUnir = false;
+  let seleccionadas = new Set();
 
   function mensajeDeError(resp, data, fallback) {
     if (resp && resp.status === 401) return 'Tu sesión venció — actualiza la página para volver a iniciar sesión.';
     return (data && data.error) || fallback;
   }
+
+  function actualizarBarraUnir() {
+    unirConfirmarBtn.disabled = seleccionadas.size < 2;
+    unirConfirmarBtn.textContent = seleccionadas.size >= 2 ? `Unir seleccionadas (${seleccionadas.size})` : 'Unir seleccionadas';
+  }
+
+  function salirDeModoUnir() {
+    modoUnir = false;
+    seleccionadas = new Set();
+    document.body.classList.remove('modo-unir');
+    unirToggleBtn.hidden = false;
+    unirHint.hidden = true;
+    unirConfirmarBtn.hidden = true;
+    unirCancelarBtn.hidden = true;
+  }
+
+  unirToggleBtn.addEventListener('click', () => {
+    modoUnir = true;
+    document.body.classList.add('modo-unir');
+    unirToggleBtn.hidden = true;
+    unirHint.hidden = false;
+    unirConfirmarBtn.hidden = false;
+    unirCancelarBtn.hidden = false;
+    actualizarBarraUnir();
+  });
+  unirCancelarBtn.addEventListener('click', salirDeModoUnir);
+
+  unirConfirmarBtn.addEventListener('click', async () => {
+    if (seleccionadas.size < 2) return;
+    unirConfirmarBtn.disabled = true;
+    unirConfirmarBtn.textContent = 'Uniendo…';
+    try {
+      const resp = await fetch('/api/story-log/merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...seleccionadas] }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        storyLogStatus.textContent = mensajeDeError(resp, data, 'No se pudieron unir esas historias.');
+        alert(mensajeDeError(resp, data, 'No se pudieron unir esas historias.'));
+        actualizarBarraUnir();
+        return;
+      }
+      salirDeModoUnir();
+      cargarStoryLog();
+    } catch (e) {
+      alert('No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.');
+      actualizarBarraUnir();
+    }
+  });
 
   // Antes un error acá (red caída, servidor, sesión vencida) dejaba a la
   // persona sin más salida que recargar la página entera a mano.
@@ -127,6 +216,7 @@
         return;
       }
       const stories = data.stories || [];
+      seleccionadas = new Set([...seleccionadas].filter((id) => stories.some((s) => s.id === id)));
       if (!stories.length) {
         storyLogStatus.textContent = 'Todavía no hay historias detectadas en tus charlas.';
         storyLogLista.innerHTML = '<p class="empty">Todavía no hay historias detectadas en tus charlas.</p><a class="empty-cta" href="/app.html">Empezar a charlar →</a>';
@@ -137,28 +227,52 @@
       stories.forEach((s) => {
         const div = document.createElement('div');
         div.className = 'item';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.setAttribute('aria-label', 'Elegir esta historia para unir');
+        checkbox.checked = seleccionadas.has(s.id);
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) seleccionadas.add(s.id);
+          else seleccionadas.delete(s.id);
+          actualizarBarraUnir();
+        });
+        div.appendChild(checkbox);
+
+        const body = document.createElement('div');
+        body.className = 'item-body';
         const fecha = new Date(s.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
-        if (typeof s.audio_url === 'string' && /^https?:\/\//.test(s.audio_url)) {
-          const audio = document.createElement('audio');
-          audio.controls = true;
-          // El Blob donde vive el audio no tiene su propia ACL privada
-          // (ver "Decisiones de seguridad pendientes" en claude/links.md) —
-          // la protección real la hace /api/media-file, que confirma que
-          // esta sesión tiene permiso de verlo antes de traerlo (server.js).
-          audio.src = '/api/media-file?u=' + encodeURIComponent(s.audio_url);
-          div.appendChild(audio);
+        // audio_url es el primero/único; audio_urls trae los que se
+        // sumaron al unir 2 o más historias (ver /api/story-log/merge).
+        const todosLosAudios = [s.audio_url, ...(Array.isArray(s.audio_urls) ? s.audio_urls : [])].filter(
+          (u) => typeof u === 'string' && /^https?:\/\//.test(u)
+        );
+        if (todosLosAudios.length) {
+          const audiosWrap = document.createElement('div');
+          if (todosLosAudios.length > 1) audiosWrap.className = 'audios-extra';
+          todosLosAudios.forEach((url) => {
+            const audio = document.createElement('audio');
+            audio.controls = true;
+            // El Blob donde vive el audio no tiene su propia ACL privada
+            // (ver "Decisiones de seguridad pendientes" en claude/links.md) —
+            // la protección real la hace /api/media-file, que confirma que
+            // esta sesión tiene permiso de verlo antes de traerlo (server.js).
+            audio.src = '/api/media-file?u=' + encodeURIComponent(url);
+            audiosWrap.appendChild(audio);
+          });
+          body.appendChild(audiosWrap);
         } else {
           const em = document.createElement('em');
           em.textContent = '(sin audio guardado)';
-          div.appendChild(em);
-          div.appendChild(document.createElement('br'));
+          body.appendChild(em);
+          body.appendChild(document.createElement('br'));
         }
         const textoWrap = document.createElement('div');
         const strong = document.createElement('strong');
         strong.textContent = fecha + ':';
         textoWrap.appendChild(strong);
         textoWrap.appendChild(document.createTextNode(' ' + s.texto));
-        div.appendChild(textoWrap);
+        body.appendChild(textoWrap);
         // Fotos/video que se subieron mientras se contaba esta historia
         // (ver "agregar una foto o video" en app.html).
         const mediaAdjunta = Array.isArray(s.media_urls) ? s.media_urls : [];
@@ -173,10 +287,12 @@
             else { el.src = src; el.alt = m.caption || 'Foto de la historia'; }
             grid.appendChild(el);
           });
-          div.appendChild(grid);
+          body.appendChild(grid);
         }
+        div.appendChild(body);
         storyLogLista.appendChild(div);
       });
+      actualizarBarraUnir();
     } catch (e) {
       mostrarErrorConReintento('No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.');
     }

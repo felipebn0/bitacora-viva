@@ -85,7 +85,7 @@ function fakeSql(strings, ...values) {
     const u = users[values[0]];
     return Promise.resolve(u ? [{ username: u.username, email: u.email }] : []);
   }
-  if (text.includes('SELECT id, texto, audio_url, created_at FROM story_log')) {
+  if (text.includes('SELECT id, texto, audio_url, audio_urls, created_at FROM story_log')) {
     return Promise.resolve(storyLog[values[0]] || []);
   }
   if (text.includes('SELECT texto FROM resumen')) {
