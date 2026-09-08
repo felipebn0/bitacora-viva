@@ -380,12 +380,16 @@ async function checkCuenta(browser, base, w, scale, sessionCookie, screenshotDir
   }
   await page.click('#userMenuBtn').catch(() => {});
   await page.waitForTimeout(150);
-  // El acordeón no es exclusivo: se pueden abrir "Tamaño de letra" (donde
-  // vive el control A-/A+ de esta pantalla) y "Perfil" (donde vive el
-  // correo) a la vez, sin que una cierre a la otra.
-  await page.click('text=Tamaño de letra').catch(() => {});
-  await page.waitForTimeout(150);
-  await page.click('text=Perfil').catch(() => {});
+  // Se selecciona por aria-controls (estable) y NO por texto: "Perfil" es
+  // subcadena de "Perfiles" (el link a perfiles.html), y "Tamaño de letra"
+  // ya no es de primer nivel — vive anidado dentro de "Opciones avanzadas",
+  // así que hay que abrir esa sección padre antes de poder abrirlo.
+  // El acordeón no es exclusivo: abrir una sección no cierra las otras.
+  await page.click('button[aria-controls="umSecPerfil"]').catch(() => {});   // el correo vive acá
+  await page.waitForTimeout(120);
+  await page.click('button[aria-controls="umSecAvanzadas"]').catch(() => {}); // sección padre
+  await page.waitForTimeout(120);
+  await page.click('button[aria-controls="umSecFuente"]').catch(() => {});    // el control A-/A+ vive acá
   await page.waitForTimeout(150);
 
   const info = await page.evaluate(() => {
