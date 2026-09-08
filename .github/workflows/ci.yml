@@ -57,13 +57,13 @@ jobs:
       - name: Instalar navegador de Playwright (Chromium)
         run: npx playwright install --with-deps chromium
 
-      # Las 8 suites de Playwright de acá abajo van con "continue-on-error:
+      # Las 10 suites de Playwright de acá abajo van con "continue-on-error:
       # true" + id: cada una corre pase lo que pase con las anteriores — un
-      # fallo en "responsive" ya no deja sin correr a las 7 de después (pasó
+      # fallo en "responsive" ya no deja sin correr a las de después (pasó
       # de verdad: un timing sensible al entorno en "responsive" hizo que
       # pausar/seguir, árbol, mic, a11y, landscape, barra fija y login-vacío
       # ni se ejecutaran en esa corrida). El paso "Resultado de las pruebas
-      # de Playwright" de más abajo revisa el resultado de las 8 y falla el
+      # de Playwright" de más abajo revisa el resultado de todas y falla el
       # job igual si cualquiera falló — no alcanza con dejarlas correr
       # todas, el check final tiene que seguir bloqueando el merge.
       - name: Pruebas responsive (ancho x escala de letra, Playwright)
@@ -132,11 +132,26 @@ jobs:
         continue-on-error: true
         run: npm run test:login-vacio
 
+      # Sección "Instalación" en Cuenta (agregar la app a la pantalla de
+      # inicio) — 4 escenarios de user agent: iPhone Safari, iPhone Chrome,
+      # Android con y sin beforeinstallprompt.
+      - name: Pruebas de la sección Instalación en Cuenta (Playwright)
+        id: instalacion
+        continue-on-error: true
+        run: npm run test:instalacion
+
+      # Las tarjetas de "Quiénes han colaborado" en el árbol ahora enlazan a
+      # colaboraciones.html filtrado a esa persona (?colaborador=).
+      - name: Pruebas del enlace árbol → aportes por colaborador (Playwright)
+        id: arbol_colab_link
+        continue-on-error: true
+        run: npm run test:arbol-colab-link
+
       - name: Resultado de las pruebas de Playwright
         if: always()
         run: |
           fallo=0
-          for r in "${{ steps.responsive.outcome }}" "${{ steps.pause_resume.outcome }}" "${{ steps.arbol.outcome }}" "${{ steps.mic_denegado.outcome }}" "${{ steps.a11y.outcome }}" "${{ steps.landscape.outcome }}" "${{ steps.colaborar_sticky.outcome }}" "${{ steps.login_vacio.outcome }}"; do
+          for r in "${{ steps.responsive.outcome }}" "${{ steps.pause_resume.outcome }}" "${{ steps.arbol.outcome }}" "${{ steps.mic_denegado.outcome }}" "${{ steps.a11y.outcome }}" "${{ steps.landscape.outcome }}" "${{ steps.colaborar_sticky.outcome }}" "${{ steps.login_vacio.outcome }}" "${{ steps.instalacion.outcome }}" "${{ steps.arbol_colab_link.outcome }}"; do
             if [ "$r" != "success" ]; then fallo=1; fi
           done
           if [ "$fallo" = "1" ]; then

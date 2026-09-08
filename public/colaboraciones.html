@@ -121,13 +121,30 @@
     width: 100%; max-width: 320px; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 12px;
     font-family: var(--font-body); font-size: 0.95rem; background: #fff; color: var(--ink); min-height: 44px;
   }
+
+  /* Aviso de filtro (ver ?colaborador= en arbol.html) — mismo estilo de
+     "franja informativa" que .empty-cta, para que se note sin gritar. */
+  .filtro-aviso {
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+    background: #F3ECD8; border-radius: 10px; padding: 10px 14px; margin: 0 0 16px; font-size: 0.9rem;
+  }
+  /* Sin esto, hidden="" en un elemento con "display" propio (como este,
+     display:flex) no alcanza para esconderlo — la regla de arriba le gana
+     al [hidden] del navegador (comprobado con Playwright, mismo caso que
+     .um-btn[hidden] en app.html). */
+  .filtro-aviso[hidden] { display: none; }
+  .filtro-aviso a {
+    color: var(--gold-deep); font-weight: 700; text-decoration: none;
+    border-bottom: 1px solid var(--gold-deep); display: inline-flex; align-items: center;
+    min-height: 44px; padding: 10px 4px;
+  }
 </style>
 </head>
 <body>
   <header>
     <div>
-      <h1>Colaboración</h1>
-      <p>Lo que tu círculo aportó a tu historia, y lo que tú aportaste en otras.</p>
+      <h1 id="pageTitle">Colaboración</h1>
+      <p id="pageSub">Lo que tu círculo aportó a tu historia, y lo que tú aportaste en otras.</p>
     </div>
     <a class="volver" href="/app.html">← volver a la bitácora</a>
   </header>
@@ -161,6 +178,13 @@
       <section id="aportesSection">
         <h2>Lo que contaron</h2>
         <p class="sub">Las historias completas, con su audio y fotos si las agregaron.</p>
+        <!-- Solo aparece si se llegó acá desde una tarjeta de "Quiénes han
+             colaborado" en arbol.html (?colaborador=), ver el bloque de
+             filtroColaborador más abajo. -->
+        <div id="filtroAviso" class="filtro-aviso" hidden>
+          <span id="filtroAvisoTexto"></span>
+          <a href="/colaboraciones.html">Ver los aportes de todos →</a>
+        </div>
         <p id="aportesStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
         <div id="aportesLista"><p class="empty">Cargando…</p></div>
       </section>
@@ -194,6 +218,32 @@
   const dadosSelect = document.getElementById('dadosSelect');
   const dadosLista = document.getElementById('dadosLista');
   const dadosStatus = document.getElementById('dadosStatus');
+  const tabsRow = document.querySelector('.tabs-row');
+  const colaboradoresSection = document.getElementById('colaboradoresSection');
+  const pageTitle = document.getElementById('pageTitle');
+  const pageSub = document.getElementById('pageSub');
+  const filtroAviso = document.getElementById('filtroAviso');
+  const filtroAvisoTexto = document.getElementById('filtroAvisoTexto');
+
+  // Se llega acá con ?colaborador=Nombre al tocar una tarjeta de "Quiénes
+  // han colaborado" en arbol.html — el nombre viaja tal cual lo devuelve
+  // /api/tree/colaboradores (ya pasado por capitalizarNombre en el
+  // servidor), que es el mismo formato que trae n.contributor en
+  // /api/contributions, así que alcanza con comparar texto igual a igual.
+  const filtroColaborador = new URLSearchParams(location.search).get('colaborador');
+  if (filtroColaborador) {
+    pageTitle.textContent = `Aportes de ${filtroColaborador}`;
+    pageSub.textContent = 'Las historias que contó, todas juntas.';
+    // Drilldown a una sola persona: la pestaña "Lo que yo dije de otros" y
+    // la grilla de "Quiénes han colaborado" no suman nada acá — ya se sabe
+    // de quién es esta pantalla. (.tabs-row trae display:flex propio, así
+    // que hidden="" no la esconde: se apaga por style, mismo caso que
+    // .filtro-aviso[hidden].)
+    if (tabsRow) tabsRow.style.display = 'none';
+    colaboradoresSection.hidden = true;
+    filtroAviso.hidden = false;
+    filtroAvisoTexto.textContent = `Mostrando solo lo que aportó ${filtroColaborador}.`;
+  }
 
   // Mismo criterio que el resto de las páginas: si la sesión venció, decirlo
   // claro en vez de mostrar un error genérico de conexión.
@@ -419,8 +469,24 @@
       agregarBotonReintentar(aportesLista);
       return;
     }
-    const notes = resultado.notes;
+    // ?colaborador= (ver más arriba) — se llegó desde una tarjeta de
+    // arbol.html, así que solo se muestra lo que aportó esa persona.
+    const notes = filtroColaborador
+      ? resultado.notes.filter((n) => n.contributor === filtroColaborador)
+      : resultado.notes;
     if (!notes.length) {
+      if (filtroColaborador) {
+        // filtroColaborador viene de la URL (dato no confiable) — textContent,
+        // nunca innerHTML con el nombre metido en el string.
+        const mensaje = `No se encontraron aportes de ${filtroColaborador}.`;
+        aportesStatus.textContent = mensaje;
+        aportesLista.innerHTML = '';
+        const p = document.createElement('p');
+        p.className = 'empty';
+        p.textContent = mensaje;
+        aportesLista.appendChild(p);
+        return;
+      }
       // Si arriba (colaboradores) también está vacío, esa sección ya
       // muestra "Invitar familiares →" — repetirlo acá es el mismo CTA
       // dos veces en la misma pantalla, sin agregar nada nuevo.
