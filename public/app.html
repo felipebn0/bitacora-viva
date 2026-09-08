@@ -259,9 +259,6 @@
     padding: 22px; text-align: center; flex-direction: column; align-items: center; gap: 12px;
   }
   .subperfil-banner p { margin: 0; color: var(--ink); font-size: 0.95rem; }
-  .perfil-fila { border-bottom: 1px solid #E7DFCC; padding: 8px 0; }
-  .perfil-wa-btn { display: inline-block; width: auto; }
-  .perfil-enlace-texto { word-break: break-all; }
   /* #checkingScreen: se ve DESDE el primer frame (a diferencia de login y
      app, que arrancan ocultos) y es lo único visible mientras se espera la
      respuesta de fetch('/api/me'). Sin esto la página quedaba en blanco
@@ -726,29 +723,16 @@
          <p class="um-username" id="umUsername"></p>
 
          <!-- Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe):
-              menú de Cuenta simplificado a 3 secciones de primer nivel
-              (Perfiles, Perfil, Opciones avanzadas) + Cerrar sesión, en vez
-              de 10 — Cambiar clave y Zona de riesgo pasan a vivir DENTRO de
-              Perfil (es lo mismo que "todo lo que es mío"), y lo que se usa
-              poco (Voz, Tamaño de letra, Tu copia, Plan, Recordatorios)
-              queda un nivel más adentro, en Opciones avanzadas. -->
-
-         <!-- BACKLOG #12: subperfiles — varias bitácoras (ej. la de tu papá,
-              la de tu mamá) administradas desde este mismo login, estilo
-              selector de perfiles. Podés verlas/pagarlas, pero no narrar en
-              su nombre — para eso existe el link permanente de cada una. -->
-         <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecPerfiles">Perfiles <span class="um-chevron" aria-hidden="true">›</span></button>
-         <div class="um-section-body" id="umSecPerfiles" hidden>
-           <p class="um-msg" id="umPerfilesLista">Cargando…</p>
-           <div class="um-fontsize-row">
-             <input type="text" id="umNuevoSubperfilNombre" placeholder="Nombre (ej: Papá)" maxlength="100" aria-label="Nombre de la persona">
-           </div>
-           <input type="date" id="umNuevoSubperfilFecha" aria-label="Fecha de nacimiento (opcional)">
-           <button class="um-btn" id="umCrearSubperfilBtn" type="button">+ Agregar bitácora de otra persona</button>
-           <p class="um-msg" id="umPerfilesMsg" role="status" aria-live="polite" aria-atomic="true"></p>
-           <p class="um-hint">La persona que administras no necesita usuario ni clave — le compartes un enlace permanente para que cuente sus propias historias, sin crear cuenta.</p>
-         </div>
-
+              menú de Cuenta simplificado a 2 secciones de primer nivel
+              (Perfil, Opciones avanzadas) + Cerrar sesión. Cambiar clave y
+              Zona de riesgo pasan a vivir DENTRO de Perfil (es lo mismo que
+              "todo lo que es mío"), y lo que se usa poco (Voz, Tamaño de
+              letra, Tu copia, Plan, Recordatorios) queda un nivel más
+              adentro, en Opciones avanzadas. "Perfiles" (administrar varias
+              bitácoras) se sacó del todo de este menú — hacía mucho ruido
+              acá adentro — y pasó a ser su propia pantalla (perfiles.html,
+              con ícono propio en la barra de abajo del orbe), igual que
+              Historias o Árbol. -->
          <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecPerfil">Perfil <span class="um-chevron" aria-hidden="true">›</span></button>
          <div class="um-section-body" id="umSecPerfil" hidden>
            <!-- <label> visible en vez de solo placeholder+aria-label —
@@ -1001,6 +985,17 @@
       <div class="icon-nav-item">
         <a class="icon-btn" href="/capitulos.html" title="Libro de la historia" aria-label="Libro de la historia">📖</a>
         <span class="icon-label" aria-hidden="true">Libro</span>
+      </div>
+      <!-- Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe):
+           "Perfiles" (administrar varias bitácoras) sale del menú de
+           Cuenta, donde hacía mucho ruido, y pasa a ser su propia pantalla
+           — mismo patrón que Historias/Árbol/Libro. Se esconde para
+           cualquier sesión de invitado (ver aplicarSesionSubperfil más
+           abajo): ni un colaborador clásico ni el narrador de un enlace
+           permanente administran bitácoras. -->
+      <div class="icon-nav-item" id="perfilesNavItem">
+        <a class="icon-btn" href="/perfiles.html" title="Perfiles que administras" aria-label="Perfiles que administras">👪</a>
+        <span class="icon-label" aria-hidden="true">Perfiles</span>
       </div>
     </nav>
 
@@ -1362,170 +1357,10 @@
     window.location.href = '/';
   });
 
-  // --- Subperfiles (BACKLOG #12) ------------------------------------
-  const umPerfilesLista = document.getElementById('umPerfilesLista');
-  const umPerfilesMsg = document.getElementById('umPerfilesMsg');
-  const umNuevoSubperfilNombre = document.getElementById('umNuevoSubperfilNombre');
-  const umNuevoSubperfilFecha = document.getElementById('umNuevoSubperfilFecha');
-  const umCrearSubperfilBtn = document.getElementById('umCrearSubperfilBtn');
-  let umPerfilesCargados = false;
-  // id (número) del subperfil cuyo enlace está desplegado ahora mismo, o
-  // null — para no tener que guardar un <div> por cada uno.
-  let umNarradorLinkAbierto = null;
-
-  // El nombre de un subperfil es texto libre que escribió la persona — se
-  // arma la fila con innerHTML, así que hay que escapar '<', '>' y '&'
-  // antes de meterlo, o un nombre con forma de etiqueta HTML se ejecutaría
-  // como código. El resto de valores interpolados acá son ids numéricos
-  // que vienen del servidor, no hace falta escaparlos.
-  function escaparHtml(s) {
-    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }
-
-  function filaPerfil(p) {
-    const esActivo = p.esPropia ? !window.bitacoraActivaId : window.bitacoraActivaId === p.id;
-    const cambiarBtn = esActivo
-      ? `<span class="um-hint">(perfil activo)</span>`
-      : `<button class="um-btn" data-cambiar="${p.id}" type="button">Cambiar acá</button>`;
-    const enlaceBtn = p.esPropia ? '' : `<button class="um-btn um-plain" data-enlace="${p.id}" type="button">Compartir enlace para narrar</button>`;
-    const enlaceBox = umNarradorLinkAbierto === p.id ? `<div class="um-fontsize-row" id="umEnlaceBox-${p.id}"><span class="um-msg" id="umEnlaceTexto-${p.id}">Cargando…</span></div>` : '';
-    return `<div class="perfil-fila">
-      <strong>${escaparHtml(p.nombre) || '(sin nombre)'}</strong> ${cambiarBtn}
-      ${enlaceBtn}
-      ${enlaceBox}
-    </div>`;
-  }
-
-  async function pintarPerfiles() {
-    try {
-      const resp = await fetch('/api/subprofiles');
-      const data = await resp.json();
-      if (!resp.ok) { umPerfilesLista.textContent = data.error || 'No se pudieron cargar tus perfiles.'; return; }
-      umPerfilesLista.innerHTML = data.perfiles.map(filaPerfil).join('');
-    } catch (e) {
-      umPerfilesLista.textContent = 'No se pudieron cargar tus perfiles.';
-    }
-  }
-
-  async function cargarPerfiles() {
-    if (umPerfilesCargados) return;
-    umPerfilesCargados = true;
-    await pintarPerfiles();
-  }
-
-  umCrearSubperfilBtn.addEventListener('click', async () => {
-    const nombre = umNuevoSubperfilNombre.value.trim();
-    if (!nombre) { umPerfilesMsg.textContent = 'Falta el nombre.'; return; }
-    umCrearSubperfilBtn.disabled = true;
-    umPerfilesMsg.textContent = '';
-    try {
-      const resp = await fetch('/api/subprofiles', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre, fechaNacimiento: umNuevoSubperfilFecha.value || null }),
-      });
-      const data = await resp.json();
-      if (!resp.ok) { umPerfilesMsg.textContent = data.error || 'No se pudo crear el subperfil.'; return; }
-      umNuevoSubperfilNombre.value = '';
-      umNuevoSubperfilFecha.value = '';
-      umPerfilesMsg.textContent = `✓ Se creó la bitácora de ${data.nombre}.`;
-      // Deja el enlace ya abierto y cargado — sin esto, había que ubicar la
-      // fila recién creada y tocar "Compartir enlace" aparte para poder
-      // copiarlo y probarlo (por ejemplo, abrirlo en una ventana de
-      // incógnito para simular al narrador).
-      umNarradorLinkAbierto = data.id;
-      await pintarPerfiles();
-      await cargarYMostrarEnlace(data.id);
-    } catch (e) {
-      umPerfilesMsg.textContent = 'No se pudo conectar. Intenta de nuevo.';
-    } finally {
-      umCrearSubperfilBtn.disabled = false;
-    }
-  });
-
-  // Un solo listener con delegación (en vez de uno por fila) — las filas se
-  // reemplazan enteras cada vez que se repinta la lista.
-  umPerfilesLista.addEventListener('click', async (e) => {
-    const cambiarId = e.target.dataset.cambiar;
-    if (cambiarId) {
-      try {
-        const resp = await fetch('/api/subprofiles/switch', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: Number(cambiarId) }),
-        });
-        if (!resp.ok) { umPerfilesMsg.textContent = 'No se pudo cambiar de perfil.'; return; }
-        // Recarga entera: cada sección de la app (árbol, capítulos,
-        // historias, la charla misma) lee la bitácora activa de la cookie —
-        // más simple y confiable que invalidar cada pedacito por separado.
-        window.location.href = '/app.html';
-      } catch (e2) {
-        umPerfilesMsg.textContent = 'No se pudo conectar. Intenta de nuevo.';
-      }
-      return;
-    }
-    const enlaceId = Number(e.target.dataset.enlace);
-    if (enlaceId) {
-      umNarradorLinkAbierto = umNarradorLinkAbierto === enlaceId ? null : enlaceId;
-      await pintarPerfiles();
-      if (umNarradorLinkAbierto === enlaceId) await cargarYMostrarEnlace(enlaceId);
-      return;
-    }
-    const linkACopiar = e.target.dataset.copiarLink;
-    if (linkACopiar) {
-      try {
-        await navigator.clipboard.writeText(linkACopiar);
-        const textoOriginal = e.target.textContent;
-        e.target.textContent = 'copiado ✓';
-        setTimeout(() => { e.target.textContent = textoOriginal; }, 1800);
-      } catch (e5) {}
-      return;
-    }
-    const regenId = Number(e.target.dataset.regenerar);
-    if (regenId) {
-      if (!confirm('¿Generar un enlace nuevo? El que ya compartiste deja de servir.')) return;
-      try {
-        const resp = await fetch(`/api/subprofiles/${regenId}/narrador-link/regenerate`, { method: 'POST' });
-        const data = await resp.json();
-        if (resp.ok) await mostrarEnlace(regenId, data.code);
-      } catch (e3) {}
-      return;
-    }
-    const revokId = Number(e.target.dataset.revocar);
-    if (revokId) {
-      if (!confirm('¿Quitarle el acceso a ese enlace? Podrás generar uno nuevo cuando quieras.')) return;
-      try {
-        await fetch(`/api/subprofiles/${revokId}/narrador-link/revoke`, { method: 'POST' });
-        umNarradorLinkAbierto = null;
-        await pintarPerfiles();
-      } catch (e4) {}
-      return;
-    }
-  });
-
-  function mostrarEnlace(id, code) {
-    const box = document.getElementById(`umEnlaceTexto-${id}`);
-    if (!box) return;
-    const link = `${location.origin}/app.html?codigo=${encodeURIComponent(code)}`;
-    const mensaje = `Con este enlace puedes contar tus historias sin necesitar usuario ni clave — entra acá y guárdalo en tu celular: ${link}`;
-    const wa = `https://wa.me/?text=${encodeURIComponent(mensaje)}`;
-    // data-link (no data-copiar="id"): el link cambia si se regenera el
-    // código, así que conviene que el botón lleve el valor ya armado
-    // encima, en vez de tener que rearmarlo a partir del id en el momento
-    // del click.
-    box.innerHTML = `<p class="um-hint perfil-enlace-texto">${link}</p>
-      <button class="um-btn" type="button" data-copiar-link="${link.replace(/"/g, '&quot;')}">Copiar enlace</button>
-      <a href="${wa}" target="_blank" rel="noopener" class="um-btn perfil-wa-btn">Compartir por WhatsApp</a>
-      <button class="um-btn um-plain" type="button" data-regenerar="${id}">Generar uno nuevo</button>
-      <button class="um-btn um-plain" type="button" data-revocar="${id}">Quitar acceso</button>`;
-  }
-
-  async function cargarYMostrarEnlace(id) {
-    try {
-      const resp = await fetch(`/api/subprofiles/${id}/narrador-link`);
-      const data = await resp.json();
-      if (resp.ok) mostrarEnlace(id, data.code);
-    } catch (e) {}
-  }
-
-  document.querySelector('[aria-controls="umSecPerfiles"]').addEventListener('click', cargarPerfiles);
+  // Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe): toda la
+  // lógica de "Perfiles" (listar, crear, cambiar, compartir el enlace de
+  // narrador) se mudó a perfiles.html — antes vivía acá adentro y hacía
+  // mucho ruido dentro del menú de Cuenta.
 
   // --- Plan y pagos ---
   const umPlanEstado = document.getElementById('umPlanEstado');
@@ -1961,12 +1796,16 @@
       // reiniciar la cuenta) — mostrarlas solo llevaría a un error al
       // tocarlas. Tamaño de letra, Voz y Tu copia (exportar) sí funcionan
       // igual que siempre.
-      ['umSecPerfiles', 'umSecPerfil', 'umSecClave', 'umSecPlan', 'umSecRecordatorios', 'umSecRiesgo'].forEach((controlId) => {
+      ['umSecPerfil', 'umSecClave', 'umSecPlan', 'umSecRecordatorios', 'umSecRiesgo'].forEach((controlId) => {
         const toggle = document.querySelector(`[aria-controls="${controlId}"]`);
         const body = document.getElementById(controlId);
         if (toggle) toggle.style.display = 'none';
         if (body) body.hidden = true;
       });
+      // El narrador de un enlace permanente no administra bitácoras — no
+      // tiene cuenta propia detrás.
+      const perfilesNavItem = document.getElementById('perfilesNavItem');
+      if (perfilesNavItem) perfilesNavItem.style.display = 'none';
       greetingName.textContent = data.guestName || data.bitacoraNombre || '';
       subperfilBanner.style.display = 'none';
       orbZone.style.display = '';

@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Perfiles — Los recuerdos de mis viejos</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/images/favicon-192.png">
+<link rel="apple-touch-icon" href="/images/favicon-192.png">
+<!-- Fuentes autoalojadas (ronda 2 del camino a CSP en enforce, 2026-09-06):
+     antes venían de fonts.googleapis.com/fonts.gstatic.com, lo que además
+     de la violación de CSP (font-src 'self') mandaba la IP de cada visita
+     a un tercero. Ver public/fonts/fonts.css para el detalle. -->
+<link rel="stylesheet" href="/fonts/fonts.css">
+<script src="/font-size.js"></script>
+<style>
+  :root {
+    --bg: #F5EFE2;
+    --ink: #2B241C;
+    --ink-soft: #706551;
+    --gold-deep: #8F5A20;
+    --moss: #5B6B45;
+    --font-display: "Source Serif 4", Georgia, serif;
+    --font-body: "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  :focus-visible { outline: 3px solid var(--gold-deep); outline-offset: 2px; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    padding: calc(28px + env(safe-area-inset-top)) calc(20px + env(safe-area-inset-right)) calc(60px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));
+  }
+  header { max-width: 720px; margin: 0 auto 20px; display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  h1 { font-family: var(--font-display); font-size: 1.6rem; margin: 0; }
+  header p { color: var(--ink-soft); margin: 4px 0 0; font-size: 0.95rem; }
+  a.volver { color: var(--gold-deep); font-size: 0.9rem; text-decoration: none; border-bottom: 1px solid var(--gold-deep); display: inline-flex; align-items: center; min-height: 44px; padding: 10px 4px; }
+
+  .wrap { max-width: 720px; margin: 0 auto; }
+  section { margin-bottom: 40px; }
+  section h2 { font-family: var(--font-display); font-size: 1.2rem; margin: 0 0 4px; }
+  section .sub { color: var(--ink-soft); font-size: 0.9rem; margin: 0 0 16px; }
+  .empty { color: var(--ink-soft); font-style: italic; }
+  .msg { font-size: 0.85rem; min-height: 1.1em; margin: 8px 0 0; color: var(--moss); }
+  .msg.error { color: #a33; }
+  /* Solo para lectores de pantalla — mismo criterio que historias.html/
+     colaboraciones.html: el anuncio corto va aparte del contenido visual. */
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  }
+  .retry-btn {
+    color: var(--gold-deep); font-size: 0.9rem; font-weight: 700; text-decoration: none;
+    border: 1px solid var(--gold-deep); border-radius: 8px; background: none; cursor: pointer;
+    font-family: var(--font-body); display: inline-flex; align-items: center; justify-content: center;
+    min-height: 44px; padding: 8px 14px; margin-top: 4px;
+  }
+
+  .perfil-card {
+    background: #FBF6EA; border: 1px solid #E7DFCC; border-radius: 14px;
+    padding: 16px 20px; margin-bottom: 12px;
+  }
+  .perfil-card .fila-principal { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .perfil-card .acciones-fila { display: flex; gap: 8px; flex-wrap: wrap; }
+  .perfil-card .nombre { font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; margin: 0; }
+  .perfil-card .activo-tag { color: var(--ink-soft); font-size: 0.85rem; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;
+    text-align: center; text-decoration: none; border: none; background: var(--moss);
+    color: #FBF6EA; border-radius: 10px; padding: 10px 16px; font-weight: 700;
+    cursor: pointer; font-family: var(--font-body); font-size: 0.88rem; min-height: 44px;
+  }
+  .btn:disabled { opacity: 0.6; cursor: default; }
+  .btn.plain { background: none; color: var(--gold-deep); text-decoration: underline; padding: 10px 4px; min-width: auto; }
+  .btn.small { padding: 8px 14px; min-height: 40px; font-size: 0.85rem; }
+  .enlace-box { margin-top: 14px; padding-top: 14px; border-top: 1px solid #E7DFCC; }
+  .enlace-box .enlace-texto { word-break: break-all; color: var(--ink-soft); font-size: 0.85rem; margin: 0 0 10px; }
+  .enlace-box .acciones { display: flex; flex-wrap: wrap; gap: 8px; }
+  .enlace-box .acciones .btn { width: auto; }
+
+  .form-nueva {
+    background: #FBF6EA; border: 1px solid #E7DFCC; border-radius: 14px; padding: 18px 20px;
+  }
+  .form-nueva label { display: block; font-size: 0.85rem; color: var(--ink-soft); margin: 0 0 4px; }
+  .form-nueva input {
+    width: 100%; border: 1px solid #E7DFCC; border-radius: 10px; padding: 10px 12px;
+    font-family: var(--font-body); background: #fff; color: var(--ink); font-size: 1rem; margin-bottom: 14px;
+  }
+  .form-nueva .hint { font-size: 0.8rem; color: var(--ink-soft); margin: -8px 0 14px; }
+</style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Perfiles</h1>
+      <p>Las bitácoras que administras desde este login — cambia entre ellas o comparte el enlace de cada una.</p>
+    </div>
+    <a class="volver" href="/app.html">← volver a la bitácora</a>
+  </header>
+  <!-- <main>, no <div>: mismo criterio que el resto de las páginas — sin
+       esto un lector de pantalla no tiene forma de saltar directo al
+       contenido. -->
+  <main class="wrap">
+    <section id="listaSection">
+      <h2>Tus bitácoras</h2>
+      <p class="sub">La tuya, y las de las personas que administras.</p>
+      <p id="listaStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
+      <div id="lista"><p class="empty">Cargando…</p></div>
+    </section>
+
+    <section id="nuevaSection">
+      <h2>Agregar bitácora de otra persona</h2>
+      <p class="sub">Para alguien que quieras administrar (ej. tu papá o tu mamá) — no necesita usuario ni clave, le compartes un enlace permanente para que cuente sus propias historias.</p>
+      <div class="form-nueva">
+        <label for="nuevoNombre">Nombre</label>
+        <input type="text" id="nuevoNombre" placeholder="Ej: Papá" maxlength="100">
+        <label for="nuevaFecha">Fecha de nacimiento (opcional)</label>
+        <input type="date" id="nuevaFecha" aria-label="Fecha de nacimiento (opcional)">
+        <button class="btn" id="crearBtn" type="button">+ Agregar bitácora</button>
+        <p class="msg" id="crearMsg" role="status" aria-live="polite" aria-atomic="true"></p>
+      </div>
+    </section>
+  </main>
+
+<script>
+(function () {
+  const lista = document.getElementById('lista');
+  const listaStatus = document.getElementById('listaStatus');
+  const nuevoNombre = document.getElementById('nuevoNombre');
+  const nuevaFecha = document.getElementById('nuevaFecha');
+  const crearBtn = document.getElementById('crearBtn');
+  const crearMsg = document.getElementById('crearMsg');
+
+  function mensajeDeError(resp, data, fallback) {
+    if (resp && resp.status === 401) return 'Tu sesión venció — actualiza la página para volver a iniciar sesión.';
+    return (data && data.error) || fallback;
+  }
+
+  function agregarBotonReintentar() {
+    const retryBtn = document.createElement('button');
+    retryBtn.className = 'retry-btn';
+    retryBtn.type = 'button';
+    retryBtn.textContent = 'Reintentar';
+    retryBtn.addEventListener('click', cargarPerfiles);
+    lista.appendChild(retryBtn);
+  }
+
+  // El nombre de un subperfil es texto libre que escribió la persona — se
+  // arma la fila con innerHTML, así que hay que escapar '<', '>' y '&'
+  // antes de meterlo, o un nombre con forma de etiqueta HTML se ejecutaría
+  // como código. El resto de valores interpolados acá son ids numéricos
+  // que vienen del servidor, no hace falta escaparlos.
+  function escaparHtml(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  let perfilesCache = [];
+  let enlaceAbiertoId = null;
+  let activaId = null; // window.bitacoraActivaId, si /api/me lo trae
+
+  function filaPerfil(p) {
+    const esActivo = p.esPropia ? !activaId : activaId === p.id;
+    const cambiarBtn = esActivo
+      ? `<span class="activo-tag">Bitácora activa ahora</span>`
+      : `<button class="btn small" data-cambiar="${p.id}" type="button">Cambiar acá</button>`;
+    const enlaceToggleBtn = p.esPropia ? '' : `<button class="btn small plain" data-enlace="${p.id}" type="button">${enlaceAbiertoId === p.id ? 'Ocultar enlace' : 'Compartir enlace para narrar'}</button>`;
+    const enlaceBox = enlaceAbiertoId === p.id ? `<div class="enlace-box" id="enlaceBox-${p.id}"><p class="msg">Cargando…</p></div>` : '';
+    return `<div class="perfil-card">
+      <div class="fila-principal">
+        <p class="nombre">${escaparHtml(p.nombre) || '(sin nombre)'}</p>
+        <div class="acciones-fila">${cambiarBtn}${enlaceToggleBtn}</div>
+      </div>
+      ${enlaceBox}
+    </div>`;
+  }
+
+  function pintarPerfiles() {
+    if (!perfilesCache.length) {
+      lista.innerHTML = '<p class="empty">No se pudieron cargar tus perfiles.</p>';
+      return;
+    }
+    lista.innerHTML = perfilesCache.map(filaPerfil).join('');
+  }
+
+  async function cargarPerfiles() {
+    lista.innerHTML = '<p class="empty">Cargando…</p>';
+    try {
+      const resp = await fetch('/api/subprofiles');
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        listaStatus.textContent = mensajeDeError(resp, data, 'No se pudieron cargar tus perfiles.');
+        lista.innerHTML = '<p class="empty">' + listaStatus.textContent + '</p>';
+        agregarBotonReintentar();
+        return;
+      }
+      perfilesCache = data.perfiles || [];
+      listaStatus.textContent = perfilesCache.length === 1 ? 'Se cargó 1 perfil.' : `Se cargaron ${perfilesCache.length} perfiles.`;
+      pintarPerfiles();
+    } catch (e) {
+      listaStatus.textContent = 'No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.';
+      lista.innerHTML = '<p class="empty">' + listaStatus.textContent + '</p>';
+      agregarBotonReintentar();
+    }
+  }
+
+  function mostrarEnlace(id, code) {
+    const box = document.getElementById(`enlaceBox-${id}`);
+    if (!box) return;
+    const link = `${location.origin}/app.html?codigo=${encodeURIComponent(code)}`;
+    const mensaje = `Con este enlace puedes contar tus historias sin necesitar usuario ni clave — entra acá y guárdalo en tu celular: ${link}`;
+    const wa = `https://wa.me/?text=${encodeURIComponent(mensaje)}`;
+    // data-link (no data-copiar="id"): el link cambia si se regenera el
+    // código, así que conviene que el botón lleve el valor ya armado
+    // encima, en vez de tener que rearmarlo a partir del id en el momento
+    // del click.
+    box.innerHTML = `<p class="enlace-texto">${link}</p>
+      <div class="acciones">
+        <button class="btn small" type="button" data-copiar-link="${link.replace(/"/g, '&quot;')}">Copiar enlace</button>
+        <a href="${wa}" target="_blank" rel="noopener" class="btn small">Compartir por WhatsApp</a>
+        <button class="btn small plain" type="button" data-regenerar="${id}">Generar uno nuevo</button>
+        <button class="btn small plain" type="button" data-revocar="${id}">Quitar acceso</button>
+      </div>`;
+  }
+
+  async function cargarYMostrarEnlace(id) {
+    try {
+      const resp = await fetch(`/api/subprofiles/${id}/narrador-link`);
+      const data = await resp.json();
+      if (resp.ok) mostrarEnlace(id, data.code);
+    } catch (e) {}
+  }
+
+  // Un solo listener con delegación (en vez de uno por fila) — las filas se
+  // reemplazan enteras cada vez que se repinta la lista.
+  lista.addEventListener('click', async (e) => {
+    const cambiarId = e.target.dataset.cambiar;
+    if (cambiarId) {
+      try {
+        const resp = await fetch('/api/subprofiles/switch', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: Number(cambiarId) }),
+        });
+        if (!resp.ok) { listaStatus.textContent = 'No se pudo cambiar de perfil.'; return; }
+        // Recarga entera: cada sección de la app (árbol, capítulos,
+        // historias, la charla misma) lee la bitácora activa de la cookie —
+        // más simple y confiable que invalidar cada pedacito por separado.
+        window.location.href = '/app.html';
+      } catch (e2) {
+        listaStatus.textContent = 'No se pudo conectar. Intenta de nuevo.';
+      }
+      return;
+    }
+    const enlaceId = Number(e.target.dataset.enlace);
+    if (enlaceId) {
+      enlaceAbiertoId = enlaceAbiertoId === enlaceId ? null : enlaceId;
+      pintarPerfiles();
+      if (enlaceAbiertoId === enlaceId) await cargarYMostrarEnlace(enlaceId);
+      return;
+    }
+    const linkACopiar = e.target.dataset.copiarLink;
+    if (linkACopiar) {
+      try {
+        await navigator.clipboard.writeText(linkACopiar);
+        const textoOriginal = e.target.textContent;
+        e.target.textContent = 'copiado ✓';
+        setTimeout(() => { e.target.textContent = textoOriginal; }, 1800);
+      } catch (e5) {}
+      return;
+    }
+    const regenId = Number(e.target.dataset.regenerar);
+    if (regenId) {
+      if (!confirm('¿Generar un enlace nuevo? El que ya compartiste deja de servir.')) return;
+      try {
+        const resp = await fetch(`/api/subprofiles/${regenId}/narrador-link/regenerate`, { method: 'POST' });
+        const data = await resp.json();
+        if (resp.ok) await mostrarEnlace(regenId, data.code);
+      } catch (e3) {}
+      return;
+    }
+    const revokId = Number(e.target.dataset.revocar);
+    if (revokId) {
+      if (!confirm('¿Quitarle el acceso a ese enlace? Podrás generar uno nuevo cuando quieras.')) return;
+      try {
+        await fetch(`/api/subprofiles/${revokId}/narrador-link/revoke`, { method: 'POST' });
+        enlaceAbiertoId = null;
+        pintarPerfiles();
+      } catch (e4) {}
+      return;
+    }
+  });
+
+  crearBtn.addEventListener('click', async () => {
+    const nombre = nuevoNombre.value.trim();
+    if (!nombre) { crearMsg.textContent = 'Falta el nombre.'; crearMsg.classList.remove('error'); return; }
+    crearBtn.disabled = true;
+    crearMsg.textContent = '';
+    try {
+      const resp = await fetch('/api/subprofiles', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre, fechaNacimiento: nuevaFecha.value || null }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) { crearMsg.textContent = mensajeDeError(resp, data, 'No se pudo crear el subperfil.'); crearMsg.classList.add('error'); return; }
+      nuevoNombre.value = '';
+      nuevaFecha.value = '';
+      crearMsg.classList.remove('error');
+      crearMsg.textContent = `✓ Se creó la bitácora de ${data.nombre}.`;
+      // Deja el enlace ya abierto y cargado — sin esto, había que ubicar la
+      // fila recién creada y tocar "Compartir enlace" aparte para poder
+      // copiarlo y probarlo (por ejemplo, abrirlo en una ventana de
+      // incógnito para simular al narrador).
+      enlaceAbiertoId = data.id;
+      await cargarPerfiles();
+      await cargarYMostrarEnlace(data.id);
+    } catch (e) {
+      crearMsg.classList.add('error');
+      crearMsg.textContent = 'No se pudo conectar. Intenta de nuevo.';
+    } finally {
+      crearBtn.disabled = false;
+    }
+  });
+
+  fetch('/api/me')
+    .then((resp) => (resp.ok ? resp.json() : Promise.reject()))
+    .then((data) => {
+      if (data.isCollaborator || data.isGuest) { window.location.href = '/app.html'; return; }
+      activaId = data.bitacoraActiva ? data.bitacoraActiva.id : null;
+      cargarPerfiles();
+    })
+    .catch(() => {
+      lista.innerHTML = '<p class="empty">Inicia sesión en la bitácora primero. <a class="volver" href="/app.html">Ir a la bitácora</a></p>';
+    });
+})();
+</script>
+</body>
+</html>
