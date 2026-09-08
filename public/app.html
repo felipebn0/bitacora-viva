@@ -787,6 +787,14 @@
            </div>
          </div>
 
+         <!-- Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe):
+              el link a Perfiles vuelve a estar en el menú de Cuenta (debajo
+              de Perfil) en vez de en la barra de íconos de abajo — pero
+              sigue siendo un link que LLEVA a su propia pantalla
+              (perfiles.html), no un acordeón que despliega la lista acá
+              adentro. -->
+         <a class="um-btn um-plain" id="umPerfilesLink" href="/perfiles.html">Perfiles</a>
+
          <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecAvanzadas">Opciones avanzadas <span class="um-chevron" aria-hidden="true">›</span></button>
          <!-- Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe):
               "um-nested-group" le da un fondo propio a todo lo de acá
@@ -985,17 +993,6 @@
       <div class="icon-nav-item">
         <a class="icon-btn" href="/capitulos.html" title="Libro de la historia" aria-label="Libro de la historia">📖</a>
         <span class="icon-label" aria-hidden="true">Libro</span>
-      </div>
-      <!-- Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe):
-           "Perfiles" (administrar varias bitácoras) sale del menú de
-           Cuenta, donde hacía mucho ruido, y pasa a ser su propia pantalla
-           — mismo patrón que Historias/Árbol/Libro. Se esconde para
-           cualquier sesión de invitado (ver aplicarSesionSubperfil más
-           abajo): ni un colaborador clásico ni el narrador de un enlace
-           permanente administran bitácoras. -->
-      <div class="icon-nav-item" id="perfilesNavItem">
-        <a class="icon-btn" href="/perfiles.html" title="Perfiles que administras" aria-label="Perfiles que administras">👪</a>
-        <span class="icon-label" aria-hidden="true">Perfiles</span>
       </div>
     </nav>
 
@@ -1804,8 +1801,8 @@
       });
       // El narrador de un enlace permanente no administra bitácoras — no
       // tiene cuenta propia detrás.
-      const perfilesNavItem = document.getElementById('perfilesNavItem');
-      if (perfilesNavItem) perfilesNavItem.style.display = 'none';
+      const umPerfilesLink = document.getElementById('umPerfilesLink');
+      if (umPerfilesLink) umPerfilesLink.style.display = 'none';
       greetingName.textContent = data.guestName || data.bitacoraNombre || '';
       subperfilBanner.style.display = 'none';
       orbZone.style.display = '';
