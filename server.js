@@ -2296,10 +2296,12 @@ app.post('/api/register', rateLimit, async (req, res) => {
     if (!process.env.SETUP_KEY || setupKey !== process.env.SETUP_KEY) {
       return res.status(403).json({ error: 'Clave de configuración incorrecta.' });
     }
-    // Mismo mínimo que /api/signup y /api/change-password (antes era 4 acá,
-    // la única de las tres rutas que se quedó afuera cuando se unificó esto).
-    if (!username || !password || String(password).length < 8) {
-      return res.status(400).json({ error: 'Usuario y clave (mínimo 8 caracteres) son obligatorios.' });
+    // Mismo mínimo que /api/signup y /api/change-password, y mismo mensaje
+    // estandarizado en las tres (pedido de Felipe, 2026-09-08) — el único
+    // código de 4 dígitos en toda la app es el PIN de los invitados
+    // (narrador de un subperfil), no una clave de cuenta.
+    if (!username || !password || String(password).length < 6) {
+      return res.status(400).json({ error: 'Usuario y clave (al menos 6 caracteres) son obligatorios.' });
     }
     if (claveDemasiadoLarga(password)) {
       return res.status(400).json({ error: 'La clave es demasiado larga (máximo 72 caracteres).' });
@@ -2334,8 +2336,8 @@ app.post('/api/signup', rateLimit, async (req, res) => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
       return res.status(400).json({ error: 'El correo no parece válido.' });
     }
-    if (!password || String(password).length < 8) {
-      return res.status(400).json({ error: 'La clave debe tener al menos 8 caracteres.' });
+    if (!password || String(password).length < 6) {
+      return res.status(400).json({ error: 'La clave debe tener al menos 6 caracteres.' });
     }
     if (claveDemasiadoLarga(password)) {
       return res.status(400).json({ error: 'La clave es demasiado larga (máximo 72 caracteres).' });
@@ -2639,9 +2641,9 @@ app.post('/api/change-password', requireAuth, rateLimit, async (req, res) => {
     if (req.isGuest) return res.status(403).json({ error: 'No disponible para invitados sin cuenta.' });
     const { currentPassword, newPassword } = req.body || {};
     if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Faltan la clave actual y la nueva.' });
-    // Mismo mínimo (8) que /api/signup y /api/register, para que no haya
+    // Mismo mínimo (6) que /api/signup y /api/register, para que no haya
     // una puerta más débil que la otra para la misma cuenta.
-    if (String(newPassword).length < 8) return res.status(400).json({ error: 'La clave nueva debe tener al menos 8 caracteres.' });
+    if (String(newPassword).length < 6) return res.status(400).json({ error: 'La clave nueva debe tener al menos 6 caracteres.' });
     if (claveDemasiadoLarga(newPassword)) return res.status(400).json({ error: 'La clave es demasiado larga (máximo 72 caracteres).' });
 
     // Además del límite por IP, uno por cuenta: quien ya tiene una cookie

@@ -1122,6 +1122,23 @@
         return;
       }
 
+      // Antes esto dependía solo del globo nativo del navegador
+      // (checkValidity()/reportValidity() más abajo) — en letra chica y
+      // fácil de no ver, mismo motivo que ya se corrigió para el código de
+      // invitación arriba. Ahora nombre y correo faltantes también
+      // muestran el error pegado abajo del formulario, igual que la clave.
+      if (!name) {
+        signupStatus.classList.add('error');
+        signupStatus.textContent = 'Falta tu nombre.';
+        document.getElementById('suName').focus();
+        return;
+      }
+      if (!email) {
+        signupStatus.classList.add('error');
+        signupStatus.textContent = 'Falta tu correo.';
+        document.getElementById('suEmail').focus();
+        return;
+      }
       if (!signupForm.checkValidity()) {
         signupForm.reportValidity();
         return;
