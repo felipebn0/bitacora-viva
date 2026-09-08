@@ -2337,16 +2337,25 @@
       if (silencioLargo || turnoDemasiadoLargo) {
         stopVoiceActivityDetection();
         finalizeSpokenAnswer();
-        return;
       }
-      vadRafId = requestAnimationFrame(tick);
     }
-    tick();
+    // setInterval, no requestAnimationFrame (reportado por Felipe, 2026-09-08:
+    // "se quedó escuchando y no pasó nada", sin tocar nada — se quedaba
+    // colgado sin que la persona hiciera nada raro). rAF deja de correr (o
+    // se frena mucho) apenas la pestaña pasa a segundo plano o pierde el
+    // foco — algo tan simple como que el celular apague la pantalla un
+    // instante a mitad de la charla — y como el detector de silencio y el
+    // corte de seguridad (MAX_TURN_MS) viven ADENTRO de tick(), si tick()
+    // deja de correr, nada de eso vuelve a dispararse nunca: "Escuchando…"
+    // se queda ahí para siempre. setInterval no depende de que la pestaña
+    // esté en primer plano ni renderizando frames, así que el corte de
+    // silencio sigue funcionando aunque el navegador la frene un poco.
+    vadRafId = setInterval(tick, 100);
   }
 
   function stopVoiceActivityDetection() {
     vadActive = false;
-    if (vadRafId) cancelAnimationFrame(vadRafId);
+    if (vadRafId) clearInterval(vadRafId);
     vadRafId = null;
   }
 

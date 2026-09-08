@@ -1212,16 +1212,19 @@
       if (silencioLargo || turnoDemasiadoLargo) {
         stopVAD();
         terminarGrabacion();
-        return;
       }
-      vadRafId = requestAnimationFrame(tick);
     }
-    tick();
+    // setInterval, no requestAnimationFrame (mismo arreglo que app.html,
+    // 2026-09-08): rAF se frena o directamente deja de correr apenas la
+    // pestaña pasa a segundo plano o pierde el foco, y como el corte de
+    // silencio vive ADENTRO de tick(), si tick() deja de correr "Escuchando…"
+    // se queda pegado para siempre, sin que la persona haya tocado nada raro.
+    vadRafId = setInterval(tick, 100);
   }
 
   function stopVAD() {
     vadActive = false;
-    if (vadRafId) cancelAnimationFrame(vadRafId);
+    if (vadRafId) clearInterval(vadRafId);
     vadRafId = null;
   }
 
