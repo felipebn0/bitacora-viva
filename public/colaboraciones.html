@@ -127,7 +127,7 @@
   <header>
     <div>
       <h1>Colaboración</h1>
-      <p>Lo que tu círculo aportó a tu historia, y lo que vos aportaste en otras.</p>
+      <p>Lo que tu círculo aportó a tu historia, y lo que tú aportaste en otras.</p>
     </div>
     <a class="volver" href="/app.html">← volver a la bitácora</a>
   </header>
@@ -526,7 +526,7 @@
 
   // Item: "Lo que dijeron de mí" con el mismo selector que "Lo que yo dije
   // de otros" (pedido de Felipe, 2026-09-08) -- si administras subperfiles
-  // (papá, mamá...), podés ver los aportes que RECIBIÓ cada uno sin tener
+  // (papá, mamá...), puedes ver los aportes que RECIBIÓ cada uno sin tener
   // que cambiarte de bitácora primero (ver puedeAdministrarBitacora en
   // server.js).
   async function cargarSelectorRecibidos() {
@@ -542,7 +542,7 @@
         perfiles.forEach((p) => {
           const opt = document.createElement('option');
           opt.value = p.id;
-          opt.textContent = p.esPropia ? `${p.nombre} (vos)` : p.nombre;
+          opt.textContent = p.esPropia ? `${p.nombre} (tú)` : p.nombre;
           if (idActivoSesion ? p.id === idActivoSesion : p.esPropia) opt.selected = true;
           recibidosSelect.appendChild(opt);
         });

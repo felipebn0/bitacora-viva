@@ -211,7 +211,7 @@
     const onboardingBtn = p.esPropia ? '' : `<a class="btn small plain" href="/perfilar.html?id=${p.id}">${p.tieneOnboarding ? 'Editar lo que sabemos de ella' : 'Contarle a la IA sobre ella'}</a>`;
     // Archivar (pedido de Felipe, 2026-09-08): no borra nada, solo lo saca
     // de esta lista y corta sus enlaces — ver POST /api/subprofiles/:id/archive.
-    // No se ofrece para "vos" (esPropia) ni para el perfil activo ahora
+    // No se ofrece para "tú" (esPropia) ni para el perfil activo ahora
     // mismo (el servidor lo rechazaría igual, pero es más claro no
     // ofrecer un botón que va a fallar).
     const archivarBtn = (!p.esPropia && !esActivo) ? `<button class="btn small plain warn" data-archivar="${p.id}" type="button">Archivar</button>` : '';
