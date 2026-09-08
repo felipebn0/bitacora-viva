@@ -2273,6 +2273,41 @@ app.post('/api/subprofiles/:id/archive', requireAuth, bloquearColaborador, bloqu
   }
 });
 
+// Trae (o genera de una) el código para que el CÍRCULO de esa persona le
+// aporte historias en colaborar.html?codigo=... — es el mismo mecanismo que
+// GET /api/invite-code, pero apuntado a un subperfil en vez de a la propia
+// cuenta (pedido de Felipe: el link para "que le aporten" iba a app.html por
+// error, en vez de a colaborar.html).
+app.get('/api/subprofiles/:id/invite-link', requireAuth, bloquearColaborador, bloquearInvitado, async (req, res) => {
+  try {
+    await ensureSchema();
+    const id = parseInt(req.params.id, 10);
+    const bit = await bitacoraDelAdmin(id, req.userId);
+    if (!bit) return res.status(404).json({ error: 'No se encontró ese subperfil.' });
+    const code = (await leerInviteCodeActivo(id, false)) || (await asignarInviteCodeActivo(id, false));
+    res.json({ code });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo generar el enlace.' });
+  }
+});
+
+// Mismo motivo que /api/invite-code/regenerate: cerrar el acceso de un link
+// que se compartió de más, sin afectar a quienes ya colaboraron.
+app.post('/api/subprofiles/:id/invite-link/regenerate', requireAuth, bloquearColaborador, bloquearInvitado, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    const id = parseInt(req.params.id, 10);
+    const bit = await bitacoraDelAdmin(id, req.userId);
+    if (!bit) return res.status(404).json({ error: 'No se encontró ese subperfil.' });
+    const code = await asignarInviteCodeActivo(id, false);
+    res.json({ code });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo generar el enlace.' });
+  }
+});
+
 // --- Entrar como narrador de un subperfil, sin crear cuenta (BACKLOG #12) ---
 // Mismo espíritu que /api/guest-code-info + /api/guest-start (BACKLOG #5),
 // pero esto narra SU PROPIA bitácora (story_log, árbol, capítulos) en vez de

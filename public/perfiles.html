@@ -173,6 +173,7 @@
 
   let perfilesCache = [];
   let enlaceAbiertoId = null;
+  let aporteAbiertoId = null;
   let activaId = null; // window.bitacoraActivaId, si /api/me lo trae
 
   function filaPerfil(p) {
@@ -183,6 +184,10 @@
       ? `<span class="activo-tag">Bitácora activa ahora</span>`
       : `<button class="btn small" data-cambiar="${p.id}" type="button">Cambiar acá</button>`;
     const enlaceToggleBtn = p.esPropia ? '' : `<button class="btn small plain" data-enlace="${p.id}" type="button">${enlaceAbiertoId === p.id ? 'Ocultar enlace' : 'Compartir enlace para narrar'}</button>`;
+    // Enlace de APORTES (item 10, pedido de Felipe 2026-09-08): distinto del
+    // de narrar de arriba — este es para que el círculo de esa persona le
+    // aporte historias en colaborar.html, no para que ELLA narre la suya.
+    const aporteToggleBtn = p.esPropia ? '' : `<button class="btn small plain" data-aporte="${p.id}" type="button">${aporteAbiertoId === p.id ? 'Ocultar enlace' : 'Compartir para que le aporten historias'}</button>`;
     // Archivar (pedido de Felipe, 2026-09-08): no borra nada, solo lo saca
     // de esta lista y corta sus enlaces — ver POST /api/subprofiles/:id/archive.
     // No se ofrece para "vos" (esPropia) ni para el perfil activo ahora
@@ -190,6 +195,7 @@
     // ofrecer un botón que va a fallar).
     const archivarBtn = (!p.esPropia && !esActivo) ? `<button class="btn small plain warn" data-archivar="${p.id}" type="button">Archivar</button>` : '';
     const enlaceBox = enlaceAbiertoId === p.id ? `<div class="enlace-box" id="enlaceBox-${p.id}"><p class="msg">Cargando…</p></div>` : '';
+    const aporteBox = aporteAbiertoId === p.id ? `<div class="enlace-box" id="aporteBox-${p.id}"><p class="msg">Cargando…</p></div>` : '';
     return `<div class="perfil-card">
       <div class="fila-principal">
         <div class="identidad">
@@ -199,9 +205,10 @@
             ${tagPrincipal}
           </div>
         </div>
-        <div class="acciones-fila">${cambiarBtn}${enlaceToggleBtn}${archivarBtn}</div>
+        <div class="acciones-fila">${cambiarBtn}${enlaceToggleBtn}${aporteToggleBtn}${archivarBtn}</div>
       </div>
       ${enlaceBox}
+      ${aporteBox}
     </div>`;
   }
 
@@ -261,6 +268,30 @@
     } catch (e) {}
   }
 
+  function mostrarEnlaceAporte(id, code) {
+    const box = document.getElementById(`aporteBox-${id}`);
+    if (!box) return;
+    const perfil = perfilesCache.find((p) => p.id === id);
+    const nombre = (perfil && perfil.nombre) || 'esa persona';
+    const link = `${location.origin}/colaborar.html?codigo=${encodeURIComponent(code)}`;
+    const mensaje = `Ayúdanos a guardar los recuerdos de ${nombre} — cuéntanos una historia acá: ${link}`;
+    const wa = `https://wa.me/?text=${encodeURIComponent(mensaje)}`;
+    box.innerHTML = `<p class="enlace-texto">${link}</p>
+      <div class="acciones">
+        <button class="btn small" type="button" data-copiar-link="${link.replace(/"/g, '&quot;')}">Copiar enlace</button>
+        <a href="${wa}" target="_blank" rel="noopener" class="btn small">Compartir por WhatsApp</a>
+        <button class="btn small plain" type="button" data-regenerar-aporte="${id}">Generar uno nuevo</button>
+      </div>`;
+  }
+
+  async function cargarYMostrarAporte(id) {
+    try {
+      const resp = await fetch(`/api/subprofiles/${id}/invite-link`);
+      const data = await resp.json();
+      if (resp.ok) mostrarEnlaceAporte(id, data.code);
+    } catch (e) {}
+  }
+
   // Un solo listener con delegación (en vez de uno por fila) — las filas se
   // reemplazan enteras cada vez que se repinta la lista.
   lista.addEventListener('click', async (e) => {
@@ -287,6 +318,13 @@
       if (enlaceAbiertoId === enlaceId) await cargarYMostrarEnlace(enlaceId);
       return;
     }
+    const aporteId = Number(e.target.dataset.aporte);
+    if (aporteId) {
+      aporteAbiertoId = aporteAbiertoId === aporteId ? null : aporteId;
+      pintarPerfiles();
+      if (aporteAbiertoId === aporteId) await cargarYMostrarAporte(aporteId);
+      return;
+    }
     const linkACopiar = e.target.dataset.copiarLink;
     if (linkACopiar) {
       try {
@@ -305,6 +343,16 @@
         const data = await resp.json();
         if (resp.ok) await mostrarEnlace(regenId, data.code);
       } catch (e3) {}
+      return;
+    }
+    const regenAporteId = Number(e.target.dataset.regenerarAporte);
+    if (regenAporteId) {
+      if (!confirm('¿Generar un enlace nuevo? El que ya compartiste deja de servir.')) return;
+      try {
+        const resp = await fetch(`/api/subprofiles/${regenAporteId}/invite-link/regenerate`, { method: 'POST' });
+        const data = await resp.json();
+        if (resp.ok) mostrarEnlaceAporte(regenAporteId, data.code);
+      } catch (e3b) {}
       return;
     }
     const revokId = Number(e.target.dataset.revocar);

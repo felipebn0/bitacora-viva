@@ -186,6 +186,10 @@
     min-height: 44px; box-sizing: border-box;
   }
   .collab-switch-list a.active { background: var(--gold-deep); color: #FBF6EA; border-color: var(--gold-deep); font-weight: 700; }
+  /* Dropdown en vez de burbujas cuando hay muchas colaboraciones (item 17,
+     pedido de Felipe 2026-09-08) -- con pocas, las burbujas de arriba se ven
+     bien; con muchas se desordenan y un selector es más claro. */
+  .collab-switch-select { width: 100%; max-width: 320px; margin: 0 auto; display: block; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 12px; font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink); }
 
   .aportes {
     width: min(440px, 100%);
@@ -828,22 +832,45 @@
       const historias = data.historias || [];
       if (historias.length < 2) return; // con una sola no hace falta el selector
       collabSwitchList.innerHTML = '';
-      historias.forEach((h) => {
-        const a = document.createElement('a');
-        a.href = '/colaborar.html?owner=' + h.ownerId;
-        a.textContent = h.ownerName;
-        const esActiva = ownerIdActivo
-          ? String(h.ownerId) === String(ownerIdActivo)
-          : h.ownerName === nombreActivoFallback;
-        if (esActiva) {
-          a.classList.add('active');
-          // El estado visual (clase .active) ya existía — sin esto, a
-          // quien usa lector de pantalla no le llega cuál de las bitácoras
-          // es la que está viendo ahora mismo.
-          a.setAttribute('aria-current', 'page');
-        }
-        collabSwitchList.appendChild(a);
-      });
+      // Con muchas colaboraciones, la fila de burbujas se ve desordenada —
+      // a partir de 6 se muestra un dropdown en su lugar (mismo listado,
+      // solo cambia cómo se elige).
+      if (historias.length > 6) {
+        const select = document.createElement('select');
+        select.className = 'collab-switch-select';
+        select.setAttribute('aria-label', 'Elegir con quién colaborar');
+        historias.forEach((h) => {
+          const opt = document.createElement('option');
+          opt.value = h.ownerId;
+          opt.textContent = h.ownerName;
+          const esActiva = ownerIdActivo
+            ? String(h.ownerId) === String(ownerIdActivo)
+            : h.ownerName === nombreActivoFallback;
+          if (esActiva) opt.selected = true;
+          select.appendChild(opt);
+        });
+        select.addEventListener('change', () => {
+          window.location.href = '/colaborar.html?owner=' + select.value;
+        });
+        collabSwitchList.appendChild(select);
+      } else {
+        historias.forEach((h) => {
+          const a = document.createElement('a');
+          a.href = '/colaborar.html?owner=' + h.ownerId;
+          a.textContent = h.ownerName;
+          const esActiva = ownerIdActivo
+            ? String(h.ownerId) === String(ownerIdActivo)
+            : h.ownerName === nombreActivoFallback;
+          if (esActiva) {
+            a.classList.add('active');
+            // El estado visual (clase .active) ya existía — sin esto, a
+            // quien usa lector de pantalla no le llega cuál de las bitácoras
+            // es la que está viendo ahora mismo.
+            a.setAttribute('aria-current', 'page');
+          }
+          collabSwitchList.appendChild(a);
+        });
+      }
       collabSwitch.style.display = 'block';
     } catch (e) {}
   }
