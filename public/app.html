@@ -2339,25 +2339,23 @@
   let vadSource = null;
   function startVoiceActivityDetection() {
     if (!mediaStream) return;
-    // El AudioContext se comparte entre turnos, pero en el celular el
-    // navegador lo "suspende" solo cuando la pantalla se apaga o hay una
-    // interrupción — y un contexto suspendido devuelve SILENCIO constante al
-    // medidor de abajo, así que el corte por silencio se disparaba a cada
-    // rato con audio vacío y la charla quedaba en un bucle de "Escuchando…".
-    // Si no está corriendo, se intenta reanudar; si aun así no arranca (iOS
-    // no siempre deja sin un gesto nuevo), se descarta y se crea uno nuevo.
+    // Mismo manejo simple que colaborar.html (que sí funciona bien): se
+    // reutiliza el AudioContext entre turnos y, si quedó "suspendido"
+    // (el navegador lo hace solo cuando no hay audio activo un rato, o en
+    // el celular al apagar la pantalla), se pide reanudarlo y se sigue.
+    // Un intento anterior de "cerrarlo y crear otro" acá rompía el caso
+    // normal: resume() es asíncrono, así que el chequeo inmediato de
+    // .state siempre daba 'suspended' y terminaba midiendo sobre un
+    // contexto nuevo todavía suspendido = SILENCIO -> el turno se cortaba
+    // en ~1s, caía por "demasiado corta" y la charla no avanzaba. Si de
+    // verdad no reanuda (permiso perdido, etc.), el corte tras 3 intentos
+    // vacíos (reintentarOEscribir) ya deja pausada la charla pidiendo un
+    // toque nuevo, que es el gesto que lo destraba.
     if (audioContext && audioContext.state === 'closed') { audioContext = null; }
     if (!audioContext) {
       audioContext = new (window.AudioContext || window.webkitAudioContext)();
     }
-    if (audioContext.state === 'suspended') {
-      audioContext.resume().catch(() => {});
-      if (audioContext.state === 'suspended') {
-        try { audioContext.close(); } catch (e) {}
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        audioContext.resume().catch(() => {});
-      }
-    }
+    if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
     // Desconectar el nodo del turno anterior — si no, se van apilando
     // fuentes sobre el mismo contexto en cada turno.
     if (vadSource) { try { vadSource.disconnect(); } catch (e) {} }
@@ -2466,6 +2464,11 @@
       sessionId += 1;
       setState('paused', 'No logré escucharte. Escribe tu respuesta abajo, o presiona el botón para hablar de nuevo.');
       orbLabel.innerHTML = 'Presiona<br>para hablar';
+      // Ocultar el botón rojo "Terminar": en este estado se le pide a la
+      // persona que TOQUE el orbe para reintentar, y ese botón se apoya
+      // sobre una esquina del orbe — un toque ahí cerraría la charla sin
+      // querer ("cerró todo"). Vuelve a aparecer solo en cuanto se reanuda.
+      endBtn.style.display = 'none';
       try { writeInput.focus(); } catch (e) {}
       return;
     }
