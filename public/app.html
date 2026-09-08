@@ -1754,7 +1754,14 @@
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     promptDeInstalacion = e;
-    if (agregarInicioBtn.dataset.modoNarrador === 'true') agregarInicioBtn.style.display = 'inline-flex';
+    // Este evento es de Chrome/Android y NO es confiable: depende de sus
+    // propios criterios internos (a veces tarda, a veces no llega nunca en
+    // esta sesión) — cuando SÍ llega, el botón de un solo toque es mejor
+    // que la instrucción manual, así que la reemplaza.
+    if (agregarInicioBtn.dataset.modoNarrador === 'true') {
+      agregarInicioBtn.style.display = 'inline-flex';
+      agregarInicioTexto.style.display = 'none';
+    }
   });
   agregarInicioBtn.addEventListener('click', async () => {
     if (!promptDeInstalacion) return;
@@ -1773,17 +1780,25 @@
     manifestLink.href = `/api/manifest.json?${params.toString()}`;
     appleTitleMeta.setAttribute('content', nombre ? `Los recuerdos de ${nombre}` : 'Los recuerdos de mis viejos');
     agregarInicioBtn.dataset.modoNarrador = 'true';
+    // Si ya se está usando instalada (agregada antes), no hace falta
+    // ofrecer nada de esto de nuevo.
+    const yaInstalada = window.navigator.standalone || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+    if (yaInstalada) return;
     if (promptDeInstalacion) { agregarInicioBtn.style.display = 'inline-flex'; return; }
-    // iOS Safari no tiene ningún evento/API para disparar el cartel de
-    // instalación solo — la única forma es que la persona lo haga a mano
-    // desde el botón de Compartir. Se detecta por user-agent (no hay
-    // feature-detection real para esto) y se muestra la instrucción en vez
-    // del botón, que ahí no serviría de nada.
+    // beforeinstallprompt (Chrome/Android) es un evento poco confiable —
+    // depende de criterios internos del navegador y puede no llegar nunca
+    // en esta sesión, aunque el navegador sí soporte instalar la página.
+    // En vez de dejar todo esto vacío mientras se espera un evento que
+    // quizás nunca llegue, se muestra SIEMPRE la instrucción manual de
+    // una — si el evento llega más tarde, el listener de arriba la
+    // reemplaza por el botón de un solo toque. iOS Safari nunca dispara
+    // este evento (no tiene ninguna API para esto), así que ahí la
+    // instrucción manual es la única opción posible, siempre.
     const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    if (esIOS && !window.navigator.standalone) {
-      agregarInicioTexto.textContent = 'Para guardar esta charla en tu pantalla de inicio: toca compartir ⬆️ y luego "Agregar a pantalla de inicio".';
-      agregarInicioTexto.style.display = 'block';
-    }
+    agregarInicioTexto.textContent = esIOS
+      ? 'Para guardar esta charla en tu pantalla de inicio: toca compartir ⬆️ y luego "Agregar a pantalla de inicio".'
+      : 'Para guardar esta charla en tu pantalla de inicio: toca el menú ⋮ (arriba a la derecha) y elige "Agregar a pantalla de inicio" o "Instalar app".';
+    agregarInicioTexto.style.display = 'block';
   }
 
   function aplicarSesionSubperfil(data) {
