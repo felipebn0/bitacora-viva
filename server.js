@@ -659,6 +659,16 @@ function ensureSchema() {
       // dueño de la bitácora o se use como "historia ya aportada" en otro
       // lado mientras todavía se está escribiendo.
       sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS en_progreso BOOLEAN NOT NULL DEFAULT false`,
+      // Privada/archivada (item 14, pedido de Felipe 2026-09-08) — las
+      // controla quien la aportó (contributed_by, o el nombre de invitado
+      // si no tiene cuenta), nunca el dueño de la bitácora. is_private: se
+      // esconde del resto del círculo que también colabora acá, pero el
+      // dueño (quien administra/paga la bitácora) la sigue viendo siempre
+      // — decisión explícita de Felipe. archived_at: igual que
+      // bitacoras.archived_at, no es un borrado real, solo deja de
+      // aparecer (ni para el dueño ni para el colaborador).
+      sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS is_private BOOLEAN NOT NULL DEFAULT false`,
+      sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ`,
       sql`CREATE INDEX IF NOT EXISTS idx_family_notes_user ON family_notes(user_id)`,
 
       // Un usuario dueño de su propia bitácora también puede sumarse como
@@ -4289,11 +4299,14 @@ app.get('/api/contributions', requireAuth, async (req, res) => {
     // bitácora comparten nombre, verían el aporte del otro (limitación
     // conocida, no un hueco de privacidad hacia afuera de la familia).
     const esDueño = ownerId === req.userId;
+    // archived_at IS NULL en las 3: un aporte archivado (item 14) deja de
+    // aparecer para TODOS, incluido quien lo aportó — mismo criterio que
+    // bitacoras.archived_at con los subperfiles.
     const notesRaw = esDueño
-      ? await sql`SELECT id, contributor, parentesco, protagonista, texto, audio_url, audio_urls, media_urls, created_at FROM family_notes WHERE user_id = ${ownerId} ORDER BY created_at DESC LIMIT 30`
+      ? await sql`SELECT id, contributor, parentesco, protagonista, texto, audio_url, audio_urls, media_urls, created_at, is_private FROM family_notes WHERE user_id = ${ownerId} AND archived_at IS NULL ORDER BY created_at DESC LIMIT 30`
       : req.isGuest
-      ? await sql`SELECT id, contributor, parentesco, protagonista, texto, audio_url, audio_urls, media_urls, created_at FROM family_notes WHERE user_id = ${ownerId} AND contributed_by IS NULL AND contributor = ${req.guestName} ORDER BY created_at DESC LIMIT 30`
-      : await sql`SELECT id, contributor, parentesco, protagonista, texto, audio_url, audio_urls, media_urls, created_at FROM family_notes WHERE user_id = ${ownerId} AND contributed_by = ${req.userId} ORDER BY created_at DESC LIMIT 30`;
+      ? await sql`SELECT id, contributor, parentesco, protagonista, texto, audio_url, audio_urls, media_urls, created_at, is_private FROM family_notes WHERE user_id = ${ownerId} AND contributed_by IS NULL AND contributor = ${req.guestName} AND archived_at IS NULL ORDER BY created_at DESC LIMIT 30`
+      : await sql`SELECT id, contributor, parentesco, protagonista, texto, audio_url, audio_urls, media_urls, created_at, is_private FROM family_notes WHERE user_id = ${ownerId} AND contributed_by = ${req.userId} AND archived_at IS NULL ORDER BY created_at DESC LIMIT 30`;
     const mediaRaw = esDueño
       ? await sql`SELECT type, url, caption, contributor, created_at FROM media WHERE user_id = ${ownerId} ORDER BY created_at DESC LIMIT 30`
       : [];
@@ -4305,10 +4318,62 @@ app.get('/api/contributions', requireAuth, async (req, res) => {
       media_urls: parseJsonArray(n.media_urls),
     }));
     const media = mediaRaw.map((m) => ({ ...m, contributor: capitalizarNombre(m.contributor) }));
-    res.json({ notes, media });
+    // puedeAdministrar: solo quien aportó puede marcar privado/archivar lo
+    // suyo (nunca el dueño de la bitácora) — acá se sabe de una porque las
+    // ramas "no dueño" de arriba YA filtran solo por lo propio.
+    res.json({ notes, media, puedeAdministrar: !esDueño });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudieron cargar los aportes.' });
+  }
+});
+
+// Confirma que quien pide la acción es de verdad quien aportó esa nota
+// (nunca el dueño de la bitácora, aunque también tenga acceso a leerla) --
+// usado por los dos endpoints de abajo. Devuelve la nota o null.
+async function aporteDelColaborador(id, ownerId, req) {
+  const rows = await sql`SELECT id, user_id, contributed_by, contributor FROM family_notes WHERE id = ${id} AND archived_at IS NULL`;
+  const nota = rows[0];
+  if (!nota || nota.user_id !== ownerId) return null;
+  if (req.isGuest) return (nota.contributed_by == null && nota.contributor === req.guestName) ? nota : null;
+  return nota.contributed_by === req.userId ? nota : null;
+}
+
+// Item 14 (pedido de Felipe, 2026-09-08): quien aportó una historia puede
+// esconderla del resto del círculo que también colabora acá -- el dueño de
+// la bitácora la sigue viendo siempre (ver el filtro de GET /api/contributions).
+app.post('/api/contributions/:id/privacy', requireAuth, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    const id = parseInt(req.params.id, 10);
+    const ownerId = await resolveProfileUserId(req);
+    if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
+    const nota = await aporteDelColaborador(id, ownerId, req);
+    if (!nota) return res.status(404).json({ error: 'No se encontró ese aporte.' });
+    const privada = !!(req.body && req.body.private);
+    await sql`UPDATE family_notes SET is_private = ${privada} WHERE id = ${id}`;
+    res.json({ ok: true, private: privada });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo actualizar el aporte.' });
+  }
+});
+
+// Igual que POST /api/subprofiles/:id/archive: no es un borrado real, solo
+// deja de aparecer (ni para el dueño ni para quien lo aportó).
+app.post('/api/contributions/:id/archive', requireAuth, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    const id = parseInt(req.params.id, 10);
+    const ownerId = await resolveProfileUserId(req);
+    if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
+    const nota = await aporteDelColaborador(id, ownerId, req);
+    if (!nota) return res.status(404).json({ error: 'No se encontró ese aporte.' });
+    await sql`UPDATE family_notes SET archived_at = now() WHERE id = ${id}`;
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo archivar el aporte.' });
   }
 });
 

@@ -218,6 +218,16 @@
   .aportes .lista .item { font-size: 0.85rem; color: var(--ink-soft); }
   .aportes .lista .item strong { color: var(--ink); }
   .aportes .lista .item audio { width: 100%; margin-top: 4px; }
+  /* Item 14 (pedido de Felipe 2026-09-08): solo aparece cuando el aporte
+     es propio (ver puedeAdministrar en GET /api/contributions) -- nunca
+     en la vista del dueño de la bitácora. */
+  .aportes .lista .item .aporte-acciones { margin-top: 6px; display: flex; gap: 14px; }
+  .aportes .lista .item .aporte-acciones button {
+    background: none; border: none; color: var(--moss); text-decoration: underline;
+    cursor: pointer; font-family: var(--font-body); font-size: 0.78rem; padding: 4px 0;
+  }
+  .aportes .lista .item .aporte-acciones .archivar-btn { color: #a33; }
+  .aportes .lista .item.es-privado { opacity: 0.75; }
 
   /* A diferencia de app.html, acá no hay ningún panel "sticky" con un
      presupuesto de alto fijo — esta página siempre fue de una sola
@@ -1685,6 +1695,23 @@
   fotoCaptionSend.addEventListener('click', subirFotoPendiente);
   fotoCaptionInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') subirFotoPendiente(); });
 
+  async function cambiarPrivacidadAporte(id, privada) {
+    try {
+      await fetch(conOwner(`/api/contributions/${id}/privacy`), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ private: privada }),
+      });
+    } catch (e) {}
+    cargarAportes();
+  }
+
+  async function archivarAporte(id) {
+    if (!confirm('¿Archivar este aporte? Deja de verse, tuyo y del resto — no se borra nada.')) return;
+    try {
+      await fetch(conOwner(`/api/contributions/${id}/archive`), { method: 'POST' });
+    } catch (e) {}
+    cargarAportes();
+  }
+
   async function cargarAportes() {
     try {
       const resp = await fetch(conOwner('/api/contributions'));
@@ -1694,7 +1721,7 @@
       const items = (data.notes || []).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
       items.forEach((it) => {
         const div = document.createElement('div');
-        div.className = 'item';
+        div.className = 'item' + (it.is_private ? ' es-privado' : '');
         // contributor/parentesco/protagonista/texto son texto libre que
         // cualquier colaborador puede mandar — se arma el DOM a mano
         // (textContent) en vez de pegarlo como HTML, para que no se pueda
@@ -1703,7 +1730,7 @@
         const quien = it.contributor ? it.contributor + (it.parentesco ? ` (${it.parentesco})` : '') : 'Familia';
         const etiqueta = it.protagonista ? `Historia de ${it.protagonista} — compartida por ${quien}` : quien;
         const strong = document.createElement('strong');
-        strong.textContent = etiqueta + ':';
+        strong.textContent = etiqueta + (it.is_private ? ' (privado)' : '') + ':';
         div.appendChild(strong);
         div.appendChild(document.createTextNode(' ' + it.texto));
         urls.forEach((u) => {
@@ -1716,6 +1743,25 @@
             div.appendChild(audio);
           }
         });
+        // Solo lo propio se puede administrar (item 14) -- el dueño de la
+        // bitácora nunca ve estos botones en su lista (puedeAdministrar
+        // llega en false cuando la vista es la de él).
+        if (data.puedeAdministrar) {
+          const acciones = document.createElement('div');
+          acciones.className = 'aporte-acciones';
+          const privBtn = document.createElement('button');
+          privBtn.type = 'button';
+          privBtn.textContent = it.is_private ? 'Quitar privado' : 'Marcar privado';
+          privBtn.addEventListener('click', () => cambiarPrivacidadAporte(it.id, !it.is_private));
+          const archBtn = document.createElement('button');
+          archBtn.type = 'button';
+          archBtn.className = 'archivar-btn';
+          archBtn.textContent = 'Archivar';
+          archBtn.addEventListener('click', () => archivarAporte(it.id));
+          acciones.appendChild(privBtn);
+          acciones.appendChild(archBtn);
+          div.appendChild(acciones);
+        }
         aportesLista.appendChild(div);
       });
     } catch (e) {}

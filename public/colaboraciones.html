@@ -249,7 +249,11 @@
       const urls = (n.audio_urls && n.audio_urls.length) ? n.audio_urls : (n.audio_url ? [n.audio_url] : []);
       const quienP = document.createElement('p');
       quienP.className = 'quien';
-      quienP.textContent = etiqueta;
+      // is_private (item 14): quien lo aportó lo marcó privado -- se
+      // esconde del resto del círculo, pero el dueño de la bitácora lo
+      // sigue viendo siempre (decisión de Felipe), así que acá se aclara
+      // por qué aparece.
+      quienP.textContent = etiqueta + (n.is_private ? ' (privado — solo lo ves tú)' : '');
       item.appendChild(quienP);
       const textoDiv = document.createElement('div');
       textoDiv.className = 'texto';
