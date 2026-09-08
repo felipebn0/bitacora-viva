@@ -99,7 +99,7 @@
     background: #FBF6EA; border: 1px solid #E7DFCC; border-radius: 14px; padding: 18px 20px;
   }
   .form-nueva label { display: block; font-size: 0.85rem; color: var(--ink-soft); margin: 0 0 4px; }
-  .form-nueva input {
+  .form-nueva input, .form-nueva select {
     width: 100%; border: 1px solid #E7DFCC; border-radius: 10px; padding: 10px 12px;
     font-family: var(--font-body); background: #fff; color: var(--ink); font-size: 1rem; margin-bottom: 14px;
   }
@@ -133,6 +133,20 @@
         <input type="text" id="nuevoNombre" placeholder="Ej: Papá" maxlength="100">
         <label for="nuevaFecha">Fecha de nacimiento (opcional)</label>
         <input type="date" id="nuevaFecha" aria-label="Fecha de nacimiento (opcional)">
+        <label for="nuevaRelacion">¿Para quién es? (opcional)</label>
+        <select id="nuevaRelacion">
+          <option value="">Prefiero no decir</option>
+          <option value="Papá">Papá</option>
+          <option value="Mamá">Mamá</option>
+          <option value="Abuelo">Abuelo</option>
+          <option value="Abuela">Abuela</option>
+          <option value="Hijo">Hijo</option>
+          <option value="Hija">Hija</option>
+          <option value="Amigo">Amigo</option>
+          <option value="Amiga">Amiga</option>
+          <option value="otro">Otro</option>
+        </select>
+        <input type="text" id="nuevaRelacionOtro" placeholder="¿Cuál?" maxlength="60" hidden>
         <button class="btn" id="crearBtn" type="button">+ Agregar bitácora</button>
         <p class="msg" id="crearMsg" role="status" aria-live="polite" aria-atomic="true"></p>
       </div>
@@ -145,8 +159,15 @@
   const listaStatus = document.getElementById('listaStatus');
   const nuevoNombre = document.getElementById('nuevoNombre');
   const nuevaFecha = document.getElementById('nuevaFecha');
+  const nuevaRelacion = document.getElementById('nuevaRelacion');
+  const nuevaRelacionOtro = document.getElementById('nuevaRelacionOtro');
   const crearBtn = document.getElementById('crearBtn');
   const crearMsg = document.getElementById('crearMsg');
+
+  nuevaRelacion.addEventListener('change', () => {
+    nuevaRelacionOtro.hidden = nuevaRelacion.value !== 'otro';
+    if (!nuevaRelacionOtro.hidden) nuevaRelacionOtro.focus();
+  });
 
   function mensajeDeError(resp, data, fallback) {
     if (resp && resp.status === 401) return 'Tu sesión venció — actualiza la página para volver a iniciar sesión.';
@@ -179,7 +200,9 @@
   function filaPerfil(p) {
     const esActivo = p.esPropia ? !activaId : activaId === p.id;
     const inicial = (p.nombre || '?').trim().charAt(0).toUpperCase();
-    const tagPrincipal = p.esPropia ? `<span class="principal-tag">Usuario principal</span>` : '';
+    const tagPrincipal = p.esPropia
+      ? `<span class="principal-tag">Usuario principal</span>`
+      : (p.relacion ? `<span class="principal-tag">${escaparHtml(p.relacion)}</span>` : '');
     const cambiarBtn = esActivo
       ? `<span class="activo-tag">Bitácora activa ahora</span>`
       : `<button class="btn small" data-cambiar="${p.id}" type="button">Cambiar acá</button>`;
@@ -387,15 +410,19 @@
     if (!nombre) { crearMsg.textContent = 'Falta el nombre.'; crearMsg.classList.remove('error'); return; }
     crearBtn.disabled = true;
     crearMsg.textContent = '';
+    const relacion = nuevaRelacion.value === 'otro' ? nuevaRelacionOtro.value.trim() : nuevaRelacion.value;
     try {
       const resp = await fetch('/api/subprofiles', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre, fechaNacimiento: nuevaFecha.value || null }),
+        body: JSON.stringify({ nombre, fechaNacimiento: nuevaFecha.value || null, relacion: relacion || null }),
       });
       const data = await resp.json();
       if (!resp.ok) { crearMsg.textContent = mensajeDeError(resp, data, 'No se pudo crear el subperfil.'); crearMsg.classList.add('error'); return; }
       nuevoNombre.value = '';
       nuevaFecha.value = '';
+      nuevaRelacion.value = '';
+      nuevaRelacionOtro.value = '';
+      nuevaRelacionOtro.hidden = true;
       crearMsg.classList.remove('error');
       crearMsg.textContent = `✓ Se creó la bitácora de ${data.nombre}.`;
       // Deja el enlace ya abierto y cargado — sin esto, había que ubicar la

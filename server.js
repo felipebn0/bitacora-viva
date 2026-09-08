@@ -869,6 +869,12 @@ function ensureSchema() {
       // narrando ni aportando ahí; GET /api/subprofiles y el "cambiar de
       // perfil" dejan de ofrecerlo.
       sql`ALTER TABLE bitacoras ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ`,
+      // Para quién es el subperfil (item 11, pedido de Felipe 2026-09-08):
+      // se pregunta al crearlo, solo para mostrarlo en perfiles.html — no
+      // afecta ninguna charla ni prompt de la IA. Texto libre corto (no un
+      // enum en la base) porque el selector en el frontend ya ofrece las
+      // opciones más comunes más una casilla de "otro".
+      sql`ALTER TABLE bitacoras ADD COLUMN IF NOT EXISTS relacion TEXT`,
 
       // Las 8 tablas de contenido de arriba declaraban su "user_id" como
       // REFERENCES users(id) — correcto mientras cada bitácora era siempre
@@ -2137,8 +2143,9 @@ app.post('/api/subprofiles', requireAuth, bloquearColaborador, bloquearInvitado,
       cleanFecha = fechaNacimientoValida(req.body.fechaNacimiento);
       if (!cleanFecha) return res.status(400).json({ error: 'La fecha de nacimiento no es válida.' });
     }
+    const cleanRelacion = capitalizarNombre(String((req.body && req.body.relacion) || '').trim().slice(0, 60)) || null;
     await ensureSchema();
-    const rows = await sql`INSERT INTO bitacoras (admin_user_id, nombre, fecha_nacimiento) VALUES (${req.userId}, ${cleanNombre}, ${cleanFecha}) RETURNING id`;
+    const rows = await sql`INSERT INTO bitacoras (admin_user_id, nombre, fecha_nacimiento, relacion) VALUES (${req.userId}, ${cleanNombre}, ${cleanFecha}, ${cleanRelacion}) RETURNING id`;
     res.json({ ok: true, id: rows[0].id, nombre: cleanNombre });
   } catch (err) {
     console.error(err);
@@ -2153,11 +2160,11 @@ app.get('/api/subprofiles', requireAuth, bloquearColaborador, bloquearInvitado, 
     await ensureSchema();
     const propia = await sql`SELECT name FROM users WHERE id = ${req.userId}`;
     const nombrePropio = capitalizarNombre((propia[0] && propia[0].name) || '') || req.username;
-    const subperfiles = await sql`SELECT id, nombre FROM bitacoras WHERE admin_user_id = ${req.userId} AND archived_at IS NULL ORDER BY created_at ASC`;
+    const subperfiles = await sql`SELECT id, nombre, relacion FROM bitacoras WHERE admin_user_id = ${req.userId} AND archived_at IS NULL ORDER BY created_at ASC`;
     res.json({
       perfiles: [
         { id: req.userId, nombre: nombrePropio, esPropia: true },
-        ...subperfiles.map((s) => ({ id: s.id, nombre: capitalizarNombre(s.nombre), esPropia: false })),
+        ...subperfiles.map((s) => ({ id: s.id, nombre: capitalizarNombre(s.nombre), relacion: s.relacion || null, esPropia: false })),
       ],
     });
   } catch (err) {

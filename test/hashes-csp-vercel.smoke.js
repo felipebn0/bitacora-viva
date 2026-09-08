@@ -1,5 +1,5 @@
 // Smoke test para la ronda 3 del camino hacia CSP en enforce (2026-09-06):
-// permitir los bloques <script>/<style> inline de las 7 páginas por su
+// permitir los bloques <script>/<style> inline de las páginas de public/ por su
 // hash sha256 exacto (ver csp-hashes.js) en vez de extraerlos a archivos
 // aparte.
 //
@@ -46,8 +46,8 @@ check(`vercel.json tiene el header ${clavePolicy}`, !!(headers && headers[claveP
 const policyActual = headers && headers[clavePolicy];
 check('script-src en vercel.json trae exactamente los hashes que hoy dan las páginas de public/', !!policyActual && policyActual.includes(construirDirectiva('script-src', scriptHashes)));
 check('style-src en vercel.json trae exactamente los hashes que hoy dan las páginas de public/', !!policyActual && policyActual.includes(construirDirectiva('style-src', styleHashes)));
-check(`hay ${scriptHashes.length} hashes de <script> (uno por bloque inline real, sin contar los que tienen src=)`, scriptHashes.length >= 7); // 7 páginas, app.html aporta 2
-check(`hay ${styleHashes.length} hashes de <style> (uno por página)`, styleHashes.length === 7);
+check(`hay ${scriptHashes.length} hashes de <script> (uno por bloque inline real, sin contar los que tienen src=)`, scriptHashes.length >= 8); // 8 páginas, app.html aporta 2
+check(`hay ${styleHashes.length} hashes de <style> (uno por página)`, styleHashes.length === 8);
 
 console.log(`\n${pasaron} pasaron, ${fallaron} fallaron`);
 if (fallaron) {
