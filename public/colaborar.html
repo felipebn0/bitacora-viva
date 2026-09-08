@@ -497,6 +497,13 @@
   // Entrada de invitado sin cuenta — llega con ?codigo=XXXXXXXX (link de
   // WhatsApp compartido desde app.html, ver /api/guest-start).
   const codigoInvitado = new URLSearchParams(window.location.search).get('codigo');
+  // BACKLOG #12: el narrador de un subperfil (llega SIN owner/codigo, ver
+  // el botón "Colaborar" del nav de app.html) también es isGuest — pero no
+  // tiene cuenta con la que sumarse como colaborador FIJO. unirseDesdeHub()
+  // usa estas dos para decidir si arranca una sesión de invitado nueva
+  // (/api/guest-start) en vez de /api/join-collaboration.
+  let sesionEsGuest = false;
+  let miGuestName = null;
   function conOwner(path) {
     if (!activeOwnerId) return path;
     return path + (path.includes('?') ? '&' : '?') + 'owner=' + encodeURIComponent(activeOwnerId);
@@ -591,6 +598,28 @@
     hubSubmitBtn.disabled = true;
     hubError.textContent = '';
     try {
+      // BACKLOG #12: un invitado sin cuenta (ej. el narrador de un
+      // subperfil) no puede sumarse como colaborador FIJO —
+      // /api/join-collaboration necesita una cuenta real de verdad
+      // logueada. En vez de eso, arranca una sesión de invitado nueva para
+      // ESTE código (mismo mecanismo que ya usa la entrada por ?codigo=
+      // más abajo), reusando el nombre que ya había dado. Esto REEMPLAZA
+      // su sesión actual: mientras ayuda acá, deja de tener activo su
+      // propio enlace hasta que vuelva a entrar con él.
+      if (sesionEsGuest) {
+        const resp = await fetch('/api/guest-start', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ codigo: code, name: miGuestName || '' }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+          hubError.textContent = data.error || 'No se pudo entrar con ese código.';
+          hubSubmitBtn.disabled = false;
+          return;
+        }
+        window.location.href = location.pathname;
+        return;
+      }
       const resp = await fetch('/api/join-collaboration', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -802,6 +831,8 @@
   fetch('/api/me')
     .then((resp) => (resp.ok ? resp.json() : Promise.reject()))
     .then(async (data) => {
+      sesionEsGuest = !!data.isGuest;
+      miGuestName = data.guestName || null;
       // Solo una cuenta que tiene su propia bitácora (no es 100%
       // colaboradora) puede "volver a su historia" — una cuenta 100%
       // colaboradora no tiene árbol, capítulos ni charla propia. Esa misma

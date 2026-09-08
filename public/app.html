@@ -1744,9 +1744,6 @@
   const subperfilBanner = document.getElementById('subperfilBanner');
   const subperfilBannerTexto = document.getElementById('subperfilBannerTexto');
   const subperfilVolverBtn = document.getElementById('subperfilVolverBtn');
-  const colaborarNavLink = document.querySelector('nav.topbar a[href="/colaborar.html"]');
-  const colaborarNavItem = colaborarNavLink ? colaborarNavLink.closest('.icon-nav-item') : null;
-  const cuentaNavItem = userMenuBtn.closest('.icon-nav-item');
   window.bitacoraActivaId = null;
 
   subperfilVolverBtn.addEventListener('click', async () => {
@@ -1816,8 +1813,21 @@
     // este, así que se agarra fresco acá en vez de duplicar esa constante.
     const greetingBox = document.getElementById('greeting');
     if (data.isGuest && data.isNarradorLink) {
-      if (colaborarNavItem) colaborarNavItem.style.display = 'none';
-      if (cuentaNavItem) cuentaNavItem.style.display = 'none';
+      // Pedido de Felipe (2026-09-07): el perfil del narrador se ve y
+      // funciona igual que uno normal — Colaborar (unirse a la historia de
+      // OTRA persona, ver unirseDesdeHub en colaborar.html) y Cuenta
+      // quedan visibles. Dentro de Cuenta, sí se ocultan las secciones que
+      // no tienen sentido sin una cuenta real detrás (nombre/correo/clave,
+      // facturación, recordatorios, administrar subperfiles, borrar/
+      // reiniciar la cuenta) — mostrarlas solo llevaría a un error al
+      // tocarlas. Tamaño de letra, Voz y Tu copia (exportar) sí funcionan
+      // igual que siempre.
+      ['umSecPerfiles', 'umSecPerfil', 'umSecClave', 'umSecPlan', 'umSecRecordatorios', 'umSecRiesgo'].forEach((controlId) => {
+        const toggle = document.querySelector(`[aria-controls="${controlId}"]`);
+        const body = document.getElementById(controlId);
+        if (toggle) toggle.style.display = 'none';
+        if (body) body.hidden = true;
+      });
       greetingName.textContent = data.guestName || data.bitacoraNombre || '';
       subperfilBanner.style.display = 'none';
       orbZone.style.display = '';
