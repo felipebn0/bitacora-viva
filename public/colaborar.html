@@ -239,7 +239,7 @@
   @keyframes breathe { 0%,100% { transform: scale(1); opacity: .6; } 50% { transform: scale(1.08); opacity: .15; } }
   .orb-zone .orb[data-state="listening"] { background: radial-gradient(circle at 35% 30%, #9A6524, var(--gold-deep)); }
   .orb-zone .orb[data-state="listening"]::before { animation-duration: 1.4s; }
-  .orb-zone .orb[data-state="thinking"] { background: radial-gradient(circle at 35% 30%, #67774D, var(--moss)); }
+  .orb-zone .orb[data-state="thinking"], .orb-zone .orb[data-state="speaking"] { background: radial-gradient(circle at 35% 30%, #67774D, var(--moss)); }
   .state-label { font-size: 0.85rem; color: var(--ink-soft); min-height: 1.2em; text-align: center; }
   .orb-zone .write-toggle {
     background: none; border: none; padding: 0; border-radius: 0;
@@ -1031,6 +1031,27 @@
     return (data && data.error) || 'Hubo un problema en el servidor. Intenta de nuevo en un momento.';
   }
 
+  // Qué hacer una vez que la respuesta de la IA ya se mostró (y, si
+  // corresponde, ya se terminó de hablar): cerrar la charla si era el
+  // cierre, o seguir escuchando sola si no (pedido de Felipe, 2026-09-08:
+  // que esta pantalla se sienta igual de fluida que la charla principal).
+  async function manejarDesenlaceDeTurno(data) {
+    if (data.done) {
+      charlaTerminada = true;
+      releaseWakeLock();
+      orb.style.display = 'none';
+      document.getElementById('subirAudioBtn').style.display = 'none';
+      mostrarEscribirColab(false);
+      recStatus.textContent = '';
+      aporteMsg.classList.toggle('error', !data.saved);
+      aporteMsg.textContent = data.saved ? '✓ Historia guardada. Gracias.' : '⚠️ La charla terminó, pero hubo un problema para guardarla.';
+      otraHistoriaBtn.style.display = 'inline-block';
+      if (data.saved) { cargarAportes(); }
+    } else if (interaccionReal) {
+      await empezarGrabacion();
+    }
+  }
+
   async function enviarTurno() {
     // Ver el comentario junto a subidaFotoEnCurso: si hay una foto
     // subiéndose todavía, esperamos a que termine antes de armar este
@@ -1053,18 +1074,26 @@
       historyLocal.push({ role: 'assistant', content: data.message });
       agregarBurbuja('a', data.message);
       esperandoAclaracion = !!data.needsBasicInfo;
-      if (data.done) {
-        charlaTerminada = true;
-        releaseWakeLock();
-        orb.style.display = 'none';
-        document.getElementById('subirAudioBtn').style.display = 'none';
-        mostrarEscribirColab(false);
-        recStatus.textContent = '';
-        aporteMsg.classList.toggle('error', !data.saved);
-        aporteMsg.textContent = data.saved ? '✓ Historia guardada. Gracias.' : '⚠️ La charla terminó, pero hubo un problema para guardarla.';
-        otraHistoriaBtn.style.display = 'inline-block';
-        if (data.saved) { cargarAportes(); }
-      }
+
+      // interaccionReal=false: todavía es el saludo inicial, antes de
+      // cualquier gesto real de la persona — se muestra en silencio, como
+      // ya pasaba, en vez de intentar hablar (el navegador lo bloquearía
+      // igual, sin ningún aviso, y de paso evita pedir el micrófono solo
+      // apenas carga la página).
+      if (!interaccionReal) { await manejarDesenlaceDeTurno(data); return; }
+
+      orb.dataset.state = 'speaking';
+      orb.innerHTML = '···';
+      orb.disabled = true;
+      orb.setAttribute('aria-label', 'La entrevistadora está hablando');
+      recStatus.textContent = 'Hablando…';
+      // Se espera a que termine de hablar (y, si sigue la charla, a que la
+      // siguiente grabación ya haya arrancado) antes de que enviarTurno()
+      // se dé por resuelto — terminarGrabacion() decide si reiniciar el
+      // orbe a "idle" según esto, y si no se esperara acá lo pisaría de
+      // vuelta a "idle" a mitad de la charla hablada.
+      await new Promise((resolve) => speak(data.message, resolve));
+      await manejarDesenlaceDeTurno(data);
     } catch (e) {
       thinking.remove();
       agregarBurbuja('a', 'No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.');
@@ -1098,6 +1127,10 @@
   async function enviarTextoEscrito() {
     const texto = writeInputColab.value.trim();
     if (!texto || charlaTerminada) return;
+    // Escribir también cuenta como el gesto real que desbloquea el audio —
+    // ver el comentario largo junto a "interaccionReal" más abajo.
+    interaccionReal = true;
+    unlockAudioPlayback();
     writeInputColab.value = '';
     mostrarEscribirColab(false);
     historyLocal.push({ role: 'user', content: texto });
@@ -1242,8 +1275,82 @@
     return 'No se pudo acceder al micrófono — puedes escribir tu historia en su lugar.';
   }
 
+  // --- Voz de la entrevistadora (TTS) + charla fluida ---------------------
+  // Pedido de Felipe (2026-09-08): "aportar una historia" debía sentirse
+  // igual que la charla principal (app.html) — press el botón UNA vez,
+  // conversar de corrido, y que se cierre sola al terminar. Antes acá no
+  // se escuchaba nada (nunca hubo TTS en esta pantalla) y había que volver
+  // a tocar el botón en cada turno. Se porta el mismo mecanismo que ya
+  // funciona en app.html (mismo /api/speak, mismo elemento <audio> único
+  // reusado, misma voz de respaldo del sistema si el servidor falla).
+  //
+  // interaccionReal: recién se pone en true con el primer gesto de verdad
+  // de la persona (tocar el orbe o mandar un turno escrito) — antes de
+  // eso NO se intenta hablar ni escuchar solo. Es la causa real de por qué
+  // el primer intento de charla fluida (2026-09-07) se rompía: sin esperar
+  // ese gesto, el navegador bloquea el audio en silencio y el micrófono se
+  // pedía sin ningún aviso sonoro de que ya era el turno de la persona —
+  // se sentía como que "no pasaba nada". Con la voz de por medio, además,
+  // la persona tiene tiempo real de prepararse antes de que arranque a
+  // escuchar, en vez de que la grabación empiece de golpe en silencio.
+  let interaccionReal = false;
+  let ttsAudioEl = null;
+  const SILENT_AUDIO = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEAQB8AAEAfAAABAAgAAABkYXRhAAAAAA==';
+
+  function unlockAudioPlayback() {
+    if (!ttsAudioEl) ttsAudioEl = new Audio();
+    ttsAudioEl.src = SILENT_AUDIO;
+    ttsAudioEl.play().catch(() => {});
+  }
+
+  function unlockMicAudioContext() {
+    if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioContext.state === 'suspended') audioContext.resume();
+  }
+
+  function speakWithSystemVoice(text, onEnd) {
+    if (!('speechSynthesis' in window)) { if (onEnd) onEnd(); return; }
+    try {
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = 'es-CO';
+      utter.rate = 0.95;
+      utter.onend = onEnd || null;
+      utter.onerror = onEnd || null;
+      speechSynthesis.speak(utter);
+    } catch (e) { if (onEnd) onEnd(); }
+  }
+
+  async function speak(text, onEnd) {
+    try {
+      const resp = await fetch('/api/speak', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }),
+      });
+      if (!resp.ok) throw new Error('tts-unavailable');
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      if (!ttsAudioEl) ttsAudioEl = new Audio();
+      ttsAudioEl.src = url;
+      ttsAudioEl.onended = () => { URL.revokeObjectURL(url); if (onEnd) onEnd(); };
+      ttsAudioEl.onerror = () => { URL.revokeObjectURL(url); speakWithSystemVoice(text, onEnd); };
+      await ttsAudioEl.play();
+    } catch (err) {
+      speakWithSystemVoice(text, onEnd);
+    }
+  }
+
   async function empezarGrabacion() {
     if (charlaTerminada || grabando) return;
+    interaccionReal = true;
+    // Ahora esto también se llama SOLO (sin click, ver
+    // manejarDesenlaceDeTurno) para seguir la charla — un botón
+    // deshabilitado no bloquea una llamada por código como sí bloquea un
+    // click real, así que hay que repetir acá el mismo chequeo que ya
+    // impide tocar el orbe cuando el navegador no puede grabar nada.
+    if (micNoDisponible) { mostrarEscribirColab(true); return; }
+    // Por si venía de "hablando" (ver enviarTurno/manejarDesenlaceDeTurno):
+    // ese estado deja el orbe deshabilitado, y acá no había ningún otro
+    // lugar que lo reactivara antes de escuchar de nuevo.
+    orb.disabled = false;
     try {
       // Carrera contra un timeout: en algunos navegadores, sobre todo
       // después de interactuar con el selector nativo de fotos (subir una
@@ -1259,6 +1366,14 @@
         new Promise((_, reject) => setTimeout(() => reject(Object.assign(new Error('timeout'), { name: 'TimeoutError' })), 8000)),
       ]);
     } catch (e) {
+      // Encontrado probando la charla fluida: si esto se llama SOLO (ver
+      // manejarDesenlaceDeTurno) el orbe puede haber quedado en "hablando"
+      // (moss, disabled) apenas un momento antes — sin resetearlo acá se
+      // quedaba trabado mostrando "hablando" para siempre aunque ya se
+      // hubiera caído al modo escribir.
+      orb.dataset.state = 'idle';
+      orb.innerHTML = 'Presiona<br>para hablar';
+      orb.setAttribute('aria-label', 'Presiona para grabar tu historia');
       recStatus.textContent = mensajeErrorMicrofono(e);
       mostrarEscribirColab(true);
       writeInputColab.focus();
@@ -1373,12 +1488,27 @@
     }
 
     const ok = await procesarAudio(blob, blob.type || 'audio/webm');
-    recStatus.textContent = ok ? '' : 'No se pudo entender el audio. Intenta de nuevo.';
-    reset();
+    if (!ok) {
+      recStatus.textContent = 'No se pudo entender el audio. Intenta de nuevo.';
+      reset();
+      return;
+    }
+    // ok=true: procesarAudio() ya esperó a enviarTurno() de punta a punta
+    // (habló la respuesta y, si seguía la charla, ya arrancó a escuchar de
+    // nuevo — ver manejarDesenlaceDeTurno) o terminó la charla del todo.
+    // reset() acá pisaría ese estado de vuelta a "idle" a mitad de la
+    // charla hablada, así que no corresponde tocarlo.
   }
 
   orb.addEventListener('click', () => {
     if (grabando) { terminarGrabacion(); return; }
+    // Desbloquea audio/mic con este gesto real ANTES de que arranque nada
+    // async — mismo motivo que app.html: en Android, si el AudioContext se
+    // crea recién varios segundos después del toque (esperando al
+    // servidor, a que termine de hablar), suele quedar "suspended" para
+    // siempre y el detector de silencio nunca detecta voz real.
+    unlockAudioPlayback();
+    unlockMicAudioContext();
     empezarGrabacion();
   });
 
@@ -1408,9 +1538,14 @@
     orb.disabled = true;
     recStatus.textContent = 'Procesando el audio…';
     const ok = await procesarAudio(file, file.type || 'audio/mp4');
-    recStatus.textContent = ok ? '' : 'No se pudo entender el audio. Intenta de nuevo.';
-    subirAudioBtn.disabled = false;
-    orb.disabled = false;
+    if (!ok) {
+      recStatus.textContent = 'No se pudo entender el audio. Intenta de nuevo.';
+      subirAudioBtn.disabled = false;
+      orb.disabled = false;
+    }
+    // ok=true: mismo motivo que en terminarGrabacion() — procesarAudio() ya
+    // dejó todo resuelto (hablando/escuchando de nuevo, o la charla
+    // terminada), no hay que reactivar nada acá encima.
   });
 
   // --- Agregar una foto o video que acompañe esta historia (BACKLOG #1:
