@@ -205,9 +205,17 @@
   #narradorScreen { display: none; }
   #agregarInicioBtn { display: none; }
   #agregarInicioTexto { display: none; margin: 0; font-size: 0.78rem; }
+  /* #subperfilBanner (id, no la clase) empieza oculto -- mismo motivo que
+     #loginScreen/#narradorScreen más arriba: una clase con "display:flex"
+     le sigue ganando al atributo hidden (misma especificidad que un
+     selector de clase, y el estilo de autor siempre le gana al default del
+     navegador para [hidden]) — por eso el aviso de "no puedes narrar en su
+     nombre" quedaba visible de más para el narrador de un subperfil, que sí
+     puede narrar. Se togglea con .style.display, no con .hidden. */
+  #subperfilBanner { display: none; }
   .subperfil-banner {
     width: min(420px, 100%); background: #FBF6EA; border: 1px solid #E7DFCC; border-radius: 20px;
-    padding: 22px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px;
+    padding: 22px; text-align: center; flex-direction: column; align-items: center; gap: 12px;
   }
   .subperfil-banner p { margin: 0; color: var(--ink); font-size: 0.95rem; }
   .perfil-fila { border-bottom: 1px solid #E7DFCC; padding: 8px 0; }
@@ -819,7 +827,7 @@
              no narrar en su nombre (ver bloquearSiNoPuedeNarrar en el
              servidor); esto es solo para que no llegues a tocar el orbe y
              te encuentres con un error confuso. -->
-        <div class="subperfil-banner" id="subperfilBanner" hidden>
+        <div class="subperfil-banner" id="subperfilBanner">
           <p id="subperfilBannerTexto"></p>
           <button class="write-toggle" id="subperfilVolverBtn" type="button">Volver a mi bitácora</button>
         </div>
@@ -1787,7 +1795,7 @@
       if (colaborarNavItem) colaborarNavItem.style.display = 'none';
       if (cuentaNavItem) cuentaNavItem.style.display = 'none';
       greetingName.textContent = data.guestName || data.bitacoraNombre || '';
-      subperfilBanner.hidden = true;
+      subperfilBanner.style.display = 'none';
       orbZone.style.display = '';
       if (greetingBox) greetingBox.style.display = '';
       activarAccesoDirecto(codigoNarradorUrl, data.bitacoraNombre);
@@ -1796,14 +1804,14 @@
     window.bitacoraActivaId = data.bitacoraActiva ? data.bitacoraActiva.id : null;
     if (data.bitacoraActiva) {
       subperfilBannerTexto.textContent = `Viendo la bitácora de ${data.bitacoraActiva.nombre || 'esa persona'} — puedes ver y pagar, pero no narrar en su nombre.`;
-      subperfilBanner.hidden = false;
+      subperfilBanner.style.display = 'flex';
       orbZone.style.display = 'none';
       // Sin esto, "Presiona el botón para empezar a charlar" quedaba
       // visible arriba del aviso de "no puedes narrar en su nombre" —
       // contradictorio, ya que el botón de hablar está oculto ahí abajo.
       if (greetingBox) greetingBox.style.display = 'none';
     } else {
-      subperfilBanner.hidden = true;
+      subperfilBanner.style.display = 'none';
       orbZone.style.display = '';
       if (greetingBox) greetingBox.style.display = '';
     }
