@@ -203,8 +203,12 @@
      fetch resuelve — ni el login ni la app se ven de más. */
   #loginScreen { display: none; }
   #narradorScreen { display: none; }
-  #agregarInicioBtn { display: none; }
-  #agregarInicioTexto { display: none; margin: 0; font-size: 0.78rem; }
+  .acceso-directo-row {
+    width: 100%; max-width: 900px; margin: 0 auto 8px; box-sizing: border-box;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  #agregarInicioBtn { display: none; flex-shrink: 0; }
+  #agregarInicioTexto { display: none; margin: 0; font-size: 0.78rem; flex: 1; min-width: 0; }
   /* #subperfilBanner (id, no la clase) empieza oculto -- mismo motivo que
      #loginScreen/#narradorScreen más arriba: una clase con "display:flex"
      le sigue ganando al atributo hidden (misma especificidad que un
@@ -623,12 +627,6 @@
    <div class="greeting-bar">
      <img class="brand-logo" src="/images/logo-icon.png" alt="Los recuerdos de mis viejos">
      <h1 class="greeting-text"><span class="brand-tag">Los recuerdos de mis viejos</span>Hola, <span class="greeting-name" id="greetingName"></span></h1>
-     <!-- BACKLOG #12: solo se muestra para quien entró con el enlace
-          permanente de un subperfil (sin cuenta) — ver aplicarSesionSubperfil.
-          Deja instalar esta charla como un ícono propio en la pantalla de
-          inicio, para no depender de encontrar el link de nuevo. -->
-     <button class="icon-btn" id="agregarInicioBtn" type="button" title="Agregar a la pantalla de inicio">➕📱</button>
-     <p class="sub" id="agregarInicioTexto"></p>
      <div class="user-menu">
        <div class="icon-nav-item">
          <button class="icon-btn" id="userMenuBtn" type="button" title="Mi cuenta" aria-label="Mi cuenta" aria-expanded="false" aria-controls="userMenuPanel">👤</button>
@@ -767,6 +765,17 @@
          </div>
        </div>
      </div>
+   </div>
+   <!-- BACKLOG #12: solo se muestra para quien entró con el enlace
+        permanente de un subperfil (sin cuenta) — ver aplicarSesionSubperfil.
+        Deja instalar esta charla como un ícono propio en la pantalla de
+        inicio, para no depender de encontrar el link de nuevo. Fuera de
+        .greeting-bar (no adentro): esa barra es una fila flex angosta
+        pensada solo para logo+saludo+cuenta — meter acá un texto largo la
+        rompía entera, empujando el saludo a una columna angosta. -->
+   <div class="acceso-directo-row" id="accesoDirectoRow">
+     <button class="icon-btn" id="agregarInicioBtn" type="button" title="Agregar a la pantalla de inicio">➕📱</button>
+     <p class="sub" id="agregarInicioTexto"></p>
    </div>
    </header>
    <!-- <nav>, no <div>: son los enlaces a las otras secciones de la
