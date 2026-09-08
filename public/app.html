@@ -1243,6 +1243,15 @@
   // null — para no tener que guardar un <div> por cada uno.
   let umNarradorLinkAbierto = null;
 
+  // El nombre de un subperfil es texto libre que escribió la persona — se
+  // arma la fila con innerHTML, así que hay que escapar '<', '>' y '&'
+  // antes de meterlo, o un nombre con forma de etiqueta HTML se ejecutaría
+  // como código. El resto de valores interpolados acá son ids numéricos
+  // que vienen del servidor, no hace falta escaparlos.
+  function escaparHtml(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
   function filaPerfil(p) {
     const esActivo = p.esPropia ? !window.bitacoraActivaId : window.bitacoraActivaId === p.id;
     const cambiarBtn = esActivo
@@ -1251,7 +1260,7 @@
     const enlaceBtn = p.esPropia ? '' : `<button class="um-btn um-plain" data-enlace="${p.id}" type="button">Compartir enlace para narrar</button>`;
     const enlaceBox = umNarradorLinkAbierto === p.id ? `<div class="um-fontsize-row" id="umEnlaceBox-${p.id}"><span class="um-msg" id="umEnlaceTexto-${p.id}">Cargando…</span></div>` : '';
     return `<div class="perfil-fila">
-      <strong>${p.nombre || '(sin nombre)'}</strong> ${cambiarBtn}
+      <strong>${escaparHtml(p.nombre) || '(sin nombre)'}</strong> ${cambiarBtn}
       ${enlaceBtn}
       ${enlaceBox}
     </div>`;

@@ -11,11 +11,17 @@ name: CI
 # "build-and-test" de acá abajo como "required status check". Eso es un
 # cambio de configuración del repo que tiene que hacer quien administra el
 # repositorio — no se puede activar desde un workflow.
+# Solo main: los workflows de GitHub Actions pueden leer los secrets del
+# repo desde CUALQUIER rama en la que corran, así que dejar que corrieran
+# también en `pruebas` (rama a la que un colaborador externo tiene push)
+# le daba a esa persona una vía para exfiltrar secrets editando este mismo
+# archivo. Los PR que apuntan a main SÍ siguen corriendo CI (el filtro de
+# `pull_request` mira la rama DESTINO), vengan de la rama que vengan.
 on:
   push:
-    branches: [main, pruebas]
+    branches: [main]
   pull_request:
-    branches: [main, pruebas]
+    branches: [main]
 
 jobs:
   build-and-test:

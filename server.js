@@ -250,6 +250,19 @@ function origenPermitido(req) {
   }
 }
 
+// Origen absoluto de la app para armar links que van AFUERA (correos,
+// links de pago de Wava, links de archivo en el .zip de export). Si está
+// configurada PUBLIC_BASE_URL, se usa esa — así un pedido con el header
+// Host falseado no puede meter links a otro dominio en un correo o en la
+// redirección post-pago. Sin esa variable, se cae al comportamiento de
+// siempre (protocolo + Host del pedido), así que no cambia nada hasta que
+// se configure.
+function urlBase(req) {
+  const configurada = process.env.PUBLIC_BASE_URL;
+  if (configurada) return configurada.replace(/\/+$/, '');
+  return `${req.protocol}://${req.get('host')}`;
+}
+
 app.use('/api', (req, res, next) => {
   if (!METODOS_MUTANTES.has(req.method)) return next();
   // /api/csp-report (ver más abajo) lo llama el navegador solo, disparado
@@ -2246,8 +2259,8 @@ app.post('/api/register', rateLimit, async (req, res) => {
     }
     // Mismo mínimo que /api/signup y /api/change-password (antes era 4 acá,
     // la única de las tres rutas que se quedó afuera cuando se unificó esto).
-    if (!username || !password || String(password).length < 6) {
-      return res.status(400).json({ error: 'Usuario y clave (mínimo 6 caracteres) son obligatorios.' });
+    if (!username || !password || String(password).length < 8) {
+      return res.status(400).json({ error: 'Usuario y clave (mínimo 8 caracteres) son obligatorios.' });
     }
     if (claveDemasiadoLarga(password)) {
       return res.status(400).json({ error: 'La clave es demasiado larga (máximo 72 caracteres).' });
@@ -2259,7 +2272,7 @@ app.post('/api/register', rateLimit, async (req, res) => {
     await ensureSchema();
     const existing = await sql`SELECT id FROM users WHERE username = ${cleanUsername}`;
     if (existing.length) return res.status(409).json({ error: 'Ese usuario ya existe.' });
-    const hash = await bcrypt.hash(password, 10);
+    const hash = await bcrypt.hash(password, 12);
     await sql`INSERT INTO users (username, password_hash) VALUES (${cleanUsername}, ${hash})`;
     res.json({ ok: true });
   } catch (err) {
@@ -2282,8 +2295,8 @@ app.post('/api/signup', rateLimit, async (req, res) => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
       return res.status(400).json({ error: 'El correo no parece válido.' });
     }
-    if (!password || String(password).length < 6) {
-      return res.status(400).json({ error: 'La clave debe tener al menos 6 caracteres.' });
+    if (!password || String(password).length < 8) {
+      return res.status(400).json({ error: 'La clave debe tener al menos 8 caracteres.' });
     }
     if (claveDemasiadoLarga(password)) {
       return res.status(400).json({ error: 'La clave es demasiado larga (máximo 72 caracteres).' });
@@ -2312,7 +2325,7 @@ app.post('/api/signup', rateLimit, async (req, res) => {
       ownerUserId = ownerRows[0].id;
     }
 
-    const hash = await bcrypt.hash(password, 10);
+    const hash = await bcrypt.hash(password, 12);
     const rows = await sql`
       INSERT INTO users (username, name, email, password_hash, owner_user_id)
       VALUES (${cleanEmail}, ${cleanName}, ${cleanEmail}, ${hash}, ${ownerUserId})
@@ -2334,11 +2347,19 @@ app.post('/api/login', rateLimit, async (req, res) => {
     const { username, password } = req.body || {};
     if (!username || !password) return res.status(400).json({ error: 'Faltan usuario o clave.' });
     const cleanUsername = String(username).trim().toLowerCase();
-    // Límite por cuenta desactivado por ahora (ver BACKLOG.md para
-    // reactivarlo). Queda el límite por IP (rateLimit, arriba en la
-    // cadena de esta ruta).
-    // const { permitido, retryAfterSegundos } = await limitePorClave(`login:${cleanUsername}`, 15 * 60 * 1000, 10);
-    // if (!permitido) { res.setHeader('Retry-After', String(retryAfterSegundos)); return res.status(429).json({ error: 'Demasiados intentos con esa cuenta, espera unos minutos.' }); }
+    // Límite por CUENTA además del límite por IP (rateLimit, arriba en la
+    // cadena): frena a quien reparte intentos de adivinar la clave de UNA
+    // cuenta entre muchas IPs distintas (el límite por IP no ve eso). Se
+    // había desactivado porque una versión más agresiva (10 intentos / 15
+    // min) llegó a bloquear a Felipe recuperando su propia clave — por eso
+    // ahora es más holgado (12 intentos / 10 min) y el mensaje dice cuántos
+    // minutos faltan, en vez de un "espera unos minutos" sin número.
+    const { permitido, retryAfterSegundos } = await limitePorClave(`login:${cleanUsername}`, 10 * 60 * 1000, 12);
+    if (!permitido) {
+      res.setHeader('Retry-After', String(retryAfterSegundos));
+      const minutos = Math.max(1, Math.ceil(retryAfterSegundos / 60));
+      return res.status(429).json({ error: `Demasiados intentos con esta cuenta. Espera ${minutos} ${minutos === 1 ? 'minuto' : 'minutos'} e intenta de nuevo.` });
+    }
     await ensureSchema();
     const rows = await sql`SELECT id, username, password_hash, token_version FROM users WHERE username = ${cleanUsername}`;
     if (!rows.length) return res.status(401).json({ error: 'Usuario o clave incorrectos.' });
@@ -2579,10 +2600,9 @@ app.post('/api/change-password', requireAuth, rateLimit, async (req, res) => {
     if (req.isGuest) return res.status(403).json({ error: 'No disponible para invitados sin cuenta.' });
     const { currentPassword, newPassword } = req.body || {};
     if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Faltan la clave actual y la nueva.' });
-    // Antes pedía solo 4 caracteres acá contra 6 en /api/signup — se
-    // unifica al mismo mínimo, para que no haya una puerta más débil que
-    // la otra para la misma cuenta.
-    if (String(newPassword).length < 6) return res.status(400).json({ error: 'La clave nueva debe tener al menos 6 caracteres.' });
+    // Mismo mínimo (8) que /api/signup y /api/register, para que no haya
+    // una puerta más débil que la otra para la misma cuenta.
+    if (String(newPassword).length < 8) return res.status(400).json({ error: 'La clave nueva debe tener al menos 8 caracteres.' });
     if (claveDemasiadoLarga(newPassword)) return res.status(400).json({ error: 'La clave es demasiado larga (máximo 72 caracteres).' });
 
     // Además del límite por IP, uno por cuenta: quien ya tiene una cookie
@@ -2600,7 +2620,7 @@ app.post('/api/change-password', requireAuth, rateLimit, async (req, res) => {
     const ok = await bcrypt.compare(currentPassword, rows[0].password_hash);
     if (!ok) return res.status(401).json({ error: 'La clave actual no es correcta.' });
 
-    const hash = await bcrypt.hash(String(newPassword), 10);
+    const hash = await bcrypt.hash(String(newPassword), 12);
     // token_version + 1 invalida cualquier otra sesión abierta con la clave
     // vieja (por ejemplo, si alguien más tenía acceso al dispositivo o a la
     // cookie). Este mismo dispositivo se queda logueado porque le
@@ -3036,25 +3056,29 @@ Reglas:
 - Anda cubriendo, en este orden aproximado (sin ser rígida si la persona ya adelantó algo): sus papás (nombres), sus hermanos (nombres, si es mayor o menor), sus abuelos por los dos lados (nombres, si los llegó a conocer), sus tíos más cercanos, si tiene pareja (nombre), y si tiene hijos (nombres).
 - Para cada persona, si hay lugar, pide un dato breve que la identifique (a qué se dedicaba, cómo era) — pero sin extenderte, esto es para saber quién es quién, no para contar toda su historia.
 - Modismos colombianos suaves y variados (qué más, listo, de una, qué chévere, ¿cierto?, pues sí, qué belleza) sin exagerar, nunca jerga juvenil ni groserías.
+- Habla como se habla, no como se escribe: frases cortas y sueltas, sin guion largo (—) para encajar frases, sin enumerar de a tres, sin frases de cierre con moraleja. Varía el arranque de cada turno.
+- Aunque esta charla sea corta, sigue siendo con alguien mayor a quien se quiere: si al nombrar a un familiar aparece un tono de cariño o de tristeza (alguien que ya murió, un hermano con el que se distanció), no pases de largo; reconócelo con una frase cálida y sencilla antes de seguir con el siguiente nombre.
 - Cuando sientas que ya cubriste una buena parte del árbol familiar (generalmente entre 10 y 18 intercambios, o antes si la persona no tiene mucho más para agregar), cierra con un mensaje cálido agradeciendo, avisando que el árbol quedó guardado, e invitando a retomar las charlas normales o seguir el árbol otro día. Termina ese mensaje, y solo ese, con la palabra exacta [FIN] en una línea aparte.
 - Nunca uses [FIN] excepto en ese cierre.
 - Si más abajo hay personas ya conocidas, no vuelvas a preguntar por ellas.` + REGLA_DATOS_NO_CONFIABLES;
 
 const SYSTEM_PROMPT = `Eres una entrevistadora cálida y paciente, colombiana, que ayuda a una persona mayor a contar la historia de su vida. Hablas en español de Colombia, tuteando siempre a la persona (usa "tú", nunca "usted" ni "vos" — ni en preguntas ni en imperativos: "¿cómo estás?", "cuéntame", "tienes", "siéntate", "espera", nunca "contame", "tenés", "sentate", "esperá"), con oraciones simples y cortas, fáciles de escuchar en voz alta.
 
-Esto es una charla de sobremesa con alguien querido, no una entrevista ni un formulario. La persona con la que hablas no debería sentir en ningún momento que le estás sacando datos — debería sentir que alguien de verdad quiere escucharla.
+Esto es una charla de sobremesa con alguien querido, no una entrevista ni un formulario. La persona con la que hablas no debería sentir en ningún momento que le estás sacando datos — debería sentir que alguien de verdad quiere escucharla. Es la conversación con un viejito o una viejita de la casa a quien se quiere y se respeta: con paciencia, sin afán, disfrutando lo que cuenta.
 
 LO MÁS IMPORTANTE, por encima de cualquier otra regla de acá abajo: nunca dos preguntas en el mismo turno — esto vale tanto si son dos oraciones separadas como si van conectadas por una coma o un "y" dentro de la misma oración ("¿dónde jugaban, cómo armaban el equipo?" sigue siendo dos preguntas, aunque suene a una sola idea). Si te salen dos preguntas relacionadas, quédate con la más abierta de las dos y descarta la otra. La mayoría de tus turnos, además, NO deberían terminar en pregunta. Reacciona primero, con algo genuino y específico a lo que acaba de contar (no un genérico "qué interesante" — algo que solo tendría sentido si de verdad escuchaste eso puntual). Muchas veces esa reacción sola, sin ninguna pregunta al final, alcanza para que siga contando; deja que el silencio invite. Ejemplo de lo que NUNCA tienes que hacer: "¿Cómo se llamaban tus primos? ¿Y cuál era el barrio donde creciste?" — eso son dos preguntas encadenadas, se siente a interrogatorio. En cambio: "Uy, fútbol en la calle con los primos, qué belleza. Cuéntame más de esos partidos." — una sola invitación abierta, no dos preguntas cerradas de dato.
 
 Cuando sí preguntes, prefiere una invitación abierta ("¿y qué más pasaba ahí?", "cuéntame de eso") a una pregunta cerrada pidiendo un dato puntual (nombre exacto, fecha exacta) — los datos específicos van a ir saliendo solos a medida que la persona cuenta, no hace falta cazarlos uno por uno.
 
-Presta atención al tono de lo que cuenta, no solo al contenido: si algo sonó difícil, triste, o con pérdida de por medio, no reacciones con el mismo entusiasmo que a algo alegre — baja el ritmo, reconoce eso con calidez y sin apuro ("eso debió ser muy duro"), y deja que la persona decida si quiere seguir ahí o pasar a otra cosa, sin forzarla a profundizar en algo doloroso.
+Ponte en el lugar de quien te habla, no solo en lo que cuenta. Si algo suena alegre, alégrate de verdad con ella y celebra ese recuerdo ("qué bello eso", "me imagino la risa que sería"). Si algo suena difícil, triste, o hay una pérdida de por medio, para todo: no reacciones con el mismo entusiasmo, baja el ritmo y reconoce el dolor con palabras sencillas ("eso debió doler mucho", "qué duro haber pasado por eso"). Quédate ahí un momento, sin correr a la siguiente pregunta. Está bien un turno que solo acompañe, sin pregunta al final ("tómate tu tiempo, aquí estoy"). Nunca le pidas un dato (un año, una edad, un nombre) justo después de que contó algo doloroso; eso puede esperar. Deja que la persona decida si quiere seguir en ese recuerdo o pasar a otra cosa, sin forzarla a profundizar en algo doloroso.
 
 Muestra que escuchas de verdad: cuando tenga sentido, retoma algo que mencionó antes en la charla ("recién dijiste que tu papá trabajaba en el campo — ¿tenía que ver con eso el viaje que hicieron?") — eso se siente como una charla real, no como preguntas sueltas sin memoria.
 
 Usa modismos colombianos suaves y variados, propios de un trato respetuoso con una persona mayor (por ejemplo: "qué más", "listo", "de una", "qué chévere", "¿cierto?", "pues sí", "qué belleza", "qué interesante", "ay, no", "qué pena", "imagínate", "eso sí", "uy") — varía cuál usas en cada turno, no repitas siempre las mismas dos o tres. Nunca jerga juvenil o vulgar como "bacano", "berraquera" o groserías. El tono es animado y cercano, pero con la calidez respetuosa con la que se habla con un mayor, no como con un amigo de la misma edad.
 
 Presta especial atención a esto — es lo que más se rompe en la práctica: "¡Ay!" (o "ay, qué...") como arranque de turno se está volviendo un tic, casi un reflejo en la mayoría de los mensajes. Nunca lo uses en dos turnos seguidos, y en la mayoría de tus turnos arranca directo con la reacción concreta a lo que contó, sin ninguna muletilla o exclamación antes ("Fútbol en la calle con los primos, qué belleza..." en vez de "¡Ay, fútbol en la calle...!").
+
+Tus mensajes tienen que sonar hablados, no escritos: como alguien sentado al lado en la mesa, no como alguien leyendo una tarjeta. Frases cortas, separadas por puntos. Evita el guion largo (—) para meter una frase dentro de otra, evita las enumeraciones de tres cosas ("infancia, familia y trabajo") y evita las frases de cierre con moraleja ("y eso es lo que de verdad importa"). Nada de "en resumen", "en conclusión" ni "es importante mencionar". Cada turno tuyo debería sentirse distinto al anterior, no salido del mismo molde.
 
 Reglas adicionales:
 - Si en tu turno anterior le pediste que dijera cualquier cosa para probar el audio (una prueba de micrófono, no algo de su historia), y esta es su primera respuesta después de eso: confírmale con calidez que la escuchaste bien (nunca repitas la prueba ni le pidas que diga algo más para confirmar de nuevo), y en ese MISMO turno invítala a que te cuente de su vida como un libro abierto — que hable de corrido de lo que se le ocurra: quién es, sus papás, sus hermanos, cuántos años tiene, lo que quiera contar, sin apurarse ni preocuparse por el orden.
@@ -3762,10 +3786,14 @@ async function loadKnownMoments(userId) {
   return rows.map((e) => `- ${e.descripcion}${e.anio ? ' (' + e.anio + ')' : ''}`).join('\n');
 }
 
-function buildAporteSystemPrompt(ownerNombre, colaboradorNombre, protagonista) {
+function buildAporteSystemPrompt(ownerNombre, colaboradorNombre, protagonista, parentescoConocido) {
   const nombre = ownerNombre || 'esta persona';
   const esOtroProtagonista = protagonista && protagonista !== colaboradorNombre;
   return `Eres una entrevistadora cálida y paciente, colombiana, que está ayudando a un familiar a aportar un recuerdo sobre la vida de ${nombre} para sumarlo a su bitácora de vida. Hablas en español de Colombia, tuteando siempre al colaborador — ni en preguntas ni en imperativos — (usa "tú", nunca "usted" ni "vos": "¿cómo estás?", "cuéntame", "tienes", "me cuentas", "espera" — nunca "usted", "contame", "tenés", "me contás", "esperá"), con oraciones simples, cálidas y cortas.
+
+Habla como se habla, no como se escribe: frases cortas y sueltas, sin guion largo (—) para encajar frases dentro de otras, sin enumerar de a tres, sin frases de cierre con moraleja ("y eso es lo que de verdad importa"), sin "en resumen" ni "en conclusión". Cada turno tuyo debería sonar distinto al anterior.
+
+Ponte en el lugar de quien te cuenta. Si el recuerdo es alegre, alégrate y celébralo con él ("qué bello ese recuerdo de ${nombre}"). Si es un recuerdo difícil o hay una pérdida de por medio, baja el ritmo y reconoce el dolor con palabras sencillas ("qué duro eso") antes de seguir con lo que corresponda.
 
 El colaborador se llama ${colaboradorNombre} — ya lo sabes porque entró con su cuenta. NUNCA le preguntes su nombre, en ningún momento de la charla.
 
@@ -3777,14 +3805,16 @@ ${esOtroProtagonista
 
 Esto funciona como un micrófono abierto, no como una entrevista de preguntas y respuestas: haces UNA sola invitación cálida al principio (ver más abajo), y después dejas que la persona cuente su historia completa, de corrido, con calma, sin interrumpirla con preguntas turno a turno.
 
-Necesitas que, entre lo que ya dijo en la invitación y lo que cuenta, queden claros dos datos además de la historia en sí:
-1. Su parentesco con ${nombre} (hija, sobrino, amiga de la familia, vecino, etc.) — alcanza con una palabra o categoría, no hace falta que profundice.
+Necesitas que, entre lo que ya dijo en la invitación y lo que cuenta, queden claros estos datos además de la historia en sí:
+${parentescoConocido
+  ? `1. El parentesco de ${colaboradorNombre} con ${nombre} YA SE SABE de una vez anterior: es "${parentescoConocido}" — NUNCA se lo vuelvas a preguntar, ni en la invitación inicial ni después, aunque no lo mencione en esta charla. Dalo por hecho.`
+  : `1. Su parentesco con ${nombre} (hija, sobrino, amiga de la familia, vecino, etc.) — alcanza con una palabra o categoría, no hace falta que profundice.`}
 2. Una referencia temporal — un año, una época, o algo que ayude a ubicar la historia en una línea de tiempo (no hace falta precisión, con una época o un año aproximado alcanza).
 3. La historia misma — con que cuente una anécdota reconocible ya alcanza, por corta o simple que sea. Una historia de 2-3 frases con un principio y un final ya está completa. NO es tu trabajo pedir que la elabore, que dé más contexto, que cuente "cómo fue todo" o que agregue más color — eso es curiosidad tuya, no una necesidad real, y acá NO corresponde.
 
-Cuando la persona termine de contar su historia (su primer turno largo ya cuenta como "terminar de contar" — no es tu criterio el que decide que "faltó más"), revisa bien todo lo que dijo. Si ya mencionó su parentesco y una referencia temporal (aunque sea de pasada), NO se los preguntes — pasa directo a preguntarle con calidez si hay algo más que quiera agregar. Si falta alguno de los dos, ahí sí pregúntaselo — de forma breve y natural, una sola pregunta, no una lista — antes de pasar al "¿algo más?". Nunca hagas esta pregunta de aclaración ANTES de que la persona haya tenido la oportunidad de contar su historia completa — solo después.
+Cuando la persona termine de contar su historia (su primer turno largo ya cuenta como "terminar de contar" — no es tu criterio el que decide que "faltó más"), revisa bien todo lo que dijo. ${parentescoConocido ? `El parentesco ya lo tienes (ver arriba) — solo falta` : `Si ya mencionó su parentesco y una referencia temporal (aunque sea de pasada), NO se los preguntes — pasa directo a preguntarle con calidez si hay algo más que quiera agregar. Si falta`} la referencia temporal${parentescoConocido ? '' : ' y/o el parentesco'}, ahí sí pregúntaselo — de forma breve y natural, **una sola pregunta con un solo signo de interrogación**, nunca dos preguntas juntas ni una lista — antes de pasar al "¿algo más?". Nunca hagas esta pregunta de aclaración ANTES de que la persona haya tenido la oportunidad de contar su historia completa — solo después.
 
-Cuando hagas esa pregunta de aclaración (porque faltó el parentesco y/o la referencia temporal), termina ese mensaje, y solo ese, con la palabra exacta [FALTA_DATO] en una línea aparte — es una señal interna para el sistema, no se la menciones a la persona. NUNCA uses [FALTA_DATO] junto con [FIN] en el mismo mensaje, y nunca la uses para la invitación inicial ni para la pregunta de "¿algo más?".
+Cuando hagas esa pregunta de aclaración, termina ese mensaje, y solo ese, con la palabra exacta [FALTA_DATO] en una línea aparte — es una señal interna para el sistema, no se la menciones a la persona. NUNCA uses [FALTA_DATO] junto con [FIN] en el mismo mensaje, y nunca la uses para la invitación inicial ni para la pregunta de "¿algo más?".
 
 Esto es lo que más se rompe en la práctica, presta especial atención: en cuanto la persona te responda esa pregunta de aclaración (el dato que faltaba), ese dato queda completo — NO importa qué tan corta sea su respuesta ("su nieta", "en el 2020"). El turno siguiente, sin excepción, tiene que ir DIRECTO a la pregunta de "¿algo más?" — nunca a otra pregunta de seguimiento sobre la historia ("y qué más pasó ese día", "cuéntame más de eso"), aunque la respuesta a la aclaración te haya dejado con ganas de saber más. Tratar esa respuesta breve como si fuera una nueva entrada de historia que hay que profundizar es exactamente el error a evitar acá.
 
@@ -3900,7 +3930,24 @@ async function marcarAportePendiente(ownerId, contributorName) {
   }
 }
 
-async function finalizarAporte(ownerId, draftId, fullHistory, audioUrls, contributedByUserId, colaboradorNombre, protagonista, mediaUrls) {
+// Cuando el mismo colaborador ya le aportó antes una historia PROPIA a esta
+// misma bitácora, su parentesco con el dueño quedó grabado esa vez — no
+// tiene sentido volver a preguntarlo cada vez que cuenta una historia
+// nueva, es el mismo dato de siempre (reportado por Felipe, 2026-09-07:
+// la entrevistadora le preguntaba de nuevo su parentesco con Diego aunque
+// ya llevaba varias historias aportadas ahí). Solo aplica a historias
+// PROPIAS (protagonista IS NULL) — cuando la historia es sobre otra
+// persona (ver "protagonista" en /api/contribute-chat), el parentesco es
+// el de ESA persona con el dueño, que sí puede cambiar de una historia a
+// otra, así que ahí se sigue preguntando siempre.
+async function buscarParentescoConocido(ownerId, contributedByUserId, contributorNombre) {
+  const rows = contributedByUserId
+    ? await sql`SELECT parentesco FROM family_notes WHERE user_id = ${ownerId} AND contributed_by = ${contributedByUserId} AND parentesco IS NOT NULL AND protagonista IS NULL ORDER BY created_at DESC LIMIT 1`
+    : await sql`SELECT parentesco FROM family_notes WHERE user_id = ${ownerId} AND contributed_by IS NULL AND contributor = ${contributorNombre} AND parentesco IS NOT NULL AND protagonista IS NULL ORDER BY created_at DESC LIMIT 1`;
+  return (rows[0] && rows[0].parentesco) || null;
+}
+
+async function finalizarAporte(ownerId, draftId, fullHistory, audioUrls, contributedByUserId, colaboradorNombre, protagonista, mediaUrls, parentescoConocido) {
   try {
     const transcript = fullHistory
       .filter((m) => !/^\(.*\)$/.test(m.content.trim())) // sin los avisos internos entre paréntesis
@@ -3919,7 +3966,12 @@ async function finalizarAporte(ownerId, draftId, fullHistory, audioUrls, contrib
     if (!toolUse || !toolUse.input || !String(toolUse.input.texto || '').trim()) return false;
 
     const cleanContributor = capitalizarNombre(String(colaboradorNombre || '').trim().slice(0, 60)) || null;
-    const cleanParentesco = capitalizarNombre(String(toolUse.input.parentesco || '').trim().slice(0, 60)) || null;
+    // Si el parentesco ya se sabía de una vez anterior, se le dijo a la IA
+    // que NO lo volviera a preguntar — así que la charla de esta vuelta
+    // puede no mencionarlo ni una vez, y la extracción de acá vendría
+    // vacía. parentescoConocido es el respaldo para ese caso: nunca se
+    // pierde el dato solo porque no hizo falta repetirlo.
+    const cleanParentesco = capitalizarNombre(String(toolUse.input.parentesco || '').trim().slice(0, 60)) || parentescoConocido || null;
     const texto = capitalizarInicio(String(toolUse.input.texto).trim().slice(0, 4000));
     const audioUrlsLimpias = Array.isArray(audioUrls)
       ? audioUrls.map((u) => urlHttpValida(u)).filter(Boolean).slice(0, 10)
@@ -3982,19 +4034,26 @@ app.post('/api/contribute-chat', requireAuth, rateLimit, async (req, res) => {
     // persona (ver colaborar.html), acá viene ese nombre.
     const protagonista = capitalizarNombre(String(req.body.protagonista || '').trim().slice(0, 60)) || colaboradorNombre;
     const esOtroProtagonista = protagonista !== colaboradorNombre;
+    // Ver buscarParentescoConocido: si este colaborador ya contó antes una
+    // historia PROPIA sobre este mismo dueño, no hace falta preguntarle de
+    // nuevo su parentesco — solo aplica a historias propias, nunca cuando
+    // esOtroProtagonista (ahí el parentesco es de otra persona distinta).
+    const parentescoConocido = esOtroProtagonista
+      ? null
+      : await buscarParentescoConocido(ownerId, req.isGuest ? null : req.userId, colaboradorNombre);
 
     let messages;
     if (!history.length) {
       const momentos = await loadKnownMoments(ownerId);
       const startPrompt = esOtroProtagonista
         ? `(${colaboradorNombre} acaba de empezar a aportar una historia sobre ${ownerNombre || 'esta persona'}, pero aclaró que esta historia no le pasó a ${colaboradorNombre} sino a ${protagonista} — ${colaboradorNombre} solo la está compartiendo. Salúdala/salúdalo por su nombre (${colaboradorNombre}) con calidez, como si le dieras el micrófono abierto: invítala/invítalo a contar lo que sepa o tenga guardado de esa historia de ${protagonista}, con confianza y de corrido, sin apuro. En esa misma invitación, de forma natural, pídele que mencione el parentesco de ${protagonista} con ${ownerNombre || 'esta persona'} y en qué año o época fue eso, para poder ubicar la historia en el tiempo. Puedes dar una pista mencionando lugares, épocas o momentos conocidos de la vida de ${ownerNombre || 'esta persona'} (por ejemplo "su infancia en Los Andes") — pero NUNCA menciones el nombre propio de ninguna otra persona específica, solo lugares o momentos.${momentos ? '\n\nMomentos conocidos (usa solo esto como pista, nunca nombres de personas):\n' + momentos : ''}\n\nEste es tu único mensaje antes de que hable — después de esta invitación no preguntes nada más, déjala/déjalo contar la historia completa.)`
-        : `(${colaboradorNombre} acaba de empezar a aportar una historia sobre ${ownerNombre || 'esta persona'}. Salúdala/salúdalo por su nombre (${colaboradorNombre}, adapta el género según el nombre) con calidez, como si le dieras el micrófono abierto: invítala/invítalo a contar su recuerdo con confianza y de corrido, sin apuro. En esa misma invitación, de forma natural (no como una lista de requisitos), pídele que mientras cuenta mencione su parentesco con ${ownerNombre || 'esta persona'} y en qué año o época fue eso, para poder ubicar la historia en el tiempo. Puedes dar una pista mencionando lugares, épocas o momentos conocidos de su vida (por ejemplo "su infancia en Los Andes" o "su época en el colegio") — pero NUNCA menciones el nombre propio de ninguna persona específica, solo lugares o momentos.${momentos ? '\n\nMomentos conocidos (usa solo esto como pista, nunca nombres de personas):\n' + momentos : ''}\n\nEste es tu único mensaje antes de que hable — después de esta invitación no preguntes nada más, déjala/déjalo contar su historia completa.)`;
+        : `(${colaboradorNombre} acaba de empezar a aportar una historia sobre ${ownerNombre || 'esta persona'}. Salúdala/salúdalo por su nombre (${colaboradorNombre}, adapta el género según el nombre) con calidez, como si le dieras el micrófono abierto: invítala/invítalo a contar su recuerdo con confianza y de corrido, sin apuro. En esa misma invitación, de forma natural (no como una lista de requisitos), pídele que mientras cuenta mencione${parentescoConocido ? '' : ' su parentesco con ' + (ownerNombre || 'esta persona') + ' y'} en qué año o época fue eso, para poder ubicar la historia en el tiempo. Puedes dar una pista mencionando lugares, épocas o momentos conocidos de su vida (por ejemplo "su infancia en Los Andes" o "su época en el colegio") — pero NUNCA menciones el nombre propio de ninguna persona específica, solo lugares o momentos.${momentos ? '\n\nMomentos conocidos (usa solo esto como pista, nunca nombres de personas):\n' + momentos : ''}\n\nEste es tu único mensaje antes de que hable — después de esta invitación no preguntes nada más, déjala/déjalo contar su historia completa.)`;
       messages = [{ role: 'user', content: startPrompt }];
     } else {
       messages = history;
     }
 
-    const system = buildAporteSystemPrompt(ownerNombre, colaboradorNombre, protagonista);
+    const system = buildAporteSystemPrompt(ownerNombre, colaboradorNombre, protagonista, parentescoConocido);
 
     const response = await anthropic.messages.create({
       model: MODEL,
@@ -4017,7 +4076,7 @@ app.post('/api/contribute-chat', requireAuth, rateLimit, async (req, res) => {
 
     let saved = false;
     if (done) {
-      saved = await finalizarAporte(ownerId, draftId, messages.concat([{ role: 'assistant', content: text }]), audioUrls, req.userId, colaboradorNombre, protagonista, mediaUrls);
+      saved = await finalizarAporte(ownerId, draftId, messages.concat([{ role: 'assistant', content: text }]), audioUrls, req.userId, colaboradorNombre, protagonista, mediaUrls, parentescoConocido);
     } else if (history.length) {
       // Ya contó algo — lo guardamos ahora mismo, no hace falta esperar a
       // que termine toda la charla (y las preguntas de aclaración) para que
@@ -4203,7 +4262,7 @@ app.get('/api/export', requireAuth, bloquearColaborador, rateLimit, async (req, 
     // persona siga con sesión iniciada, no como un link público para
     // siempre (por eso el aviso en el LEEME de abajo). Es el respaldo para
     // lo que no haya entrado en el presupuesto de tamaño como archivo real.
-    const linkArchivo = (valor) => (valor ? `${req.protocol}://${req.get('host')}/api/media-file?u=${encodeURIComponent(valor)}` : null);
+    const linkArchivo = (valor) => (valor ? `${urlBase(req)}/api/media-file?u=${encodeURIComponent(valor)}` : null);
     const historiasConLink = historias.map((h) => ({ ...h, audio_url: linkArchivo(h.audio_url) }));
     const aportes = aportesRaw.map((a) => ({
       ...a,
@@ -4830,13 +4889,15 @@ async function enviarCorreo({ to, subject, html }) {
 // Mismo signSession/verifySession que ya usa el login normal — un mismo
 // mecanismo, dos formas de llegar a la sesión. A diferencia de la cookie
 // de sesión normal (30 días), este link vence en MAGIC_LOGIN_MAX_AGE
-// (30 minutos): viaja por correo, que puede quedar dando vueltas en una
-// bandeja de entrada mucho más tiempo que eso.
-const MAGIC_LOGIN_MAX_AGE = 30 * 60 * 1000;
+// (15 minutos): viaja por correo, que puede quedar dando vueltas en una
+// bandeja de entrada mucho más tiempo que eso, y el token va en la URL
+// (queda en logs y en el historial del navegador) — cuanto más corta la
+// ventana en la que sirve, menos expone si el link se filtra.
+const MAGIC_LOGIN_MAX_AGE = 15 * 60 * 1000;
 
 function crearLinkMagico(req, userId, next) {
   const token = signSession({ magic: true, userId });
-  const base = `${req.protocol}://${req.get('host')}`;
+  const base = urlBase(req);
   return `${base}/api/magic-login?token=${encodeURIComponent(token)}&next=${encodeURIComponent(next || '/app.html')}`;
 }
 
@@ -4893,7 +4954,7 @@ function plantillaRecordatorio(nombre, link) {
     <h1 style="font-size:1.3rem">Hola, ${nombre} 👋</h1>
     <p>Hace un tiempo que no charlamos — tu bitácora sigue esperando la próxima historia.</p>
     <p><a href="${link}" style="display:inline-block;background:#8F5A20;color:#FBF6EA;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:bold">Seguir contando →</a></p>
-    <p style="color:#706551;font-size:.85rem">Este link te lleva directo a tu cuenta, sin pedirte la clave, y vence en 30 minutos por seguridad. Si no quieres seguir recibiendo estos correos, puedes apagarlos desde el menú de Cuenta.</p>
+    <p style="color:#706551;font-size:.85rem">Este link te lleva directo a tu cuenta, sin pedirte la clave, y vence en 15 minutos por seguridad. Si no quieres seguir recibiendo estos correos, puedes apagarlos desde el menú de Cuenta.</p>
   </div>`;
 }
 
@@ -4960,13 +5021,21 @@ const PLANES = {
 const WAVA_MERCHANT_KEY = process.env.WAVA_MERCHANT_KEY;
 const WAVA_WEBHOOK_SECRET = process.env.WAVA_WEBHOOK_SECRET;
 const WAVA_API_BASE = process.env.WAVA_API_BASE || 'https://api.wava.co/v1';
-// Mientras no haya WAVA_MERCHANT_KEY configurada, /api/billing/checkout y
+// Sin WAVA_MERCHANT_KEY configurada, /api/billing/checkout y
 // /api/billing/gift-checkout simulan el pago en vez de devolver 501 — para
 // poder probar todo el flujo (plan activo, código de regalo, canje) sin
 // depender de la cuenta real de Wava todavía. Apenas se configure la clave
-// de verdad (BACKLOG.md #11), esto se apaga solo: no es un interruptor que
-// haya que acordarse de sacar.
-const PAGOS_DUMMY = !WAVA_MERCHANT_KEY;
+// de verdad (BACKLOG.md #11), esto se apaga solo.
+//
+// OJO: el modo simulado SOLO vale fuera de producción. Antes se activaba
+// con solo mirar que faltara la clave — así que un despliegue de
+// producción sin Wava configurada dejaba activar planes pagos gratis con
+// un simple POST a /api/billing/checkout. Ahora, en producción sin clave,
+// PAGOS_DESHABILITADOS pasa a true y esas dos rutas responden 501 en vez
+// de regalar el plan.
+const EN_PRODUCCION = (process.env.VERCEL_ENV || process.env.NODE_ENV) === 'production';
+const PAGOS_DUMMY = !WAVA_MERCHANT_KEY && !EN_PRODUCCION;
+const PAGOS_DESHABILITADOS = !WAVA_MERCHANT_KEY && EN_PRODUCCION;
 
 async function generarCodigoDeRegaloUnico() {
   let code;
@@ -5046,6 +5115,7 @@ app.get('/api/billing/status', requireAuth, bloquearColaborador, bloquearInvitad
 // webhook confirme el pago — nunca se activa acá, del lado del cliente.
 app.post('/api/billing/checkout', requireAuth, bloquearColaborador, bloquearInvitado, rateLimit, async (req, res) => {
   try {
+    if (PAGOS_DESHABILITADOS) return res.status(501).json({ error: 'Los pagos todavía no están habilitados.' });
     const planId = String(req.body.planId || '');
     const plan = PLANES[planId];
     if (!plan) return res.status(400).json({ error: 'Plan inválido.' });
@@ -5055,7 +5125,7 @@ app.post('/api/billing/checkout', requireAuth, bloquearColaborador, bloquearInvi
 
     await ensureSchema();
     const orderKey = `sub-${req.userId}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
-    const base = `${req.protocol}://${req.get('host')}`;
+    const base = urlBase(req);
 
     let link;
     let hash = null;
@@ -5127,6 +5197,7 @@ app.post('/api/billing/checkout', requireAuth, bloquearColaborador, bloquearInvi
 // quien lo reciba, sea cual sea esa cuenta — ver /api/billing/redeem-gift.
 app.post('/api/billing/gift-checkout', requireAuth, bloquearInvitado, rateLimit, async (req, res) => {
   try {
+    if (PAGOS_DESHABILITADOS) return res.status(501).json({ error: 'Los pagos todavía no están habilitados.' });
     const plan = PLANES.regalo;
     const monto = plan.precioAnual;
     const sendOn = limpiarFechaEnvioRegalo(req.body && req.body.sendOn);
@@ -5134,7 +5205,7 @@ app.post('/api/billing/gift-checkout', requireAuth, bloquearInvitado, rateLimit,
 
     await ensureSchema();
     const orderKey = `gift-${req.userId}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
-    const base = `${req.protocol}://${req.get('host')}`;
+    const base = urlBase(req);
 
     if (PAGOS_DUMMY) {
       // Sin Wava configurada: se simula el pago y se genera el código de
@@ -5413,7 +5484,7 @@ app.get('/api/cron/billing', async (req, res) => {
       if (!plan) continue;
       try {
         const orderKey = `renov-${s.user_id}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
-        const base = `${req.protocol}://${req.get('host')}`;
+        const base = urlBase(req);
         const monto = s.periodo === 'monthly' ? plan.precioMensual : plan.precioAnual;
         const wavaResp = WAVA_MERCHANT_KEY
           ? await fetch(`${WAVA_API_BASE}/links`, {

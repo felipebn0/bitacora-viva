@@ -27,10 +27,14 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     steps:
-      - name: Verificar que exista el secret DATABASE_URL
+      - name: Verificar que existan los secrets necesarios
         run: |
           if [ -z "${{ secrets.DATABASE_URL }}" ]; then
             echo "::error::Falta el secret DATABASE_URL en este repo. Sin él no se puede hacer el backup. Agregalo en Settings → Secrets and variables → Actions → New repository secret."
+            exit 1
+          fi
+          if [ -z "${{ secrets.BACKUP_PASSPHRASE }}" ]; then
+            echo "::error::Falta el secret BACKUP_PASSPHRASE. El dump se cifra con esta frase antes de subirlo (el release queda visible para cualquier colaborador del repo, y el dump trae hashes de claves y datos privados de las familias). Elegí una frase larga, guardala en un gestor de contraseñas, y agregala en Settings → Secrets and variables → Actions."
             exit 1
           fi
 
@@ -47,30 +51,41 @@ jobs:
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
           sudo apt-get install -y postgresql-client-17
 
-      - name: Hacer el pg_dump
+      - name: Hacer el pg_dump y cifrarlo
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
         run: |
           FECHA=$(date -u +%Y-%m-%d)
           echo "FECHA=$FECHA" >> "$GITHUB_ENV"
           pg_dump "$DATABASE_URL" --no-owner --no-privileges -F c -f "backup-$FECHA.dump"
+          # El release queda visible para cualquier colaborador del repo, y
+          # el dump trae hashes de claves, correos e historias privadas — se
+          # sube cifrado con AES-256, nunca en claro. La frase va por stdin
+          # (--passphrase-fd 0), no como argumento, para que no aparezca en
+          # la lista de procesos.
+          printf '%s' "$BACKUP_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback \
+            --passphrase-fd 0 --symmetric --cipher-algo AES256 \
+            -o "backup-$FECHA.dump.gpg" "backup-$FECHA.dump"
+          rm -f "backup-$FECHA.dump"
 
-      - name: Subir el dump como release
+      - name: Subir el dump cifrado como release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "backup-$FECHA" "backup-$FECHA.dump" \
+          gh release create "backup-$FECHA" "backup-$FECHA.dump.gpg" \
             --repo "${{ github.repository }}" \
             --title "Backup $FECHA" \
-            --notes "Backup automático semanal de la base de datos (formato pg_dump custom).
+            --notes "Backup automático semanal de la base de datos (pg_dump formato custom), cifrado con AES-256.
 
-          Para restaurar:
+          Para restaurar hace falta la frase guardada en el secret BACKUP_PASSPHRASE:
 
           \`\`\`
+          gpg --batch --pinentry-mode loopback --passphrase 'LA_FRASE' -o backup-$FECHA.dump -d backup-$FECHA.dump.gpg
           pg_restore --clean --no-owner -d \"\$DATABASE_URL\" backup-$FECHA.dump
           \`\`\`
 
-          Necesita un cliente de Postgres (pg_restore) instalado y la connection string de destino en \$DATABASE_URL."
+          Necesita gpg y un cliente de Postgres (pg_restore), más la connection string de destino en \$DATABASE_URL."
 
       - name: Limpiar backups viejos (dejar solo los últimos 8 = ~2 meses)
         env:
