@@ -386,8 +386,17 @@
     padding: 12px 2px; margin: 4px 0 0; font-family: var(--font-body);
     font-size: 0.9rem; color: var(--ink); font-weight: 700; text-align: left; cursor: pointer;
     min-height: 44px; box-sizing: border-box;
+    /* text-decoration:none: esta misma clase ahora también se usa en el
+       link a Perfiles (un <a>, no un <button>) — sin esto se veía
+       subrayado, distinto al resto de las opciones del menú. */
+    text-decoration: none;
   }
   .user-menu-panel .um-section-toggle:first-of-type { border-top: none; margin-top: 0; }
+  /* :first-of-type cuenta por ETIQUETA, no por clase — "Perfiles" es el
+     primer (y único) <a> entre los hijos directos del panel, así que sin
+     esto la regla de arriba (pensada para el primer <button>, "Perfil")
+     también lo agarraba a él y le sacaba la línea divisoria de arriba. */
+  .user-menu-panel a.um-section-toggle:first-of-type { border-top: 1px solid #E7DFCC; margin-top: 4px; }
   .user-menu-panel .um-section-toggle-warn { color: #a33; }
   .user-menu-panel .um-chevron { flex-shrink: 0; margin-left: 10px; color: var(--ink-soft); transition: transform 0.15s ease; }
   .user-menu-panel .um-section-toggle[aria-expanded="true"] .um-chevron { transform: rotate(90deg); }
@@ -788,12 +797,12 @@
          </div>
 
          <!-- Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe):
-              el link a Perfiles vuelve a estar en el menú de Cuenta (debajo
-              de Perfil) en vez de en la barra de íconos de abajo — pero
-              sigue siendo un link que LLEVA a su propia pantalla
-              (perfiles.html), no un acordeón que despliega la lista acá
-              adentro. -->
-         <a class="um-btn um-plain" id="umPerfilesLink" href="/perfiles.html">Perfiles</a>
+              "Perfiles" se ve igual que las demás opciones del menú (mismo
+              estilo que "Perfil"/"Opciones avanzadas": negrita, alineado a
+              la izquierda, con su propia línea divisoria) — la diferencia
+              es que ESTE lleva directo a su propia pantalla (perfiles.html)
+              en vez de desplegar contenido acá adentro. -->
+         <a class="um-section-toggle" id="umPerfilesLink" href="/perfiles.html">Perfiles <span class="um-chevron" aria-hidden="true">›</span></a>
 
          <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecAvanzadas">Opciones avanzadas <span class="um-chevron" aria-hidden="true">›</span></button>
          <!-- Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe):
