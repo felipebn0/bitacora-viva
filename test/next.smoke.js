@@ -73,11 +73,19 @@ function fakeSql(strings, ...values) {
   // loadPendingFamilyNote (con "id," al principio) — tiene que chequearse
   // ANTES que loadFamilyContext (sin "id,"), aunque en los hechos ninguna
   // es substring literal de la otra por la coma después de SELECT.
-  if (text.includes('SELECT id, contributor, parentesco, texto, media_urls FROM family_notes')) {
+  if (text.includes('SELECT id, contributor, parentesco, texto, media_urls, ab_variant FROM family_notes')) {
     return Promise.resolve(user.pendingFamilyNote ? [user.pendingFamilyNote] : []);
   }
   if (text.includes('UPDATE family_notes SET discussed = true')) {
     familyNoteMarkedDiscussed.push(values[0]);
+    return Promise.resolve([]);
+  }
+  // Item 12: el sorteo de variante solo corre si el fixture no trae
+  // ab_variant ya puesto -- los tests de acá abajo siempre lo traen, así
+  // que este mock no se ejercita hoy, pero queda por si algún test nuevo
+  // arranca sin ab_variant.
+  if (text.includes('UPDATE family_notes SET ab_variant')) {
+    if (user.pendingFamilyNote) user.pendingFamilyNote.ab_variant = values[0];
     return Promise.resolve([]);
   }
   if (text.includes('SELECT contributor, parentesco, texto FROM family_notes')) {
@@ -433,7 +441,7 @@ async function main() {
   // --- 11) Nota pendiente de un colaborador se incorpora al arranque ---------
   resetAnthropicMock();
   user.resumenTexto = 'Diego ya contó algunas historias de su infancia.';
-  user.pendingFamilyNote = { id: 42, contributor: 'María', parentesco: 'hija', texto: 'Contó que su papá le enseñó a andar en bici en el parque.' };
+  user.pendingFamilyNote = { id: 42, contributor: 'María', parentesco: 'hija', texto: 'Contó que su papá le enseñó a andar en bici en el parque.', ab_variant: 'inicio' };
   pushAnthropicResponse('¡Hola Diego! Quiero contarte que estuve hablando con María y me contó una historia sobre ti, de cuando tu papá te enseñó a andar en bici. ¿Qué te acuerdas de eso?');
   const conNota = await nextForUser(server, cookie, { history: [], mode: 'historia' });
   check('nota pendiente -> 200', conNota.status === 200);
@@ -446,7 +454,7 @@ async function main() {
   // proveedor perdía el aporte en silencio: la nota quedaba marcada como
   // discutida aunque la persona nunca llegó a enterarse).
   resetAnthropicMock();
-  user.pendingFamilyNote = { id: 43, contributor: 'María', parentesco: 'hija', texto: 'Otra historia distinta.' };
+  user.pendingFamilyNote = { id: 43, contributor: 'María', parentesco: 'hija', texto: 'Otra historia distinta.', ab_variant: 'inicio' };
   pushAnthropicResponse({ throw: new Error('Anthropic no respondió (simulado)') });
   const conNotaFallaProveedor = await nextForUser(server, cookie, { history: [], mode: 'historia' });
   check('nota pendiente + falla del proveedor -> 500 (no 200)', conNotaFallaProveedor.status === 500);
@@ -462,6 +470,7 @@ async function main() {
   user.pendingFamilyNote = {
     id: 44, contributor: 'Felipe', parentesco: 'hijo', texto: 'Contó del río de la finca de la abuela.',
     media_urls: JSON.stringify([{ url: 'https://fake.blob.vercel-storage.com/media/1/foto-1.jpg', type: 'foto', caption: 'El río de la finca' }]),
+    ab_variant: 'inicio',
   };
   pushAnthropicResponse('¡Hola Diego! Felipe te contó una historia sobre el río de la finca, y también subió una foto. ¿Qué recuerdas de eso?');
   const conNotaYFoto = await nextForUser(server, cookie, { history: [], mode: 'historia' });
@@ -471,6 +480,33 @@ async function main() {
   check('nota con foto: se marcó la nota como discutida', familyNoteMarkedDiscussed.includes(44));
   const notaYFotoBody = JSON.parse(conNotaYFoto.body);
   check('nota con foto: la respuesta trae la foto para mostrarla en pantalla', notaYFotoBody.media && notaYFotoBody.media.url === 'https://fake.blob.vercel-storage.com/media/1/foto-1.jpg' && notaYFotoBody.media.type === 'foto');
+
+  // --- 11c1) Item 12 (A/B test): variante 'medio' -- NO se menciona en el
+  // primer turno, se difiere hasta que la charla lleva unos intercambios.
+  resetAnthropicMock();
+  user.pendingFamilyNote = { id: 45, contributor: 'María', parentesco: 'hija', texto: 'Contó del cumpleaños sorpresa.', ab_variant: 'medio' };
+  pushAnthropicResponse('¡Hola Diego! Cuéntame, ¿de dónde eres?');
+  const medioTurno0 = await nextForUser(server, cookie, { history: [], mode: 'historia' });
+  check('variante medio, turno 0 -> 200', medioTurno0.status === 200);
+  check('variante medio, turno 0: el arranque NO menciona la nota (se difiere)', !capturedCalls[0].messages[0].content.includes('cumpleaños sorpresa'));
+  check('variante medio, turno 0: NO se marca como discutida todavía', !familyNoteMarkedDiscussed.includes(45));
+
+  resetAnthropicMock();
+  const historialLargo = [
+    { role: 'user', content: 'Hola, soy Diego.' },
+    { role: 'assistant', content: '¡Hola Diego! Cuéntame, ¿de dónde eres?' },
+    { role: 'user', content: 'Nací en Bogotá.' },
+    { role: 'assistant', content: '¿Y con quién vivías?' },
+    { role: 'user', content: 'Con mis papás y mis hermanos.' },
+    { role: 'assistant', content: '¿Algún recuerdo lindo de esa casa?' },
+    { role: 'user', content: 'Sí, los domingos en familia.' },
+  ];
+  pushAnthropicResponse('Qué lindo. Y antes de seguir, María me contó una historia sobre el cumpleaños sorpresa. ¿Qué recuerdas de eso?');
+  const medioTurnoTarde = await nextForUser(server, cookie, { history: historialLargo, mode: 'historia' });
+  check('variante medio, turno tardío -> 200', medioTurnoTarde.status === 200);
+  const ultimoMensajeMedio = capturedCalls[0].messages[capturedCalls[0].messages.length - 1];
+  check('variante medio, turno tardío: se pega al ÚLTIMO mensaje del usuario (no reemplaza la charla)', ultimoMensajeMedio.role === 'user' && ultimoMensajeMedio.content.includes('Sí, los domingos en familia.') && ultimoMensajeMedio.content.includes('cumpleaños sorpresa'));
+  check('variante medio, turno tardío: se marca como discutida', familyNoteMarkedDiscussed.includes(45));
 
   user.pendingFamilyNote = null;
 
