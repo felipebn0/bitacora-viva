@@ -267,8 +267,11 @@
     .memory-chip strong{color:var(--ink);display:block;margin-bottom:2px}
 
     /* SHARED */
-    section{padding:96px 0}
-    .section-head{max-width:760px;margin-bottom:54px}
+    /* 96->80 y 54->40: la página se sentía muy aireada, con huecos vacíos
+       entre secciones (reportado por Felipe). Sigue habiendo respiro, pero
+       menos "vacío". */
+    section{padding:80px 0}
+    .section-head{max-width:760px;margin-bottom:40px}
     .section-head.center{text-align:center;margin-left:auto;margin-right:auto}
     h2{font-size:clamp(2.4rem,5vw,4.6rem);margin:0 0 18px}
     .section-head p{font-size:1.08rem;color:var(--ink-soft);margin:0;max-width:65ch}
@@ -277,16 +280,26 @@
     /* PROBLEM */
     .problem{background:var(--ink);color:#F9F1E3;position:relative;overflow:hidden}
     .problem:before{content:"“";position:absolute;font-family:var(--serif);font-size:30rem;line-height:.6;right:4%;top:20px;color:rgba(255,255,255,.035)}
-    .problem-grid{display:grid;grid-template-columns:.9fr 1.1fr;gap:80px;align-items:start}
-    .problem h2{max-width:10ch}
+    .problem-grid{display:grid;grid-template-columns:1fr 1.05fr;gap:64px;align-items:center}
+    /* Antes: max-width:10ch + h2 global de 72px -> el titular caía en una
+       columna angosta y se partía en 8 líneas de una o dos palabras, con
+       la columna de preguntas terminando 250px antes -> un hueco negro
+       enorme abajo a la derecha (reportado por Felipe). Más ancho y algo
+       más chico: ~3-4 líneas, y align-items:center reparte cualquier
+       diferencia de alto en vez de dejarla toda abajo. */
+    .problem h2{max-width:16ch;font-size:clamp(2.1rem,3.4vw,3.1rem)}
     .questions{display:grid;gap:12px}
     .question-card{padding:18px 20px;border:1px solid rgba(255,255,255,.12);border-radius:18px;background:rgba(255,255,255,.035);font-family:var(--serif);font-style:italic;font-size:1.14rem;color:#EADFCB}
     .problem-note{margin-top:22px;color:#BAAD97}
 
     /* STEPS */
     .steps-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
-    .step{background:rgba(255,253,247,.64);border:1px solid var(--line);border-radius:24px;padding:28px;min-height:320px;display:flex;flex-direction:column}
-    .step-num{font-family:var(--serif);font-size:3rem;color:var(--gold);line-height:1;margin-bottom:auto}
+    /* min-height 320 -> 232: el contenido real de cada paso mide ~150px,
+       así que 320 dejaba ~170px muertos en el medio de cada tarjeta. 232
+       mantiene el número arriba y el texto abajo con un respiro chico,
+       sin el hueco. */
+    .step{background:rgba(255,253,247,.64);border:1px solid var(--line);border-radius:24px;padding:28px;min-height:232px;display:flex;flex-direction:column}
+    .step-num{font-family:var(--serif);font-size:2.4rem;color:var(--gold);line-height:1;margin-bottom:auto}
     .step h3{font-size:1.75rem;margin:28px 0 12px}
     .step p{color:var(--ink-soft);margin:0}
 
@@ -331,7 +344,7 @@
 
     /* FAMILY */
     .family-cards{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
-    .family-card{background:#FFFDF7;border:1px solid var(--line);border-radius:22px;padding:24px;min-height:210px}
+    .family-card{background:#FFFDF7;border:1px solid var(--line);border-radius:22px;padding:24px}
     .soon-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:18px}
     .soon-card{background:#FFFDF7;border:1px dashed var(--line);border-radius:22px;padding:24px;position:relative}
     .soon-badge{display:inline-block;background:var(--moss);color:#FBF6EA;font-size:.68rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:3px 10px;border-radius:20px;margin-bottom:12px}
@@ -369,7 +382,7 @@
     .faq-item p strong{color:var(--ink)}
 
     /* REGISTRO */
-    .registro{padding:110px 0;position:relative;overflow:hidden}
+    .registro{padding:84px 0;position:relative;overflow:hidden}
     .registro:before{content:"";position:absolute;width:520px;height:520px;border-radius:50%;background:radial-gradient(circle,rgba(201,138,60,.16),transparent 68%);right:-180px;top:-130px;pointer-events:none}
     .registro-box{position:relative;display:grid;grid-template-columns:.9fr 1.1fr;gap:64px;align-items:center;background:var(--ink);color:#F9F1E3;border-radius:34px;padding:58px;overflow:hidden}
     .registro-copy h2{font-size:clamp(2.7rem,5vw,4.8rem);margin:0 0 18px;max-width:9ch}
@@ -408,7 +421,7 @@
     .field-note{grid-column:1/-1;color:var(--ink-soft);font-size:.85rem;margin:-6px 0 0}
 
     /* CTA */
-    .final-cta{text-align:center;padding:120px 0}.final-cta .inner{max-width:840px;margin:auto}.final-cta h2{font-size:clamp(3rem,6.5vw,6rem)}.final-cta p{font-family:var(--serif);font-style:italic;color:var(--ink-soft);font-size:1.3rem;margin:0 0 30px}
+    .final-cta{text-align:center;padding:92px 0}.final-cta .inner{max-width:840px;margin:auto}.final-cta h2{font-size:clamp(3rem,6.5vw,6rem)}.final-cta p{font-family:var(--serif);font-style:italic;color:var(--ink-soft);font-size:1.3rem;margin:0 0 30px}
 
     footer{border-top:1px solid var(--line);padding:34px 0 48px;color:var(--ink-soft);font-size:.9rem}.footer-row{display:flex;justify-content:space-between;gap:20px;align-items:center;flex-wrap:wrap}.footer-links{display:flex;gap:20px;flex-wrap:wrap}.footer-links a{text-decoration:none;display:inline-flex;align-items:center;min-height:44px;padding:4px 2px}
     /* Sin min-width:0 este texto no se ajustaba: un div flex, por defecto,
