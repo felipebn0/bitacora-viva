@@ -37,6 +37,7 @@ let nextBitacoraId = 1000;
 
 let storyLog = {}; // profileUserId -> [{ id, texto, audio_url, media_urls }]
 let nextStoryLogId = 1;
+let familyNotesInserts = []; // [{ userId, contributor, parentesco, texto }]
 
 function fakeSql(strings, ...values) {
   const text = strings.join('?');
@@ -70,7 +71,7 @@ function fakeSql(strings, ...values) {
   if (text.includes('INSERT INTO bitacoras (admin_user_id, nombre, fecha_nacimiento)')) {
     const [adminUserId, nombre, fechaNacimiento] = values;
     const id = nextBitacoraId++;
-    bitacoras[id] = { id, admin_user_id: adminUserId, nombre, fecha_nacimiento: fechaNacimiento, narrador_code: null };
+    bitacoras[id] = { id, admin_user_id: adminUserId, nombre, fecha_nacimiento: fechaNacimiento, narrador_code: null, invite_code: null, aportes_pending_names: null };
     return Promise.resolve([{ id }]);
   }
   if (text.includes('SELECT id, nombre FROM bitacoras WHERE admin_user_id')) {
@@ -110,6 +111,60 @@ function fakeSql(strings, ...values) {
   if (text.includes('SELECT id, nombre FROM bitacoras WHERE narrador_code')) {
     const bit = Object.values(bitacoras).find((b) => b.narrador_code && b.narrador_code === values[0]);
     return Promise.resolve(bit ? [{ id: bit.id, nombre: bit.nombre }] : []);
+  }
+
+  // requireAuth: revalidar en cada request la sesión de un invitado clásico
+  // cuyo código era de un subperfil (session.ownerEsBitacora).
+  if (text.includes('SELECT id, invite_code FROM bitacoras WHERE id')) {
+    const bit = bitacoras[values[0]];
+    return Promise.resolve(bit ? [{ id: bit.id, invite_code: bit.invite_code }] : []);
+  }
+  // --- invite_code de la bitácora ACTIVA (BACKLOG #12: un subperfil ahora
+  // acepta aportes de otros familiares igual que una cuenta normal) ---
+  if (text.includes('SELECT invite_code FROM bitacoras WHERE id')) {
+    const bit = bitacoras[values[0]];
+    return Promise.resolve(bit ? [{ invite_code: bit.invite_code }] : []);
+  }
+  if (text.includes('UPDATE bitacoras SET invite_code')) {
+    const [code, id] = values;
+    if (bitacoras[id]) bitacoras[id].invite_code = code;
+    return Promise.resolve([]);
+  }
+  // buscarDuenoPorInviteCode: primero prueba en users (ningún fixture de
+  // este archivo tiene invite_code propio, así que siempre vacío acá),
+  // después en bitacoras.
+  if (text.includes('SELECT id, name, username FROM users WHERE invite_code')) {
+    return Promise.resolve([]);
+  }
+  if (text.includes('SELECT id, nombre FROM bitacoras WHERE invite_code')) {
+    const bit = Object.values(bitacoras).find((b) => b.invite_code && b.invite_code === values[0]);
+    return Promise.resolve(bit ? [{ id: bit.id, nombre: bit.nombre }] : []);
+  }
+  // marcarAportePendiente: prueba users primero (vacío, ningún fixture usa
+  // esta columna) y recién después bitacoras.
+  if (text.includes('SELECT aportes_pending_names FROM users WHERE id')) {
+    return Promise.resolve([]);
+  }
+  if (text.includes('SELECT aportes_pending_names FROM bitacoras WHERE id')) {
+    const bit = bitacoras[values[0]];
+    return Promise.resolve(bit ? [{ aportes_pending_names: bit.aportes_pending_names }] : []);
+  }
+  if (text.includes('UPDATE bitacoras SET aportes_pending_names = NULL WHERE id')) {
+    const [id] = values;
+    if (bitacoras[id]) bitacoras[id].aportes_pending_names = null;
+    return Promise.resolve([]);
+  }
+  if (text.includes('UPDATE bitacoras SET aportes_pending_names')) {
+    const [json, id] = values;
+    if (bitacoras[id]) bitacoras[id].aportes_pending_names = json;
+    return Promise.resolve([]);
+  }
+  // /api/contribute-story: family_notes.user_id es a qué bitácora quedó
+  // atado el aporte — se guarda para verificar que cayó en el subperfil.
+  if (text.includes('INSERT INTO family_notes (user_id, contributor, parentesco, texto, audio_url, contributed_by)')) {
+    const [userId, contributor, parentesco, texto] = values;
+    familyNotesInserts.push({ userId, contributor, parentesco, texto });
+    return Promise.resolve([]);
   }
 
   // --- Contenido genérico (loadMemorySummary, loadPendingFamilyNote,
@@ -296,6 +351,41 @@ function check(nombre, cond) {
     check('revocar -> 200', revocar.status === 200);
     const infoTrasRevocar = await request(server, { path: `/api/narrador-code-info?codigo=${codigoNuevo}` });
     check('tras revocar, ese código ya no resuelve a nada -> 404', infoTrasRevocar.status === 404);
+
+    // --- Un subperfil ahora acepta aportes de otros familiares, igual que
+    // una cuenta normal (pedido de Felipe, 2026-09-07) ---------------------
+    const crearMama = await request(server, { path: '/api/subprofiles', method: 'POST', body: { nombre: 'mamá' } }, cookieFelipe);
+    const { id: mamaId } = JSON.parse(crearMama.body);
+
+    // El código de "aportar" se pide desde la MISMA ruta de siempre
+    // (/api/invite-code), pero ahora targeteando la bitácora activa —
+    // Felipe lo pide mientras está cambiado al subperfil de mamá.
+    const switchMama = await request(server, { path: '/api/subprofiles/switch', method: 'POST', body: { id: mamaId } }, cookieFelipe);
+    const cookieComoMama = switchMama.headers['set-cookie'][0].split(';')[0];
+    const inviteCodeMama = await request(server, { path: '/api/invite-code' }, cookieComoMama);
+    check('pedir el código de aportes de un subperfil -> 200', inviteCodeMama.status === 200 && typeof JSON.parse(inviteCodeMama.body).code === 'string');
+    const codigoAportesMama = JSON.parse(inviteCodeMama.body).code;
+
+    // Un familiar cualquiera (sin cuenta) entra con ese código y aporta una historia.
+    const infoAportes = await request(server, { path: `/api/guest-code-info?codigo=${codigoAportesMama}` });
+    check('el código de aportes de un subperfil resuelve a su nombre -> 200', infoAportes.status === 200 && JSON.parse(infoAportes.body).ownerName === 'Mamá');
+
+    const guestStartAportes = await request(server, { path: '/api/guest-start', method: 'POST', body: { codigo: codigoAportesMama, name: 'Tía Rosa' } });
+    check('un familiar entra como invitado clásico con el código de un subperfil -> 200', guestStartAportes.status === 200);
+    const cookieTiaRosa = guestStartAportes.headers['set-cookie'][0].split(';')[0];
+
+    const aporte = await request(server, {
+      path: '/api/contribute-story', method: 'POST',
+      body: { contributor: 'Tía Rosa', parentesco: 'hermana', text: 'Recuerdo una vez que fuimos juntas de paseo al río, hace muchísimos años, cuando todavía éramos jovencitas y no teníamos ninguna preocupación en el mundo.' },
+    }, cookieTiaRosa);
+    check('la tía aporta una historia al subperfil de mamá -> 200', aporte.status === 200);
+    check('el aporte quedó guardado con user_id = el subperfil de mamá, no el de Felipe', familyNotesInserts.some((n) => n.userId === mamaId && n.contributor === 'Tía Rosa'));
+
+    // La campanita de "Aportes" del subperfil se prende — Felipe (cambiado
+    // a ese perfil) la ve igual que en su propia bitácora.
+    const aportesPending = await request(server, { path: '/api/aportes/pending' }, cookieComoMama);
+    const nombresPendientes = JSON.parse(aportesPending.body).names;
+    check('la campanita de aportes del subperfil se prendió con el nombre de la tía', Array.isArray(nombresPendientes) && nombresPendientes.includes('Tía Rosa'));
   } finally {
     server.close();
   }

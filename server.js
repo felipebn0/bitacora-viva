@@ -804,6 +804,17 @@ function ensureSchema() {
       // invitado clásico contra users.invite_code, ver requireAuth más abajo.
       sql`ALTER TABLE bitacoras ADD COLUMN IF NOT EXISTS narrador_code TEXT`,
       sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_bitacoras_narrador_code ON bitacoras(narrador_code) WHERE narrador_code IS NOT NULL`,
+      // Contraparte de users.invite_code — un subperfil debe funcionar
+      // igual que una bitácora normal en esto (pedido de Felipe,
+      // 2026-09-07): otros familiares tienen que poder aportarle historias
+      // igual que a cualquier cuenta, no solo la persona del narrador_code
+      // de arriba (que es distinto: ese es para que ELLA narre SU PROPIA
+      // bitácora sin cuenta; este es para que OTROS le aporten cosas, como
+      // ya funciona en una cuenta dueña normal). Mismo mecanismo que
+      // users.invite_code: /api/guest-code-info y /api/guest-start ahora
+      // también buscan acá.
+      sql`ALTER TABLE bitacoras ADD COLUMN IF NOT EXISTS invite_code TEXT`,
+      sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_bitacoras_invite_code ON bitacoras(invite_code) WHERE invite_code IS NOT NULL`,
 
       // Las 8 tablas de contenido de arriba declaraban su "user_id" como
       // REFERENCES users(id) — correcto mientras cada bitácora era siempre
@@ -1117,7 +1128,14 @@ async function requireAuth(req, res, next) {
   if (session.guest) {
     try {
       await ensureSchema();
-      const rows = await sql`SELECT id, invite_code FROM users WHERE id = ${session.ownerId} AND owner_user_id IS NULL`;
+      // BACKLOG #12: el dueño de este código puede ser una cuenta normal
+      // (users) o un subperfil (bitacoras) — session.ownerEsBitacora (viajó
+      // firmado desde /api/guest-start) dice en cuál de las dos revalidar.
+      // Sesiones firmadas ANTES de este cambio no traen ese campo (queda
+      // undefined = falsy = "es de users", el comportamiento de siempre).
+      const rows = session.ownerEsBitacora
+        ? await sql`SELECT id, invite_code FROM bitacoras WHERE id = ${session.ownerId}`
+        : await sql`SELECT id, invite_code FROM users WHERE id = ${session.ownerId} AND owner_user_id IS NULL`;
       if (!rows.length) return res.status(401).json({ error: 'No autenticado.' });
       // El código quedó firmado adentro del token en /api/guest-start — si
       // el dueño lo rotó desde entonces (/api/invite-code/regenerate), esta
@@ -1139,6 +1157,10 @@ async function requireAuth(req, res, next) {
     req.bitacoraEsPropia = false;
     req.puedeNarrar = false;
     req.guestName = session.guestName || null;
+    // A quién le está aportando este invitado: una cuenta normal (users) o
+    // un subperfil (bitacoras) — /api/me lo necesita para saber en cuál de
+    // las dos buscar el nombre del "dueño" a mostrar.
+    req.ownerEsBitacora = !!session.ownerEsBitacora;
     return next();
   }
   if (!session.userId) {
@@ -1372,8 +1394,12 @@ app.get('/api/me', requireAuth, async (req, res) => {
       });
     }
     if (req.isGuest) {
-      const ownerRows = await sql`SELECT name, username FROM users WHERE id = ${req.profileUserId}`;
-      const ownerName = capitalizarNombre((ownerRows[0] && (ownerRows[0].name || ownerRows[0].username)) || '') || null;
+      // BACKLOG #12: el "dueño" al que le está aportando este invitado
+      // puede ser una cuenta normal o un subperfil (ver buscarDuenoPorInviteCode)
+      const ownerRows = req.ownerEsBitacora
+        ? await sql`SELECT nombre FROM bitacoras WHERE id = ${req.profileUserId}`
+        : await sql`SELECT name, username FROM users WHERE id = ${req.profileUserId}`;
+      const ownerName = capitalizarNombre((ownerRows[0] && (ownerRows[0].nombre || ownerRows[0].name || ownerRows[0].username)) || '') || null;
       return res.json({
         username: null, name: null, email: null, fechaNacimiento: null,
         isCollaborator: true, isGuest: true, guestName: req.guestName, ownerName,
@@ -1767,6 +1793,33 @@ async function asignarNuevoInviteCode(userId) {
   return code;
 }
 
+// BACKLOG #12: un subperfil funciona igual que una cuenta dueña normal para
+// esto — otros familiares le pueden aportar historias con SU PROPIO código
+// (bitacoras.invite_code), igual que a cualquier bitácora. Mismo par
+// leer/asignar que ya usa leerPerfilBitacora para nombre/fecha, ramificado
+// según de qué bitácora se trata.
+async function leerInviteCodeActivo(profileUserId, esPropia) {
+  const rows = esPropia
+    ? await sql`SELECT invite_code FROM users WHERE id = ${profileUserId}`
+    : await sql`SELECT invite_code FROM bitacoras WHERE id = ${profileUserId}`;
+  return (rows[0] && rows[0].invite_code) || null;
+}
+async function asignarInviteCodeActivo(profileUserId, esPropia) {
+  if (esPropia) return asignarNuevoInviteCode(profileUserId);
+  let code;
+  for (let intento = 0; intento < 5; intento++) {
+    code = randomInviteCode();
+    try {
+      await sql`UPDATE bitacoras SET invite_code = ${code} WHERE id = ${profileUserId}`;
+      return code;
+    } catch (err) {
+      if (err && err.code === '23505' && intento < 4) continue;
+      throw err;
+    }
+  }
+  return code;
+}
+
 // Mismo mecanismo que asignarNuevoInviteCode, pero para el link permanente
 // de un subperfil (ver bitacoras.narrador_code) — la persona del subperfil
 // lo usa para narrar su propia bitácora sin cuenta propia (/api/narrador-start).
@@ -1785,15 +1838,24 @@ async function asignarNuevoNarradorCode(bitacoraId) {
   return code;
 }
 
-app.get('/api/invite-code', requireAuth, bloquearInvitado, async (req, res) => {
+// Ojo: opera sobre la BITÁCORA ACTIVA (req.profileUserId/req.bitacoraEsPropia),
+// no siempre sobre la cuenta que loguea — así, un subperfil (BACKLOG #12)
+// puede tener su propio código para que otros familiares le aporten
+// historias, igual que cualquier cuenta dueña normal. bloquearInvitado NO
+// se usa acá a propósito: el narrador de un subperfil (invitado sin
+// cuenta, pero con isCollaborator=false) sí tiene que poder generar y ver
+// el código de SU bitácora — solo el invitado clásico (isCollaborator=true,
+// aporta a la bitácora de otro) queda afuera, y de eso ya se encarga el
+// chequeo de abajo.
+app.get('/api/invite-code', requireAuth, async (req, res) => {
   try {
     if (req.isCollaborator) {
       return res.status(403).json({ error: 'Las cuentas colaboradoras no tienen código propio.' });
     }
     await ensureSchema();
-    const rows = await sql`SELECT invite_code FROM users WHERE id = ${req.userId}`;
-    if (rows[0] && rows[0].invite_code) return res.json({ code: rows[0].invite_code });
-    const code = await asignarNuevoInviteCode(req.userId);
+    const existente = await leerInviteCodeActivo(req.profileUserId, req.bitacoraEsPropia);
+    if (existente) return res.json({ code: existente });
+    const code = await asignarInviteCodeActivo(req.profileUserId, req.bitacoraEsPropia);
     res.json({ code });
   } catch (err) {
     console.error(err);
@@ -1806,13 +1868,13 @@ app.get('/api/invite-code', requireAuth, bloquearInvitado, async (req, res) => {
 // quiere cerrar esa puerta sin afectar a los familiares que ya se unieron
 // (las colaboraciones ya aceptadas quedan en la tabla collaborations, no
 // dependen del código en sí).
-app.post('/api/invite-code/regenerate', requireAuth, bloquearInvitado, rateLimit, async (req, res) => {
+app.post('/api/invite-code/regenerate', requireAuth, rateLimit, async (req, res) => {
   try {
     if (req.isCollaborator) {
       return res.status(403).json({ error: 'Las cuentas colaboradoras no tienen código propio.' });
     }
     await ensureSchema();
-    const code = await asignarNuevoInviteCode(req.userId);
+    const code = await asignarInviteCodeActivo(req.profileUserId, req.bitacoraEsPropia);
     res.json({ code });
   } catch (err) {
     console.error(err);
@@ -1856,9 +1918,15 @@ app.get('/api/collaboration-info', requireAuth, async (req, res) => {
   try {
     const ownerId = await resolveProfileUserId(req);
     if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
-    const rows = await sql`SELECT name, username FROM users WHERE id = ${ownerId}`;
+    // BACKLOG #12: si es un invitado clásico y su código era de un
+    // subperfil (no de una cuenta), el "dueño" vive en bitacoras, no en
+    // users — una cuenta completa (join-collaboration/signup) nunca llega
+    // acá con un subperfil, porque esos dos caminos solo buscan en users.
+    const rows = req.isGuest && req.ownerEsBitacora
+      ? await sql`SELECT nombre FROM bitacoras WHERE id = ${ownerId}`
+      : await sql`SELECT name, username FROM users WHERE id = ${ownerId}`;
     if (!rows.length) return res.status(404).json({ error: 'No se encontró esa bitácora.' });
-    res.json({ ownerId, ownerName: capitalizarNombre(rows[0].name || rows[0].username) });
+    res.json({ ownerId, ownerName: capitalizarNombre(rows[0].nombre || rows[0].name || rows[0].username) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo cargar esa historia.' });
@@ -1877,14 +1945,27 @@ app.get('/api/collaboration-info', requireAuth, async (req, res) => {
 // todavía. rateLimit por IP alcanza acá: el código ya es aleatoriedad
 // criptográfica de 8 caracteres (~852 mil millones de combinaciones),
 // adivinarlo a fuerza bruta no es viable.
+// BACKLOG #12: el código de un invitado clásico puede apuntar a una cuenta
+// dueña normal (users, como siempre) o a un subperfil (bitacoras) — un
+// subperfil ahora acepta aportes de otros familiares igual que cualquier
+// bitácora. Se busca primero en users (el caso de siempre, más común) y
+// recién si no aparece ahí se busca en bitacoras.
+async function buscarDuenoPorInviteCode(cleanCode) {
+  const enUsers = await sql`SELECT id, name, username FROM users WHERE invite_code = ${cleanCode} AND owner_user_id IS NULL`;
+  if (enUsers.length) return { id: enUsers[0].id, nombre: enUsers[0].name || enUsers[0].username, esBitacora: false };
+  const enBitacoras = await sql`SELECT id, nombre FROM bitacoras WHERE invite_code = ${cleanCode}`;
+  if (enBitacoras.length) return { id: enBitacoras[0].id, nombre: enBitacoras[0].nombre, esBitacora: true };
+  return null;
+}
+
 app.get('/api/guest-code-info', rateLimit, async (req, res) => {
   try {
     const cleanCode = String(req.query.codigo || '').trim().toUpperCase();
     if (!cleanCode) return res.status(400).json({ error: 'Falta el código.' });
     await ensureSchema();
-    const rows = await sql`SELECT id, name, username FROM users WHERE invite_code = ${cleanCode} AND owner_user_id IS NULL`;
-    if (!rows.length) return res.status(404).json({ error: 'Ese código no existe.' });
-    res.json({ ownerName: capitalizarNombre(rows[0].name || rows[0].username) });
+    const owner = await buscarDuenoPorInviteCode(cleanCode);
+    if (!owner) return res.status(404).json({ error: 'Ese código no existe.' });
+    res.json({ ownerName: capitalizarNombre(owner.nombre) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo verificar el código.' });
@@ -1904,9 +1985,8 @@ app.post('/api/guest-start', rateLimit, async (req, res) => {
     if (!cleanName) return res.status(400).json({ error: 'Falta el nombre.' });
 
     await ensureSchema();
-    const rows = await sql`SELECT id, name, username FROM users WHERE invite_code = ${cleanCode} AND owner_user_id IS NULL`;
-    if (!rows.length) return res.status(404).json({ error: 'Ese código no existe.' });
-    const owner = rows[0];
+    const owner = await buscarDuenoPorInviteCode(cleanCode);
+    if (!owner) return res.status(404).json({ error: 'Ese código no existe.' });
 
     // El código va DENTRO del token firmado (no solo se usa para encontrar
     // al dueño y después olvidarse de él) para que rotar el código
@@ -1916,10 +1996,12 @@ app.post('/api/guest-start', rateLimit, async (req, res) => {
     // que se entró siguiera siendo el vigente, así que una sesión de
     // invitado de hasta 30 días sobrevivía intacta a la rotación pensada
     // justo para cortarle el acceso a quien tiene un código que se filtró.
-    const token = signSession({ guest: true, ownerId: owner.id, guestName: cleanName, code: cleanCode });
+    // ownerEsBitacora viaja también firmado — requireAuth necesita saber
+    // en qué tabla revalidar "code" en cada request (users o bitacoras).
+    const token = signSession({ guest: true, ownerId: owner.id, ownerEsBitacora: owner.esBitacora, guestName: cleanName, code: cleanCode });
     const secure = cookieEsSegura(req) ? '; Secure' : '';
     res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${token}; Max-Age=${SESSION_MAX_AGE}; Path=/; HttpOnly; SameSite=Lax${secure}`);
-    res.json({ ok: true, ownerName: capitalizarNombre(owner.name || owner.username) });
+    res.json({ ok: true, ownerName: capitalizarNombre(owner.nombre) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo entrar con ese código.' });
@@ -3790,13 +3872,29 @@ async function guardarBorradorAporte(ownerId, draftId, historyHastaAhora, audioU
 // finalizarAporte (charla) y desde /api/contribute-story (formulario
 // corto, sin charla). Falla en silencio a propósito: que la campanita no
 // se actualice nunca debería tirar abajo el guardado real del aporte.
+// BACKLOG #12: "ownerId" acá puede ser una cuenta real (users) o un
+// subperfil (bitacoras) — a diferencia de otros lugares, acá no siempre se
+// sabe de antemano cuál de las dos es (puede llegar por resolveProfileUserId
+// desde varios caminos distintos), así que se prueba primero contra users
+// (el caso de siempre, más común) y solo si no hay fila ahí se prueba
+// contra bitacoras — en vez de exigir que cada llamador sepa y pase la
+// respuesta correcta.
 async function marcarAportePendiente(ownerId, contributorName) {
   try {
     const nombre = (contributorName || '').trim() || 'Un familiar';
-    const rows = await sql`SELECT aportes_pending_names FROM users WHERE id = ${ownerId}`;
-    const pendientes = new Set(parseJsonArray(rows[0] && rows[0].aportes_pending_names));
-    pendientes.add(nombre);
-    await sql`UPDATE users SET aportes_pending_names = ${JSON.stringify(Array.from(pendientes))} WHERE id = ${ownerId}`;
+    const enUsers = await sql`SELECT aportes_pending_names FROM users WHERE id = ${ownerId}`;
+    if (enUsers.length) {
+      const pendientes = new Set(parseJsonArray(enUsers[0].aportes_pending_names));
+      pendientes.add(nombre);
+      await sql`UPDATE users SET aportes_pending_names = ${JSON.stringify(Array.from(pendientes))} WHERE id = ${ownerId}`;
+      return;
+    }
+    const enBitacoras = await sql`SELECT aportes_pending_names FROM bitacoras WHERE id = ${ownerId}`;
+    if (enBitacoras.length) {
+      const pendientes = new Set(parseJsonArray(enBitacoras[0].aportes_pending_names));
+      pendientes.add(nombre);
+      await sql`UPDATE bitacoras SET aportes_pending_names = ${JSON.stringify(Array.from(pendientes))} WHERE id = ${ownerId}`;
+    }
   } catch (err) {
     console.error('No se pudo marcar el aporte pendiente:', err);
   }
@@ -4566,17 +4664,16 @@ app.post('/api/tree/mark-seen', requireAuth, bloquearColaborador, rateLimit, asy
 // Campanita de aviso en el ícono de "Aportes" (💬): quién terminó de
 // aportar una historia desde la última vez que se abrió
 // /colaboraciones.html. Mismo mecanismo que /api/tree/pending de arriba,
-// aplicado a family_notes en vez del árbol (ver marcarAportePendiente()).
-// Un subperfil (BACKLOG #12) no tiene invite_code propio en esta primera
-// versión, así que nunca puede recibir un aporte de family_notes — por eso
-// acá no hace falta ningún equivalente de "bitacoras.aportes_pending_names"
-// (nunca se escribiría nada ahí): alcanza con devolver vacío/no-op cuando
-// la bitácora activa es un subperfil, sin siquiera consultar la base.
+// aplicado a family_notes en vez del árbol (ver marcarAportePendiente()). Un
+// subperfil (BACKLOG #12) ahora sí puede tener su propio invite_code y
+// recibir aportes igual que una cuenta normal, así que acá también hace
+// falta ramificar según req.bitacoraEsPropia (users vs. bitacoras).
 app.get('/api/aportes/pending', requireAuth, bloquearColaborador, async (req, res) => {
   try {
-    if (!req.bitacoraEsPropia) return res.json({ names: [] });
     await ensureSchema();
-    const rows = await sql`SELECT aportes_pending_names FROM users WHERE id = ${req.profileUserId}`;
+    const rows = req.bitacoraEsPropia
+      ? await sql`SELECT aportes_pending_names FROM users WHERE id = ${req.profileUserId}`
+      : await sql`SELECT aportes_pending_names FROM bitacoras WHERE id = ${req.profileUserId}`;
     res.json({ names: parseJsonArray(rows[0] && rows[0].aportes_pending_names) });
   } catch (err) {
     console.error(err);
@@ -4586,9 +4683,9 @@ app.get('/api/aportes/pending', requireAuth, bloquearColaborador, async (req, re
 
 app.post('/api/aportes/mark-seen', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
   try {
-    if (!req.bitacoraEsPropia) return res.json({ ok: true });
     await ensureSchema();
-    await sql`UPDATE users SET aportes_pending_names = NULL WHERE id = ${req.profileUserId}`;
+    if (req.bitacoraEsPropia) await sql`UPDATE users SET aportes_pending_names = NULL WHERE id = ${req.profileUserId}`;
+    else await sql`UPDATE bitacoras SET aportes_pending_names = NULL WHERE id = ${req.profileUserId}`;
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
