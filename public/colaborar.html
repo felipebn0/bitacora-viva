@@ -1338,8 +1338,22 @@
     }
   }
 
+  // Encontrado probando la charla fluida en el celular real de Felipe
+  // (2026-09-08): "toma la primera nota de voz, pero la segunda se queda
+  // colgada". La causa: empezarGrabacion() reactivaba el orbe (disabled =
+  // false) ANTES de esperar a getUserMedia() — así que si la persona
+  // tocaba el orbe mientras esa espera seguía en curso (pedir el permiso
+  // de nuevo puede tardar, sobre todo justo después de soltar el stream
+  // anterior), esa segunda llamada entraba en carrera con la automática,
+  // pisándose mutuamente mediaStream/mediaRecorder. iniciandoGrabacion
+  // bloquea esa segunda entrada mientras la primera todavía está a mitad
+  // de pedir el micrófono — aparte de que ahora el orbe también se queda
+  // deshabilitado hasta que la espera realmente termina (éxito o error),
+  // no desde el primer instante.
+  let iniciandoGrabacion = false;
+
   async function empezarGrabacion() {
-    if (charlaTerminada || grabando) return;
+    if (charlaTerminada || grabando || iniciandoGrabacion) return;
     interaccionReal = true;
     // Ahora esto también se llama SOLO (sin click, ver
     // manejarDesenlaceDeTurno) para seguir la charla — un botón
@@ -1347,10 +1361,7 @@
     // click real, así que hay que repetir acá el mismo chequeo que ya
     // impide tocar el orbe cuando el navegador no puede grabar nada.
     if (micNoDisponible) { mostrarEscribirColab(true); return; }
-    // Por si venía de "hablando" (ver enviarTurno/manejarDesenlaceDeTurno):
-    // ese estado deja el orbe deshabilitado, y acá no había ningún otro
-    // lugar que lo reactivara antes de escuchar de nuevo.
-    orb.disabled = false;
+    iniciandoGrabacion = true;
     try {
       // Carrera contra un timeout: en algunos navegadores, sobre todo
       // después de interactuar con el selector nativo de fotos (subir una
@@ -1371,6 +1382,8 @@
       // (moss, disabled) apenas un momento antes — sin resetearlo acá se
       // quedaba trabado mostrando "hablando" para siempre aunque ya se
       // hubiera caído al modo escribir.
+      iniciandoGrabacion = false;
+      orb.disabled = false;
       orb.dataset.state = 'idle';
       orb.innerHTML = 'Presiona<br>para hablar';
       orb.setAttribute('aria-label', 'Presiona para grabar tu historia');
@@ -1379,6 +1392,8 @@
       writeInputColab.focus();
       return;
     }
+    iniciandoGrabacion = false;
+    orb.disabled = false;
     audioChunks = [];
     try {
       mediaRecorder = new MediaRecorder(mediaStream, { audioBitsPerSecond: 40000 });
