@@ -12,11 +12,11 @@
      abrir siempre como una pestaña más del navegador) — apple-mobile-web-
      app-* es lo que usa iOS Safari (no tiene API para dispararlo solo, la
      persona lo hace a mano desde Compartir); el manifest dinámico
-     (/manifest.json, ver server.js) es lo que usa Android/Chrome para el
-     cartel de "Instalar". Sin ?codigo=, /manifest.json devuelve el genérico
+     (/api/manifest.json, ver server.js) es lo que usa Android/Chrome para el
+     cartel de "Instalar". Sin ?codigo=, /api/manifest.json devuelve el genérico
      de la app entera — agregarlo acá de forma fija no rompe nada para quien
      nunca use un enlace de subperfil. -->
-<link rel="manifest" href="/manifest.json" id="appManifestLink">
+<link rel="manifest" href="/api/manifest.json" id="appManifestLink">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Los recuerdos de mis viejos" id="appleTitleMeta">
 <!-- Fuentes autoalojadas (ronda 2 del camino a CSP en enforce, 2026-09-06):
@@ -1739,7 +1739,7 @@
     const params = new URLSearchParams();
     if (codigo) params.set('codigo', codigo);
     if (nombre) params.set('nombre', nombre);
-    manifestLink.href = `/manifest.json?${params.toString()}`;
+    manifestLink.href = `/api/manifest.json?${params.toString()}`;
     appleTitleMeta.setAttribute('content', nombre ? `Los recuerdos de ${nombre}` : 'Los recuerdos de mis viejos');
     agregarInicioBtn.dataset.modoNarrador = 'true';
     if (promptDeInstalacion) { agregarInicioBtn.style.display = 'inline-flex'; return; }

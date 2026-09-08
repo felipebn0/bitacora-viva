@@ -200,7 +200,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 // hace falta autenticación ni tocar la base — solo arma el JSON a partir de
 // query params ya públicos (el mismo código que ya viaja en la URL que se
 // comparte por WhatsApp).
-app.get('/manifest.json', (req, res) => {
+// Va bajo /api/ (no /manifest.json pelado) porque vercel.json enruta TODO
+// lo que no empiece con /api/ directo a un archivo estático de public/ (ver
+// la última regla de "routes" ahí) — una ruta fuera de /api/ nunca llega a
+// este servidor Express en producción/preview, solo en local (npm run dev).
+app.get('/api/manifest.json', (req, res) => {
   const codigo = typeof req.query.codigo === 'string' ? req.query.codigo.replace(/[^A-Za-z0-9]/g, '').slice(0, 8) : '';
   const nombre = typeof req.query.nombre === 'string' ? req.query.nombre.replace(/[^\p{L}\p{N} ]/gu, '').slice(0, 60) : '';
   res.set('Content-Type', 'application/manifest+json');
