@@ -160,7 +160,12 @@
      tamaño de toque se queda en 44px mínimo aunque se vea chico. */
   .orb-wrap { position: relative; display: inline-grid; place-items: center; }
   .orb-mini-end {
-    position: absolute; right: -6px; bottom: 4px;
+    /* Antes (right:-6px; bottom:4px) quedaba metido bastante adentro del
+       círculo del orbe grande — se veía como si el orbe se "achicara" al
+       activarse, porque el rojo tapaba un pedazo real de él (reportado
+       por Felipe). Ahora queda apoyado bien afuera, tocando el borde nada
+       más, sin comerse nada del círculo principal. */
+    position: absolute; right: -16px; bottom: -8px;
     width: 56px; height: 56px; min-width: 44px; min-height: 44px;
     border-radius: 50%; border: 3px solid var(--bg); cursor: pointer;
     background: #a33; color: #fff; font-family: var(--font-body); font-weight: 700;
