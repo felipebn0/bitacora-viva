@@ -165,6 +165,15 @@
        activarse, porque el rojo tapaba un pedazo real de él (reportado
        por Felipe). Ahora queda apoyado bien afuera, tocando el borde nada
        más, sin comerse nada del círculo principal. */
+    /* display:none acá (no solo por JS): el botón original ("terminar la
+       charla") tenía la clase pc-93b8ea5b, que empieza oculta por
+       default -- al rediseñarlo como este orbe chico rojo esa clase se
+       perdió, así que quedaba SIEMPRE visible desde el primer render,
+       tapando una esquina real del orbe grande y comiéndose los clics
+       que debían ir al botón de hablar (reportado por Felipe: "hago clic
+       y no pasa nada"). setState() lo sigue mostrando/ocultando con
+       .style.display durante la charla, igual que antes. */
+    display: none;
     position: absolute; right: -16px; bottom: -8px;
     width: 56px; height: 56px; min-width: 44px; min-height: 44px;
     border-radius: 50%; border: 3px solid var(--bg); cursor: pointer;
@@ -2861,7 +2870,7 @@
   async function comprobarSiArbolTieneBase() {
     try {
       const resp = await fetch('/api/tree');
-      if (!resp.ok) { arbolTieneBase = false; return; }
+      if (!resp.ok) { arbolTieneBase = false; setState(state, stateLabel.textContent); return; }
       const data = await resp.json();
       arbolTieneBase = Array.isArray(data.people) && data.people.length > 0;
     } catch (e) {
