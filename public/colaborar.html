@@ -425,7 +425,11 @@
           <input type="text" id="fotoCaptionInput" placeholder="¿Quién aparece? (opcional)" aria-label="Descripción de la foto o video">
           <button id="fotoCaptionSend" type="button">Subir</button>
         </div>
-        <button class="write-toggle" id="writeToggleColab" type="button" aria-expanded="false" aria-controls="writeRowColab">o prefiero escribir mi historia</button>
+        <!-- Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe):
+             se quita el botón manual "prefiero escribir mi historia" — el
+             cuadro (writeRowColab) sigue apareciendo solo, automáticamente,
+             si el micrófono no está disponible o falla (ver
+             mostrarEscribirColab/micNoDisponible más abajo), eso no se toca. -->
         <div class="write-row pc-accd6151" id="writeRowColab">
           <input type="text" id="writeInputColab" placeholder="Escribe tu historia…" aria-label="Escribir historia">
           <button id="writeSendColab" type="button">Enviar</button>
@@ -940,17 +944,15 @@
   const orb = document.getElementById('orb');
   const recStatus = document.getElementById('recStatus');
   const otraHistoriaBtn = document.getElementById('otraHistoriaBtn');
-  const writeToggleColab = document.getElementById('writeToggleColab');
   const writeRowColab = document.getElementById('writeRowColab');
   const writeInputColab = document.getElementById('writeInputColab');
   const writeSendColab = document.getElementById('writeSendColab');
-  // El cuadro para escribir se muestra/esconde desde varios lugares (el
-  // botón, un error de micrófono, terminar la charla) — no solo desde su
-  // propio botón. Este helper mantiene aria-expanded sincronizado sin
-  // importar desde dónde se dispare.
+  // El cuadro para escribir se muestra/esconde desde varios lugares (un
+  // error de micrófono, terminar la charla) — desde que se quitó el botón
+  // manual (experimento UX, rama ux-pruebas), solo queda el fallback
+  // automático.
   function mostrarEscribirColab(mostrar) {
     writeRowColab.classList.toggle('visible', mostrar);
-    writeToggleColab.setAttribute('aria-expanded', String(mostrar));
   }
   // Si el navegador directamente no puede grabar, el fallback de texto
   // queda siempre visible — "resetChat" (que corre cada vez que arranca
@@ -1016,7 +1018,6 @@
     otraHistoriaBtn.style.display = 'none';
     orb.style.display = '';
     document.getElementById('subirAudioBtn').style.display = '';
-    writeToggleColab.style.display = '';
     if (!micNoDisponible) mostrarEscribirColab(false);
     writeInputColab.value = '';
   }
@@ -1057,7 +1058,6 @@
         releaseWakeLock();
         orb.style.display = 'none';
         document.getElementById('subirAudioBtn').style.display = 'none';
-        writeToggleColab.style.display = 'none';
         mostrarEscribirColab(false);
         recStatus.textContent = '';
         aporteMsg.classList.toggle('error', !data.saved);
@@ -1094,15 +1094,6 @@
   }
 
   otraHistoriaBtn.addEventListener('click', iniciarAporte);
-
-  // --- Alternativa por si el micrófono falla o el navegador no graba: se
-  // puede escribir la historia en vez de decirla en voz alta (igual que
-  // "prefiero escribir" en la charla principal de app.html).
-  writeToggleColab.addEventListener('click', () => {
-    const abierto = !writeRowColab.classList.contains('visible');
-    mostrarEscribirColab(abierto);
-    if (abierto) writeInputColab.focus();
-  });
 
   async function enviarTextoEscrito() {
     const texto = writeInputColab.value.trim();

@@ -74,6 +74,44 @@
     display: inline-flex; align-items: center; min-height: 44px; padding: 10px 4px;
   }
   .rebuild-btn:disabled { opacity: 0.6; cursor: default; }
+  /* Experimento UX (rama ux-pruebas, 2026-09-08): mismo estilo de link que
+     "reconstruir árbol", pero marcado en dorado y sin subrayado mientras
+     el modo está activo, para que se note que quedó prendido. */
+  .edit-mode-btn[aria-pressed="true"] { color: var(--gold-deep); text-decoration: none; font-weight: 700; }
+  /* Experimento UX (rama ux-pruebas, 2026-09-08): cuadro propio para
+     corregir una persona, en vez de los prompt() nativos del navegador. */
+  .edit-modal-backdrop {
+    position: fixed; inset: 0; background: rgba(43,36,28,0.5);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px; z-index: 50; box-sizing: border-box;
+  }
+  .edit-modal-backdrop[hidden] { display: none; }
+  .edit-modal {
+    background: #FBF6EA; border-radius: 16px; padding: 24px;
+    max-width: 420px; width: 100%; max-height: 85vh; overflow-y: auto;
+    box-shadow: 0 20px 60px -20px rgba(0,0,0,0.4);
+  }
+  .edit-modal h2 { font-family: var(--font-display); font-size: 1.25rem; margin: 0 0 4px; }
+  .edit-modal label { display: block; font-size: 0.85rem; color: var(--ink-soft); margin: 16px 0 6px; }
+  .edit-modal input[type="text"] {
+    width: 100%; box-sizing: border-box; padding: 11px 12px; border: 1px solid #E7DFCC;
+    border-radius: 10px; font-family: var(--font-body); font-size: 1rem; color: var(--ink);
+  }
+  .edit-modal .padres-lista { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; max-height: 200px; overflow-y: auto; }
+  .edit-modal .padres-lista label {
+    display: flex; align-items: center; gap: 10px; font-size: 1rem; color: var(--ink);
+    margin: 0; min-height: 44px;
+  }
+  .edit-modal .padres-lista input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--moss); flex-shrink: 0; }
+  .edit-modal .padres-vacio { font-size: 0.85rem; color: var(--ink-soft); margin: 4px 0 0; }
+  .edit-modal .modal-error { color: #a33; font-size: 0.85rem; margin-top: 14px; min-height: 1.2em; }
+  .edit-modal .modal-actions { display: flex; gap: 10px; margin-top: 10px; }
+  .edit-modal .modal-actions button {
+    flex: 1; min-height: 46px; border-radius: 10px; font-family: var(--font-body);
+    font-weight: 700; font-size: 0.95rem; cursor: pointer;
+  }
+  .edit-modal .modal-save { background: var(--moss); color: #FBF6EA; border: none; }
+  .edit-modal .modal-cancel { background: none; border: 1px solid #E7DFCC; color: var(--ink); }
   @media (max-width: 560px) {
     .header-actions { justify-content: center; }
   }
@@ -144,6 +182,21 @@
   @media (hover: none), (pointer: coarse) {
     .tree-node .edit-btn { opacity: 1; }
   }
+  /* Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe,
+     recomendación #1 de la auditoría): en celular los 3 iconos (editar,
+     marcar como "Yo", borrar) quedaban SIEMPRE visibles en cada persona —
+     con una familia grande eran muchos iconitos a la vez para algo que
+     casi nunca se usa. Ahora quedan ocultos por defecto y solo aparecen
+     en modo "Editar árbol" (ver editarArbolBtn más abajo). El !important
+     es a propósito: gana sin pelear con la regla de :hover de arriba ni
+     con la de @media (hover: none) — las dos siguen intactas para cuando
+     el modo SÍ está activo. */
+  body:not(.modo-editar-arbol) .tree-node .edit-btn,
+  body:not(.modo-editar-arbol) .tree-node .marcar-principal-btn,
+  body:not(.modo-editar-arbol) .tree-node .borrar-btn {
+    opacity: 0 !important;
+    pointer-events: none;
+  }
   .avatar {
     width: 68px; height: 68px; border-radius: 50%;
     background: var(--bubble-user);
@@ -190,6 +243,12 @@
   <header>
     <div class="header-actions">
       <a class="volver" href="/app.html">← volver a la bitácora</a>
+      <!-- Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe,
+           recomendación #1 de la auditoría): con este modo apagado (el
+           estado normal), el árbol se ve limpio, solo nombres y
+           parentescos — al activarlo aparecen los 3 iconos de editar en
+           cada persona. -->
+      <button class="rebuild-btn edit-mode-btn" id="editModeBtn" type="button" aria-pressed="false">✏️ editar árbol</button>
       <button class="rebuild-btn" id="rebuildBtn" type="button">🔄 reconstruir árbol</button>
     </div>
     <h1>Árbol genealógico</h1>
@@ -215,6 +274,29 @@
     <div class="colab-grid" id="colabGrid"></div>
   </section>
   </main>
+
+  <!-- Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe,
+       recomendación #1 de la auditoría): reemplaza los prompt()/confirm()
+       nativos del navegador para corregir nombre/relación/padres por un
+       cuadro propio de la app, con la misma letra y botones grandes que el
+       resto — antes salía en letra chica del sistema, sin agrandar-letra
+       ni el estilo cálido de acá. -->
+  <div class="edit-modal-backdrop" id="editModalBackdrop" hidden>
+    <div class="edit-modal" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
+      <h2 id="editModalTitle">Corregir persona</h2>
+      <label for="editModalNombre">Nombre</label>
+      <input type="text" id="editModalNombre" maxlength="100">
+      <label for="editModalRelacion">Relación o vínculo (con la persona principal)</label>
+      <input type="text" id="editModalRelacion" maxlength="100">
+      <label id="editModalPadresLabel">¿Hijo/a de quién? (hasta 2)</label>
+      <div class="padres-lista" id="editModalPadresLista" aria-labelledby="editModalPadresLabel"></div>
+      <p class="modal-error" id="editModalError" role="alert"></p>
+      <div class="modal-actions">
+        <button type="button" class="modal-cancel" id="editModalCancelar">Cancelar</button>
+        <button type="button" class="modal-save" id="editModalGuardar">Guardar</button>
+      </div>
+    </div>
+  </div>
 
 <script>
 (function () {
@@ -944,22 +1026,64 @@
   // Corregir a mano el nombre, el parentesco, o de quién es hijo/a alguien
   // — para cuando la IA lo entendió mal (un nombre mal escrito, un
   // parentesco equivocado, o alguien que quedó conectado a la persona
-  // equivocada, o sin conectar).
-  async function editarPersona(id, nombreActual, relacionActual, padresActuales) {
-    const nuevoNombre = prompt('Nombre:', nombreActual);
-    if (nuevoNombre === null) return;
-    const nuevaRelacion = prompt('Relación o vínculo (con la persona principal):', relacionActual);
-    if (nuevaRelacion === null) return;
+  // equivocada, o sin conectar). Experimento UX (rama ux-pruebas,
+  // 2026-09-08): antes esto encadenaba 3 prompt() del navegador; ahora abre
+  // el cuadro propio de la app (#editModalBackdrop) — ver más abajo.
+  const editModalBackdrop = document.getElementById('editModalBackdrop');
+  const editModalNombre = document.getElementById('editModalNombre');
+  const editModalRelacion = document.getElementById('editModalRelacion');
+  const editModalPadresLista = document.getElementById('editModalPadresLista');
+  const editModalError = document.getElementById('editModalError');
+  const editModalCancelar = document.getElementById('editModalCancelar');
+  const editModalGuardar = document.getElementById('editModalGuardar');
+  let editModalPersonaId = null;
+
+  function editarPersona(id, nombreActual, relacionActual, padresActuales) {
+    editModalPersonaId = id;
+    editModalError.textContent = '';
+    editModalNombre.value = nombreActual || '';
+    editModalRelacion.value = relacionActual || '';
     const otros = nombresConocidos.filter((n) => n !== nombreActual);
-    const nuevosPadresRaw = prompt(
-      `¿Hijo/a de quién? Escribe el nombre EXACTO del papá y/o la mamá, separados por coma (o déjalo vacío si no aplica).\n\nNombres disponibles: ${otros.join(', ')}`,
-      (padresActuales || []).join(', ')
-    );
-    if (nuevosPadresRaw === null) return;
-    const nombre = nuevoNombre.trim();
-    const relacion = nuevaRelacion.trim();
-    if (!nombre || !relacion) return;
-    const padres = nuevosPadresRaw.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 2);
+    const padresDeAntes = new Set(padresActuales || []);
+    editModalPadresLista.innerHTML = '';
+    if (!otros.length) {
+      editModalPadresLista.innerHTML = '<p class="padres-vacio">Todavía no hay otras personas en el árbol para elegir.</p>';
+    } else {
+      otros.forEach((nombreOtro) => {
+        const label = document.createElement('label');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = nombreOtro;
+        checkbox.checked = padresDeAntes.has(nombreOtro);
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode(nombreOtro));
+        editModalPadresLista.appendChild(label);
+      });
+    }
+    editModalBackdrop.hidden = false;
+    editModalNombre.focus();
+  }
+
+  function cerrarEditModal() {
+    editModalBackdrop.hidden = true;
+    editModalPersonaId = null;
+  }
+  editModalCancelar.addEventListener('click', cerrarEditModal);
+  editModalBackdrop.addEventListener('click', (e) => { if (e.target === editModalBackdrop) cerrarEditModal(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !editModalBackdrop.hidden) cerrarEditModal(); });
+
+  editModalGuardar.addEventListener('click', async () => {
+    const nombre = editModalNombre.value.trim();
+    const relacion = editModalRelacion.value.trim();
+    if (!nombre || !relacion) {
+      editModalError.textContent = 'Falta el nombre o la relación.';
+      return;
+    }
+    // Como mucho 2 (papá y mamá) — si eligió más, se queda con las 2
+    // primeras que marcó en vez de rechazar todo el guardado.
+    const padres = Array.from(editModalPadresLista.querySelectorAll('input:checked')).map((c) => c.value).slice(0, 2);
+    const id = editModalPersonaId;
+    editModalGuardar.disabled = true;
     try {
       const resp = await fetch('/api/tree/person/' + id, {
         method: 'PUT',
@@ -967,15 +1091,17 @@
         body: JSON.stringify({ nombre, relacion, padres }),
       });
       if (resp.ok) {
+        cerrarEditModal();
         cargar();
       } else {
         const data = await resp.json().catch(() => ({}));
-        alert(mensajeDeError(resp, data, 'No se pudo guardar el cambio.'));
+        editModalError.textContent = mensajeDeError(resp, data, 'No se pudo guardar el cambio.');
       }
     } catch (e) {
-      alert('No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.');
+      editModalError.textContent = 'No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.';
     }
-  }
+    editModalGuardar.disabled = false;
+  });
 
   let arbolVisto = false;
 
@@ -1053,6 +1179,19 @@
       colabSection.style.display = 'block';
     } catch (e) {}
   }
+
+  // Experimento UX (rama ux-pruebas, 2026-09-08): modo "Editar árbol" — ver
+  // el comentario largo junto a la regla CSS ".modo-editar-arbol" arriba.
+  // Arranca apagado en cada visita a propósito (no se guarda en
+  // localStorage): es un modo de "estoy corrigiendo algo ahora", no una
+  // preferencia permanente.
+  const editModeBtn = document.getElementById('editModeBtn');
+  editModeBtn.addEventListener('click', () => {
+    const activo = !document.body.classList.contains('modo-editar-arbol');
+    document.body.classList.toggle('modo-editar-arbol', activo);
+    editModeBtn.setAttribute('aria-pressed', String(activo));
+    editModeBtn.textContent = activo ? '✓ listo' : '✏️ editar árbol';
+  });
 
   // Vuelve a repasar TODAS las charlas guardadas con las reglas más
   // recientes — útil cuando se corrige un bug de cómo se arma el árbol,

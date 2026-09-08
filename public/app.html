@@ -148,6 +148,19 @@
   .orb[data-state="speaking"], .orb[data-state="thinking"] { background: radial-gradient(circle at 35% 30%, #67774D, var(--moss)); }
   .orb[data-state="paused"] { background: radial-gradient(circle at 35% 30%, #7D7050, #706551); }
   .orb[data-state="paused"]::before { animation: none; opacity: 0.3; }
+  /* Experimento UX (rama ux-pruebas, 2026-09-08): "terminar la charla" como
+     un orbe chico y rojo, pegado abajo a la derecha del principal — el
+     tamaño de toque se queda en 44px mínimo aunque se vea chico. */
+  .orb-wrap { position: relative; display: inline-grid; place-items: center; }
+  .orb-mini-end {
+    position: absolute; right: -6px; bottom: 4px;
+    width: 56px; height: 56px; min-width: 44px; min-height: 44px;
+    border-radius: 50%; border: 3px solid var(--bg); cursor: pointer;
+    background: #a33; color: #fff; font-family: var(--font-body); font-weight: 700;
+    font-size: 0.68rem; line-height: 1.1; letter-spacing: 0.01em;
+    box-shadow: 0 6px 16px -6px rgba(136,34,34,0.6);
+  }
+  .orb-mini-end:hover { background: #8f2b2b; }
   .state-label { font-size: 0.9rem; color: var(--ink-soft); min-height: 1.3em; }
   /* min-height/min-width:44px: la zona de toque mínima recomendada — este
      link de texto quedaba en ~19px de alto, apenas el tamaño de la letra.
@@ -336,6 +349,12 @@
   .user-menu-panel .um-chevron { flex-shrink: 0; margin-left: 10px; color: var(--ink-soft); transition: transform 0.15s ease; }
   .user-menu-panel .um-section-toggle[aria-expanded="true"] .um-chevron { transform: rotate(90deg); }
   .user-menu-panel .um-section-body { padding: 4px 0 10px; }
+  /* Experimento UX (rama ux-pruebas, 2026-09-08): "Opciones avanzadas" y
+     las secciones de Perfil quedan anidadas un nivel — esta sangría chica
+     es la única pista visual de que son sub-opciones, sin duplicar todo el
+     estilo del acordeón para un segundo nivel. */
+  .user-menu-panel .um-section-body .um-section-toggle,
+  .user-menu-panel .um-section-body .um-section-body { padding-left: 14px; }
   .user-menu-panel .um-field-label { display: block; font-size: 0.8rem; color: var(--ink-soft); margin: 0 0 4px; }
   /* Se muestra solo cuando el nombre/correo no entra completo en el
      cuadro a tamaño normal — en vez de achicar la letra del campo
@@ -638,15 +657,13 @@
        <div class="user-menu-panel" id="userMenuPanel">
          <p class="um-username" id="umUsername"></p>
 
-         <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecFuente">Tamaño de letra <span class="um-chevron" aria-hidden="true">›</span></button>
-         <div class="um-section-body" id="umSecFuente" hidden>
-           <div class="um-fontsize-row">
-             <button class="um-btn" id="umFontDecBtn" type="button" aria-label="Achicar la letra">A-</button>
-             <span class="um-fontsize-value" id="umFontSizeValue">100%</span>
-             <button class="um-btn" id="umFontIncBtn" type="button" aria-label="Agrandar la letra">A+</button>
-           </div>
-           <p class="um-hint">Cambia el tamaño de la letra en toda la app — se recuerda la próxima vez que entres.</p>
-         </div>
+         <!-- Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe):
+              menú de Cuenta simplificado a 3 secciones de primer nivel
+              (Perfiles, Perfil, Opciones avanzadas) + Cerrar sesión, en vez
+              de 10 — Cambiar clave y Zona de riesgo pasan a vivir DENTRO de
+              Perfil (es lo mismo que "todo lo que es mío"), y lo que se usa
+              poco (Voz, Tamaño de letra, Tu copia, Plan, Recordatorios)
+              queda un nivel más adentro, en Opciones avanzadas. -->
 
          <!-- BACKLOG #12: subperfiles — varias bitácoras (ej. la de tu papá,
               la de tu mamá) administradas desde este mismo login, estilo
@@ -662,12 +679,6 @@
            <button class="um-btn" id="umCrearSubperfilBtn" type="button">+ Agregar bitácora de otra persona</button>
            <p class="um-msg" id="umPerfilesMsg" role="status" aria-live="polite" aria-atomic="true"></p>
            <p class="um-hint">La persona que administras no necesita usuario ni clave — le compartes un enlace permanente para que cuente sus propias historias, sin crear cuenta.</p>
-         </div>
-
-         <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecVoz">Voz <span class="um-chevron" aria-hidden="true">›</span></button>
-         <div class="um-section-body" id="umSecVoz" hidden>
-           <select id="voiceSelect" aria-label="Elegir voz"></select>
-           <p class="um-hint">Elige qué voz usa la entrevistadora para hablarte.</p>
          </div>
 
          <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecPerfil">Perfil <span class="um-chevron" aria-hidden="true">›</span></button>
@@ -688,84 +699,104 @@
            <p class="um-hint">Para que la entrevistadora entienda mejor el contexto de tu edad al charlar — es opcional.</p>
            <button class="um-btn" id="umProfileSaveBtn" type="button">Guardar perfil</button>
            <p class="um-msg" id="umProfileMsg" role="status" aria-live="polite" aria-atomic="true"></p>
-         </div>
-
-         <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecClave">Cambiar clave <span class="um-chevron" aria-hidden="true">›</span></button>
-         <div class="um-section-body" id="umSecClave" hidden>
-           <input type="password" id="umCurrentPassword" placeholder="Clave actual" autocomplete="current-password" aria-label="Clave actual">
-           <input type="password" id="umNewPassword" placeholder="Clave nueva" autocomplete="new-password" aria-label="Clave nueva">
-           <button class="um-btn" id="umChangePasswordBtn" type="button">Cambiar clave</button>
-           <p class="um-msg" id="umPasswordMsg" role="status" aria-live="polite" aria-atomic="true"></p>
-         </div>
-
-         <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecCopia">Tu copia <span class="um-chevron" aria-hidden="true">›</span></button>
-         <div class="um-section-body" id="umSecCopia" hidden>
-           <a class="um-btn um-plain" id="umExportLink" href="/api/export" download>⬇️ Descargar mi historia</a>
-           <p class="um-hint">Un archivo .zip con todas tus historias, aportes de tu círculo, árbol genealógico y capítulos — para que tengas tu propia copia, aparte de esta app.</p>
-         </div>
-
-         <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecPlan">Plan <span class="um-chevron" aria-hidden="true">›</span></button>
-         <div class="um-section-body" id="umSecPlan" hidden>
-           <p class="um-msg" id="umPlanEstado">Cargando…</p>
-           <div class="pc-cb458930" id="umPlanOpciones">
-             <button class="um-btn" id="umPlanPersonalBtn" type="button">Legado personal — $399.000/año</button>
-             <button class="um-btn" id="umPlanFamiliarBtn" type="button">Legado familiar — $649.000/año</button>
-             <button class="um-btn um-plain" id="umPlanRegalarBtn" type="button" aria-expanded="false" aria-controls="umRegaloDetalles">🎁 Comprar un regalo para otra persona — $449.000</button>
-             <p class="um-hint">Te lleva a una página de pago segura de Wava — tarjeta, Nequi, Daviplata o Bre-B.</p>
-           </div>
-           <div id="umRegaloDetalles" hidden>
-             <label class="um-field-label" for="umRegaloFecha">¿Cuándo quieres que llegue el código? (opcional)</label>
-             <input type="date" id="umRegaloFecha" aria-label="Fecha para recibir el código del regalo">
-             <p class="um-hint">Si lo dejas vacío, te llega por correo ya mismo, apenas se confirme el pago.</p>
-             <label class="um-field-label" for="umRegaloNota">Un mensaje para acompañarlo (opcional)</label>
-             <textarea id="umRegaloNota" maxlength="300" rows="3" placeholder="Ej: Para que sigas contando tus historias, papá..."></textarea>
-             <button class="um-btn" id="umRegaloConfirmarBtn" type="button">Continuar al pago →</button>
-           </div>
-           <p class="um-msg" id="umPlanMsg" role="status" aria-live="polite" aria-atomic="true"></p>
 
            <hr>
-           <p class="um-hint">¿Te regalaron una bitácora? Canjea el código acá — se activa en TU cuenta, no en la de quien te lo regaló.</p>
-           <div class="um-fontsize-row">
-             <input class="pc-39ddb588" type="text" id="umRegaloCodigo" placeholder="Código de regalo" maxlength="8" aria-label="Código de regalo">
-             <button class="um-btn" id="umRegaloCanjearBtn" type="button">Canjear</button>
+           <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecClave">Cambiar clave <span class="um-chevron" aria-hidden="true">›</span></button>
+           <div class="um-section-body" id="umSecClave" hidden>
+             <input type="password" id="umCurrentPassword" placeholder="Clave actual" autocomplete="current-password" aria-label="Clave actual">
+             <input type="password" id="umNewPassword" placeholder="Clave nueva" autocomplete="new-password" aria-label="Clave nueva">
+             <button class="um-btn" id="umChangePasswordBtn" type="button">Cambiar clave</button>
+             <p class="um-msg" id="umPasswordMsg" role="status" aria-live="polite" aria-atomic="true"></p>
            </div>
-           <p class="um-msg" id="umRegaloMsg" role="status" aria-live="polite" aria-atomic="true"></p>
+
+           <button type="button" class="um-section-toggle um-section-toggle-warn" aria-expanded="false" aria-controls="umSecRiesgo">Zona de riesgo <span class="um-chevron" aria-hidden="true">›</span></button>
+           <div class="um-section-body" id="umSecRiesgo" hidden>
+             <div class="danger-zone">
+               <button class="um-btn um-plain um-warn" id="umResetToggle" type="button">🔄 Reiniciar mi bitácora</button>
+               <div class="pc-1f5ad18c" id="umResetRow">
+                 <input type="password" id="umResetPassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para reiniciar la bitácora">
+                 <button class="um-btn um-danger" id="umResetConfirm" type="button">Reiniciar bitácora</button>
+                 <p class="um-msg um-error" id="umResetError" role="alert"></p>
+               </div>
+               <button class="um-btn um-plain um-warn" id="umDeleteToggle" type="button">⚠️ Borrar mi cuenta permanentemente</button>
+               <div class="pc-1f5ad18c" id="umDeleteRow">
+                 <input type="password" id="umDeletePassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para borrar la cuenta">
+                 <button class="um-btn um-danger" id="umDeleteConfirm" type="button">Borrar cuenta</button>
+                 <p class="um-msg um-error" id="umDeleteError" role="alert"></p>
+               </div>
+             </div>
+           </div>
          </div>
 
-         <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecRecordatorios">Recordatorios <span class="um-chevron" aria-hidden="true">›</span></button>
-         <div class="um-section-body" id="umSecRecordatorios" hidden>
-           <label class="um-hint pc-5d029f6b">
-             <input type="checkbox" id="umRecordatoriosActivos"> Avisarme por correo si hace un tiempo que no charlamos
-           </label>
-           <select id="umRecordatoriosFrecuencia" aria-label="Cada cuánto avisar">
-             <option value="7">Cada semana</option>
-             <option value="14">Cada 2 semanas</option>
-             <option value="30">Cada mes</option>
-           </select>
-           <button class="um-btn" id="umRecordatoriosGuardar" type="button">Guardar</button>
-           <p class="um-msg" id="umRecordatoriosMsg" role="status" aria-live="polite" aria-atomic="true"></p>
+         <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecAvanzadas">Opciones avanzadas <span class="um-chevron" aria-hidden="true">›</span></button>
+         <div class="um-section-body" id="umSecAvanzadas" hidden>
+           <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecVoz">Voz <span class="um-chevron" aria-hidden="true">›</span></button>
+           <div class="um-section-body" id="umSecVoz" hidden>
+             <select id="voiceSelect" aria-label="Elegir voz"></select>
+             <p class="um-hint">Elige qué voz usa la entrevistadora para hablarte.</p>
+           </div>
+
+           <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecFuente">Tamaño de letra <span class="um-chevron" aria-hidden="true">›</span></button>
+           <div class="um-section-body" id="umSecFuente" hidden>
+             <div class="um-fontsize-row">
+               <button class="um-btn" id="umFontDecBtn" type="button" aria-label="Achicar la letra">A-</button>
+               <span class="um-fontsize-value" id="umFontSizeValue">100%</span>
+               <button class="um-btn" id="umFontIncBtn" type="button" aria-label="Agrandar la letra">A+</button>
+             </div>
+             <p class="um-hint">Cambia el tamaño de la letra en toda la app — se recuerda la próxima vez que entres.</p>
+           </div>
+
+           <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecCopia">Tu copia <span class="um-chevron" aria-hidden="true">›</span></button>
+           <div class="um-section-body" id="umSecCopia" hidden>
+             <a class="um-btn um-plain" id="umExportLink" href="/api/export" download>⬇️ Descargar mi historia</a>
+             <p class="um-hint">Un archivo .zip con todas tus historias, aportes de tu círculo, árbol genealógico y capítulos — para que tengas tu propia copia, aparte de esta app.</p>
+           </div>
+
+           <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecPlan">Plan <span class="um-chevron" aria-hidden="true">›</span></button>
+           <div class="um-section-body" id="umSecPlan" hidden>
+             <p class="um-msg" id="umPlanEstado">Cargando…</p>
+             <div class="pc-cb458930" id="umPlanOpciones">
+               <button class="um-btn" id="umPlanPersonalBtn" type="button">Legado personal — $399.000/año</button>
+               <button class="um-btn" id="umPlanFamiliarBtn" type="button">Legado familiar — $649.000/año</button>
+               <button class="um-btn um-plain" id="umPlanRegalarBtn" type="button" aria-expanded="false" aria-controls="umRegaloDetalles">🎁 Comprar un regalo para otra persona — $449.000</button>
+               <p class="um-hint">Te lleva a una página de pago segura de Wava — tarjeta, Nequi, Daviplata o Bre-B.</p>
+             </div>
+             <div id="umRegaloDetalles" hidden>
+               <label class="um-field-label" for="umRegaloFecha">¿Cuándo quieres que llegue el código? (opcional)</label>
+               <input type="date" id="umRegaloFecha" aria-label="Fecha para recibir el código del regalo">
+               <p class="um-hint">Si lo dejas vacío, te llega por correo ya mismo, apenas se confirme el pago.</p>
+               <label class="um-field-label" for="umRegaloNota">Un mensaje para acompañarlo (opcional)</label>
+               <textarea id="umRegaloNota" maxlength="300" rows="3" placeholder="Ej: Para que sigas contando tus historias, papá..."></textarea>
+               <button class="um-btn" id="umRegaloConfirmarBtn" type="button">Continuar al pago →</button>
+             </div>
+             <p class="um-msg" id="umPlanMsg" role="status" aria-live="polite" aria-atomic="true"></p>
+
+             <hr>
+             <p class="um-hint">¿Te regalaron una bitácora? Canjea el código acá — se activa en TU cuenta, no en la de quien te lo regaló.</p>
+             <div class="um-fontsize-row">
+               <input class="pc-39ddb588" type="text" id="umRegaloCodigo" placeholder="Código de regalo" maxlength="8" aria-label="Código de regalo">
+               <button class="um-btn" id="umRegaloCanjearBtn" type="button">Canjear</button>
+             </div>
+             <p class="um-msg" id="umRegaloMsg" role="status" aria-live="polite" aria-atomic="true"></p>
+           </div>
+
+           <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecRecordatorios">Recordatorios <span class="um-chevron" aria-hidden="true">›</span></button>
+           <div class="um-section-body" id="umSecRecordatorios" hidden>
+             <label class="um-hint pc-5d029f6b">
+               <input type="checkbox" id="umRecordatoriosActivos"> Avisarme por correo si hace un tiempo que no charlamos
+             </label>
+             <select id="umRecordatoriosFrecuencia" aria-label="Cada cuánto avisar">
+               <option value="7">Cada semana</option>
+               <option value="14">Cada 2 semanas</option>
+               <option value="30">Cada mes</option>
+             </select>
+             <button class="um-btn" id="umRecordatoriosGuardar" type="button">Guardar</button>
+             <p class="um-msg" id="umRecordatoriosMsg" role="status" aria-live="polite" aria-atomic="true"></p>
+           </div>
          </div>
 
          <hr>
          <button class="um-btn um-plain" id="umLogoutBtn" type="button">Cerrar sesión</button>
-
-         <button type="button" class="um-section-toggle um-section-toggle-warn" aria-expanded="false" aria-controls="umSecRiesgo">Zona de riesgo <span class="um-chevron" aria-hidden="true">›</span></button>
-         <div class="um-section-body" id="umSecRiesgo" hidden>
-           <div class="danger-zone">
-             <button class="um-btn um-plain um-warn" id="umResetToggle" type="button">🔄 Reiniciar mi bitácora</button>
-             <div class="pc-1f5ad18c" id="umResetRow">
-               <input type="password" id="umResetPassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para reiniciar la bitácora">
-               <button class="um-btn um-danger" id="umResetConfirm" type="button">Reiniciar bitácora</button>
-               <p class="um-msg um-error" id="umResetError" role="alert"></p>
-             </div>
-             <button class="um-btn um-plain um-warn" id="umDeleteToggle" type="button">⚠️ Borrar mi cuenta permanentemente</button>
-             <div class="pc-1f5ad18c" id="umDeleteRow">
-               <input type="password" id="umDeletePassword" placeholder="Confirma tu clave" autocomplete="current-password" aria-label="Confirma tu clave para borrar la cuenta">
-               <button class="um-btn um-danger" id="umDeleteConfirm" type="button">Borrar cuenta</button>
-               <p class="um-msg um-error" id="umDeleteError" role="alert"></p>
-             </div>
-           </div>
-         </div>
        </div>
      </div>
    </div>
@@ -781,38 +812,6 @@
      <p class="sub" id="agregarInicioTexto"></p>
    </div>
    </header>
-   <!-- <nav>, no <div>: son los enlaces a las otras secciones de la
-        bitácora — sin esto un lector de pantalla no puede saltar
-        directamente a la navegación (o saltearla) como hace con el
-        contenido de <main>, más abajo. -->
-   <nav class="topbar" aria-label="Secciones de tu bitácora">
-     <div class="icon-nav-item">
-       <a class="icon-btn" href="/colaborar.html" title="Colaborar con otra historia" aria-label="Colaborar con otra historia">🤝</a>
-       <span class="icon-label" aria-hidden="true">Colaborar</span>
-     </div>
-     <div class="icon-nav-item">
-       <div class="icon-btn-wrap">
-         <a class="icon-btn" href="/colaboraciones.html" title="Aportes de tu círculo" aria-label="Aportes de tu círculo">💬</a>
-         <span class="icon-badge" id="aportesBadge"></span>
-       </div>
-       <span class="icon-label" aria-hidden="true">Aportes</span>
-     </div>
-     <div class="icon-nav-item">
-       <a class="icon-btn" href="/historias.html" title="Historias detectadas en la charla" aria-label="Historias detectadas en la charla">🗒️</a>
-       <span class="icon-label" aria-hidden="true">Historias</span>
-     </div>
-     <div class="icon-nav-item">
-       <div class="icon-btn-wrap">
-         <a class="icon-btn" href="/arbol.html" title="Árbol genealógico" aria-label="Árbol genealógico">🌳</a>
-         <span class="icon-badge" id="treeBadge"></span>
-       </div>
-       <span class="icon-label" aria-hidden="true">Árbol</span>
-     </div>
-     <div class="icon-nav-item">
-       <a class="icon-btn" href="/capitulos.html" title="Libro de la historia" aria-label="Libro de la historia">📖</a>
-       <span class="icon-label" aria-hidden="true">Libro</span>
-     </div>
-   </nav>
    <!-- <main>: antes el contenido central (la charla con el orbe, y todo lo
         de acá abajo) no estaba en ningún landmark — visualmente funciona
         igual, pero un lector de pantalla no tiene forma de saltar directo
@@ -844,9 +843,18 @@
           <button class="write-toggle" id="subperfilVolverBtn" type="button">Volver a mi bitácora</button>
         </div>
         <div class="orb-zone" id="orbZone">
-          <button class="orb" id="orb" data-state="idle" aria-label="Presionar para comenzar la charla">
-            <span id="orbLabel">Presiona<br>para hablar</span>
-          </button>
+          <!-- Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe):
+               "terminar la charla" deja de ser un link de texto en la lista
+               de abajo y pasa a ser un orbe chico y rojo, pegado abajo a la
+               derecha del orbe principal — se nota que es una acción aparte
+               (y de cuidado, por el color), sin competir en tamaño con el
+               botón que sí importa todo el tiempo. -->
+          <div class="orb-wrap">
+            <button class="orb" id="orb" data-state="idle" aria-label="Presionar para comenzar la charla">
+              <span id="orbLabel">Presiona<br>para hablar</span>
+            </button>
+            <button class="orb-mini-end" id="endBtn" type="button" aria-label="Terminar la charla">Terminar</button>
+          </div>
           <!-- role="status" aria-live="polite" aria-atomic="true": este texto
                cambia solo (Escuchando…/Transcribiendo…/pausa/errores) sin que
                la persona toque nada — sin esto, alguien con lector de
@@ -854,19 +862,25 @@
                porque el texto se REEMPLAZA entero cada vez (no se agrega),
                así que conviene anunciarlo completo y no solo la diferencia. -->
           <div class="state-label" id="stateLabel" role="status" aria-live="polite" aria-atomic="true"></div>
-          <button class="write-toggle end-toggle pc-93b8ea5b" id="endBtn" type="button">terminar la charla</button>
-          <button class="write-toggle" id="treeModeBtn" type="button">armar árbol genealógico</button>
+          <!-- Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe):
+               "armar árbol genealógico" solo aparece mientras el árbol todavía
+               no tiene ninguna base armada — apenas /api/tree devuelve al
+               menos una persona (aparte de "Yo"), se esconde solo. Arranca
+               oculto para no mostrarlo un instante de más mientras se
+               confirma el estado real (ver comprobarSiArbolTieneBase). -->
+          <button class="write-toggle" id="treeModeBtn" type="button" hidden>armar árbol genealógico</button>
           <button class="write-toggle pc-93b8ea5b" id="subirFotoBtn" type="button">📷 agregar una foto o video de esta historia</button>
           <input class="pc-93b8ea5b" type="file" id="subirFotoInput" accept="image/*,video/*">
           <div class="write-row" id="fotoCaptionRow">
             <input type="text" id="fotoCaptionInput" placeholder="¿Quién aparece? (opcional)" aria-label="Descripción de la foto o video">
             <button id="fotoCaptionSend" type="button">Subir</button>
           </div>
-          <!-- Oculto a pedido: el botón manual "prefiero escribir" ya no se
-               muestra. El cuadro para escribir (writeRow) sigue apareciendo
-               solo, automáticamente, cuando el micrófono falla o no se
-               entendió bien lo dicho — ver listenForAnswer/finalizeSpokenAnswer. -->
-          <button class="write-toggle pc-93b8ea5b" id="writeToggle" type="button">prefiero escribir</button>
+          <!-- Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe):
+               se quita el botón manual "prefiero escribir" — el cuadro para
+               escribir (writeRow) sigue apareciendo solo, automáticamente,
+               cuando el micrófono falla o no se entendió bien lo dicho (ver
+               listenForAnswer/finalizeSpokenAnswer) — eso NO se toca, sigue
+               siendo la única forma de responder si el micrófono no anda. -->
           <div class="write-row" id="writeRow">
             <input type="text" id="writeInput" placeholder="Escribe tu respuesta…" aria-label="Escribir respuesta">
             <button id="writeSend" type="button">Enviar</button>
@@ -877,8 +891,41 @@
     </div>
    </div>
 
+    <!-- Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe): la
+         barra de 5 íconos ya no va arriba de todo — se mueve acá, debajo
+         del orbe y arriba de "invitar a mi círculo", para que la pantalla
+         principal empiece solo con lo que hace falta para narrar. -->
+    <nav class="topbar" aria-label="Secciones de tu bitácora">
+      <div class="icon-nav-item">
+        <a class="icon-btn" href="/colaborar.html" title="Colaborar con otra historia" aria-label="Colaborar con otra historia">🤝</a>
+        <span class="icon-label" aria-hidden="true">Colaborar</span>
+      </div>
+      <div class="icon-nav-item">
+        <div class="icon-btn-wrap">
+          <a class="icon-btn" href="/colaboraciones.html" title="Aportes de tu círculo" aria-label="Aportes de tu círculo">💬</a>
+          <span class="icon-badge" id="aportesBadge"></span>
+        </div>
+        <span class="icon-label" aria-hidden="true">Aportes</span>
+      </div>
+      <div class="icon-nav-item">
+        <a class="icon-btn" href="/historias.html" title="Historias detectadas en la charla" aria-label="Historias detectadas en la charla">🗒️</a>
+        <span class="icon-label" aria-hidden="true">Historias</span>
+      </div>
+      <div class="icon-nav-item">
+        <div class="icon-btn-wrap">
+          <a class="icon-btn" href="/arbol.html" title="Árbol genealógico" aria-label="Árbol genealógico">🌳</a>
+          <span class="icon-badge" id="treeBadge"></span>
+        </div>
+        <span class="icon-label" aria-hidden="true">Árbol</span>
+      </div>
+      <div class="icon-nav-item">
+        <a class="icon-btn" href="/capitulos.html" title="Libro de la historia" aria-label="Libro de la historia">📖</a>
+        <span class="icon-label" aria-hidden="true">Libro</span>
+      </div>
+    </nav>
+
     <div class="logout-row">
-      <button class="invite-cta" id="inviteToggle" type="button" aria-expanded="false" aria-controls="inviteRow">Invitar familiares a colaborar</button>
+      <button class="invite-cta" id="inviteToggle" type="button" aria-expanded="false" aria-controls="inviteRow">Invitar a mi círculo a colaborar</button>
       <div class="pc-71494e54" id="inviteRow">
         <p class="sub pc-ccc12387">Comparte este código con familiares — se unen a tu bitácora, pueden escuchar y leer lo que ya guardaste, y también sumar sus propias historias. Nadie de fuera de tu familia puede entrar con este código.</p>
         <p class="pc-298fc7ae" id="inviteCode">…</p>
@@ -1955,7 +2002,6 @@
   const mediaMomento = document.getElementById('mediaMomento');
   const mediaMomentoImg = document.getElementById('mediaMomentoImg');
   const mediaMomentoVideo = document.getElementById('mediaMomentoVideo');
-  const writeToggle = document.getElementById('writeToggle');
   const writeRow = document.getElementById('writeRow');
   const writeInput = document.getElementById('writeInput');
   const writeSend = document.getElementById('writeSend');
@@ -2191,7 +2237,9 @@
     else if (!resting) orbHint = 'Presionar para pausar la charla';
     orb.setAttribute('aria-label', orbHint);
     endBtn.style.display = resting ? 'none' : 'inline';
-    treeModeBtn.style.display = resting ? 'inline' : 'none';
+    // arbolTieneBase === null: todavía no llegó la respuesta de
+    // comprobarSiArbolTieneBase() — no se muestra de más mientras tanto.
+    treeModeBtn.style.display = (resting && arbolTieneBase === false) ? 'inline' : 'none';
     subirFotoBtn.style.display = (resting || sessionMode === 'arbol') ? 'none' : 'inline';
   }
 
@@ -2715,10 +2763,13 @@
   async function finishSession() {
     setState('ended', '');
     orbLabel.innerHTML = 'Presiona<br>para otra charla';
-    writeToggle.style.display = 'none';
     releaseMic();
     releaseWakeLock();
     await saveSessionLog();
+    // Si esta charla era de armar árbol (o si de una charla normal salieron
+    // personas nuevas), "armar árbol genealógico" no debe volver a
+    // ofrecerse si ya hay una base — se vuelve a comprobar al terminar.
+    if (sessionMode === 'arbol') comprobarSiArbolTieneBase();
   }
 
   function startSession(mode) {
@@ -2781,16 +2832,8 @@
     }
   });
 
-  writeToggle.addEventListener('click', () => {
-    writeRow.classList.toggle('visible');
-    if (writeRow.classList.contains('visible')) writeInput.focus();
-  });
   writeSend.addEventListener('click', () => handleAnswer(writeInput.value));
   writeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleAnswer(writeInput.value); });
-
-  if (!window.MediaRecorder || !navigator.mediaDevices) {
-    writeToggle.textContent = 'escribir respuesta';
-  }
 
   // --- Agregar una foto o video a la historia que se está contando ---
   // Mismo mecanismo que en colaborar.html (subirFotoPendiente/mediaUrlsLocal).
@@ -2881,6 +2924,27 @@
     } catch (e) {}
   }
   cargarBadgeArbol();
+
+  // Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe): "armar
+  // árbol genealógico" solo tiene sentido ofrecerlo mientras el árbol
+  // todavía no tiene ninguna base — apenas hay al menos una persona
+  // guardada (por la charla de armar árbol, o porque salió mencionada en
+  // una charla normal), se esconde solo. arbolTieneBase arranca en null
+  // ("todavía no sabemos") para que setState() no lo muestre de más antes
+  // de tener la respuesta real del servidor.
+  let arbolTieneBase = null;
+  async function comprobarSiArbolTieneBase() {
+    try {
+      const resp = await fetch('/api/tree');
+      if (!resp.ok) { arbolTieneBase = false; return; }
+      const data = await resp.json();
+      arbolTieneBase = Array.isArray(data.people) && data.people.length > 0;
+    } catch (e) {
+      arbolTieneBase = false;
+    }
+    setState(state, stateLabel.textContent); // re-aplica la visibilidad ya con el dato real
+  }
+  comprobarSiArbolTieneBase();
 
   // Mismo mecanismo que cargarBadgeArbol() de arriba, para el ícono de
   // "Aportes" (💬) — avisa cuando un familiar terminó de contar una
