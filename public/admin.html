@@ -240,7 +240,7 @@
     return Number(n || 0).toLocaleString('es-CO');
   }
   function fmtUsd(n) {
-    return '$' + Number(n || 0).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+    return '$' + Number(n || 0).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
   function fmtBytes(n) {
     const b = Number(n || 0);
