@@ -46,14 +46,15 @@ check(`vercel.json tiene el header ${clavePolicy}`, !!(headers && headers[claveP
 const policyActual = headers && headers[clavePolicy];
 check('script-src en vercel.json trae exactamente los hashes que hoy dan las páginas de public/', !!policyActual && policyActual.includes(construirDirectiva('script-src', scriptHashes)));
 check('style-src en vercel.json trae exactamente los hashes que hoy dan las páginas de public/', !!policyActual && policyActual.includes(construirDirectiva('style-src', styleHashes)));
-// 18 páginas en total (ver PAGINAS en csp-hashes.js). Algunas comparten
-// el mismo <script>/<style> letra por letra con otra página (dedup en el
-// SET), otras (general-apple*.html, general-raiz.html, paletas/landing.html,
+// 19 páginas en total (ver PAGINAS en csp-hashes.js, admin.html sumado
+// 2026-09-09 para el panel de consumo). Algunas comparten el mismo
+// <script>/<style> letra por letra con otra página (dedup en el SET),
+// otras (general-apple*.html, general-raiz.html, paletas/landing.html,
 // nina.html, adulto.html) usan CSS externo y no suman hash de <style>; por
 // eso el ">="/"===" son sobre el conteo real de hoy, no una cuenta simple
 // de "una página, un hash".
 check(`hay ${scriptHashes.length} hashes de <script> (uno por bloque inline real, sin contar los que tienen src=)`, scriptHashes.length >= 9);
-check(`hay ${styleHashes.length} hashes de <style> (uno por página)`, styleHashes.length === 13);
+check(`hay ${styleHashes.length} hashes de <style> (uno por página)`, styleHashes.length === 14);
 
 console.log(`\n${pasaron} pasaron, ${fallaron} fallaron`);
 if (fallaron) {

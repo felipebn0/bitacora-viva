@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Panel de consumo — Los recuerdos de mis viejos</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/images/favicon-192.png">
+<link rel="apple-touch-icon" href="/images/favicon-192.png">
+<!-- Fuentes autoalojadas (mismo criterio que el resto de public/, ver el
+     comentario en capitulos.html): nunca fonts.googleapis.com. -->
+<link rel="stylesheet" href="/fonts/fonts.css">
+<script src="/font-size.js"></script>
+<style>
+  :root {
+    --bg: #F5EFE2;
+    --ink: #2B241C;
+    --ink-soft: #706551;
+    --gold: #93622A;
+    --gold-deep: #8F5A20;
+    --moss: #5B6B45;
+    --line: #E7DFCC;
+    --font-display: "Source Serif 4", Georgia, serif;
+    --font-body: "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif;
+
+    /* Paleta categórica (identidad, no magnitud) para el desglose por tipo
+       de uso — validada con el validador del skill dataviz (banda de
+       luminosidad, piso de croma, separación CVD adyacente >=8, piso a
+       ojo normal >=15, contraste >=3:1 sobre #FBF6EA) partiendo del tono
+       dorado ya usado en el sitio. El sitio no tiene modo oscuro todavía,
+       así que no hace falta una variante dark acá. */
+    --series-charla: #9C6420;
+    --series-resumen: #007D9C;
+    --series-arbol: #2E6B2E;
+    --series-capitulos: #B5502E;
+    --series-aportes: #8A4A9E;
+
+    /* Estado (fijo, nunca temático) para marcar quién superó el umbral de
+       gasto configurado — siempre va con ícono + texto, nunca solo color. */
+    --status-critical: #D03B3B;
+  }
+  * { box-sizing: border-box; }
+  :focus-visible { outline: 3px solid var(--gold-deep); outline-offset: 2px; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    padding: calc(28px + env(safe-area-inset-top)) calc(20px + env(safe-area-inset-right)) calc(60px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));
+  }
+  header { max-width: 1080px; margin: 0 auto 20px; display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  h1 { font-family: var(--font-display); font-size: 1.6rem; margin: 0; }
+  header p { color: var(--ink-soft); margin: 4px 0 0; font-size: 0.92rem; }
+  a.volver { color: var(--gold-deep); font-size: 0.9rem; text-decoration: none; border-bottom: 1px solid var(--gold-deep); display: inline-flex; align-items: center; min-height: 44px; padding: 10px 4px; }
+
+  .wrap { max-width: 1080px; margin: 0 auto; }
+
+  .empty { color: var(--ink-soft); font-style: italic; margin-top: 40px; }
+  .error-box { color: #a33; background: #FBF6EA; border: 1px solid var(--line); border-radius: 14px; padding: 18px 22px; margin-top: 20px; }
+
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    background: #FBF6EA;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 16px 18px;
+  }
+  .stat-card .label { font-size: 0.78rem; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.04em; margin: 0 0 6px; }
+  .stat-card .value { font-family: var(--font-display); font-size: 1.5rem; font-weight: 600; margin: 0; }
+  .stat-card .sub { font-size: 0.78rem; color: var(--ink-soft); margin: 4px 0 0; }
+  .delta { font-weight: 700; }
+  .delta.up-bad { color: var(--status-critical); }
+  .delta.down-good { color: var(--moss); }
+
+  .pricing-note {
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    background: #FBF6EA;
+    border: 1px dashed #CFBE9E;
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin-bottom: 22px;
+  }
+  .pricing-note code { background: rgba(0,0,0,0.05); border-radius: 4px; padding: 1px 4px; }
+
+  section.panel {
+    background: #FBF6EA;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 18px 20px;
+    margin-bottom: 22px;
+  }
+  section.panel h2 { font-family: var(--font-display); font-size: 1.1rem; margin: 0 0 4px; font-weight: 600; }
+  section.panel p.sub { color: var(--ink-soft); font-size: 0.85rem; margin: 0 0 16px; }
+
+  .kind-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .kind-row:last-child { margin-bottom: 0; }
+  .kind-swatch { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; }
+  .kind-swatch.k-charla, .kind-fill.k-charla { background: var(--series-charla); }
+  .kind-swatch.k-resumen, .kind-fill.k-resumen { background: var(--series-resumen); }
+  .kind-swatch.k-arbol, .kind-fill.k-arbol { background: var(--series-arbol); }
+  .kind-swatch.k-capitulos, .kind-fill.k-capitulos { background: var(--series-capitulos); }
+  .kind-swatch.k-aportes, .kind-fill.k-aportes { background: var(--series-aportes); }
+  .kind-swatch.k-otro, .kind-fill.k-otro { background: var(--ink-soft); }
+  .kind-label { width: 190px; flex: 0 0 auto; font-size: 0.86rem; }
+  .kind-bar-track { flex: 1; height: 10px; background: #EEE5D2; border-radius: 999px; overflow: hidden; min-width: 60px; }
+  .kind-fill { display: block; height: 100%; border-radius: 999px; width: 0; }
+  .kind-value { width: 130px; flex: 0 0 auto; text-align: right; font-size: 0.84rem; font-family: var(--font-display); font-weight: 600; }
+  .kind-calls { color: var(--ink-soft); font-weight: 400; font-family: var(--font-body); font-size: 0.76rem; }
+
+  .toolbar { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+  button.csv-btn {
+    border: 1px solid var(--gold-deep); background: #FBF6EA; color: var(--gold-deep);
+    border-radius: 999px; padding: 8px 16px; font-weight: 700; font-size: 0.82rem;
+    cursor: pointer; font-family: var(--font-body); min-height: 44px;
+  }
+  button.csv-btn:hover { background: rgba(201,138,60,0.08); }
+
+  .table-scroll {
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: #FBF6EA;
+  }
+  table { border-collapse: collapse; width: 100%; min-width: 980px; font-size: 0.88rem; }
+  thead th {
+    text-align: left;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--ink-soft);
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  thead th.sortable { cursor: pointer; user-select: none; }
+  thead th.sortable:hover { color: var(--ink); }
+  thead th .arrow { display: inline-block; width: 1em; opacity: 0.6; }
+  tbody td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: rgba(201,138,60,0.06); }
+  tbody tr.over-threshold { background: rgba(208,59,59,0.06); }
+  tbody tr.over-threshold:hover { background: rgba(208,59,59,0.1); }
+  .user-cell .name { font-weight: 700; }
+  .user-cell .sub { color: var(--ink-soft); font-size: 0.78rem; }
+  .tipo-badge {
+    display: inline-block; font-size: 0.7rem; font-weight: 700; color: var(--ink-soft);
+    border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; margin-left: 6px;
+  }
+  .admin-badge {
+    display: inline-block; font-size: 0.7rem; font-weight: 700; color: var(--moss);
+    border: 1px solid var(--moss); border-radius: 999px; padding: 1px 8px; margin-left: 6px;
+  }
+  .alert-badge {
+    display: inline-flex; align-items: center; gap: 4px; font-size: 0.7rem; font-weight: 700;
+    color: var(--status-critical); border: 1px solid var(--status-critical); border-radius: 999px;
+    padding: 1px 8px; margin-left: 6px; white-space: nowrap;
+  }
+  .cost { font-family: var(--font-display); font-weight: 600; }
+  .cost-bar-wrap { display: flex; align-items: center; gap: 8px; }
+  .cost-bar-track { flex: 1; min-width: 70px; height: 8px; background: #EEE5D2; border-radius: 999px; overflow: hidden; }
+  .cost-bar-fill { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--gold), var(--gold-deep)); }
+  .muted { color: var(--ink-soft); }
+  .num-sub { font-size: 0.76rem; color: var(--ink-soft); }
+
+  footer.note { max-width: 1080px; margin: 24px auto 0; color: var(--ink-soft); font-size: 0.8rem; }
+</style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Panel de consumo</h1>
+      <p>Uso y costo estimado por perfil — Claude, voz y espacio en la base de datos.</p>
+    </div>
+    <a class="volver" href="/app.html">← volver a la bitácora</a>
+  </header>
+  <div class="wrap">
+    <div id="content">
+      <p class="empty">Cargando…</p>
+    </div>
+  </div>
+  <footer class="note" id="footNote" hidden></footer>
+
+<script>
+(function () {
+  const content = document.getElementById('content');
+  const footNote = document.getElementById('footNote');
+
+  const KIND_CLASS = {
+    'Charla': 'k-charla',
+    'Resumen automático': 'k-resumen',
+    'Árbol genealógico': 'k-arbol',
+    'Capítulos': 'k-capitulos',
+    'Aportes de la familia': 'k-aportes',
+  };
+
+  function fmtNumber(n) {
+    return Number(n || 0).toLocaleString('es-CO');
+  }
+  function fmtUsd(n) {
+    return '$' + Number(n || 0).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+  }
+  function fmtBytes(n) {
+    const b = Number(n || 0);
+    if (b < 1024) return b + ' B';
+    if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
+    return (b / (1024 * 1024)).toFixed(2) + ' MB';
+  }
+  function fmtSeconds(n) {
+    const s = Math.round(Number(n || 0));
+    const m = Math.floor(s / 60);
+    const rest = s % 60;
+    if (m === 0) return s + ' s';
+    return m + ' min ' + rest + ' s';
+  }
+  function fmtDate(iso) {
+    if (!iso) return '—';
+    try {
+      return new Date(iso).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' });
+    } catch (e) {
+      return '—';
+    }
+  }
+  function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s == null ? '' : String(s);
+    return d.innerHTML;
+  }
+  // Delta vs. el período anterior — signo, y color según si subir es malo
+  // (siempre lo es acá: es costo). prev=0 y curr=0 no dice nada; prev=0 y
+  // curr>0 es "recién empezó a gastar", no un porcentaje con sentido.
+  function deltaHtml(curr, prev) {
+    if (!prev && !curr) return '';
+    if (!prev) return '<span class="delta up-bad">▲ nuevo este mes</span>';
+    const pct = ((curr - prev) / prev) * 100;
+    if (Math.abs(pct) < 1) return '<span class="muted">≈ igual que el mes anterior</span>';
+    const up = pct > 0;
+    return `<span class="delta ${up ? 'up-bad' : 'down-good'}">${up ? '▲' : '▼'} ${Math.abs(pct).toFixed(0)}% vs. mes anterior</span>`;
+  }
+
+  // Los anchos de barra son datos en vivo (no un valor fijo que se pueda
+  // convertir a una clase pc-XXXXXXXX como el resto del sitio) — en vez de
+  // escribir style="width:...%" en el HTML (el smoke test de CSP lo
+  // detectaría como un atributo style inline real, aunque viva dentro de
+  // un template de JS), cada barra se marca con data-pct y el ancho se
+  // aplica acá, después de insertar el HTML, vía el DOM directo — nunca
+  // queda un texto "style=" en el archivo.
+  function aplicarAnchosDeBarra(root) {
+    root.querySelectorAll('[data-pct]').forEach((el) => {
+      el.style.width = el.getAttribute('data-pct') + '%';
+    });
+  }
+
+  function showUnauthorized() {
+    content.innerHTML = `
+      <div class="error-box">
+        No tenés acceso a este panel. Es solo para las cuentas marcadas como administradoras.
+        <br><a class="volver" href="/app.html">Volver a la bitácora</a>
+      </div>`;
+  }
+
+  function showError(msg) {
+    content.innerHTML = `<div class="error-box">${esc(msg || 'No se pudo cargar el reporte.')}</div>`;
+  }
+
+  // Columnas de la tabla: clave de orden + de dónde sale el valor. Vive
+  // acá (no repetido en el HTML) para que el mismo array maneje el thead
+  // clickeable y el tbody.
+  const COLUMNS = [
+    { key: 'perfil', label: 'Perfil', sortKey: (p) => (p.nombre || '').toLowerCase() },
+    { key: 'claude', label: 'Claude', sortKey: (p) => p.claude.costUsd },
+    { key: 'voz', label: 'Voz (TTS)', sortKey: (p) => p.elevenlabsTts.costUsd },
+    { key: 'tiempo', label: 'Tiempo hablado', sortKey: (p) => p.talkTime.seconds },
+    { key: 'db', label: 'En base de datos', sortKey: (p) => p.db.totalBytes },
+    { key: 'total', label: 'Costo total estimado', sortKey: (p) => p.totalCostUsd },
+  ];
+
+  let sortState = { key: 'total', dir: 'desc' };
+
+  function sortedProfiles(profiles) {
+    const col = COLUMNS.find((c) => c.key === sortState.key) || COLUMNS[COLUMNS.length - 1];
+    const dir = sortState.dir === 'asc' ? 1 : -1;
+    return [...profiles].sort((a, b) => {
+      const va = col.sortKey(a);
+      const vb = col.sortKey(b);
+      if (va < vb) return -1 * dir;
+      if (va > vb) return 1 * dir;
+      return 0;
+    });
+  }
+
+  function csvEscape(v) {
+    const s = String(v == null ? '' : v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+
+  function downloadCsv(profiles) {
+    const headers = ['perfil', 'tipo', 'correo', 'perfil_desde', 'claude_usd', 'claude_tokens_in', 'claude_tokens_out',
+      'voz_usd', 'voz_caracteres', 'tiempo_hablado_seg', 'db_bytes', 'costo_total_usd'];
+    const lines = [headers.join(',')];
+    profiles.forEach((p) => {
+      lines.push([
+        p.nombre, p.tipo, p.email || '', p.createdAt || '',
+        p.claude.costUsd.toFixed(4), p.claude.inputTokens, p.claude.outputTokens,
+        p.elevenlabsTts.costUsd.toFixed(4), p.elevenlabsTts.characters,
+        Math.round(p.talkTime.seconds), p.db.totalBytes, p.totalCostUsd.toFixed(4),
+      ].map(csvEscape).join(','));
+    });
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'consumo-' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function render(data) {
+    const profiles = data.profiles || [];
+    if (!profiles.length) {
+      content.innerHTML = '<p class="empty">Todavía no hay cuentas registradas.</p>';
+      return;
+    }
+
+    const threshold = data.pricing.alertThresholdUsd30d;
+    const totalCost30d = profiles.reduce((acc, p) => acc + (p.totalCostUsd30d || 0), 0);
+    const totalCostPrev30d = profiles.reduce((acc, p) => acc + (p.totalCostUsdPrev30d || 0), 0);
+    const totalCostAll = profiles.reduce((acc, p) => acc + (p.totalCostUsd || 0), 0);
+    const totalTokens30d = profiles.reduce((acc, p) => acc + (p.claude.inputTokens30d || 0) + (p.claude.outputTokens30d || 0), 0);
+    const totalTalk30d = profiles.reduce((acc, p) => acc + (p.talkTime.seconds30d || 0), 0);
+    const maxCost = Math.max(1, ...profiles.map((p) => p.totalCostUsd || 0));
+
+    const statsHtml = `
+      <div class="stats-row">
+        <div class="stat-card">
+          <p class="label">Costo estimado · últimos 30 días</p>
+          <p class="value">${fmtUsd(totalCost30d)}</p>
+          <p class="sub">${deltaHtml(totalCost30d, totalCostPrev30d) || 'Claude + voz, todos los perfiles'}</p>
+        </div>
+        <div class="stat-card">
+          <p class="label">Costo estimado · total histórico</p>
+          <p class="value">${fmtUsd(totalCostAll)}</p>
+          <p class="sub">Desde que se activó la medición</p>
+        </div>
+        <div class="stat-card">
+          <p class="label">Tokens Claude · 30 días</p>
+          <p class="value">${fmtNumber(totalTokens30d)}</p>
+          <p class="sub">entrada + salida, todos los perfiles</p>
+        </div>
+        <div class="stat-card">
+          <p class="label">Tiempo hablado · 30 días</p>
+          <p class="value">${fmtSeconds(totalTalk30d)}</p>
+          <p class="sub">todos los perfiles</p>
+        </div>
+      </div>`;
+
+    const pricingHtml = `
+      <div class="pricing-note">
+        Los $ son un <strong>estimado</strong>, calculado con las tarifas configuradas en el servidor
+        (<code>ANTHROPIC_INPUT_PRICE_PER_1M</code>, <code>ANTHROPIC_OUTPUT_PRICE_PER_1M</code>,
+        <code>ANTHROPIC_CACHE_WRITE_PRICE_PER_1M</code>, <code>ANTHROPIC_CACHE_READ_PRICE_PER_1M</code>,
+        <code>ELEVENLABS_PRICE_PER_1K_CHARS</code>) — ahora mismo: Claude entrada ${fmtUsd(data.pricing.anthropicInputPer1M)}/1M tok,
+        salida ${fmtUsd(data.pricing.anthropicOutputPer1M)}/1M tok, voz ${fmtUsd(data.pricing.elevenTtsPer1kChars)}/1000 caracteres.
+        Ajustalas para que reflejen tu plan real. Los caracteres de Azure (si se usa) se cuentan pero no tienen tarifa cargada.
+        ${threshold != null
+          ? `Se resalta a quien supera <strong>${fmtUsd(threshold)}</strong> en 30 días (<code>ADMIN_ALERT_THRESHOLD_USD_30D</code>).`
+          : `No hay umbral de alerta configurado — definí <code>ADMIN_ALERT_THRESHOLD_USD_30D</code> para resaltar a quien se pase de un monto en 30 días.`}
+      </div>`;
+
+    const kinds = data.kindBreakdown || [];
+    const maxKindCost = Math.max(1, ...kinds.map((k) => k.costUsd));
+    const kindHtml = kinds.length
+      ? `
+        <section class="panel">
+          <h2>Costo por tipo de uso</h2>
+          <p class="sub">Qué funcionalidad de Claude sale más cara, sumando todos los perfiles — útil para saber dónde ajustar si hay que bajar costos.</p>
+          ${kinds.map((k) => {
+            const cls = KIND_CLASS[k.label] || 'k-otro';
+            const pct = Math.max(2, Math.round((k.costUsd / maxKindCost) * 100));
+            return `
+              <div class="kind-row">
+                <span class="kind-swatch ${cls}"></span>
+                <span class="kind-label">${esc(k.label)}</span>
+                <span class="kind-bar-track"><span class="kind-fill ${cls}" data-pct="${pct}"></span></span>
+                <span class="kind-value">${fmtUsd(k.costUsd)} <span class="kind-calls">(${fmtNumber(k.calls)})</span></span>
+              </div>`;
+          }).join('')}
+        </section>`
+      : '';
+
+    function renderTable() {
+      const sorted = sortedProfiles(profiles);
+      const theadHtml = COLUMNS.map((c) => {
+        const active = sortState.key === c.key;
+        const arrow = active ? (sortState.dir === 'asc' ? '▲' : '▼') : '↕';
+        return `<th class="sortable" data-key="${c.key}"><span class="arrow">${arrow}</span> ${esc(c.label)}</th>`;
+      }).join('');
+
+      const rowsHtml = sorted.map((p) => {
+        const barPct = Math.max(2, Math.round((p.totalCostUsd / maxCost) * 100));
+        const overThreshold = threshold != null && p.totalCostUsd30d > threshold;
+        const tipoLabel = p.tipo === 'subperfil' ? 'subperfil' : 'cuenta';
+        const contexto = p.tipo === 'subperfil'
+          ? `${p.duenoNombre ? 'de la cuenta de ' + esc(p.duenoNombre) : 'subperfil'}${p.relacion ? ' · ' + esc(p.relacion) : ''}${p.archivado ? ' · archivado' : ''}`
+          : (p.email || p.username || '');
+        return `
+          <tr class="${overThreshold ? 'over-threshold' : ''}">
+            <td class="user-cell">
+              <div class="name">${esc(p.nombre)}<span class="tipo-badge">${tipoLabel}</span>${p.isAdmin ? '<span class="admin-badge">admin</span>' : ''}${overThreshold ? `<span class="alert-badge">⚠ supera ${fmtUsd(threshold)}/30d</span>` : ''}</div>
+              <div class="sub">${contexto}</div>
+              <div class="sub">desde ${fmtDate(p.createdAt)} · ${fmtNumber(p.db.sessionsCount)} charla(s)</div>
+            </td>
+            <td>
+              <div class="cost">${fmtUsd(p.claude.costUsd)}</div>
+              <div class="num-sub">${fmtNumber(p.claude.inputTokens)} in / ${fmtNumber(p.claude.outputTokens)} out</div>
+              <div class="num-sub muted">30d: ${fmtUsd(p.claude.costUsd30d)}</div>
+            </td>
+            <td>
+              <div class="cost">${fmtUsd(p.elevenlabsTts.costUsd)}</div>
+              <div class="num-sub">${fmtNumber(p.elevenlabsTts.characters)} caracteres</div>
+              <div class="num-sub muted">30d: ${fmtUsd(p.elevenlabsTts.costUsd30d)}</div>
+            </td>
+            <td>
+              <div>${fmtSeconds(p.talkTime.seconds)}</div>
+              <div class="num-sub muted">30d: ${fmtSeconds(p.talkTime.seconds30d)}</div>
+            </td>
+            <td>
+              <div>${fmtBytes(p.db.totalBytes)}</div>
+              <div class="num-sub">${fmtNumber(p.db.mediaFiles)} foto(s)/video(s) en Blob</div>
+            </td>
+            <td>
+              <div class="cost-bar-wrap">
+                <div class="cost-bar-track"><div class="cost-bar-fill" data-pct="${barPct}"></div></div>
+                <span class="cost">${fmtUsd(p.totalCostUsd)}</span>
+              </div>
+              <div class="num-sub muted">${deltaHtml(p.totalCostUsd30d, p.totalCostUsdPrev30d)}</div>
+            </td>
+          </tr>`;
+      }).join('');
+
+      const tableEl = document.getElementById('usageTable');
+      tableEl.innerHTML = `<thead><tr>${theadHtml}</tr></thead><tbody>${rowsHtml}</tbody>`;
+      aplicarAnchosDeBarra(tableEl);
+      tableEl.querySelectorAll('th.sortable').forEach((th) => {
+        th.addEventListener('click', () => {
+          const key = th.getAttribute('data-key');
+          if (sortState.key === key) {
+            sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+          } else {
+            sortState = { key, dir: 'desc' };
+          }
+          renderTable();
+        });
+      });
+    }
+
+    content.innerHTML = `
+      ${statsHtml}
+      ${pricingHtml}
+      ${kindHtml}
+      <div class="toolbar">
+        <button class="csv-btn" id="csvBtn" type="button">Exportar CSV</button>
+      </div>
+      <div class="table-scroll">
+        <table id="usageTable"></table>
+      </div>`;
+
+    aplicarAnchosDeBarra(content);
+    renderTable();
+    document.getElementById('csvBtn').addEventListener('click', () => downloadCsv(sortedProfiles(profiles)));
+
+    footNote.hidden = false;
+    footNote.textContent = 'Generado ' + new Date(data.generatedAt).toLocaleString('es-CO') +
+      '. El consumo de Claude/voz solo cuenta desde que se activó esta medición; el tamaño en la base de datos incluye todo lo histórico.';
+  }
+
+  fetch('/api/me')
+    .then((resp) => (resp.ok ? resp.json() : Promise.reject('auth')))
+    .then((me) => {
+      if (!me.isAdmin) return Promise.reject('forbidden');
+      return fetch('/api/admin/usage');
+    })
+    .then((resp) => {
+      if (resp.status === 403) return Promise.reject('forbidden');
+      if (!resp.ok) return Promise.reject('error');
+      return resp.json();
+    })
+    .then(render)
+    .catch((err) => {
+      if (err === 'forbidden' || err === 'auth') showUnauthorized();
+      else showError('No se pudo cargar el reporte de consumo.');
+    });
+})();
+</script>
+</body>
+</html>

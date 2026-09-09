@@ -2546,9 +2546,15 @@
 
   async function transcribeAudio(blob) {
     try {
+      // lastRecordingDurationMs ya se calcula más arriba (ver
+      // stopRecordingAudio) para la lógica de "respuesta demasiado corta" —
+      // se manda también al servidor para el "tiempo hablando" del panel
+      // de consumo, sin cambiar nada de esa lógica existente.
+      const headers = { 'Content-Type': blob.type || 'audio/webm' };
+      if (lastRecordingDurationMs > 0) headers['X-Audio-Duration-Ms'] = String(Math.round(lastRecordingDurationMs));
       const resp = await fetch('/api/transcribe', {
         method: 'POST',
-        headers: { 'Content-Type': blob.type || 'audio/webm' },
+        headers,
         body: blob,
       });
       if (!resp.ok) return '';
