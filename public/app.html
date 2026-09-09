@@ -835,6 +835,13 @@
               en vez de desplegar contenido acá adentro. -->
          <a class="um-section-toggle" id="umPerfilesLink" href="/perfiles.html">Perfiles <span class="um-chevron" aria-hidden="true">›</span></a>
 
+         <!-- Panel de consumo (item pedido por Felipe, 2026-09-09): solo
+              para cuentas is_admin (ver /api/admin/usage en server.js) —
+              oculto por defecto, se muestra en showApp() si data.isAdmin.
+              Mismo patrón visual que "Perfiles": lleva directo a su propia
+              pantalla en vez de desplegar contenido acá adentro. -->
+         <a class="um-section-toggle" id="umAdminLink" href="/admin.html" hidden>Panel de consumo <span class="um-chevron" aria-hidden="true">›</span></a>
+
          <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecAvanzadas">Opciones avanzadas <span class="um-chevron" aria-hidden="true">›</span></button>
          <!-- Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe):
               "um-nested-group" le da un fondo propio a todo lo de acá
@@ -1086,6 +1093,7 @@
   const loginError = document.getElementById('loginError');
   const greetingName = document.getElementById('greetingName');
   const umUsername = document.getElementById('umUsername');
+  const umAdminLink = document.getElementById('umAdminLink');
   const umProfileName = document.getElementById('umProfileName');
   const umProfileEmail = document.getElementById('umProfileEmail');
   const umProfileNameFull = document.getElementById('umProfileNameFull');
@@ -1115,7 +1123,7 @@
   umProfileName.addEventListener('input', () => mostrarCompletoSiNoCabe(umProfileName, umProfileNameFull));
   umProfileEmail.addEventListener('input', () => mostrarCompletoSiNoCabe(umProfileEmail, umProfileEmailFull));
 
-  function showApp(username, name, email, fechaNacimiento) {
+  function showApp(username, name, email, fechaNacimiento, isAdmin) {
     checkingScreen.style.display = 'none';
     loginScreen.style.display = 'none';
     appContent.style.display = 'flex';
@@ -1126,6 +1134,7 @@
     // ahora que el correo se puede editar hace falta dejar claro cuál es
     // cuál, para no dar a entender que cambiar uno cambia el otro.
     umUsername.textContent = username ? `Usuario: ${username}` : '';
+    if (umAdminLink) umAdminLink.hidden = !isAdmin;
     umProfileName.value = name || '';
     umProfileEmail.value = email || '';
     umProfileBirthdate.value = fechaNacimiento || '';
@@ -2038,7 +2047,7 @@
       // subperfil (isNarradorLink) es un invitado DISTINTO: sí se queda
       // acá, narrando su propia bitácora (ver aplicarSesionSubperfil).
       if (data.isCollaborator) { window.location.href = '/colaborar.html'; return; }
-      showApp(data.username, data.name, data.email, data.fechaNacimiento);
+      showApp(data.username, data.name, data.email, data.fechaNacimiento, data.isAdmin);
       aplicarSesionSubperfil(data);
     })
     .catch(() => {
