@@ -158,25 +158,31 @@
     border-radius: 16px;
     background: #FBF6EA;
   }
-  table { border-collapse: collapse; width: 100%; min-width: 1280px; font-size: 0.88rem; }
+  /* table-layout:fixed + columnas por % (ver COLUMNS.width en el JS, vía
+     <colgroup>) en vez de un min-width fijo: antes la tabla obligaba a
+     scrollear a la derecha en cualquier pantalla de menos de 1280px de
+     ancho útil — con columnas por porcentaje, el texto se envuelve
+     (white-space normal, no nowrap) y todo entra en el ancho real
+     disponible, sin importar la pantalla. */
+  table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 0.84rem; }
   thead th {
     text-align: left;
-    font-size: 0.72rem;
+    font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--ink-soft);
-    padding: 12px 14px;
+    padding: 12px 10px;
     border-bottom: 1px solid var(--line);
-    white-space: nowrap;
   }
   thead th.sortable { cursor: pointer; user-select: none; }
   thead th.sortable:hover { color: var(--ink); }
   thead th .arrow { display: inline-block; width: 1em; opacity: 0.6; }
   tbody td {
-    padding: 12px 14px;
+    padding: 12px 10px;
     border-bottom: 1px solid var(--line);
     vertical-align: top;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: break-word;
   }
   tbody tr:last-child td { border-bottom: none; }
   tbody tr:hover { background: rgba(201,138,60,0.06); }
@@ -338,13 +344,16 @@
   // Columnas de la tabla: clave de orden + de dónde sale el valor. Vive
   // acá (no repetido en el HTML) para que el mismo array maneje el thead
   // clickeable y el tbody.
+  // "width" alimenta el <colgroup> de abajo (deben sumar 100) — con
+  // table-layout:fixed, esto es lo que reparte el ancho real disponible
+  // entre columnas en vez de que cada una crezca según su contenido.
   const COLUMNS = [
-    { key: 'perfil', label: 'Perfil', sortKey: (p) => (p.nombre || '').toLowerCase() },
-    { key: 'claude', label: 'Claude', sortKey: (p) => p.claude.costUsdRange },
-    { key: 'tts', label: 'Voz IA (TTS)', sortKey: (p) => p.elevenlabsTts.costUsdRange },
-    { key: 'stt', label: 'Transcripción (STT)', sortKey: (p) => p.elevenlabsStt.costUsdRange },
-    { key: 'db', label: 'En base de datos', sortKey: (p) => p.db.totalBytes },
-    { key: 'total', label: 'Costo total estimado', sortKey: (p) => p.totalCostUsdRange },
+    { key: 'perfil', label: 'Perfil', width: 22, sortKey: (p) => (p.nombre || '').toLowerCase() },
+    { key: 'claude', label: 'Claude', width: 15, sortKey: (p) => p.claude.costUsdRange },
+    { key: 'tts', label: 'Voz IA (TTS)', width: 13, sortKey: (p) => p.elevenlabsTts.costUsdRange },
+    { key: 'stt', label: 'Transcripción (STT)', width: 15, sortKey: (p) => p.elevenlabsStt.costUsdRange },
+    { key: 'db', label: 'En base de datos', width: 20, sortKey: (p) => p.db.totalBytes },
+    { key: 'total', label: 'Costo total', width: 15, sortKey: (p) => p.totalCostUsdRange },
   ];
 
   let sortState = { key: 'total', dir: 'desc' };
@@ -552,8 +561,14 @@
           </tr>`;
       }).join('');
 
+      // data-pct, no style="width:...%" en el texto: mismo motivo que
+      // aplicarAnchosDeBarra más arriba (el smoke test de CSP busca
+      // style="..." como texto literal en el archivo, sin entender que
+      // esto es un template de JS armado en runtime) — aplicarAnchosDeBarra
+      // ya sabe leer data-pct en CUALQUIER elemento, <col> incluido.
+      const colgroupHtml = `<colgroup>${COLUMNS.map((c) => `<col data-pct="${c.width}">`).join('')}</colgroup>`;
       const tableEl = document.getElementById('usageTable');
-      tableEl.innerHTML = `<thead><tr>${theadHtml}</tr></thead><tbody>${rowsHtml}</tbody>`;
+      tableEl.innerHTML = `${colgroupHtml}<thead><tr>${theadHtml}</tr></thead><tbody>${rowsHtml}</tbody>`;
       aplicarAnchosDeBarra(tableEl);
       tableEl.querySelectorAll('th.sortable').forEach((th) => {
         th.addEventListener('click', () => {
