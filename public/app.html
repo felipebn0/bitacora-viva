@@ -178,7 +178,21 @@
     width: 56px; height: 56px; min-width: 44px; min-height: 44px;
     border-radius: 50%; border: 3px solid var(--bg); cursor: pointer;
     background: #a33; color: #fff; font-family: var(--font-body); font-weight: 700;
-    font-size: 0.68rem; line-height: 1.1; letter-spacing: 0.01em;
+    /* 0.68rem (el valor original) medía a lo ancho MÁS que el círculo ya
+       con "Tamaño de letra" en 140% (63px de texto contra ~50px de
+       interior útil, descontando el borde) — el texto no se recorta de
+       verdad, sino que sigue de largo por fuera del círculo rojo, sobre
+       el fondo de la página, donde no se distingue (reportado por Luca:
+       "Termina" se ve, la "r" no). Medido con Playwright contra la
+       fuente real (Atkinson Hyperlegible, negrita): a 0.48rem,
+       "Terminar" mide 44.6px a 140% y 31.9px a 100% — entra con margen
+       en los dos casos. overflow-wrap/word-break quedan además como red
+       de seguridad, no como solución principal: si algún día el texto
+       cambia a algo más largo, se parte en dos líneas en vez de volver a
+       desbordar en silencio. */
+    font-size: 0.48rem; line-height: 1.05; letter-spacing: 0;
+    padding: 2px; text-align: center;
+    overflow-wrap: break-word; word-break: break-word;
     box-shadow: 0 6px 16px -6px rgba(136,34,34,0.6);
   }
   .orb-mini-end:hover { background: #8f2b2b; }
