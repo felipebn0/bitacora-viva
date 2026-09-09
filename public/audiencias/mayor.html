@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<!-- Landing pensada para un adulto mayor (pedido de Felipe 2026-09-08,
+     "a tu criterio", olvidando el sistema de paletas anterior).
+     Decisiones de diseño, explicadas:
+     - Letra grande de entrada (19px) y control A-/A+ bien visible arriba
+       de todo -- no escondido en un menú.
+     - Atkinson Hyperlegible en TODO el texto: es la misma fuente que ya
+       usa el resto de la app, diseñada específicamente para que letras
+       parecidas (I/l, 6/8, etc.) no se confundan -- justo lo que más
+       ayuda a esta edad.
+     - Un solo camino: una sola pantalla, un solo botón grande, sin menú
+       de navegación ni FAQ larga que obligue a buscar información.
+     - Nada depende de hover ni de gestos -- todo es un botón grande para
+       tocar con el dedo.
+     - Contraste alto (tinta casi negra sobre crema) en vez de grises
+       medios -- ningún texto por debajo del contraste que ya exige el
+       resto de la app. -->
+<title>Los recuerdos de mis viejos — para contar tu historia</title>
+<meta name="description" content="Cuenta tu historia hablando, sin escribir nada. Tu familia la va a poder escuchar siempre.">
+<link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/images/favicon-192.png">
+<link rel="apple-touch-icon" href="/images/favicon-192.png">
+<link rel="stylesheet" href="/fonts/fonts.css">
+<style>
+  :root {
+    --bg: #F7F1E3;
+    --surface: #FFFFFF;
+    --ink: #211A10;
+    --ink-soft: #4A3F2E;
+    --gold: #8A5320;
+    --gold-deep: #6C3F16;
+    --border: #E3D6BC;
+    --font-body: "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif;
+    --font-display: "Source Serif 4", Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  :focus-visible { outline: 4px solid var(--gold-deep); outline-offset: 3px; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; min-height: 100vh; min-height: 100dvh;
+    background: var(--bg); color: var(--ink); font-family: var(--font-body);
+    font-size: 19px; line-height: 1.6;
+    padding: calc(20px + env(safe-area-inset-top)) calc(20px + env(safe-area-inset-right)) calc(48px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));
+  }
+  .wrap { max-width: 640px; margin: 0 auto; }
+
+  /* Control de tamaño de letra -- lo primero que se ve, no un ícono
+     chico escondido. Sube/baja el font-size del <html> entero. */
+  .letra-ctrl {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    background: var(--surface); border: 2px solid var(--border); border-radius: 999px;
+    padding: 8px; margin: 0 auto 28px; width: fit-content;
+  }
+  .letra-ctrl button {
+    min-width: 56px; min-height: 56px; border-radius: 50%; border: none;
+    background: var(--bg); color: var(--gold-deep); font-family: var(--font-body);
+    font-weight: 700; font-size: 1.3rem; cursor: pointer;
+  }
+  .letra-ctrl button:hover { background: var(--border); }
+  .letra-ctrl span { font-size: 1rem; color: var(--ink-soft); min-width: 52px; text-align: center; }
+
+  header { text-align: center; margin-bottom: 36px; }
+  .logo-row { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 20px; }
+  .logo-row img { width: 48px; height: 48px; }
+  .logo-row span { font-family: var(--font-display); font-size: 1.3rem; font-weight: 700; color: var(--ink); }
+
+  h1 {
+    font-family: var(--font-display); font-size: 2.4rem; font-weight: 700;
+    line-height: 1.25; margin: 0 0 18px; color: var(--ink);
+  }
+  .subtitulo { font-size: 1.25rem; color: var(--ink-soft); margin: 0 0 34px; line-height: 1.5; }
+
+  .cta-grande {
+    display: flex; align-items: center; justify-content: center; gap: 14px;
+    width: 100%; min-height: 84px; border: none; border-radius: 24px;
+    background: var(--gold-deep); color: #FBF3E7; font-family: var(--font-body);
+    font-weight: 700; font-size: 1.5rem; cursor: pointer; text-decoration: none;
+    box-shadow: 0 10px 26px -10px rgba(108,63,22,0.55); margin-bottom: 16px;
+  }
+  .cta-grande:hover { background: #5A3312; }
+  .cta-grande .icono { font-size: 1.8rem; }
+  .ya-tengo {
+    display: block; text-align: center; font-size: 1.15rem; color: var(--gold-deep);
+    text-decoration: underline; min-height: 48px; line-height: 48px;
+  }
+
+  .como-funciona { margin-top: 48px; }
+  .como-funciona h2 { font-family: var(--font-display); font-size: 1.6rem; text-align: center; margin: 0 0 28px; }
+  .paso {
+    display: flex; align-items: flex-start; gap: 20px;
+    background: var(--surface); border: 2px solid var(--border); border-radius: 20px;
+    padding: 22px 24px; margin-bottom: 18px;
+  }
+  .paso .num {
+    flex: 0 0 auto; width: 52px; height: 52px; border-radius: 50%;
+    background: var(--gold-deep); color: #FBF3E7; font-family: var(--font-display);
+    font-size: 1.4rem; font-weight: 700; display: flex; align-items: center; justify-content: center;
+  }
+  .paso p { margin: 0; font-size: 1.15rem; line-height: 1.5; }
+  .paso strong { display: block; font-size: 1.25rem; margin-bottom: 4px; }
+
+  .tranquilidad {
+    margin-top: 40px; background: var(--surface); border: 2px solid var(--border);
+    border-radius: 20px; padding: 26px 24px; text-align: center;
+  }
+  .tranquilidad p { margin: 0 0 12px; font-size: 1.15rem; line-height: 1.6; }
+  .tranquilidad p:last-child { margin-bottom: 0; }
+
+  footer { text-align: center; margin-top: 40px; font-size: 1rem; color: var(--ink-soft); }
+  footer a { color: var(--gold-deep); }
+
+  @media (max-width: 480px) {
+    h1 { font-size: 2rem; }
+    body { font-size: 18px; }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="letra-ctrl" role="group" aria-label="Tamaño de letra">
+      <button type="button" id="menosBtn" aria-label="Achicar la letra">A-</button>
+      <span id="tamanoValor">100%</span>
+      <button type="button" id="masBtn" aria-label="Agrandar la letra">A+</button>
+    </div>
+
+    <header>
+      <div class="logo-row">
+        <img src="/images/logo-icon.png" alt="" aria-hidden="true">
+        <span>Los recuerdos de mis viejos</span>
+      </div>
+      <h1>Cuenta tu historia, con tu propia voz.</h1>
+      <p class="subtitulo">No hay que escribir nada. Solo tienes que hablar, como si le contaras a un nieto — y tu familia la va a poder escuchar siempre, cuando quiera.</p>
+    </header>
+
+    <a class="cta-grande" href="/index.html#registro-form">
+      <span class="icono">🎙️</span> Empezar a contar mi historia
+    </a>
+    <a class="ya-tengo" href="/app.html">Ya tengo mi cuenta — iniciar sesión</a>
+
+    <section class="como-funciona">
+      <h2>Así de simple</h2>
+      <div class="paso">
+        <div class="num">1</div>
+        <p><strong>Presionas un botón.</strong> Uno solo, grande, en el medio de la pantalla.</p>
+      </div>
+      <div class="paso">
+        <div class="num">2</div>
+        <p><strong>Hablas, tranquilo.</strong> Alguien te va preguntando de a poco, como una charla de sobremesa.</p>
+      </div>
+      <div class="paso">
+        <div class="num">3</div>
+        <p><strong>Queda guardado.</strong> Tu voz, tal como la contaste, para que tu familia la escuche cuando la extrañe.</p>
+      </div>
+    </section>
+
+    <div class="tranquilidad">
+      <p>No necesitas saber de computadores ni de teléfonos complicados.</p>
+      <p>Puedes parar cuando quieras y seguir otro día — nada se apura.</p>
+    </div>
+
+    <footer>
+      ¿Alguna duda? Pregúntale a quien te compartió este enlace.<br>
+      <a href="/index.html">Los recuerdos de mis viejos</a>
+    </footer>
+  </div>
+
+<script>
+(function () {
+  var html = document.documentElement;
+  var valor = document.getElementById('tamanoValor');
+  var actual = 100;
+  var MIN = 80, MAX = 160, PASO = 15;
+  function aplicar() {
+    html.style.fontSize = actual + '%';
+    valor.textContent = actual + '%';
+    document.getElementById('menosBtn').disabled = actual <= MIN;
+    document.getElementById('masBtn').disabled = actual >= MAX;
+  }
+  document.getElementById('menosBtn').addEventListener('click', function () {
+    actual = Math.max(MIN, actual - PASO); aplicar();
+  });
+  document.getElementById('masBtn').addEventListener('click', function () {
+    actual = Math.min(MAX, actual + PASO); aplicar();
+  });
+})();
+</script>
+</body>
+</html>
