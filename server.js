@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const Anthropic = require('@anthropic-ai/sdk');
 const { neon } = require('@neondatabase/serverless');
-const { put, del, get } = require('@vercel/blob');
+const { put, del, get, list } = require('@vercel/blob');
 const archiver = require('archiver');
 const { Readable } = require('stream');
 const { calcularHashesDeInline } = require('./csp-hashes');
@@ -1145,6 +1145,17 @@ function claudeCostUsd(usage) {
 function elevenTtsCostUsd(characters) {
   const rate = Number(process.env.ELEVENLABS_PRICE_PER_1K_CHARS || 0.18);
   return ((characters || 0) / 1000) * rate;
+}
+// Hueco real encontrado en el panel de consumo (2026-09-09, reportado por
+// Felipe): la transcripción (voz de la persona -> texto, ver /api/transcribe)
+// quedaba con audio_seconds guardado pero SIN costo -- el panel solo
+// mostraba "tiempo hablado" sin dólares, así que el costo de voz que se veía
+// era solo la mitad (la respuesta hablada de la IA, nunca lo que ella
+// transcribía). Mismo patrón que elevenTtsCostUsd: tarifa configurable por
+// variable de entorno, con un piso razonable si no se configura nada.
+function elevenSttCostUsd(seconds) {
+  const rate = Number(process.env.ELEVENLABS_PRICE_PER_MINUTE_STT || 0.4);
+  return ((seconds || 0) / 60) * rate;
 }
 
 // Registra un evento de consumo. Nunca tira: si falla, se loguea y se sigue
@@ -3896,7 +3907,7 @@ app.post('/api/transcribe', requireAuth, rateLimit, express.raw({ type: '*/*', l
     const audioSeconds = Number.isFinite(durationMs) && durationMs > 0 && durationMs < 10 * 60 * 1000
       ? durationMs / 1000
       : null;
-    await logUsage(req.profileUserId, { service: 'elevenlabs', kind: 'stt', audioSeconds });
+    await logUsage(req.profileUserId, { service: 'elevenlabs', kind: 'stt', audioSeconds, costUsd: elevenSttCostUsd(audioSeconds) });
 
     res.json({ text: (data.text || '').trim() });
   } catch (err) {
@@ -6137,6 +6148,52 @@ app.get('/api/cron/billing', async (req, res) => {
   }
 });
 
+// Audios/fotos/videos reales viven en Vercel Blob, no en Postgres (la base
+// solo guarda la URL) — así que el tamaño real de cada uno no sale de una
+// consulta SQL, hace falta listarlos en Blob. list() pagina de a 1000; para
+// una app de este tamaño una sola vuelta alcanza casi siempre, pero se seguye
+// el cursor por si algún perfil ya acumuló más.
+async function listarTodosLosBlobs(prefix) {
+  const blobs = [];
+  let cursor;
+  do {
+    const resultado = await list({ prefix, cursor, limit: 1000 });
+    blobs.push(...resultado.blobs);
+    cursor = resultado.hasMore ? resultado.cursor : undefined;
+  } while (cursor);
+  return blobs;
+}
+
+// Desglose de Blob por perfil, para la columna "En base de datos" del panel
+// de consumo (pedido de Felipe, 2026-09-09: "cuanto es de audios, cuanto de
+// texto, cuanto de fotos y videos y cuantos archivos hay"). El texto (sesiones,
+// resumen, historias, capítulos) ya se mide aparte con octet_length en SQL
+// (ver db_sizes más abajo) — esto solo cubre lo que vive en Blob.
+// Las rutas vienen de los 3 put() reales de la app: /api/save-audio
+// ("audio/<profileId>/..."), /api/contribute-audio ("audio/aportes/<profileId>/...")
+// y /api/contribute-media ("media/<profileId>/<foto|video>-...") — ver esas
+// rutas si alguna vez cambia el armado del nombre de archivo, porque este
+// desglose depende de que no cambie.
+async function resumenBlobDePerfil(profileId) {
+  const [audioPropio, audioAportes, media] = await Promise.all([
+    listarTodosLosBlobs(`audio/${profileId}/`),
+    listarTodosLosBlobs(`audio/aportes/${profileId}/`),
+    listarTodosLosBlobs(`media/${profileId}/`),
+  ]);
+  const audioBlobs = [...audioPropio, ...audioAportes];
+  const fotoBlobs = media.filter((b) => /\/foto-/.test(b.pathname));
+  const videoBlobs = media.filter((b) => /\/video-/.test(b.pathname));
+  const sumar = (arr) => arr.reduce((acc, b) => acc + (b.size || 0), 0);
+  return {
+    audioBytes: sumar(audioBlobs),
+    audioCount: audioBlobs.length,
+    fotoBytes: sumar(fotoBlobs),
+    fotoCount: fotoBlobs.length,
+    videoBytes: sumar(videoBlobs),
+    videoCount: videoBlobs.length,
+  };
+}
+
 // --- Panel de consumo (solo cuentas is_admin) ---
 // Un reporte por "perfil" — cuenta dueña O subperfil (ver el comentario de
 // usage_events en ensureSchema): tokens y costo estimado de Claude,
@@ -6151,6 +6208,33 @@ app.get('/api/cron/billing', async (req, res) => {
 app.get('/api/admin/usage', requireAuth, requireAdmin, async (req, res) => {
   try {
     await ensureSchema();
+
+    // Selector de fechas (pedido de Felipe, 2026-09-09): por defecto los
+    // últimos 30 días, o cualquier rango con ?start=YYYY-MM-DD&end=YYYY-MM-DD.
+    // "end" incluye el día entero (hasta las 23:59:59.999), no corta a la
+    // medianoche. La ventana de comparación ("vs. período anterior") es
+    // siempre el mismo largo de días que el rango elegido, inmediatamente
+    // antes — así el delta tiene sentido sin importar qué tan largo sea.
+    const ahora = new Date();
+    let rangeEnd = ahora;
+    let rangeStart = new Date(ahora.getTime() - 30 * 24 * 60 * 60 * 1000);
+    if (req.query.start) {
+      const d = new Date(req.query.start);
+      if (!isNaN(d)) rangeStart = d;
+    }
+    if (req.query.end) {
+      const d = new Date(req.query.end);
+      if (!isNaN(d)) rangeEnd = new Date(d.getTime() + 24 * 60 * 60 * 1000 - 1);
+    }
+    if (rangeEnd <= rangeStart) rangeEnd = new Date(rangeStart.getTime() + 24 * 60 * 60 * 1000);
+    const rangeMs = rangeEnd.getTime() - rangeStart.getTime();
+    const prevRangeEnd = rangeStart;
+    const prevRangeStart = new Date(rangeStart.getTime() - rangeMs);
+    const rangeStartIso = rangeStart.toISOString();
+    const rangeEndIso = rangeEnd.toISOString();
+    const prevRangeStartIso = prevRangeStart.toISOString();
+    const prevRangeEndIso = prevRangeEnd.toISOString();
+
     const rows = await sql`
       WITH profiles AS (
         SELECT id, COALESCE(name, username) AS nombre, email, username, is_admin,
@@ -6173,32 +6257,36 @@ app.get('/api/admin/usage', requireAuth, requireAdmin, async (req, res) => {
           COALESCE(SUM(characters) FILTER (WHERE service = 'elevenlabs' AND kind = 'tts'), 0) AS tts_characters,
           COALESCE(SUM(cost_usd) FILTER (WHERE service = 'elevenlabs' AND kind = 'tts'), 0) AS tts_cost_usd,
           COALESCE(SUM(characters) FILTER (WHERE service = 'azure' AND kind = 'tts'), 0) AS azure_tts_characters,
-          COALESCE(SUM(audio_seconds) FILTER (WHERE kind = 'stt'), 0) AS talk_seconds
+          COALESCE(SUM(audio_seconds) FILTER (WHERE kind = 'stt'), 0) AS stt_seconds,
+          COALESCE(SUM(cost_usd) FILTER (WHERE kind = 'stt'), 0) AS stt_cost_usd,
+          COALESCE(COUNT(*) FILTER (WHERE kind = 'stt'), 0) AS stt_calls
         FROM usage_events
         GROUP BY user_id
       ),
-      usage_30d AS (
+      usage_range AS (
         SELECT
           user_id,
-          COALESCE(SUM(input_tokens) FILTER (WHERE service = 'anthropic'), 0) AS claude_input_tokens_30d,
-          COALESCE(SUM(output_tokens) FILTER (WHERE service = 'anthropic'), 0) AS claude_output_tokens_30d,
-          COALESCE(SUM(cost_usd) FILTER (WHERE service = 'anthropic'), 0) AS claude_cost_usd_30d,
-          COALESCE(SUM(characters) FILTER (WHERE service = 'elevenlabs' AND kind = 'tts'), 0) AS tts_characters_30d,
-          COALESCE(SUM(cost_usd) FILTER (WHERE service = 'elevenlabs' AND kind = 'tts'), 0) AS tts_cost_usd_30d,
-          COALESCE(SUM(audio_seconds) FILTER (WHERE kind = 'stt'), 0) AS talk_seconds_30d
+          COALESCE(SUM(input_tokens) FILTER (WHERE service = 'anthropic'), 0) AS claude_input_tokens_r,
+          COALESCE(SUM(output_tokens) FILTER (WHERE service = 'anthropic'), 0) AS claude_output_tokens_r,
+          COALESCE(SUM(cost_usd) FILTER (WHERE service = 'anthropic'), 0) AS claude_cost_usd_r,
+          COALESCE(COUNT(*) FILTER (WHERE service = 'anthropic'), 0) AS claude_calls_r,
+          COALESCE(SUM(characters) FILTER (WHERE service = 'elevenlabs' AND kind = 'tts'), 0) AS tts_characters_r,
+          COALESCE(SUM(cost_usd) FILTER (WHERE service = 'elevenlabs' AND kind = 'tts'), 0) AS tts_cost_usd_r,
+          COALESCE(SUM(audio_seconds) FILTER (WHERE kind = 'stt'), 0) AS stt_seconds_r,
+          COALESCE(SUM(cost_usd) FILTER (WHERE kind = 'stt'), 0) AS stt_cost_usd_r,
+          COALESCE(COUNT(*) FILTER (WHERE kind = 'stt'), 0) AS stt_calls_r
         FROM usage_events
-        WHERE created_at >= now() - interval '30 days'
+        WHERE created_at >= ${rangeStartIso} AND created_at <= ${rangeEndIso}
         GROUP BY user_id
       ),
-      -- Ventana de comparación: los 30 días ANTERIORES a los últimos 30 —
-      -- alimenta el delta "vs. mes anterior" de cada tarjeta/fila.
-      usage_prev30 AS (
+      usage_prev_range AS (
         SELECT
           user_id,
-          COALESCE(SUM(cost_usd) FILTER (WHERE service = 'anthropic'), 0) AS claude_cost_usd_prev30,
-          COALESCE(SUM(cost_usd) FILTER (WHERE service = 'elevenlabs' AND kind = 'tts'), 0) AS tts_cost_usd_prev30
+          COALESCE(SUM(cost_usd) FILTER (WHERE service = 'anthropic'), 0) AS claude_cost_usd_prev,
+          COALESCE(SUM(cost_usd) FILTER (WHERE service = 'elevenlabs' AND kind = 'tts'), 0) AS tts_cost_usd_prev,
+          COALESCE(SUM(cost_usd) FILTER (WHERE kind = 'stt'), 0) AS stt_cost_usd_prev
         FROM usage_events
-        WHERE created_at >= now() - interval '60 days' AND created_at < now() - interval '30 days'
+        WHERE created_at >= ${prevRangeStartIso} AND created_at < ${prevRangeEndIso}
         GROUP BY user_id
       ),
       db_sizes AS (
@@ -6224,30 +6312,39 @@ app.get('/api/admin/usage', requireAuth, requireAdmin, async (req, res) => {
         COALESCE(ua.tts_characters, 0) AS tts_characters,
         COALESCE(ua.tts_cost_usd, 0) AS tts_cost_usd,
         COALESCE(ua.azure_tts_characters, 0) AS azure_tts_characters,
-        COALESCE(ua.talk_seconds, 0) AS talk_seconds,
-        COALESCE(u30.claude_input_tokens_30d, 0) AS claude_input_tokens_30d,
-        COALESCE(u30.claude_output_tokens_30d, 0) AS claude_output_tokens_30d,
-        COALESCE(u30.claude_cost_usd_30d, 0) AS claude_cost_usd_30d,
-        COALESCE(u30.tts_characters_30d, 0) AS tts_characters_30d,
-        COALESCE(u30.tts_cost_usd_30d, 0) AS tts_cost_usd_30d,
-        COALESCE(u30.talk_seconds_30d, 0) AS talk_seconds_30d,
-        COALESCE(up.claude_cost_usd_prev30, 0) AS claude_cost_usd_prev30,
-        COALESCE(up.tts_cost_usd_prev30, 0) AS tts_cost_usd_prev30,
+        COALESCE(ua.stt_seconds, 0) AS stt_seconds,
+        COALESCE(ua.stt_cost_usd, 0) AS stt_cost_usd,
+        COALESCE(ua.stt_calls, 0) AS stt_calls,
+        COALESCE(ur.claude_input_tokens_r, 0) AS claude_input_tokens_r,
+        COALESCE(ur.claude_output_tokens_r, 0) AS claude_output_tokens_r,
+        COALESCE(ur.claude_cost_usd_r, 0) AS claude_cost_usd_r,
+        COALESCE(ur.claude_calls_r, 0) AS claude_calls_r,
+        COALESCE(ur.tts_characters_r, 0) AS tts_characters_r,
+        COALESCE(ur.tts_cost_usd_r, 0) AS tts_cost_usd_r,
+        COALESCE(ur.stt_seconds_r, 0) AS stt_seconds_r,
+        COALESCE(ur.stt_cost_usd_r, 0) AS stt_cost_usd_r,
+        COALESCE(ur.stt_calls_r, 0) AS stt_calls_r,
+        COALESCE(up.claude_cost_usd_prev, 0) AS claude_cost_usd_prev,
+        COALESCE(up.tts_cost_usd_prev, 0) AS tts_cost_usd_prev,
+        COALESCE(up.stt_cost_usd_prev, 0) AS stt_cost_usd_prev,
         ds.sessions_bytes, ds.resumen_bytes, ds.family_notes_bytes, ds.story_log_bytes, ds.chapters_bytes, ds.media_files, ds.sessions_count
       FROM profiles p
       LEFT JOIN usage_all ua ON ua.user_id = p.id
-      LEFT JOIN usage_30d u30 ON u30.user_id = p.id
-      LEFT JOIN usage_prev30 up ON up.user_id = p.id
+      LEFT JOIN usage_range ur ON ur.user_id = p.id
+      LEFT JOIN usage_prev_range up ON up.user_id = p.id
       LEFT JOIN db_sizes ds ON ds.profile_id = p.id
-      ORDER BY (COALESCE(ua.claude_cost_usd, 0) + COALESCE(ua.tts_cost_usd, 0)) DESC
+      ORDER BY (COALESCE(ua.claude_cost_usd, 0) + COALESCE(ua.tts_cost_usd, 0) + COALESCE(ua.stt_cost_usd, 0)) DESC
     `;
 
     // Breakdown global (todos los perfiles juntos) por tipo de llamada a
-    // Claude — responde "qué funcionalidad sale cara", no "quién". Se
-    // consolidan los "kind" técnicos en categorías legibles.
+    // Claude, ACOTADO al rango elegido — responde "qué funcionalidad sale
+    // cara en este período", no "quién". Se consolidan los "kind" técnicos
+    // en categorías legibles.
     const kindRows = await sql`
       SELECT kind, COALESCE(SUM(cost_usd), 0) AS cost_usd, COALESCE(COUNT(*), 0) AS calls
-      FROM usage_events WHERE service = 'anthropic' GROUP BY kind
+      FROM usage_events
+      WHERE service = 'anthropic' AND created_at >= ${rangeStartIso} AND created_at <= ${rangeEndIso}
+      GROUP BY kind
     `;
     const KIND_GROUPS = {
       charla: 'Charla', arbol_charla: 'Charla', segunda_pasada: 'Charla',
@@ -6271,8 +6368,18 @@ app.get('/api/admin/usage', requireAuth, requireAdmin, async (req, res) => {
     // para mostrar "subperfil de X" en vez de solo el id.
     const nombresPorId = new Map(rows.map((r) => [r.id, capitalizarNombre(r.nombre || '') || r.username || `#${r.id}`]));
 
-    const profiles = rows.map((r) => {
-      const dbBytes = Number(r.sessions_bytes) + Number(r.resumen_bytes) + Number(r.family_notes_bytes) + Number(r.story_log_bytes) + Number(r.chapters_bytes);
+    // Audios/fotos/videos reales viven en Blob, no en Postgres (ver
+    // resumenBlobDePerfil) — se trae en paralelo, uno por perfil.
+    const blobPorPerfil = await Promise.all(rows.map((r) => resumenBlobDePerfil(r.id)));
+
+    const profiles = rows.map((r, i) => {
+      const textBytes = Number(r.sessions_bytes) + Number(r.resumen_bytes) + Number(r.family_notes_bytes) + Number(r.story_log_bytes) + Number(r.chapters_bytes);
+      const blob = blobPorPerfil[i];
+      const totalFiles = blob.audioCount + blob.fotoCount + blob.videoCount;
+      const totalBytes = textBytes + blob.audioBytes + blob.fotoBytes + blob.videoBytes;
+      const sttCostUsd = Number(r.stt_cost_usd);
+      const sttCostUsdR = Number(r.stt_cost_usd_r);
+      const sttCostUsdPrev = Number(r.stt_cost_usd_prev);
       return {
         id: r.id,
         nombre: capitalizarNombre(r.nombre || '') || r.username || `#${r.id}`,
@@ -6291,47 +6398,68 @@ app.get('/api/admin/usage', requireAuth, requireAdmin, async (req, res) => {
           cacheReadTokens: Number(r.claude_cache_read_tokens),
           calls: Number(r.claude_calls),
           costUsd: Number(r.claude_cost_usd),
-          inputTokens30d: Number(r.claude_input_tokens_30d),
-          outputTokens30d: Number(r.claude_output_tokens_30d),
-          costUsd30d: Number(r.claude_cost_usd_30d),
-          costUsdPrev30d: Number(r.claude_cost_usd_prev30),
+          inputTokensRange: Number(r.claude_input_tokens_r),
+          outputTokensRange: Number(r.claude_output_tokens_r),
+          callsRange: Number(r.claude_calls_r),
+          costUsdRange: Number(r.claude_cost_usd_r),
+          costUsdPrevRange: Number(r.claude_cost_usd_prev),
         },
         elevenlabsTts: {
           characters: Number(r.tts_characters),
           costUsd: Number(r.tts_cost_usd),
-          characters30d: Number(r.tts_characters_30d),
-          costUsd30d: Number(r.tts_cost_usd_30d),
-          costUsdPrev30d: Number(r.tts_cost_usd_prev30),
+          charactersRange: Number(r.tts_characters_r),
+          costUsdRange: Number(r.tts_cost_usd_r),
+          costUsdPrevRange: Number(r.tts_cost_usd_prev),
+        },
+        // Transcripción (voz de la persona -> texto) — antes no tenía costo
+        // asociado en el panel (ver el comentario junto a elevenSttCostUsd
+        // en la definición de la función). "calls" acá es, en la práctica,
+        // el número de intervenciones habladas de la persona: cada una es
+        // una transcripción real.
+        elevenlabsStt: {
+          seconds: Number(r.stt_seconds),
+          calls: Number(r.stt_calls),
+          costUsd: sttCostUsd,
+          secondsRange: Number(r.stt_seconds_r),
+          callsRange: Number(r.stt_calls_r),
+          costUsdRange: sttCostUsdR,
+          costUsdPrevRange: sttCostUsdPrev,
         },
         azureTts: { characters: Number(r.azure_tts_characters) },
-        talkTime: {
-          seconds: Number(r.talk_seconds),
-          seconds30d: Number(r.talk_seconds_30d),
-        },
         db: {
-          totalBytes: dbBytes,
+          totalBytes,
+          textBytes,
+          audioBytes: blob.audioBytes,
+          audioCount: blob.audioCount,
+          fotoBytes: blob.fotoBytes,
+          fotoCount: blob.fotoCount,
+          videoBytes: blob.videoBytes,
+          videoCount: blob.videoCount,
+          totalFiles,
           mediaFiles: Number(r.media_files),
           sessionsCount: Number(r.sessions_count),
         },
-        totalCostUsd: Number(r.claude_cost_usd) + Number(r.tts_cost_usd),
-        totalCostUsd30d: Number(r.claude_cost_usd_30d) + Number(r.tts_cost_usd_30d),
-        totalCostUsdPrev30d: Number(r.claude_cost_usd_prev30) + Number(r.tts_cost_usd_prev30),
+        totalCostUsd: Number(r.claude_cost_usd) + Number(r.tts_cost_usd) + sttCostUsd,
+        totalCostUsdRange: Number(r.claude_cost_usd_r) + Number(r.tts_cost_usd_r) + sttCostUsdR,
+        totalCostUsdPrevRange: Number(r.claude_cost_usd_prev) + Number(r.tts_cost_usd_prev) + sttCostUsdPrev,
       };
     });
 
     // Umbral opcional para resaltar visualmente a quien se está pasando de
-    // gasto en 30 días. Sin configurar, no se dispara ninguna alerta.
+    // gasto en el rango elegido. Sin configurar, no se dispara ninguna alerta.
     const alertThreshold = process.env.ADMIN_ALERT_THRESHOLD_USD_30D
       ? Number(process.env.ADMIN_ALERT_THRESHOLD_USD_30D)
       : null;
 
     res.json({
       generatedAt: new Date().toISOString(),
+      range: { start: rangeStartIso, end: rangeEndIso },
       pricing: {
         anthropicInputPer1M: Number(process.env.ANTHROPIC_INPUT_PRICE_PER_1M || 1),
         anthropicOutputPer1M: Number(process.env.ANTHROPIC_OUTPUT_PRICE_PER_1M || 5),
         elevenTtsPer1kChars: Number(process.env.ELEVENLABS_PRICE_PER_1K_CHARS || 0.18),
-        alertThresholdUsd30d: alertThreshold,
+        elevenSttPerMinute: Number(process.env.ELEVENLABS_PRICE_PER_MINUTE_STT || 0.4),
+        alertThresholdUsd: alertThreshold,
       },
       kindBreakdown,
       profiles,
