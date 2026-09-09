@@ -409,6 +409,14 @@
      esto la regla de arriba (pensada para el primer <button>, "Perfil")
      también lo agarraba a él y le sacaba la línea divisoria de arriba. */
   .user-menu-panel a.um-section-toggle:first-of-type { border-top: 1px solid #E7DFCC; margin-top: 4px; }
+  /* Oculto por defecto (solo cuentas is_admin lo ven, ver showApp()) — el
+     atributo "hidden" no alcanza acá: .um-section-toggle ya fija
+     display:flex como regla de autor, que le gana a [hidden] (regla del
+     navegador) en la cascada sin importar la especificidad. Un selector
+     por id sí le gana a la clase por especificidad; showApp() lo muestra
+     con .style.display (mismo mecanismo que ya usa umPerfilesLink más
+     abajo para el caso de subperfil). */
+  #umAdminLink { display: none; }
   .user-menu-panel .um-section-toggle-warn { color: #a33; }
   .user-menu-panel .um-chevron { flex-shrink: 0; margin-left: 10px; color: var(--ink-soft); transition: transform 0.15s ease; }
   .user-menu-panel .um-section-toggle[aria-expanded="true"] .um-chevron { transform: rotate(90deg); }
@@ -840,7 +848,7 @@
               oculto por defecto, se muestra en showApp() si data.isAdmin.
               Mismo patrón visual que "Perfiles": lleva directo a su propia
               pantalla en vez de desplegar contenido acá adentro. -->
-         <a class="um-section-toggle" id="umAdminLink" href="/admin.html" hidden>Panel de consumo <span class="um-chevron" aria-hidden="true">›</span></a>
+         <a class="um-section-toggle" id="umAdminLink" href="/admin.html">Panel de consumo <span class="um-chevron" aria-hidden="true">›</span></a>
 
          <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecAvanzadas">Opciones avanzadas <span class="um-chevron" aria-hidden="true">›</span></button>
          <!-- Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe):
@@ -1134,7 +1142,7 @@
     // ahora que el correo se puede editar hace falta dejar claro cuál es
     // cuál, para no dar a entender que cambiar uno cambia el otro.
     umUsername.textContent = username ? `Usuario: ${username}` : '';
-    if (umAdminLink) umAdminLink.hidden = !isAdmin;
+    if (umAdminLink) umAdminLink.style.display = isAdmin ? 'flex' : 'none';
     umProfileName.value = name || '';
     umProfileEmail.value = email || '';
     umProfileBirthdate.value = fechaNacimiento || '';
