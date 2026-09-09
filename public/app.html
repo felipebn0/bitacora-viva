@@ -968,7 +968,7 @@
              puntual de qué hablar y desaparece en cuanto la charla sigue
              con otra cosa. -->
         <div class="media-momento" id="mediaMomento" hidden>
-          <img id="mediaMomentoImg" alt="Foto que compartió tu familia" hidden>
+          <img id="mediaMomentoImg" alt="Foto de esta historia" hidden>
           <video id="mediaMomentoVideo" controls hidden></video>
         </div>
         <!-- BACKLOG #12: se ve en vez del orbe cuando cambiaste a un
@@ -2083,6 +2083,12 @@
   // donde toda una charla arma UNA sola historia).
   let mediaUrlsLocal = [];
   let subidaFotoEnCurso = null; // ver el comentario igual en colaborar.html
+  // Foto/video que la persona acaba de subir con el botón 📷 y todavía no
+  // se le avisó a la IA ({url, type, caption} — ver fotoRecienSubidaPrompt
+  // en server.js). Se manda una sola vez, en el próximo /api/next, y se
+  // limpia ahí mismo; url/type se quedan del lado del cliente nomás, para
+  // no ocultar la foto en pantalla mientras la IA pregunta por ella.
+  let fotoRecienSubida = null;
   let sessionKey = null;  // carpeta de audio de esta charla
   let currentSessionDbId = null;  // fila de "sessions" de esta charla, para actualizar en vez de duplicar
   let sessionMode = 'historia';  // 'historia' (charla normal) o 'arbol' (armar árbol genealógico)
@@ -2310,6 +2316,7 @@
     const resting = next === 'idle' || next === 'ended';
     let orbHint = 'Presionar para comenzar la charla';
     if (next === 'paused') orbHint = 'Presionar para seguir la charla';
+    else if (next === 'error') orbHint = 'Presionar para reintentar';
     else if (!resting) orbHint = 'Presionar para pausar la charla';
     orb.setAttribute('aria-label', orbHint);
     endBtn.style.display = resting ? 'none' : 'inline';
@@ -2684,6 +2691,8 @@
     try {
       const mediaUrls = mediaUrlsLocal;
       mediaUrlsLocal = []; // las fotos de este turno ya se van a mandar; el próximo empieza vacío
+      const fotoRecienSubidaAAvisar = fotoRecienSubida;
+      fotoRecienSubida = null; // se avisa una sola vez; el próximo turno ya no lo repite
       const lastEntry = sessionLog.length ? sessionLog[sessionLog.length - 1] : null;
       const lastAudioUrl = lastEntry && lastEntry.role === 'user' ? lastEntry.audioFile || null : null;
       // Si el turno anterior ofreció la pausa, este turno tiene que avisarle
@@ -2705,7 +2714,7 @@
       const resp = await fetch('/api/next', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ history, lastAudioUrl, mode: sessionMode, ofrecerPausa, interpretarRespuestaPausa, mediaUrls }),
+        body: JSON.stringify({ history, lastAudioUrl, mode: sessionMode, ofrecerPausa, interpretarRespuestaPausa, mediaUrls, fotoRecienSubida: fotoRecienSubidaAAvisar ? { caption: fotoRecienSubidaAAvisar.caption } : null }),
       });
       if (mySession !== sessionId) return;
       if (!resp.ok) {
@@ -2720,7 +2729,12 @@
       history.push({ role: 'assistant', content: data.message });
       const logEntry = { role: 'assistant', content: data.message, timestamp: new Date().toISOString() };
       sessionLog.push(logEntry);
-      mostrarMediaMomento(data.media);
+      // Si este turno es la reacción a una foto que la propia persona
+      // acaba de subir (ver fotoRecienSubidaAAvisar arriba), data.media
+      // viene vacío (eso es solo para fotos de un familiar) — se sigue
+      // mostrando la que ya se subió, para que no desaparezca justo cuando
+      // la IA está preguntando por ella.
+      mostrarMediaMomento(data.media || (fotoRecienSubidaAAvisar ? { url: fotoRecienSubidaAAvisar.url, type: fotoRecienSubidaAAvisar.type } : null));
       setState('speaking', 'Hablando…');
       speak(data.message, () => {
         if (mySession !== sessionId) return;
@@ -2734,9 +2748,20 @@
       }, logEntry, myTurn);
     } catch (err) {
       if (mySession !== sessionId) return;
+      // Bug real reportado (auditoría UX 2026-09-09): con un 500 del
+      // servidor o sin conexión, esto ponía state='idle' -- el MISMO
+      // estado que "todavía no arranqué ninguna charla". handleOrbPress()
+      // trata 'idle' como "empezar de cero" (startSession(), que BORRA
+      // history/sessionLog) — así que tocar el orbe para reintentar
+      // borraba en silencio todo lo ya hablado en la sesión, en vez de
+      // reintentar el turno que falló. 'error' es un estado aparte:
+      // handleOrbPress() lo reintenta llamando a fetchNext() de nuevo con
+      // el MISMO history (nunca se le agregó nada — el push a history
+      // pasa recién con la respuesta OK, más arriba), no arranca una
+      // sesión nueva.
       stateLabel.textContent = mensajeDeErrorDeTurno(err);
-      setState('idle', stateLabel.textContent);
-      orbLabel.innerHTML = 'Presiona<br>para hablar';
+      setState('error', stateLabel.textContent);
+      orbLabel.innerHTML = 'Reintentar';
       releaseMic();
       await saveSessionLog(); // best-effort: no perder lo ya hablado si de verdad fue un problema de red
     }
@@ -2949,6 +2974,7 @@
     greeting.style.display = 'none';
     mostrarMediaMomento(null);
     mediaUrlsLocal = [];
+    fotoRecienSubida = null;
     fotoCaptionRow.classList.remove('visible');
     history = [];
     sessionLog = [];
@@ -2962,6 +2988,12 @@
       unlockAudioPlayback();
       unlockMicAudioContext();
       startSession();
+    } else if (state === 'error') {
+      // Reintenta el turno que falló, sin tocar history/sessionLog (ver
+      // el comentario en el catch de fetchNext()).
+      unlockAudioPlayback();
+      unlockMicAudioContext();
+      fetchNext();
     } else if (state === 'paused') {
       unlockMicAudioContext();
       resumeConversation();
@@ -3038,7 +3070,14 @@
         });
         if (resp.ok) {
           const data = await resp.json();
-          if (data.url) mediaUrlsLocal.push({ url: data.url, type: data.type, caption });
+          if (data.url) {
+            mediaUrlsLocal.push({ url: data.url, type: data.type, caption });
+            // Item 9: mostrarla ya mismo (antes quedaba guardada en
+            // silencio y la IA nunca se enteraba ni preguntaba por ella —
+            // ver fotoRecienSubidaPrompt en server.js).
+            mostrarMediaMomento({ url: data.url, type: data.type });
+            fotoRecienSubida = { url: data.url, type: data.type, caption };
+          }
           stateLabel.textContent = '✓ Se agregó a esta historia.';
         } else {
           stateLabel.textContent = 'No se pudo subir el archivo. Intenta de nuevo.';

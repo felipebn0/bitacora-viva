@@ -413,6 +413,51 @@ async function checkCuenta(browser, base, w, scale, sessionCookie, screenshotDir
   await context.close();
 }
 
+// Auditoría UX 2026-09-09: pidió ampliar esta suite a capítulos, historias,
+// árbol, colaboraciones y perfiles (antes solo cubría landing/login/cuenta).
+// Un chequeo genérico y más liviano que checkNav/checkCuenta (sin conocer el
+// detalle de cada pantalla): sin scroll horizontal, y todo elemento
+// interactivo VISIBLE (a, button, input, select) mide 44px+ de alto — mismo
+// criterio de zona táctil que ya se exige en el resto de la app. Se corre
+// para las 5 páginas dentro del mismo loop de anchos × escalas que ya usan
+// landing/login/cuenta, así que agarra los mismos casos angostos + letra
+// grande sin duplicar la matriz.
+async function checkPaginaGenerica(browser, base, urlPath, nombrePagina, w, scale, sessionCookie, screenshotDir) {
+  const label = `${nombrePagina} ${w}px @ ${scale}%`;
+  const context = await browser.newContext({ viewport: { width: w, height: 900 }, reducedMotion: 'reduce' });
+  await attachCspViolationCollector(context);
+  await context.addCookies([{ name: sessionCookie.name, value: sessionCookie.value, url: base }]);
+  const page = await context.newPage();
+  await page.goto(`${base}${urlPath}`, { waitUntil: 'load' });
+  await page.waitForTimeout(300);
+  if (scale !== 100) {
+    await page.evaluate((s) => window.bitacoraFontSize.set(s), scale);
+    await page.waitForTimeout(120);
+  }
+  const info = await page.evaluate(() => {
+    const interactivos = Array.from(document.querySelectorAll('a, button, input, select'));
+    const visibles = interactivos.filter((el) => {
+      const r = el.getBoundingClientRect();
+      return (r.width > 0 && r.height > 0) && el.offsetParent !== null;
+    });
+    const chicos = visibles
+      .filter((el) => el.getBoundingClientRect().height < 43.5)
+      .map((el) => {
+        const nombre = (el.textContent || el.getAttribute('aria-label') || el.value || el.className || el.tagName || '').toString().trim().slice(0, 40);
+        return `${nombre} (${Math.round(el.getBoundingClientRect().height)}px)`;
+      });
+    return {
+      overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      chicos,
+    };
+  });
+  check(info.overflowX <= 1, `${label}: sin scroll horizontal (overflow=${info.overflowX}px)`);
+  check(info.chicos.length === 0, `${label}: todos los controles interactivos visibles miden 44px+ de alto (${JSON.stringify(info.chicos)})`);
+  await checkSinViolacionesCsp(page, label, check);
+  await page.screenshot({ path: path.join(screenshotDir, `${nombrePagina}-${w}-${scale}.png`) });
+  await context.close();
+}
+
 // Nace del mismo reporte que la corrección del audio en iPhone: la página
 // de "aportar a otra historia" (colaborar.html?owner=X) tenía su propia fila
 // de 3 íconos (distinta del link "← volver a la bitácora" que usan
@@ -475,7 +520,7 @@ async function checkColaborar(browser, server, base, screenshotDir) {
 // también. Cubre justo los dos anchos×altos que pidió esa auditoría, no una
 // matriz completa (eso sí sería una tarea aparte).
 async function checkHeroAlturaBaja(browser, base, screenshotDir) {
-  for (const [w, h] of [[1024, 600], [1280, 720]]) {
+  for (const [w, h] of [[320, 568], [1024, 600], [1280, 720]]) {
     const label = `hero ${w}x${h}`;
     const context = await browser.newContext({ viewport: { width: w, height: h }, reducedMotion: 'reduce' });
     await attachCspViolationCollector(context);
@@ -503,11 +548,21 @@ async function main() {
 
   const browser = await launchChromium();
 
+  const PAGINAS_GENERICAS = [
+    ['/capitulos.html', 'capitulos'],
+    ['/historias.html', 'historias'],
+    ['/arbol.html', 'arbol'],
+    ['/colaboraciones.html', 'colaboraciones'],
+    ['/perfiles.html', 'perfiles'],
+  ];
   for (const w of WIDTHS) {
     for (const scale of SCALES) {
       await checkLanding(browser, base, w, scale, screenshotDir);
       await checkLogin(browser, base, w, scale, screenshotDir);
       await checkCuenta(browser, base, w, scale, sessionCookie, screenshotDir);
+      for (const [urlPath, nombrePagina] of PAGINAS_GENERICAS) {
+        await checkPaginaGenerica(browser, base, urlPath, nombrePagina, w, scale, sessionCookie, screenshotDir);
+      }
     }
   }
   await checkColaborar(browser, server, base, screenshotDir);

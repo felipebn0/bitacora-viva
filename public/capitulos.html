@@ -59,6 +59,13 @@
     border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 12px;
     font-family: var(--font-body); font-size: 0.95rem; background: #fff; color: var(--ink);
     min-height: 44px;
+    /* Auditoría UX 2026-09-09: un <select> nativo no encoge por su cuenta
+       dentro de un flex container aunque tenga flex-wrap -- a 320px con
+       letra grande, la opción más larga ("tercera persona...") empujaba
+       todo el ancho del <select> más allá de la pantalla y generaba
+       scroll horizontal. min-width:0 deja que SÍ encoja; max-width:100%
+       lo tapa en el borde del contenedor en vez de desbordar. */
+    min-width: 0; max-width: 100%;
   }
   button.generar {
     border: none; background: var(--gold-deep); color: #FBF6EA; border-radius: 10px;

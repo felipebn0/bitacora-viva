@@ -461,6 +461,12 @@
          escondía "Crear cuenta" acá y no quedaba forma de entrar al menú). */
       .nav-inner{height:68px;gap:10px}
       .brand span{display:none}
+      /* Auditoría UX 2026-09-09: con el nombre de texto escondido (arriba),
+         el ícono solo (38px) quedaba chico al lado del control de tamaño
+         de letra (dos botones de 44px + el "100%") -- lo sube a llenar el
+         mismo cuadro de 44px que ya tiene .brand como zona táctil, en vez
+         de dejarlo flotando chico adentro con espacio de sobra alrededor. */
+      .brand-mark{width:44px;height:44px}
       /* Con el control de tamaño de letra sumado a "Iniciar sesión" y
          "Crear cuenta", el espacio de 26px entre cada uno (heredado del
          header de escritorio) ya no entraba en pantallas angostas y el
@@ -512,6 +518,22 @@
       .privacy-box{padding:30px 22px}.privacy-list{grid-template-columns:1fr}
       .registro{padding:56px 0}.registro-box{padding:30px 22px;border-radius:26px}.signup-card{padding:22px}.signup-form{grid-template-columns:1fr}
       .final-cta{padding:60px 0}.footer-row{align-items:flex-start;flex-direction:column}
+    }
+    /* Celulares chicos en alto (auditoría UX 2026-09-09, ej. 320×568):
+       la rama mobile de arriba ya angosta todo, pero no achicaba el
+       ALTO del hero — con eyebrow + h1 (clamp hasta 3.3rem) + párrafo +
+       el propio nav, el botón "Crear mi cuenta" del hero quedaba fuera
+       de la pantalla sin scrollear ni un poco, incluso antes de llegar
+       al mockup de la app (que en mobile ya va DESPUÉS del CTA, no
+       antes — el problema es solo de alto, no de orden). Mismo criterio
+       que ya usa la rama de portátiles en horizontal más abajo: se achica
+       lo más alto (h1, párrafo, paddings) hasta que el CTA entra solo. */
+    @media(max-width:640px) and (max-height:620px){
+      .hero{padding:10px 0 16px}
+      .eyebrow{margin-bottom:8px}
+      h1{font-size:clamp(1.9rem,9vw,2.3rem);margin-bottom:8px}
+      .hero-copy p{font-size:.95rem;margin:0 0 12px}
+      .hero-actions{margin-bottom:8px}
     }
     /* Portátiles en horizontal (auditoría UX 2026-09-07): a partir de
        981px de ancho el hero pasa a la grilla de 2 columnas de arriba
@@ -675,7 +697,7 @@
               <div class="audio-card"><button class="play" id="playDemo" aria-label="Vista previa visual — este ejemplo no tiene audio real">▶</button><div><strong>Así se guarda un recuerdo con audio</strong><div class="quiet pc-1e28117f">Vista previa · sin audio</div></div><div class="wave" id="waveDemo"></div></div>
             </div>
             <aside class="story-side">
-              <h3>Libro de la historia</h3>
+              <h3>Mi libro</h3>
               <div class="chapter"><small>Capítulo 01</small><b>La casa donde crecimos</b></div>
               <div class="chapter"><small>Capítulo 02</small><b>Conocer a mamá</b></div>
               <div class="chapter"><small>Capítulo 03</small><b>El primer trabajo</b></div>
@@ -822,60 +844,24 @@
          lo que la app YA hace Y después de la oportunidad de registrarse;
          quien no está listo para registrarse todavía sigue viendo esto,
          privacidad y preguntas antes del cierre final. -->
-    <section id="proximamente">
-      <div class="wrap">
-        <div class="section-head center reveal">
-          <div class="eyebrow pc-9b54a373">Lo que viene</div>
-          <h2>Próximamente</h2>
-          <p>Seguimos construyendo la bitácora. Esto es lo que se viene.</p>
-        </div>
-        <!-- "Fotos y videos" e "Historias ya grabadas" vivían acá como
-             "Próximamente" hasta que dejaron de serlo: las dos ya están
-             construidas y en uso (subida de foto/video y de nota de voz ya
-             grabada, ambas desde colaborar.html vía /api/contribute-media)
-             — auditoría UX 2026-09-07. Se sacan de esta grilla (ya no es
-             cierto que "vienen") y su valor pasa a la tarjeta de "Entran y
-             hablan, sin crear cuenta" de la sección de familia, arriba, que
-             es donde de verdad se usan. -->
-        <div class="soon-cards reveal">
-          <div class="soon-card">
-            <span class="soon-badge">Próximamente</span>
-            <div class="pc-6899e93a">🍲</div>
-            <b class="pc-f3b0f625">Recetas</b>
-            <p class="pc-166017f1">Para que esa "receta de la abuela" perdure, contada con su propia voz.</p>
-          </div>
-          <div class="soon-card">
-            <span class="soon-badge">Próximamente</span>
-            <div class="pc-6899e93a">🙏</div>
-            <b class="pc-f3b0f625">Oraciones</b>
-            <p class="pc-166017f1">Las que solían recitar, para que las escuches y las recites junto a ellos.</p>
-          </div>
-          <div class="soon-card">
-            <span class="soon-badge">Próximamente</span>
-            <div class="pc-6899e93a">🎵</div>
-            <b class="pc-f3b0f625">Memorias musicales</b>
-            <p class="pc-166017f1">Un archivo con la música de su vida, para que también la puedan disfrutar, no solo conversar.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
     <section class="privacy" id="privacidad">
       <div class="wrap">
         <div class="privacy-box reveal">
           <div><div class="eyebrow pc-f1b4ce9c">Recuerdos personales</div><h2>Tu historia tiene que sentirse tuya.</h2><p>Lo que se guarda acá son voces, recuerdos y relaciones familiares — no un dato cualquiera. Por eso la privacidad no es un detalle secundario, es la base de todo lo demás.</p></div>
+          <!-- Auditoría UX 2026-09-09: bajó de 7 a 5 tarjetas (diluía el
+               recorrido de la portada) -- "todo viaja cifrado" se fundió con
+               "audios y fotos privados" (las dos son de la misma promesa:
+               nada se entrega sin permiso real) y "nada de historial editado
+               a escondidas" se sumó como una frase más adentro de "tú tienes
+               el control" -- ninguna promesa se sacó, solo se acomodaron
+               juntas las que ya decían cosas parecidas. El detalle completo
+               de cada una sigue estando en las preguntas frecuentes. -->
           <div class="privacy-list">
             <details class="privacy-item"><summary>🔐 Tu clave nunca queda expuesta</summary><p>Inicias sesión con usuario y contraseña — la tuya nunca se guarda en texto plano: se guarda como un hash de un solo sentido, así que ni siquiera nosotros podemos leerla ni revertirla a la clave original.</p></details>
-            <details class="privacy-item"><summary>🔒 Todo viaja cifrado</summary><p>Cada conexión con el sitio va por HTTPS (la misma tecnología que usa tu banco) — nadie que intercepte la conexión puede leer lo que hablas o escribes.</p></details>
-            <!-- Estos tres bloques repetían casi palabra por palabra lo que
-                 ya dicen las preguntas frecuentes de más abajo (auditoría
-                 UX 2026-09-07) — el detalle completo sigue estando ahí, acá
-                 queda solo la promesa central, más corta de leer. -->
+            <details class="privacy-item"><summary>🔒 Todo cifrado y con permiso real</summary><p>Cada conexión con el sitio va por HTTPS (la misma tecnología que usa tu banco), y tus audios y fotos nunca se entregan directo desde donde se guardan — la app confirma primero que tienes permiso real de ver esa bitácora.</p></details>
             <details class="privacy-item"><summary>👨‍👩‍👧 Solo entra quien tú invitas</summary><p>Nadie ve tu bitácora sin el código de invitación que tú generas — ni siquiera creándose una cuenta nueva por su cuenta. Más detalle en las preguntas frecuentes, abajo.</p></details>
             <details class="privacy-item"><summary>🤖 La IA no aprende de tus historias</summary><p>Claude, la inteligencia artificial que hace las preguntas de seguimiento, es una herramienta ya entrenada que usamos — no algo que "aprende" de cada charla. Más detalle en las preguntas frecuentes, abajo.</p></details>
-            <details class="privacy-item"><summary>🔒 Tus audios y fotos también son privados</summary><p>No se entregan directo desde donde se guardan: la app confirma primero que tienes permiso real de ver esa bitácora.</p></details>
-            <details class="privacy-item"><summary>🚫 Nada de historial editado a escondidas</summary><p>Si algo se corrige, la versión anterior queda guardada — nunca se reescribe la historia sin dejar rastro.</p></details>
-            <details class="privacy-item"><summary>🗑️ Tú tienes el control</summary><p>Puedes borrar todos tus recuerdos guardados cuando quieras, con una acción tuya deliberada — nada se borra por accidente ni por un mensaje de chat. Al confirmar, se borra de la base de datos y de donde se guardan tus audios y fotos; puede quedar, por un tiempo limitado, en una copia de resguardo interna que usamos solo para recuperarnos de una falla grave, nunca para volver a mostrar tu contenido.</p></details>
+            <details class="privacy-item"><summary>🗑️ Tú tienes el control</summary><p>Puedes borrar todos tus recuerdos guardados cuando quieras, con una acción tuya deliberada — nada se borra por accidente ni por un mensaje de chat. Si algo se corrige en vez de borrarse, la versión anterior queda guardada, nunca se reescribe sin dejar rastro. Al confirmar un borrado, se borra de la base de datos y de donde se guardan tus audios y fotos; puede quedar, por un tiempo limitado, en una copia de resguardo interna que usamos solo para recuperarnos de una falla grave, nunca para volver a mostrar tu contenido.</p></details>
           </div>
         </div>
       </div>

@@ -22,7 +22,7 @@ const path = require('path');
 const crypto = require('crypto');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
-const PAGINAS = ['index.html', 'app.html', 'arbol.html', 'capitulos.html', 'colaboraciones.html', 'colaborar.html', 'historias.html', 'perfiles.html', 'general.html', 'perfilar.html', 'general-apple.html', 'general-apple-papel.html', 'general-apple-cronica.html', 'general-apple-polaroid.html', 'general-raiz.html', 'paletas/landing.html', 'audiencias/mayor.html', 'audiencias/nina.html', 'audiencias/adulto.html'];
+const PAGINAS = ['index.html', 'app.html', 'arbol.html', 'capitulos.html', 'colaboraciones.html', 'colaborar.html', 'historias.html', 'perfiles.html', 'general.html', 'perfilar.html', 'general-apple.html', 'general-apple-papel.html', 'general-apple-cronica.html', 'general-apple-polaroid.html', 'general-raiz.html', 'audiencias/mayor.html', 'audiencias/nina.html', 'audiencias/adulto.html'];
 
 // script: cualquier <script ...> SIN atributo src (el inline real; los que
 // sí tienen src, como /font-size.js, ya los cubre 'self' sin necesitar hash).
