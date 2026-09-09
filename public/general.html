@@ -172,7 +172,11 @@
     .nav-font-ctrl button:hover{background:var(--surface-2); color:var(--ink)}
     .nav-font-ctrl button:disabled{opacity:.5; cursor:default}
     .nav-font-ctrl span{font-size:0.8125rem; color:var(--ink-3); min-width:40px; text-align:center}
-    nav.is-compact .nav-inner{min-height:48px}
+    /* padding:2px 0 (normal es 8px 0): con los targets de 44px de los
+       propios controles (nav-font-ctrl button, nav-links a), bajar solo
+       min-height no alcanzaba para que compacto midiera menos que el
+       header normal — el contenido ya empujaba el alto por su cuenta. */
+    nav.is-compact .nav-inner{min-height:48px; padding:2px 0}
     .brand-mark,.nav-inner{transition:width .18s ease,height .18s ease,min-height .18s ease}
     @media(prefers-reduced-motion:reduce){.nav-inner,.brand-mark{transition:none}}
 
@@ -366,6 +370,15 @@
     }
 
     /* ---- Responsive ---- */
+    /* Se había perdido al pasar esta página al sistema de espacios de la
+       versión Apple (encontrado al revisar el nav en 320px): sin esto,
+       "Cómo funciona"/"Familia"/"Privacidad" nunca se ocultaban, y el
+       header terminaba en 4-5 filas en vez de 1-2. "Iniciar sesión"/
+       "Crear cuenta" son las dos acciones reales del menú y quedan
+       siempre visibles. */
+    @media(max-width:1220px){
+      .nav-links > a:not(.nav-cta):not(.nav-login){display:none}
+    }
     @media(max-width:900px){
       .hero-grid, .problem-grid, .voice-grid, .registro-box, .privacy-box{grid-template-columns:1fr}
       .steps-grid{grid-template-columns:1fr}
@@ -377,7 +390,6 @@
       .nav-links{gap:2px 4px; margin-left:0}
       .nav-links > a{font-size:0.875rem; padding:6px 8px}
       .nav-cta{margin-left:auto}
-      .nav-font-ctrl{order:3}
       .hero-actions .btn{flex:1 1 100%}
     }
     /* Acá la versión Apple original escondía el control de letra (A-/A+)
@@ -387,6 +399,13 @@
        celulares más chicos/comunes (320-375px) le sacaba la herramienta a
        quien más la puede necesitar. Con flex-wrap ya puesto en
        .nav-inner, se pasa a su propia fila en vez de desaparecer. */
+    /* El nombre completo ("Los recuerdos de mis viejos") no entra a 320px
+       con la letra agrandada (140%) — desborde horizontal real, encontrado
+       al pasar este mismo cambio a index.html. Se esconde el texto y
+       queda solo el ícono. */
+    @media(max-width:640px){
+      .brand span{display:none}
+    }
 
     /* ---- Bloques de fondo oscuro ----
        La versión Apple original no los traía (ahí estas secciones son

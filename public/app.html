@@ -2436,8 +2436,17 @@
   // recordar fechas/nombres sin cortar antes de tiempo. En uso real (2026-
   // 09-06) resultó demasiado: se quedaba "escuchando" varios segundos
   // después de que la persona ya había dejado de hablar, sintiéndose lento
-  // y poco fluido. Bajado a 1200ms (cerca del segundo pedido).
-  const SILENCE_MS = 1200; // pausa tolerada antes de dar la respuesta por terminada
+  // y poco fluido. Bajado a 1200ms (cerca del segundo pedido) — pero
+  // reportado de nuevo (2026-09-09, usuarios reales): cortaba pausas
+  // normales de alguien pensando o recordando un nombre a mitad de
+  // frase, mandando la respuesta a medias. La IA recibía solo el
+  // fragmento y a veces reaccionaba como si la persona hubiera terminado
+  // (o se hubiera quedado sin nada que decir) en vez de esperar el resto
+  // — de ahí también las preguntas repetidas sobre algo que sí se había
+  // contado, solo que cortado a la mitad. Subido a 2200ms: más cerca del
+  // valor original (2000ms, nunca reportado como lento) que del
+  // extremo de 4000ms que sí lo fue.
+  const SILENCE_MS = 2200; // pausa tolerada antes de dar la respuesta por terminada
   // Subido de 0.02: con ruido de fondo (ventilador, TV, eco del cuarto) el
   // volumen ambiente solía superar 0.02 seguido, así que lastLoudTime nunca
   // dejaba de renovarse y SILENCE_MS de arriba no llegaba a cumplirse nunca

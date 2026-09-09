@@ -1238,8 +1238,11 @@
   // pasan unos segundos de silencio se corta y se manda solo.
   // Antes eran 2000ms, después 4000ms — en uso real (2026-09-06, ver el
   // mismo ajuste en app.html) resultó demasiado lento: se quedaba
-  // "escuchando" varios segundos de más. Bajado a 1200ms.
-  const SILENCE_MS = 1200;
+  // "escuchando" varios segundos de más. Bajado a 1200ms — pero
+  // reportado de nuevo (2026-09-09, ver el mismo ajuste y el comentario
+  // largo en app.html): cortaba pausas normales de alguien pensando a
+  // mitad de frase. Subido a 2200ms.
+  const SILENCE_MS = 2200;
   // Subido de 0.02: con ruido de fondo, el volumen ambiente solía superar
   // 0.02 seguido y la detección de silencio no llegaba a cumplirse nunca
   // — se quedaba escuchando sin parar aunque ya hubiera terminado de
