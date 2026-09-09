@@ -1,0 +1,58 @@
+/* Paleta "Apple HIG" -- la original, café/verde/crema, tipografía de
+   sistema. Sirve de EJEMPLO de qué variables hace falta definir para una
+   paleta nueva: copiá este archivo, cambiá los valores de color y
+   guardalo con otro nombre acá mismo (public/paletas/colores/) -- no
+   hace falta tocar landing.html ni base.css para nada. */
+
+:root {
+  color-scheme: light dark;
+  --bg: #F4EEE1;
+  --bg-alt: #EAE0CD;
+  --surface: #FFFFFF;
+  --surface-2: #F4EEE1;
+  --ink: #241B12;
+  --ink-2: #6E5A45;
+  --ink-3: #9A876E;
+  --hairline: #E4D9C4;
+  --hairline-soft: #EEE5D2;
+  --accent: #8A5320;
+  --accent-press: #6C3F16;
+  --accent-tint: rgba(138, 83, 32, 0.10);
+  --accent-2: #5B6B45;
+  --accent-2-tint: rgba(91, 107, 69, 0.12);
+  --on-accent: #FBF3E7;
+  --shadow-card: 0 1px 2px rgba(60,40,20,.06), 0 10px 30px rgba(60,40,20,.09);
+  --shadow-float: 0 6px 16px rgba(60,40,20,.12), 0 28px 70px rgba(60,40,20,.16);
+  --radius-s: 12px;
+  --radius-m: 18px;
+  --radius-l: 24px;
+  --nav-bg: rgba(244, 238, 225, 0.72);
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+          "Helvetica Neue", "Segoe UI", Roboto, system-ui, sans-serif;
+  --measure: 42rem;
+  /* --heading-font/--heading-weight/--heading-tracking: no hacen falta acá,
+     base.css ya trae el valor por defecto que esta paleta usa. */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1E160E;
+    --bg-alt: #17110A;
+    --surface: #292017;
+    --surface-2: #342A1F;
+    --ink: #F4EAD8;
+    --ink-2: #C4B199;
+    --ink-3: #9C8A72;
+    --hairline: rgba(244, 234, 216, 0.14);
+    --hairline-soft: rgba(244, 234, 216, 0.08);
+    --accent: #CC9455;
+    --accent-press: #DDA968;
+    --accent-tint: rgba(204, 148, 85, 0.16);
+    --accent-2: #92A977;
+    --accent-2-tint: rgba(146, 169, 119, 0.16);
+    --on-accent: #1E160E;
+    --shadow-card: 0 1px 2px rgba(0,0,0,.35), 0 10px 30px rgba(0,0,0,.45);
+    --shadow-float: 0 8px 24px rgba(0,0,0,.5), 0 32px 70px rgba(0,0,0,.6);
+    --nav-bg: rgba(30, 22, 14, 0.66);
+  }
+}

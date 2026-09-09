@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Plantilla compartida de landing (pedido de Felipe 2026-09-08): para
+       probar una paleta de color nueva, NUNCA hay que tocar este archivo
+       ni base.css -- solo agregar un CSS chico en
+       public/paletas/colores/<nombre>.css (ver apple.css ahí mismo como
+       ejemplo) y visitar landing.html?paleta=<nombre>. El script de acá
+       abajo elige cuál cargar según ese "?paleta=" de la URL; sin ese
+       parámetro (o con uno que no existe), usa "apple" por defecto. -->
+  <title>Los recuerdos de mis viejos — plantilla de paletas (preview)</title>
+  <meta name="description" content="Conversaciones guiadas que convierten tus recuerdos, anécdotas y voz en una historia que puedes volver a escuchar, consultar y compartir. Crea tu cuenta gratis." />
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/images/favicon-192.png">
+  <link rel="apple-touch-icon" href="/images/favicon-192.png">
+  <!-- Fuentes autoalojadas (ronda 2 del camino a CSP en enforce, 2026-09-06):
+       antes venían de fonts.googleapis.com/fonts.gstatic.com, lo que además
+       de la violación de CSP (font-src 'self') mandaba la IP de cada visita
+       a un tercero. Ver public/fonts/fonts.css para el detalle. -->
+  <link rel="stylesheet" href="/fonts/fonts.css">
+  <!-- Urbanist siempre se carga (pesa poco, ~90KB entre las 4 variantes) --
+       así la paleta "raiz" la tiene disponible sin depender de que este
+       archivo sepa de antemano qué paleta se va a elegir. -->
+  <link rel="stylesheet" href="/fonts/urbanist.css">
+  <link rel="stylesheet" href="/paletas/base.css">
+  <link rel="stylesheet" href="/paletas/colores/apple.css" id="paletaCss">
+  <script>
+    // Sincrónico, antes de que el body empiece a pintar -- cambia el
+    // href del <link id="paletaCss"> antes de que el navegador llegue a
+    // aplicar el de por defecto, así no hay parpadeo.
+    (function () {
+      var permitidas = ['apple', 'papel', 'cronica', 'polaroid', 'raiz'];
+      var pedida = new URLSearchParams(location.search).get('paleta');
+      if (pedida && permitidas.indexOf(pedida) !== -1) {
+        document.getElementById('paletaCss').href = '/paletas/colores/' + pedida + '.css';
+      }
+    })();
+  </script>
+  <script src="/font-size.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Saltar al contenido</a>
+  <nav>
+    <div class="wrap nav-inner">
+      <a href="#inicio" class="brand" aria-label="Los recuerdos de mis viejos, inicio">
+        <img class="brand-mark" src="/images/logo-icon.png" alt="" aria-hidden="true">
+        <span>Los recuerdos de mis viejos</span>
+      </a>
+      <div class="nav-font-ctrl" role="group" aria-label="Tamaño de letra">
+        <button type="button" id="navFontDecBtn" aria-label="Achicar la letra">A-</button>
+        <span id="navFontSizeValue">100%</span>
+        <button type="button" id="navFontIncBtn" aria-label="Agrandar la letra">A+</button>
+      </div>
+      <div class="nav-links">
+        <a href="#como-funciona">Cómo funciona</a>
+        <a href="#privacidad">Privacidad</a>
+        <a href="/app.html" class="nav-login">Iniciar sesión</a>
+        <a class="btn btn-primary nav-cta" href="#registro-form">Crear cuenta</a>
+      </div>
+    </div>
+  </nav>
+
+  <main id="main-content" tabindex="-1">
+    <section class="hero" id="inicio">
+      <div class="wrap hero-grid">
+        <div class="hero-copy reveal">
+          <div class="eyebrow">Tu historia, contada con tu propia voz</div>
+          <h1>Tus historias merecen <em>seguir vivas.</em></h1>
+          <p>Conversaciones guiadas que convierten recuerdos, anécdotas y voz en una historia que puedes volver a escuchar, consultar y compartir — la tuya, la de alguien querido, o la de un momento que no quieres que se pierda.</p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#registro-form">Crear mi cuenta</a>
+            <a class="btn btn-secondary" href="#como-funciona">Ver cómo funciona ↓</a>
+          </div>
+          <div class="trust-row">
+            <span><i class="dot"></i> Conversa por voz</span>
+            <span><i class="dot"></i> Conserva recuerdos</span>
+            <span><i class="dot"></i> Comparte con quien quieras</span>
+          </div>
+        </div>
+
+        <div class="hero-device-wrap reveal">
+          <div class="memory-chip chip-a"><strong>Nuevo recuerdo</strong>“Mi primer trabajo...”</div>
+          <div class="memory-chip chip-b"><strong>Historia guardada</strong>Viajes · 4 min de audio</div>
+          <div class="device">
+            <div class="device-top">
+              <div class="device-title">Los recuerdos de mis viejos</div>
+              <div class="device-icons"><span class="mini-icon">🌳</span><span class="mini-icon">📖</span></div>
+            </div>
+            <div class="demo-panel">
+              <span class="demo-badge">Demostración visual</span>
+              <div class="demo-kicker">Una conversación. Un recuerdo que queda.</div>
+              <button class="orb" id="demoOrb" aria-label="Probar demostración visual (no graba audio real)"><span id="orbText">Presiona<br>para hablar</span></button>
+              <div class="demo-state" id="demoState">Prueba el botón — es solo un ejemplo</div>
+              <div class="demo-question" id="demoQuestion">“Quiero guardar una historia de mi vida.”</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="problem">
+      <div class="wrap problem-grid">
+        <div class="reveal">
+          <div class="eyebrow pc-f1b4ce9c">Lo que no se cuenta, puede perderse</div>
+          <h2>Hay historias que solo existen mientras alguien pueda contarlas.</h2>
+        </div>
+        <div class="reveal">
+          <div class="questions">
+            <div class="question-card">“¿Cómo fue tu primer trabajo?”</div>
+            <div class="question-card">“¿Qué recuerdas del día en que te mudaste?”</div>
+            <div class="question-card">“¿Cuál fue uno de los días más importantes de tu vida?”</div>
+            <div class="question-card">“¿Qué historia quieres que nunca se pierda?”</div>
+          </div>
+          <p class="problem-note">Esas historias casi nunca se cuentan a tiempo. Después queda el silencio, y el "ojalá lo hubiera guardado". Los recuerdos de mis viejos ayuda a tener esas conversaciones hoy, para poder volver a ellas siempre.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="como-funciona">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <div class="eyebrow">Cómo funciona</div>
+          <h2>Hablar es suficiente.</h2>
+          <p>No hace falta escribir una biografía ni saber por dónde empezar. La experiencia acompaña la conversación, organiza los recuerdos y los deja listos para volver a encontrarlos.</p>
+        </div>
+        <div class="steps-grid">
+          <article class="step reveal"><div class="step-num">01</div><h3>Conversa</h3><p>Presiona un botón y empieza a hablar. La app escucha, hace preguntas y sigue el hilo de forma natural.</p></article>
+          <article class="step reveal"><div class="step-num">02</div><h3>Construye la historia</h3><p>Nombres, lugares, relaciones, etapas de vida y anécdotas comienzan a formar una memoria familiar organizada.</p></article>
+          <article class="step reveal"><div class="step-num">03</div><h3>Vuelve a ella</h3><p>Escucha los audios, recorre capítulos y pregúntale a la app por personas, momentos o recuerdos ya contados.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="product" id="producto">
+      <div class="wrap">
+        <div class="section-head center reveal">
+          <div class="eyebrow pc-9b54a373">Una memoria que se puede explorar</div>
+          <h2>No es un archivo. Es una historia viva.</h2>
+          <p>Las conversaciones pueden convertirse en recuerdos consultables, capítulos y conexiones familiares.</p>
+        </div>
+        <div class="product-window reveal">
+          <div class="window-bar"><div class="traffic"><i></i><i></i><i></i></div><span class="quiet">Charla familiar</span><span>•••</span></div>
+          <div class="window-content">
+            <div class="conversation">
+              <div class="bubble q">Cuéntame de tu primer trabajo.</div>
+              <div class="bubble a">Era en una tienda pequeña del centro, mi primer sueldo lo gasté casi todo el mismo día. Ahí conocí a la que después fue mi mejor amiga...</div>
+              <div class="bubble q">¿Hay algo de esos días que recuerdes especialmente?</div>
+              <div class="bubble a">Sí. El día que me tocó cerrar sola por primera vez y me sentí grande de verdad.</div>
+              <div class="audio-card"><button class="play" id="playDemo" aria-label="Vista previa visual — este ejemplo no tiene audio real">▶</button><div><strong>Así se guarda un recuerdo con audio</strong><div class="quiet pc-1e28117f">Vista previa · sin audio</div></div><div class="wave" id="waveDemo"></div></div>
+            </div>
+            <aside class="story-side">
+              <h3>Libro de la historia</h3>
+              <div class="chapter"><small>Capítulo 01</small><b>Los años del colegio</b></div>
+              <div class="chapter"><small>Capítulo 02</small><b>El primer trabajo</b></div>
+              <div class="chapter"><small>Capítulo 03</small><b>El viaje que cambió todo</b></div>
+              <div class="tree-mini"><div class="quiet pc-fa3e1c7d">Árbol familiar</div><div class="tree-row"><span class="person">Abuelo</span><span class="arrow">→</span><span class="person">Papá</span><span class="arrow">→</span><span class="person">Hijos</span></div></div>
+            </aside>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap voice-grid">
+        <div class="voice-art reveal">
+          <div class="portrait" role="img" aria-label="Representación abstracta de un retrato familiar"></div>
+          <div class="voice-wave"><button class="play" aria-label="Vista previa visual — este ejemplo no tiene audio real">▶</button><div class="wave"></div></div>
+        </div>
+        <div class="voice-copy reveal">
+          <div class="eyebrow">Más que palabras</div>
+          <h2>No solo guarda lo que dijo. Guarda cómo lo dijo.</h2>
+          <p class="lead">Su voz. Sus pausas. Su forma de contar las cosas.</p>
+          <p>Una foto conserva cómo alguien se veía. Los recuerdos de mis viejos también puede conservar cómo sonaba una historia cuando esa persona la contó.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="familia">
+      <div class="wrap">
+        <div class="section-head center reveal">
+          <div class="eyebrow pc-9b54a373">Una historia de todos</div>
+          <h2>Esta historia la construimos entre todos.</h2>
+          <p>No hace falta que una sola persona cuente todo. Manda tu código de invitación por WhatsApp: quien lo recibe puede sumar sus propios recuerdos, y también volver cuando quiera a escuchar y leer los que ya se guardaron — así esta historia se arma y se disfruta entre todos.</p>
+        </div>
+        <div class="family-cards reveal">
+          <div class="family-card">
+            <div class="pc-6899e93a">📲</div>
+            <b class="pc-f3b0f625">Un link, directo por WhatsApp</b>
+            <p class="pc-166017f1">Cada bitácora tiene su propio código — lo mandas con un toque, listo para compartir con quien quieras.</p>
+          </div>
+          <div class="family-card">
+            <div class="pc-6899e93a">🎙️</div>
+            <b class="pc-f3b0f625">Entran y hablan, sin crear cuenta</b>
+            <p class="pc-166017f1">Tocan el link, dicen su nombre una vez, y una entrevistadora los va guiando — sin correo, sin clave, sin formularios. También pueden sumar fotos, videos o una nota de voz que ya tengan guardada.</p>
+          </div>
+          <div class="family-card">
+            <div class="pc-6899e93a">🔒</div>
+            <b class="pc-f3b0f625">Nunca se cuela nadie de afuera</b>
+            <p class="pc-166017f1">Solo entran las personas que invites — nadie más puede crearse una cuenta y llegar a tu bitácora.</p>
+          </div>
+          <div class="family-card">
+            <div class="pc-6899e93a">🤝</div>
+            <b class="pc-f3b0f625">Puedes tener la tuya y ayudar en otras</b>
+            <p class="pc-166017f1">Tu propia bitácora y, con un código, colaborar en la historia de alguien más — sin cerrar sesión ni crear otra cuenta.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- El registro se movió acá, justo después de mostrar producto/voz/
+         familia (auditoría UX 2026-09-07) — antes vivía después de
+         Próximamente/privacidad/preguntas, casi al final de la página, así
+         que alguien ya decidido a registrarse tenía que pasar por "esto
+         todavía no existe" y un muro de privacidad/FAQ antes de llegar al
+         formulario. El CTA final (más abajo, id="empezar") sigue estando
+         y sigue apuntando acá — con el registro más arriba, ese link ahora
+         scrollea hacia ARRIBA en vez de hacia abajo, cosa normal en
+         cualquier navegador. -->
+    <section class="registro" id="registro">
+      <div class="wrap">
+        <div class="registro-box reveal">
+          <div class="registro-copy">
+            <div class="eyebrow pc-f1b4ce9c">Empieza hoy</div>
+            <h2>Crea tu cuenta en menos de un minuto.</h2>
+            <p>Con nombre, correo y clave alcanza. En cuanto te registres entras directo a la herramienta y puedes empezar la primera charla.</p>
+            <div class="registro-points">
+              <span><i></i> Tus recuerdos quedan listos para volver a ellos cuando quieras.</span>
+              <span><i></i> Comparte tu código y arma esta historia entre todos.</span>
+              <span><i></i> Sin lista de espera: tu cuenta se crea al instante.</span>
+            </div>
+          </div>
+
+          <!-- id propio (auditoría UX 2026-09-07): los 4 CTA "Crear cuenta"
+               de la página apuntaban a #registro, el inicio de la SECCIÓN
+               — en móvil (una sola columna) eso deja primero el texto de
+               .registro-copy y recién después este formulario, obligando a
+               scrollear de más justo cuando alguien ya decidió registrarse.
+               Apuntan ahora a este id, el del formulario en sí; el resto de
+               la sección (.registro-copy) se ve igual, solo cambia dónde
+               aterriza el link. -->
+          <div class="signup-card" id="registro-form">
+            <h3 id="signupTitle">Crea tu cuenta</h3>
+            <p id="signupSubtitle">Nombre, correo y clave. Así de simple.</p>
+            <!-- Dos botones simples, no un patrón de "tabs" — un tablist de
+                 verdad promete navegación con flechas del teclado entre
+                 las opciones, que acá no está implementada. role="group"
+                 + aria-pressed describe justo lo que son: dos botones
+                 relacionados que alternan un estado, sin prometer de más. -->
+            <div class="signup-tabs" role="group" aria-label="Tipo de cuenta">
+              <button type="button" class="signup-tab active" id="tabNueva" aria-pressed="true">Crear mi bitácora</button>
+              <button type="button" class="signup-tab" id="tabColaborar" aria-pressed="false">Unirme con un código</button>
+            </div>
+            <form class="signup-form" id="signupForm" novalidate>
+              <div class="field">
+                <label for="suName">Nombre</label>
+                <input id="suName" name="name" type="text" autocomplete="name" placeholder="Tu nombre" required>
+              </div>
+              <div class="field">
+                <label for="suEmail">Correo electrónico</label>
+                <input id="suEmail" name="email" type="email" autocomplete="email" placeholder="nombre@correo.com" required>
+              </div>
+              <div class="field">
+                <label for="suPass">Clave</label>
+                <input id="suPass" name="password" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres" minlength="6" required>
+              </div>
+              <div class="field">
+                <label for="suPass2">Confirmar clave</label>
+                <input id="suPass2" name="password2" type="password" autocomplete="new-password" placeholder="Repite la clave" minlength="6" required>
+              </div>
+              <p class="field-hint">Mínimo 6 caracteres.</p>
+
+              <div class="field pc-93b8ea5b" id="familyCodeField">
+                <label for="suCode">Código de invitación</label>
+                <input class="pc-39ddb588" id="suCode" name="inviteCode" type="text" placeholder="Ej: B46NWEC7" maxlength="8" pattern="[A-Za-z0-9]{8}" aria-describedby="suCodeError">
+                <p class="field-error pc-81e00bde" id="suCodeError" role="alert"></p>
+              </div>
+              <p class="field-note pc-93b8ea5b" id="familyCodeNote">Vas a poder aportar historias a esa bitácora, contando con tu propia voz — no vas a tener una bitácora propia.</p>
+
+              <button class="btn btn-primary submit" id="signupSubmit" type="submit">Crear cuenta y entrar</button>
+              <p class="form-status" id="signupStatus" role="status" aria-live="polite"></p>
+              <p class="form-note">Tus datos se usan solo para tu cuenta en Los recuerdos de mis viejos.</p>
+              <p class="signup-alt">¿Ya tienes cuenta? <a href="/app.html">Inicia sesión</a>.</p>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- "Próximamente" vivió antes justo antes del CTA final (diluía la
+         conversión: alguien por registrarse volvía a leer "esto todavía
+         no existe" justo antes de decidirse), después justo después de
+         "Cómo funciona" (pero ahí seguía quedando ANTES de mostrar
+         producto/voz/familia), y después de familia (auditoría UX
+         2026-09-06). Ahora el registro se movió justo antes de acá
+         (auditoría UX 2026-09-07) — Próximamente sigue después de mostrar
+         lo que la app YA hace Y después de la oportunidad de registrarse;
+         quien no está listo para registrarse todavía sigue viendo esto,
+         privacidad y preguntas antes del cierre final. -->
+    <section id="proximamente">
+      <div class="wrap">
+        <div class="section-head center reveal">
+          <div class="eyebrow pc-9b54a373">Lo que viene</div>
+          <h2>Próximamente</h2>
+          <p>Seguimos construyendo la bitácora. Esto es lo que se viene.</p>
+        </div>
+        <!-- "Fotos y videos" e "Historias ya grabadas" vivían acá como
+             "Próximamente" hasta que dejaron de serlo: las dos ya están
+             construidas y en uso (subida de foto/video y de nota de voz ya
+             grabada, ambas desde colaborar.html vía /api/contribute-media)
+             — auditoría UX 2026-09-07. Se sacan de esta grilla (ya no es
+             cierto que "vienen") y su valor pasa a la tarjeta de "Entran y
+             hablan, sin crear cuenta" de la sección de familia, arriba, que
+             es donde de verdad se usan. -->
+        <div class="soon-cards reveal">
+          <div class="soon-card">
+            <span class="soon-badge">Próximamente</span>
+            <div class="pc-6899e93a">🍲</div>
+            <b class="pc-f3b0f625">Recetas</b>
+            <p class="pc-166017f1">Para que esa receta especial perdure, contada con tu propia voz.</p>
+          </div>
+          <div class="soon-card">
+            <span class="soon-badge">Próximamente</span>
+            <div class="pc-6899e93a">🙏</div>
+            <b class="pc-f3b0f625">Oraciones</b>
+            <p class="pc-166017f1">Las que solían recitar, para que las escuches y las recites junto a ellos.</p>
+          </div>
+          <div class="soon-card">
+            <span class="soon-badge">Próximamente</span>
+            <div class="pc-6899e93a">🎵</div>
+            <b class="pc-f3b0f625">Memorias musicales</b>
+            <p class="pc-166017f1">Un archivo con la música de su vida, para que también la puedan disfrutar, no solo conversar.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="privacy" id="privacidad">
+      <div class="wrap">
+        <div class="privacy-box reveal">
+          <div><div class="eyebrow pc-f1b4ce9c">Recuerdos personales</div><h2>Tu historia tiene que sentirse tuya.</h2><p>Lo que se guarda acá son voces, recuerdos y relaciones familiares — no un dato cualquiera. Por eso la privacidad no es un detalle secundario, es la base de todo lo demás.</p></div>
+          <div class="privacy-list">
+            <details class="privacy-item"><summary>🔐 Tu clave nunca queda expuesta</summary><p>Inicias sesión con usuario y contraseña — la tuya nunca se guarda en texto plano: se guarda como un hash de un solo sentido, así que ni siquiera nosotros podemos leerla ni revertirla a la clave original.</p></details>
+            <details class="privacy-item"><summary>🔒 Todo viaja cifrado</summary><p>Cada conexión con el sitio va por HTTPS (la misma tecnología que usa tu banco) — nadie que intercepte la conexión puede leer lo que hablas o escribes.</p></details>
+            <!-- Estos tres bloques repetían casi palabra por palabra lo que
+                 ya dicen las preguntas frecuentes de más abajo (auditoría
+                 UX 2026-09-07) — el detalle completo sigue estando ahí, acá
+                 queda solo la promesa central, más corta de leer. -->
+            <details class="privacy-item"><summary>👨‍👩‍👧 Solo entra quien tú invitas</summary><p>Nadie ve tu bitácora sin el código de invitación que tú generas — ni siquiera creándose una cuenta nueva por su cuenta. Más detalle en las preguntas frecuentes, abajo.</p></details>
+            <details class="privacy-item"><summary>🤖 La IA no aprende de tus historias</summary><p>Claude, la inteligencia artificial que hace las preguntas de seguimiento, es una herramienta ya entrenada que usamos — no algo que "aprende" de cada charla. Más detalle en las preguntas frecuentes, abajo.</p></details>
+            <details class="privacy-item"><summary>🔒 Tus audios y fotos también son privados</summary><p>No se entregan directo desde donde se guardan: la app confirma primero que tienes permiso real de ver esa bitácora.</p></details>
+            <details class="privacy-item"><summary>🚫 Nada de historial editado a escondidas</summary><p>Si algo se corrige, la versión anterior queda guardada — nunca se reescribe la historia sin dejar rastro.</p></details>
+            <details class="privacy-item"><summary>🗑️ Tú tienes el control</summary><p>Puedes borrar todos tus recuerdos guardados cuando quieras, con una acción tuya deliberada — nada se borra por accidente ni por un mensaje de chat. Al confirmar, se borra de la base de datos y de donde se guardan tus audios y fotos; puede quedar, por un tiempo limitado, en una copia de resguardo interna que usamos solo para recuperarnos de una falla grave, nunca para volver a mostrar tu contenido.</p></details>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="preguntas">
+      <div class="wrap">
+        <div class="eyebrow">Preguntas frecuentes</div>
+        <h2>Lo que la gente más nos pregunta</h2>
+        <div class="faq pc-d3a18014">
+          <details class="faq-item">
+            <summary>¿Quién puede escuchar o leer las historias que se guardan acá?</summary>
+            <p>Solo tu círculo de confianza: tú, y las personas que invites con tu propio código. Cualquiera de ellos puede entrar cuando quiera a escuchar, leer y disfrutar lo que se fue guardando — <strong>ese es justo el sentido de la aplicación</strong>, que esas historias no se pierdan y se puedan volver a visitar. Nadie por fuera de ese círculo puede entrar, ni creando una cuenta nueva por su cuenta.</p>
+          </details>
+          <details class="faq-item">
+            <summary>¿Mis audios y fotos están protegidos, o cualquiera con el link los puede abrir?</summary>
+            <p>Protegidos, sí — pero no porque el archivo en sí sea inaccesible: es que la app nunca lo entrega directo. Cada vez que se pide un audio o una foto, primero confirma que iniciaste sesión y que tienes permiso real de ver esa bitácora, y recién ahí lo entrega.</p>
+          </details>
+          <details class="faq-item">
+            <summary>¿La inteligencia artificial "aprende" de lo que cuento?</summary>
+            <p>No. Claude, la IA que hace las preguntas de seguimiento, es una herramienta ya entrenada que usamos como se usa un traductor — no algo que va aprendiendo de cada charla que tiene. Es la política estándar de Anthropic (quien la crea) para cualquiera que use su tecnología, no algo que configuramos nosotros para esta app en particular.</p>
+          </details>
+          <details class="faq-item">
+            <summary>¿Voy a poder escuchar las historias con la voz real de quien las contó, no una voz generada?</summary>
+            <p>Para las respuestas más largas o más significativas, <strong>ya se guarda la voz real</strong> de la persona — no una voz generada por IA — y se puede volver a escuchar tal cual se contó. Las respuestas más cortas se guardan solo como texto, para no ocupar espacio de más con grabaciones sin mucho contenido. La meta hacia adelante es llegar a conservar la voz real de cada historia, sin excepción, no solo de las más largas.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <section class="final-cta" id="empezar">
+      <div class="wrap inner reveal">
+        <div class="eyebrow pc-9b54a373">Una historia empieza con una pregunta</div>
+        <h2>Algún día vas a querer escuchar esa historia una vez más.</h2>
+        <p>Su voz, sus palabras, su forma de contar las cosas — eso no se puede recuperar después. Guárdala mientras todavía puede ser contada.</p>
+        <a class="btn btn-primary" href="#registro-form">Crear mi cuenta</a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap footer-row">
+      <div class="brand"><img class="brand-mark pc-a2ef1fee" src="/images/logo-icon.png" alt="" aria-hidden="true"><span>Los recuerdos de mis viejos</span></div>
+      <div class="footer-tagline">Las historias pasan. Los recuerdos pueden quedarse.</div>
+      <div class="footer-links"><a href="#como-funciona">Cómo funciona</a><a href="#registro-form">Crear cuenta</a><a href="/app.html">Iniciar sesión</a><a href="#privacidad">Privacidad</a><a href="#preguntas">Preguntas frecuentes</a></div>
+    </div>
+  </footer>
+
+  <script>
+    // Tamaño de letra — mismo mecanismo global de font-size.js que usa el
+    // resto de la app (localStorage + document.documentElement), acá solo
+    // el control visual del header público.
+    (function () {
+      const dec = document.getElementById('navFontDecBtn');
+      const inc = document.getElementById('navFontIncBtn');
+      const value = document.getElementById('navFontSizeValue');
+      if (!dec || !inc || !value || !window.bitacoraFontSize) return;
+      function actualizar() {
+        const v = window.bitacoraFontSize.get();
+        value.textContent = v + '%';
+        dec.disabled = v <= window.bitacoraFontSize.min;
+        inc.disabled = v >= window.bitacoraFontSize.max;
+      }
+      actualizar();
+      dec.addEventListener('click', () => { window.bitacoraFontSize.decrease(); actualizar(); });
+      inc.addEventListener('click', () => { window.bitacoraFontSize.increase(); actualizar(); });
+    })();
+
+    // El nav sticky cambia de alto según el ancho de pantalla y la escala
+    // de letra (el link "Cómo funciona" a 320px/140% no mide lo mismo que
+    // en desktop), así que un valor fijo de scroll-padding-top no alcanza:
+    // sin esto, al usar los links del menú (o el botón "Ver cómo
+    // funciona") el destino queda tapado por el nav en vez de aparecer
+    // debajo. Se mide el alto real cada vez que cambia y se guarda en
+    // scroll-padding-top, que es lo que usa el navegador para no scrollear
+    // "de más" al saltar a un ancla.
+    (function () {
+      const nav = document.querySelector('nav');
+      if (!nav || !window.ResizeObserver) return;
+      const actualizar = () => {
+        document.documentElement.style.scrollPaddingTop = (nav.offsetHeight + 16) + 'px';
+      };
+      new ResizeObserver(actualizar).observe(nav);
+      actualizar();
+    })();
+
+    // Cabecera compacta al hacer scroll (ver nav.is-compact en el CSS de
+    // arriba): pasado un umbral chico de scroll, el nav sticky se achica
+    // un poco para dejar más lugar a lo que se está leyendo — y vuelve a
+    // su tamaño normal apenas se sube de nuevo cerca del principio. Solo
+    // tiene efecto visual en desktop/tablet (>640px) — en mobile el CSS
+    // de la media query ya lo deja sin cambios a propósito, no hay más
+    // margen para achicarlo sin bajar algún target de 44px.
+    // requestAnimationFrame en vez de leer/escribir en cada evento
+    // "scroll" tal cual: los scroll events pueden dispararse muchas veces
+    // por segundo, y sin esto se recalcularía clases de más sin necesidad.
+    (function () {
+      const nav = document.querySelector('nav');
+      if (!nav) return;
+      const UMBRAL = 30;
+      let programado = false;
+      function actualizar() {
+        programado = false;
+        nav.classList.toggle('is-compact', window.scrollY > UMBRAL);
+      }
+      window.addEventListener('scroll', () => {
+        if (programado) return;
+        programado = true;
+        requestAnimationFrame(actualizar);
+      }, { passive: true });
+      actualizar();
+    })();
+
+    // Demo orb (decorativo, no llama al backend)
+    const orb = document.getElementById('demoOrb');
+    const orbText = document.getElementById('orbText');
+    const state = document.getElementById('demoState');
+    const question = document.getElementById('demoQuestion');
+    let active = false;
+    const demoQuestions = [
+      '“¿Cuál es uno de tus primeros recuerdos de infancia?”',
+      '“¿Quién era la persona que más te hacía reír en tu familia?”',
+      '“¿Qué lugar de tu infancia todavía puedes imaginar perfectamente?”'
+    ];
+    let qIndex = 0;
+    orb.addEventListener('click', () => {
+      active = !active;
+      orb.classList.toggle('listening', active);
+      if (active) {
+        orbText.innerHTML = 'Ejemplo:<br>escuchando…';
+        state.textContent = 'Así te escucharía la app — cuéntale el recuerdo con tus propias palabras';
+        question.textContent = demoQuestions[qIndex % demoQuestions.length];
+        qIndex++;
+      } else {
+        orbText.innerHTML = 'Presiona<br>para hablar';
+        state.textContent = 'Así se vería un recuerdo guardado';
+        question.textContent = '“La historia queda lista para volver a encontrarla.”';
+      }
+    });
+
+    // Reproducción decorativa (sin audio real)
+    const playDemo = document.getElementById('playDemo');
+    const waveDemo = document.getElementById('waveDemo');
+    let playing = false;
+    playDemo.addEventListener('click', () => {
+      playing = !playing;
+      playDemo.textContent = playing ? '❚❚' : '▶';
+      waveDemo.style.opacity = playing ? '.95' : '.55';
+      waveDemo.style.transform = playing ? 'scaleY(1.18)' : 'scaleY(1)';
+      waveDemo.style.transition = 'all .25s ease';
+    });
+
+    // Registro: crea la cuenta contra POST /api/signup y, si sale bien,
+    // ya queda la sesión iniciada (la respuesta pone la cookie), así que
+    // basta con mandar a la app.
+    const signupForm = document.getElementById('signupForm');
+    const signupStatus = document.getElementById('signupStatus');
+    const signupSubmit = document.getElementById('signupSubmit');
+
+    // Dos caminos bien separados: crear una bitácora nueva, o unirse como
+    // colaborador con el código que comparte quien ya tiene una (ver botón
+    // "invitar familiares" dentro de la app) — mismos datos (nombre, correo,
+    // clave), la única diferencia es el código.
+    const tabNueva = document.getElementById('tabNueva');
+    const tabColaborar = document.getElementById('tabColaborar');
+    const signupTitle = document.getElementById('signupTitle');
+    const signupSubtitle = document.getElementById('signupSubtitle');
+    const familyCodeField = document.getElementById('familyCodeField');
+    const familyCodeNote = document.getElementById('familyCodeNote');
+    const suCode = document.getElementById('suCode');
+    const suCodeError = document.getElementById('suCodeError');
+
+    // Se guarda aparte del estado visual de los tabs (que igual refleja lo
+    // mismo) para que el submit no tenga que releer clases/aria-pressed del
+    // DOM para saber en qué modo está — un solo lugar de verdad.
+    let modoColaborador = false;
+
+    // El <p> de error arranca con display:none inline (para no ocupar
+    // espacio cuando no hay nada que decir) — pero si solo se le cambia el
+    // textContent, nunca vuelve a mostrarse: queda con texto adentro pero
+    // invisible para todos, lectores de pantalla incluidos (display:none no
+    // se anuncia). Este helper es el único lugar que toca el mensaje, así
+    // que mostrar/ocultar quedan siempre sincronizados con el texto.
+    function mostrarErrorCodigo(mensaje) {
+      if (!suCodeError) return;
+      suCodeError.textContent = mensaje;
+      suCodeError.style.display = mensaje ? 'block' : 'none';
+    }
+
+    function setSignupMode(esColaborador) {
+      modoColaborador = esColaborador;
+      tabNueva.classList.toggle('active', !esColaborador);
+      tabNueva.setAttribute('aria-pressed', String(!esColaborador));
+      tabColaborar.classList.toggle('active', esColaborador);
+      tabColaborar.setAttribute('aria-pressed', String(esColaborador));
+      familyCodeField.style.display = esColaborador ? 'block' : 'none';
+      familyCodeNote.style.display = esColaborador ? 'block' : 'none';
+      // required solo en modo colaborador: en "crear mi bitácora" el campo
+      // ni se ve, así que tampoco tiene sentido que bloquee el envío.
+      suCode.required = esColaborador;
+      if (!esColaborador) { suCode.value = ''; }
+      mostrarErrorCodigo('');
+      signupTitle.textContent = esColaborador ? 'Únete a una familia' : 'Crea tu cuenta';
+      signupSubtitle.textContent = esColaborador
+        ? 'Nombre, correo, clave y el código que te compartieron.'
+        : 'Nombre, correo y clave. Así de simple.';
+      signupSubmit.textContent = esColaborador ? 'Unirme y entrar' : 'Crear cuenta y entrar';
+    }
+
+    tabNueva.addEventListener('click', () => setSignupMode(false));
+    tabColaborar.addEventListener('click', () => setSignupMode(true));
+
+    // Experimento (rama pruebas, 2026-09-08, pedido de Felipe): "unirme con
+    // un código" (una cuenta COMPLETA sumándose como colaboradora fija) se
+    // saca de la pantalla de registro — es un feature que ya no va. El
+    // servidor sigue aceptando accountType:'collaborator' por compatibilidad
+    // (por si ya hay cuentas creadas así), pero ya no hay forma de llegar
+    // ahí desde acá. El ?modo=colaborar que mandaba colaborar.html quedó sin
+    // efecto a propósito, ver setSignupMode() y .signup-tabs más abajo.
+
+    signupForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      signupStatus.classList.remove('error');
+      signupStatus.textContent = '';
+
+      const name = document.getElementById('suName').value.trim();
+      const email = document.getElementById('suEmail').value.trim();
+      const password = document.getElementById('suPass').value;
+      const password2 = document.getElementById('suPass2').value;
+      const inviteCode = suCode.value.trim().toUpperCase();
+
+      mostrarErrorCodigo('');
+
+      // Antes esto no se validaba en el navegador: si alguien elegía
+      // "Unirme con un código" y por lo que sea el campo quedaba vacío
+      // (lo borró, no lo tenía a mano todavía), el formulario se mandaba
+      // igual sin código — y del otro lado el servidor lo tomaba como una
+      // cuenta dueña nueva, sin avisar nada. Ahora se corta acá mismo, con
+      // un mensaje pegado al campo (no solo el globo nativo del navegador,
+      // que en letra chica es fácil de no ver) y el foco puesto ahí mismo.
+      if (modoColaborador && !inviteCode) {
+        mostrarErrorCodigo('Falta el código de invitación — pídeselo a quien te invitó.');
+        suCode.focus();
+        return;
+      }
+      if (modoColaborador && !/^[A-Za-z0-9]{8}$/.test(inviteCode)) {
+        mostrarErrorCodigo('El código tiene 8 letras y números — revisa que esté completo.');
+        suCode.focus();
+        return;
+      }
+
+      // Antes esto dependía solo del globo nativo del navegador
+      // (checkValidity()/reportValidity() más abajo) — en letra chica y
+      // fácil de no ver, mismo motivo que ya se corrigió para el código de
+      // invitación arriba. Ahora nombre y correo faltantes también
+      // muestran el error pegado abajo del formulario, igual que la clave.
+      if (!name) {
+        signupStatus.classList.add('error');
+        signupStatus.textContent = 'Falta tu nombre.';
+        document.getElementById('suName').focus();
+        return;
+      }
+      if (!email) {
+        signupStatus.classList.add('error');
+        signupStatus.textContent = 'Falta tu correo.';
+        document.getElementById('suEmail').focus();
+        return;
+      }
+      if (!signupForm.checkValidity()) {
+        signupForm.reportValidity();
+        return;
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        signupStatus.classList.add('error');
+        signupStatus.textContent = 'El correo no parece válido.';
+        return;
+      }
+      if (password.length < 6) {
+        signupStatus.classList.add('error');
+        signupStatus.textContent = 'La clave debe tener al menos 6 caracteres.';
+        return;
+      }
+      if (password !== password2) {
+        signupStatus.classList.add('error');
+        signupStatus.textContent = 'Las claves no coinciden.';
+        return;
+      }
+
+      signupSubmit.disabled = true;
+      signupStatus.textContent = 'Creando tu cuenta…';
+      try {
+        const response = await fetch('/api/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, password, inviteCode, accountType: modoColaborador ? 'collaborator' : 'owner' })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          signupStatus.classList.add('error');
+          signupStatus.textContent = data.error || 'No se pudo crear la cuenta.';
+          signupSubmit.disabled = false;
+          return;
+        }
+        signupStatus.textContent = '¡Listo! Entrando…';
+        window.location.href = data.isCollaborator ? '/colaborar.html' : '/app.html';
+      } catch (error) {
+        signupStatus.classList.add('error');
+        signupStatus.textContent = 'Hubo un problema para conectar.';
+        signupSubmit.disabled = false;
+      }
+    });
+
+    // Scroll reveals
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('show');
+          io.unobserve(entry.target);
+        }
+      });
+    }, {threshold:.12});
+    document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+  </script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+/* Paleta "Crónica Analógica" (Cálida y Acogedora) -- blanco lino, marrón
+   café, terracota quemado como acento primario, verde oliva pálido como
+   secundario. */
+
+:root {
+  color-scheme: light dark;
+  --bg: #FAF7F2;
+  --bg-alt: #F2ECE2;
+  --surface: #FFFFFF;
+  --surface-2: #F2ECE2;
+  --ink: #3D342E;
+  --ink-2: #6B5F55;
+  --ink-3: #9C9186;
+  --hairline: #E8DFD3;
+  --hairline-soft: #F1EAE0;
+  --accent: #C97A63;
+  --accent-press: #B15F49;
+  --accent-tint: rgba(201, 122, 99, 0.12);
+  --accent-2: #8DA399;
+  --accent-2-tint: rgba(141, 163, 153, 0.14);
+  --on-accent: #FBF4EF;
+  --shadow-card: 0 1px 2px rgba(61,52,46,.06), 0 10px 30px rgba(61,52,46,.09);
+  --shadow-float: 0 6px 16px rgba(61,52,46,.12), 0 28px 70px rgba(61,52,46,.16);
+  --radius-s: 12px;
+  --radius-m: 18px;
+  --radius-l: 24px;
+  --nav-bg: rgba(250, 247, 242, 0.72);
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+          "Helvetica Neue", "Segoe UI", Roboto, system-ui, sans-serif;
+  --measure: 42rem;
+  --heading-font: "Source Serif 4", Georgia, serif;
+  --heading-tracking: -0.011em;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #221B17;
+    --bg-alt: #1A1512;
+    --surface: #2C2420;
+    --surface-2: #362C26;
+    --ink: #F5EDE6;
+    --ink-2: #CDBBAE;
+    --ink-3: #9E8E80;
+    --hairline: rgba(245, 237, 230, 0.14);
+    --hairline-soft: rgba(245, 237, 230, 0.08);
+    --accent: #E0906F;
+    --accent-press: #EBA688;
+    --accent-tint: rgba(224, 144, 111, 0.16);
+    --accent-2: #A2B8AC;
+    --accent-2-tint: rgba(162, 184, 172, 0.16);
+    --on-accent: #241A14;
+    --shadow-card: 0 1px 2px rgba(0,0,0,.35), 0 10px 30px rgba(0,0,0,.45);
+    --shadow-float: 0 8px 24px rgba(0,0,0,.5), 0 32px 70px rgba(0,0,0,.6);
+    --nav-bg: rgba(34, 27, 23, 0.66);
+  }
+}

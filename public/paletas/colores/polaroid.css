@@ -1,0 +1,56 @@
+/* Paleta "Polaroid Club" (Mid-Century) -- gris arena, azul marino casi
+   negro, mostaza vintage como acento (usado quirúrgico), teal apagado
+   como secundario. */
+
+:root {
+  color-scheme: light dark;
+  --bg: #F2EFE9;
+  --bg-alt: #E9E4D8;
+  --surface: #FFFFFF;
+  --surface-2: #EDE9E0;
+  --ink: #1E252B;
+  --ink-2: #4E5A63;
+  --ink-3: #838F94;
+  --hairline: #D1C9BC;
+  --hairline-soft: #E3DDCF;
+  --accent: #E09F3E;
+  --accent-press: #C0862D;
+  --accent-tint: rgba(224, 159, 62, 0.14);
+  --accent-2: #4A7A79;
+  --accent-2-tint: rgba(74, 122, 121, 0.14);
+  --on-accent: #1E252B;
+  --shadow-card: 0 1px 2px rgba(30,37,43,.06), 0 10px 30px rgba(30,37,43,.09);
+  --shadow-float: 0 6px 16px rgba(30,37,43,.12), 0 28px 70px rgba(30,37,43,.16);
+  --radius-s: 12px;
+  --radius-m: 18px;
+  --radius-l: 24px;
+  --nav-bg: rgba(242, 239, 233, 0.72);
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+          "Helvetica Neue", "Segoe UI", Roboto, system-ui, sans-serif;
+  --measure: 42rem;
+  --heading-font: "Source Serif 4", Georgia, serif;
+  --heading-tracking: -0.011em;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #171B1E;
+    --bg-alt: #101315;
+    --surface: #20262A;
+    --surface-2: #262D31;
+    --ink: #ECE7DC;
+    --ink-2: #B7C0C4;
+    --ink-3: #8B959A;
+    --hairline: rgba(236, 231, 220, 0.14);
+    --hairline-soft: rgba(236, 231, 220, 0.08);
+    --accent: #EFB35E;
+    --accent-press: #F5C480;
+    --accent-tint: rgba(239, 179, 94, 0.16);
+    --accent-2: #6FA6A4;
+    --accent-2-tint: rgba(111, 166, 164, 0.16);
+    --on-accent: #1B1F22;
+    --shadow-card: 0 1px 2px rgba(0,0,0,.35), 0 10px 30px rgba(0,0,0,.45);
+    --shadow-float: 0 8px 24px rgba(0,0,0,.5), 0 32px 70px rgba(0,0,0,.6);
+    --nav-bg: rgba(23, 27, 30, 0.66);
+  }
+}

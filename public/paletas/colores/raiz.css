@@ -1,0 +1,59 @@
+/* Paleta de marca "RAÍZ" -- los 5 oficiales que definió Felipe (Verde
+   Raíz/Oliva/Terracota/Taupe/Crema), tipografía Urbanist (autoalojada,
+   ver /fonts/urbanist.css -- landing.html la carga siempre, sin costo si
+   la paleta activa no la usa) y radios más redondeados, a tono con el
+   isotipo. NOTA: esta paleta es solo el color/tipografía/radio -- el
+   logo (ícono + texto de marca) sigue siendo el de "Los recuerdos de mis
+   viejos" en este template compartido; ver public/general-raiz.html para
+   la versión con el isotipo y el copy de marca ya cambiados. */
+
+:root {
+  color-scheme: light dark;
+  --bg: #FDFBF7;
+  --bg-alt: #F9F8F5;
+  --surface: #FFFFFF;
+  --surface-2: #F9F8F5;
+  --ink: #363926;
+  --ink-2: #6C7051;
+  --ink-3: #AAA69A;
+  --hairline: #E4E1D6;
+  --hairline-soft: #EFEDE5;
+  --accent: #A47557;
+  --accent-press: #8C614A;
+  --accent-tint: rgba(164, 117, 87, 0.14);
+  --accent-2: #6C7051;
+  --accent-2-tint: rgba(108, 112, 81, 0.14);
+  --on-accent: #FDFBF7;
+  --shadow-card: 0 1px 2px rgba(54,57,38,.06), 0 10px 30px rgba(54,57,38,.09);
+  --shadow-float: 0 6px 16px rgba(54,57,38,.12), 0 28px 70px rgba(54,57,38,.16);
+  --radius-s: 16px;
+  --radius-m: 22px;
+  --radius-l: 32px;
+  --nav-bg: rgba(253, 251, 247, 0.72);
+  --sans: 'Urbanist Variable', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+  --measure: 42rem;
+  --heading-weight: 800;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1C1D14;
+    --bg-alt: #15160F;
+    --surface: #262716;
+    --surface-2: #2F301D;
+    --ink: #F2F0E7;
+    --ink-2: #B8BCA0;
+    --ink-3: #8D8A7A;
+    --hairline: rgba(242, 240, 231, 0.14);
+    --hairline-soft: rgba(242, 240, 231, 0.08);
+    --accent: #C99270;
+    --accent-press: #D9A688;
+    --accent-tint: rgba(201, 146, 112, 0.16);
+    --accent-2: #8B9270;
+    --accent-2-tint: rgba(139, 146, 112, 0.16);
+    --on-accent: #241A12;
+    --shadow-card: 0 1px 2px rgba(0,0,0,.35), 0 10px 30px rgba(0,0,0,.45);
+    --shadow-float: 0 8px 24px rgba(0,0,0,.5), 0 32px 70px rgba(0,0,0,.6);
+    --nav-bg: rgba(28, 29, 20, 0.66);
+  }
+}
