@@ -1157,9 +1157,16 @@ function claudeCostUsd(usage) {
 // con 330 créditos/minuto de conversión) — ese modelo es el de
 // ElevenCreative, no el de la API, y quedaba objetivamente mal calibrado
 // para esta app aunque ya intentaba arreglar el error original.
+// Un solo lugar para cada tarifa (usado acá y en /api/admin/recalculate-eleven-costs
+// más abajo) para que no puedan quedar desalineadas entre sí.
+function elevenTtsRatePer1kChars() {
+  return Number(process.env.ELEVENLABS_PRICE_PER_1K_CHARS || 0.05);
+}
+function elevenSttRatePerHour() {
+  return Number(process.env.ELEVENLABS_PRICE_PER_HOUR_STT || 0.22);
+}
 function elevenTtsCostUsd(characters) {
-  const ratePer1kChars = Number(process.env.ELEVENLABS_PRICE_PER_1K_CHARS || 0.05);
-  return ((characters || 0) / 1000) * ratePer1kChars;
+  return ((characters || 0) / 1000) * elevenTtsRatePer1kChars();
 }
 // Hueco real encontrado en el panel de consumo (2026-09-09, reportado por
 // Felipe): la transcripción (voz de la persona -> texto, ver /api/transcribe)
@@ -1168,8 +1175,7 @@ function elevenTtsCostUsd(characters) {
 // era solo la mitad (la respuesta hablada de la IA, nunca lo que ella
 // transcribía).
 function elevenSttCostUsd(seconds) {
-  const ratePerHour = Number(process.env.ELEVENLABS_PRICE_PER_HOUR_STT || 0.22);
-  return ((seconds || 0) / 3600) * ratePerHour;
+  return ((seconds || 0) / 3600) * elevenSttRatePerHour();
 }
 
 // Registra un evento de consumo. Nunca tira: si falla, se loguea y se sigue
@@ -6569,6 +6575,40 @@ app.get('/api/admin/usage', requireAuth, requireAdmin, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo cargar el reporte de consumo.' });
+  }
+});
+
+// Ajuste puntual, a pedido de Felipe (2026-09-09): cost_usd se calcula y se
+// GUARDA en el momento de cada evento (ver logUsage) — no se recalcula
+// después solo, así que las dos correcciones de tarifa de ElevenLabs de
+// hoy (primero el modelo de "créditos", equivocado; después el de la API
+// real, $/1000 caracteres y $/hora) dejaron el historial YA GUARDADO con
+// el número viejo, aunque el cálculo de acá en adelante ya salga bien.
+// Este botón (ver el de "Recalcular costos" en /admin.html) reescribe
+// cost_usd de TODO lo ya guardado de ElevenLabs con la tarifa de HOY —
+// se puede correr las veces que haga falta (siempre vuelve a dejar todo
+// alineado con la tarifa configurada en ese momento), pero solo tiene
+// sentido después de cambiar una tarifa; no hace falta como parte del uso
+// normal del panel.
+app.post('/api/admin/recalculate-eleven-costs', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await ensureSchema();
+    const ttsRate = elevenTtsRatePer1kChars();
+    const sttRate = elevenSttRatePerHour();
+    const ttsResult = await sql`
+      UPDATE usage_events SET cost_usd = (characters::numeric / 1000) * ${ttsRate}
+      WHERE service = 'elevenlabs' AND kind = 'tts' AND characters IS NOT NULL
+      RETURNING id
+    `;
+    const sttResult = await sql`
+      UPDATE usage_events SET cost_usd = (audio_seconds / 3600) * ${sttRate}
+      WHERE service = 'elevenlabs' AND kind = 'stt' AND audio_seconds IS NOT NULL
+      RETURNING id
+    `;
+    res.json({ ok: true, ttsRecalculados: ttsResult.length, sttRecalculados: sttResult.length, ttsRate, sttRate });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo recalcular el historial.' });
   }
 });
 

@@ -118,6 +118,8 @@
     margin-bottom: 22px;
   }
   .pricing-note code { background: rgba(0,0,0,0.05); border-radius: 4px; padding: 1px 4px; }
+  .recalc-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+  .recalc-note { margin-top: 6px; }
 
   section.panel {
     background: #FBF6EA;
@@ -485,6 +487,11 @@
         ${threshold != null
           ? `Se resalta a quien supera <strong>${fmtUsd(threshold)}</strong> en el rango elegido (<code>ADMIN_ALERT_THRESHOLD_USD_30D</code>).`
           : `No hay umbral de alerta configurado — definí <code>ADMIN_ALERT_THRESHOLD_USD_30D</code> para resaltar a quien se pase de un monto en el rango elegido.`}
+        <div class="recalc-row">
+          <button class="csv-btn" id="recalcBtn" type="button">Recalcular costos históricos de ElevenLabs</button>
+          <span class="num-sub muted" id="recalcStatus"></span>
+        </div>
+        <p class="num-sub muted recalc-note">Usar solo después de cambiar una tarifa — reescribe el costo (no el consumo real) de TODO lo ya guardado con la tarifa de ahora mismo.</p>
       </div>`;
 
     const kinds = data.kindBreakdown || [];
@@ -601,6 +608,21 @@
     renderTable();
     document.getElementById('csvBtn').addEventListener('click', () => downloadCsv(sortedProfiles(profiles)));
     conectarRangeBar();
+    const recalcBtn = document.getElementById('recalcBtn');
+    const recalcStatus = document.getElementById('recalcStatus');
+    if (recalcBtn) {
+      recalcBtn.addEventListener('click', () => {
+        recalcBtn.disabled = true;
+        recalcStatus.textContent = 'Recalculando…';
+        fetch('/api/admin/recalculate-eleven-costs', { method: 'POST' })
+          .then((resp) => (resp.ok ? resp.json() : Promise.reject('error')))
+          .then((r) => {
+            recalcStatus.textContent = `Listo — ${fmtNumber(r.ttsRecalculados)} de voz y ${fmtNumber(r.sttRecalculados)} de transcripción, con $${r.ttsRate}/1000 caracteres y $${r.sttRate}/hora. Refrescá la página para ver los números nuevos.`;
+          })
+          .catch(() => { recalcStatus.textContent = 'No se pudo recalcular — intentá de nuevo.'; })
+          .finally(() => { recalcBtn.disabled = false; });
+      });
+    }
 
     footNote.hidden = false;
     footNote.textContent = 'Generado ' + new Date(data.generatedAt).toLocaleString('es-CO') +
