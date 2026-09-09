@@ -378,8 +378,8 @@
   function downloadCsv(profiles) {
     const headers = ['perfil', 'tipo', 'correo', 'perfil_desde',
       'claude_usd_rango', 'claude_llamadas_rango', 'claude_tokens_in', 'claude_tokens_out',
-      'voz_ia_usd_rango', 'voz_ia_creditos_rango', 'voz_ia_caracteres_rango',
-      'transcripcion_usd_rango', 'transcripcion_creditos_rango', 'transcripcion_intervenciones_rango', 'transcripcion_seg_rango',
+      'voz_ia_usd_rango', 'voz_ia_caracteres_rango',
+      'transcripcion_usd_rango', 'transcripcion_intervenciones_rango', 'transcripcion_seg_rango',
       'db_texto_bytes', 'db_audio_bytes', 'db_audio_archivos', 'db_fotos_bytes', 'db_fotos_archivos',
       'db_videos_bytes', 'db_videos_archivos', 'db_archivos_total',
       'costo_total_usd_rango'];
@@ -388,8 +388,8 @@
       lines.push([
         p.nombre, p.tipo, p.email || '', p.createdAt || '',
         p.claude.costUsdRange.toFixed(4), p.claude.callsRange, p.claude.inputTokens, p.claude.outputTokens,
-        p.elevenlabsTts.costUsdRange.toFixed(4), p.elevenlabsTts.creditsRange, p.elevenlabsTts.charactersRange,
-        p.elevenlabsStt.costUsdRange.toFixed(4), p.elevenlabsStt.creditsRange, p.elevenlabsStt.callsRange, Math.round(p.elevenlabsStt.secondsRange),
+        p.elevenlabsTts.costUsdRange.toFixed(4), p.elevenlabsTts.charactersRange,
+        p.elevenlabsStt.costUsdRange.toFixed(4), p.elevenlabsStt.callsRange, Math.round(p.elevenlabsStt.secondsRange),
         p.db.textBytes, p.db.audioBytes, p.db.audioCount, p.db.fotoBytes, p.db.fotoCount,
         p.db.videoBytes, p.db.videoCount, p.db.totalFiles,
         p.totalCostUsdRange.toFixed(4),
@@ -438,16 +438,10 @@
     const totalTokensRange = profiles.reduce((acc, p) => acc + (p.claude.inputTokensRange || 0) + (p.claude.outputTokensRange || 0), 0);
     const totalTalkRange = profiles.reduce((acc, p) => acc + (p.elevenlabsStt.secondsRange || 0), 0);
     const totalIntervencionesRange = profiles.reduce((acc, p) => acc + (p.elevenlabsStt.callsRange || 0), 0);
-    const totalCreditsRange = profiles.reduce((acc, p) => acc + (p.elevenlabsTts.creditsRange || 0) + (p.elevenlabsStt.creditsRange || 0), 0);
     const maxCost = Math.max(1, ...profiles.map((p) => p.totalCostUsdRange || 0));
 
     const statsHtml = `
       <div class="stats-row">
-        <div class="stat-card">
-          <p class="label">Créditos ElevenLabs · rango elegido</p>
-          <p class="value">${fmtNumber(totalCreditsRange)}</p>
-          <p class="sub">voz + transcripción, todos los perfiles — dato exacto, no estimado</p>
-        </div>
         <div class="stat-card">
           <p class="label">Costo estimado · rango elegido</p>
           <p class="value">${fmtUsd(totalCostRange)}</p>
@@ -477,11 +471,12 @@
 
     const pricingHtml = `
       <div class="pricing-note">
-        Los créditos de ElevenLabs son un <strong>hecho</strong> (1 por carácter de voz, 330 por minuto
-        de transcripción — conversión fija de ElevenLabs, no cambia según el plan). Los $ de ElevenLabs
-        sí son un <strong>estimado</strong>: créditos × <code>ELEVENLABS_PRICE_PER_CREDIT</code>
-        (ahora mismo $${Number(data.pricing.elevenPricePerCredit).toFixed(6)}/crédito — ajustalo al precio
-        real de tu plan contratado). Los $ de Claude también son un estimado, con
+        Esta app llama a la API de ElevenLabs (no al plan de consumidor con "créditos") — cobra directo
+        en dólares por unidad, igual sin importar el plan contratado (confirmado contra
+        elevenlabs.io/app/subscription/api, 2026-09-09): voz de la IA (TTS)
+        <code>ELEVENLABS_PRICE_PER_1K_CHARS</code> (ahora ${fmtUsd(data.pricing.elevenTtsPer1kChars)}/1000 caracteres),
+        transcripción (STT) <code>ELEVENLABS_PRICE_PER_HOUR_STT</code> (ahora ${fmtUsd(data.pricing.elevenSttPerHour)}/hora).
+        Los $ de Claude también son un estimado, con
         <code>ANTHROPIC_INPUT_PRICE_PER_1M</code>/<code>ANTHROPIC_OUTPUT_PRICE_PER_1M</code>/
         <code>ANTHROPIC_CACHE_WRITE_PRICE_PER_1M</code>/<code>ANTHROPIC_CACHE_READ_PRICE_PER_1M</code>
         — ahora mismo: entrada ${fmtUsd(data.pricing.anthropicInputPer1M)}/1M tok, salida ${fmtUsd(data.pricing.anthropicOutputPer1M)}/1M tok.
@@ -542,13 +537,11 @@
             </td>
             <td>
               <div class="cost">${fmtUsd(p.elevenlabsTts.costUsdRange)}</div>
-              <div class="num-sub">${fmtNumber(p.elevenlabsTts.creditsRange)} créditos</div>
-              <div class="num-sub muted">${fmtNumber(p.elevenlabsTts.charactersRange)} caracteres</div>
+              <div class="num-sub">${fmtNumber(p.elevenlabsTts.charactersRange)} caracteres</div>
             </td>
             <td>
               <div class="cost">${fmtUsd(p.elevenlabsStt.costUsdRange)}</div>
-              <div class="num-sub">${fmtNumber(p.elevenlabsStt.creditsRange)} créditos</div>
-              <div class="num-sub muted">${fmtNumber(p.elevenlabsStt.callsRange)} intervención(es) · ${fmtSeconds(p.elevenlabsStt.secondsRange)}</div>
+              <div class="num-sub">${fmtNumber(p.elevenlabsStt.callsRange)} intervención(es) · ${fmtSeconds(p.elevenlabsStt.secondsRange)}</div>
             </td>
             <td>
               <div>${fmtBytes(p.db.totalBytes)} <span class="num-sub">· ${fmtNumber(p.db.totalFiles)} archivo(s)</span></div>

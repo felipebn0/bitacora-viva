@@ -102,7 +102,7 @@ La cuenta tiene que existir primero. Una vez marcada, al loguearse le va a apare
 
 - `ANTHROPIC_INPUT_PRICE_PER_1M` / `ANTHROPIC_OUTPUT_PRICE_PER_1M` — USD por millón de tokens de entrada/salida de Claude.
 - `ANTHROPIC_CACHE_WRITE_PRICE_PER_1M` / `ANTHROPIC_CACHE_READ_PRICE_PER_1M` — tarifa de los tokens de prompt caching que usa `/api/next` (ver el comentario junto a `cache_control` en server.js). Sin configurar, se calculan como 1.25x/0.1x del precio de entrada normal (las proporciones típicas de Anthropic).
-- `ELEVENLABS_PRICE_PER_CREDIT` — USD por crédito de ElevenLabs (varía según el plan contratado — revisar la factura real). La conversión a créditos es fija y no se configura: 1 crédito por carácter de voz, 330 créditos por minuto de transcripción (confirmado contra la página pública de precios de ElevenLabs).
+- `ELEVENLABS_PRICE_PER_1K_CHARS` / `ELEVENLABS_PRICE_PER_HOUR_STT` — USD por 1000 caracteres de voz (TTS) / por hora de transcripción (STT). Esta app llama a la API de ElevenLabs (no el plan de consumidor con "créditos") — esa tarifa es la misma sin importar el plan contratado (Free/Starter/Creator/...), confirmado contra elevenlabs.io/app/subscription/api: $0.05/1000 caracteres (modelo Flash/Turbo) y $0.22/hora (modelo Scribe v1), los mismos que usa esta app.
 - `ADMIN_ALERT_THRESHOLD_USD_30D` (opcional) — si un perfil supera este monto en el rango de fechas elegido en el panel, se resalta con un aviso. Sin configurar, no se resalta a nadie.
 
 El consumo de Claude/voz solo queda registrado desde que se activó esta medición (no hay forma de reconstruir tokens de charlas viejas); el tamaño en la base de datos, en cambio, se calcula sobre los datos tal como están hoy, así que sí incluye lo histórico.

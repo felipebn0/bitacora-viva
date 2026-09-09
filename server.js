@@ -1142,28 +1142,24 @@ function claudeCostUsd(usage) {
     + (cacheWrite / 1e6) * cacheWriteRate
     + (cacheRead / 1e6) * cacheReadRate;
 }
-// ElevenLabs cobra todo en "créditos", con una conversión FIJA (no cambia
-// según el plan contratado): 1 crédito por carácter de texto a voz, 330
-// créditos por minuto de transcripción (confirmado contra su página
-// pública de precios, 2026-09-09). Lo único que sí cambia según el plan es
-// cuánto vale CADA crédito en dólares — por eso una sola tarifa
-// (ELEVENLABS_PRICE_PER_CREDIT) alimenta las dos funciones de abajo, en vez
-// de dos tarifas ($/1000 caracteres y $/minuto) adivinadas por separado,
-// que podían quedar desalineadas entre sí sin que nadie lo notara — como
-// pasó acá: el valor por defecto de $/minuto que había antes (0.4) estaba
-// 6 a 8 veces por encima de lo real, aunque el de $/1000 caracteres sí
-// estaba razonablemente cerca.
-// Precio por defecto ($0.00018/crédito) aproxima el plan "Creator" de
-// ElevenLabs (el más chico con volumen real para esta app) —
-// los planes más grandes (Pro/Scale/Business) bajan a ~$0.000165/crédito.
-// Ajustar ELEVENLABS_PRICE_PER_CREDIT al plan real contratado.
-const ELEVENLABS_CREDITS_PER_CHARACTER_TTS = 1;
-const ELEVENLABS_CREDITS_PER_MINUTE_STT = 330;
-function elevenPricePerCredit() {
-  return Number(process.env.ELEVENLABS_PRICE_PER_CREDIT || 0.00018);
-}
+// Corrección 2026-09-09 (segunda vuelta, con la propia cuenta de Felipe de
+// por medio): esta app llama a la API de ElevenLabs directo con una clave
+// (api.elevenlabs.io/v1/...), no pasa por el plan de consumidor (ElevenCreative,
+// el que vende "créditos" mensuales) — esa es la pestaña "ElevenAPI" del
+// dashboard, que cobra en DÓLARES DIRECTOS por unidad, con el MISMO precio
+// por unidad sin importar el plan contratado (Free, Starter, Creator... la
+// única diferencia entre planes es cuánto viene incluido gratis, no la
+// tarifa marginal). Confirmado contra la propia cuenta de Felipe
+// (elevenlabs.io/app/subscription/api): Flash/Turbo (el modelo de TTS que
+// usa speakWithElevenLabs) = $0.05 por 1000 caracteres; Scribe v1 (el
+// modelo de STT que usa /api/transcribe) = $0.22 por HORA. Reemplaza el
+// intento anterior de esta misma corrección (una tarifa por "crédito",
+// con 330 créditos/minuto de conversión) — ese modelo es el de
+// ElevenCreative, no el de la API, y quedaba objetivamente mal calibrado
+// para esta app aunque ya intentaba arreglar el error original.
 function elevenTtsCostUsd(characters) {
-  return (characters || 0) * ELEVENLABS_CREDITS_PER_CHARACTER_TTS * elevenPricePerCredit();
+  const ratePer1kChars = Number(process.env.ELEVENLABS_PRICE_PER_1K_CHARS || 0.05);
+  return ((characters || 0) / 1000) * ratePer1kChars;
 }
 // Hueco real encontrado en el panel de consumo (2026-09-09, reportado por
 // Felipe): la transcripción (voz de la persona -> texto, ver /api/transcribe)
@@ -1172,7 +1168,8 @@ function elevenTtsCostUsd(characters) {
 // era solo la mitad (la respuesta hablada de la IA, nunca lo que ella
 // transcribía).
 function elevenSttCostUsd(seconds) {
-  return ((seconds || 0) / 60) * ELEVENLABS_CREDITS_PER_MINUTE_STT * elevenPricePerCredit();
+  const ratePerHour = Number(process.env.ELEVENLABS_PRICE_PER_HOUR_STT || 0.22);
+  return ((seconds || 0) / 3600) * ratePerHour;
 }
 
 // Registra un evento de consumo. Nunca tira: si falla, se loguea y se sigue
@@ -6505,19 +6502,14 @@ app.get('/api/admin/usage', requireAuth, requireAdmin, async (req, res) => {
           costUsdRange: Number(r.claude_cost_usd_r),
           costUsdPrevRange: Number(r.claude_cost_usd_prev),
         },
-        // "credits"/"creditsRange": el número EXACTO de créditos de
-        // ElevenLabs que consume esto (1 por carácter, conversión fija,
-        // no depende de ninguna tarifa configurada) — a diferencia de
-        // costUsd (un estimado en dólares, sí depende de
-        // ELEVENLABS_PRICE_PER_CREDIT), esto es un hecho, no una
-        // estimación. Responde directo la pregunta original de Felipe
-        // (2026-09-09): "cuántos créditos se gastaron".
+        // Esta app llama a la API de ElevenLabs (cobro directo en $ por
+        // unidad, no el sistema de "créditos" del plan de consumidor — ver
+        // el comentario junto a elevenTtsCostUsd), así que costUsd ya es
+        // el número real, no una conversión de créditos.
         elevenlabsTts: {
           characters: Number(r.tts_characters),
-          credits: Number(r.tts_characters) * ELEVENLABS_CREDITS_PER_CHARACTER_TTS,
           costUsd: Number(r.tts_cost_usd),
           charactersRange: Number(r.tts_characters_r),
-          creditsRange: Number(r.tts_characters_r) * ELEVENLABS_CREDITS_PER_CHARACTER_TTS,
           costUsdRange: Number(r.tts_cost_usd_r),
           costUsdPrevRange: Number(r.tts_cost_usd_prev),
         },
@@ -6528,11 +6520,9 @@ app.get('/api/admin/usage', requireAuth, requireAdmin, async (req, res) => {
         // una transcripción real.
         elevenlabsStt: {
           seconds: Number(r.stt_seconds),
-          credits: Math.round((Number(r.stt_seconds) / 60) * ELEVENLABS_CREDITS_PER_MINUTE_STT),
           calls: Number(r.stt_calls),
           costUsd: sttCostUsd,
           secondsRange: Number(r.stt_seconds_r),
-          creditsRange: Math.round((Number(r.stt_seconds_r) / 60) * ELEVENLABS_CREDITS_PER_MINUTE_STT),
           callsRange: Number(r.stt_calls_r),
           costUsdRange: sttCostUsdR,
           costUsdPrevRange: sttCostUsdPrev,
@@ -6569,9 +6559,8 @@ app.get('/api/admin/usage', requireAuth, requireAdmin, async (req, res) => {
       pricing: {
         anthropicInputPer1M: Number(process.env.ANTHROPIC_INPUT_PRICE_PER_1M || 1),
         anthropicOutputPer1M: Number(process.env.ANTHROPIC_OUTPUT_PRICE_PER_1M || 5),
-        elevenPricePerCredit: elevenPricePerCredit(),
-        elevenCreditsPerCharacterTts: ELEVENLABS_CREDITS_PER_CHARACTER_TTS,
-        elevenCreditsPerMinuteStt: ELEVENLABS_CREDITS_PER_MINUTE_STT,
+        elevenTtsPer1kChars: Number(process.env.ELEVENLABS_PRICE_PER_1K_CHARS || 0.05),
+        elevenSttPerHour: Number(process.env.ELEVENLABS_PRICE_PER_HOUR_STT || 0.22),
         alertThresholdUsd: alertThreshold,
       },
       kindBreakdown,
