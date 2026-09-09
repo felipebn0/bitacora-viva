@@ -59,8 +59,17 @@
        (el look de "Apple HIG"). Las paletas vintage (papel/crónica/
        polaroid) ponen --heading-font en Source Serif 4 con menos tracking
        (las serifas necesitan menos apretado); RAÍZ solo sube el peso. */
+    /* --heading-ink: opcional, aparte de --ink (pedido de Felipe,
+       2026-09-08 -- "tomar los colores más claros como principales para
+       que la página no se sienta pesada"). El título grande es lo que
+       más pesa visualmente en una landing, así que algunas paletas
+       quieren un tono más CLARO ahí -- pero --ink en sí se queda oscuro,
+       porque también lo usan cosas chicas (nav, campos de formulario)
+       que necesitan más contraste del que hace falta para un título
+       grande y en negrita. Sin --heading-ink definida, usa --ink de
+       siempre. */
     h1, h2, h3 {
-      margin: 0; color: var(--ink); line-height: 1.08;
+      margin: 0; color: var(--heading-ink, var(--ink)); line-height: 1.08;
       font-family: var(--heading-font, var(--sans));
       font-weight: var(--heading-weight, 600);
       letter-spacing: var(--heading-tracking, -0.021em);

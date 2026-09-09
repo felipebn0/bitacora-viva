@@ -31,7 +31,7 @@
     // href del <link id="paletaCss"> antes de que el navegador llegue a
     // aplicar el de por defecto, así no hay parpadeo.
     (function () {
-      var permitidas = ['apple', 'papel', 'cronica', 'polaroid', 'raiz'];
+      var permitidas = ['apple', 'papel', 'cronica', 'polaroid', 'raiz', 'arena'];
       var pedida = new URLSearchParams(location.search).get('paleta');
       if (pedida && permitidas.indexOf(pedida) !== -1) {
         document.getElementById('paletaCss').href = '/paletas/colores/' + pedida + '.css';

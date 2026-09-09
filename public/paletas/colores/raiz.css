@@ -13,16 +13,24 @@
   --bg-alt: #F9F8F5;
   --surface: #FFFFFF;
   --surface-2: #F9F8F5;
+  /* Ajuste (pedido de Felipe, 2026-09-08): "la idea era tomar los colores
+     más claros como principales para que la página no se sienta
+     pesada" -- Oliva (más claro) pasa a ser el color del TÍTULO grande
+     (--heading-ink, ver base.css), que es lo que más pesa visualmente en
+     una landing. --ink en sí se queda oscuro (Verde Raíz) porque también
+     lo usan cosas chicas -- nav, campos de formulario -- que necesitan
+     más contraste del que hace falta para un título grande y en negrita. */
+  --heading-ink: #6C7051;
   --ink: #363926;
-  --ink-2: #6C7051;
+  --ink-2: #565943;
   --ink-3: #AAA69A;
   --hairline: #E4E1D6;
   --hairline-soft: #EFEDE5;
   --accent: #A47557;
   --accent-press: #8C614A;
   --accent-tint: rgba(164, 117, 87, 0.14);
-  --accent-2: #6C7051;
-  --accent-2-tint: rgba(108, 112, 81, 0.14);
+  --accent-2: #7C8560;
+  --accent-2-tint: rgba(160, 161, 140, 0.14);
   --on-accent: #FDFBF7;
   --shadow-card: 0 1px 2px rgba(54,57,38,.06), 0 10px 30px rgba(54,57,38,.09);
   --shadow-float: 0 6px 16px rgba(54,57,38,.12), 0 28px 70px rgba(54,57,38,.16);
@@ -32,7 +40,7 @@
   --nav-bg: rgba(253, 251, 247, 0.72);
   --sans: 'Urbanist Variable', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
   --measure: 42rem;
-  --heading-weight: 800;
+  --heading-weight: 700;
 }
 
 @media (prefers-color-scheme: dark) {
