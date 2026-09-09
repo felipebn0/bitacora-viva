@@ -1520,12 +1520,84 @@
     });
   }
 
+  // Ver el comentario largo junto a esto mismo en app.html — mismo mecanismo,
+  // mismo motivo (pedido de Felipe, 2026-09-09, revisión de costos: la
+  // transcripción cobra por minuto de audio, y SILENCE_MS de espera queda
+  // grabado igual al final de cada respuesta). Se llama solo desde
+  // terminarGrabacion() (grabación en vivo, con grabacionIniciadaEn/
+  // lastLoudTime frescos) — nunca desde el flujo de "subir un archivo ya
+  // grabado" (procesarAudio más abajo lo recibe ya resuelto, no lo calcula
+  // él mismo, para no arriesgarse a recortar un archivo ajeno con el
+  // timestamp de una grabación en vivo vieja).
+  const COLA_A_CONSERVAR_MS = 500;
+  async function recortarSilencioDeCola(blob, duracionMs) {
+    if (!grabacionIniciadaEn || !lastLoudTime || !duracionMs) return { blob, durationMs: duracionMs || 0 };
+    const finCorteMs = (lastLoudTime - grabacionIniciadaEn) + COLA_A_CONSERVAR_MS;
+    if (finCorteMs >= duracionMs - 200) return { blob, durationMs: duracionMs };
+    try {
+      const arrayBuffer = await blob.arrayBuffer();
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+      const sampleRate = audioBuffer.sampleRate;
+      const finCorteSample = Math.min(audioBuffer.length, Math.max(1, Math.round((finCorteMs / 1000) * sampleRate)));
+      const recortado = ctx.createBuffer(audioBuffer.numberOfChannels, finCorteSample, sampleRate);
+      for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
+        recortado.copyToChannel(audioBuffer.getChannelData(ch).subarray(0, finCorteSample), ch);
+      }
+      try { ctx.close(); } catch (e) {}
+      return { blob: audioBufferToWav(recortado), durationMs: (finCorteSample / sampleRate) * 1000 };
+    } catch (e) {
+      return { blob, durationMs: duracionMs };
+    }
+  }
+
+  // Mismo codificador WAV manual que app.html — ver el comentario largo
+  // junto a esto mismo ahí.
+  function audioBufferToWav(buffer) {
+    const numChannels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const numFrames = buffer.length;
+    const blockAlign = numChannels * 2;
+    const dataSize = numFrames * blockAlign;
+    const arrayBuffer = new ArrayBuffer(44 + dataSize);
+    const view = new DataView(arrayBuffer);
+    const escribirTexto = (offset, texto) => { for (let i = 0; i < texto.length; i++) view.setUint8(offset + i, texto.charCodeAt(i)); };
+    escribirTexto(0, 'RIFF');
+    view.setUint32(4, 36 + dataSize, true);
+    escribirTexto(8, 'WAVE');
+    escribirTexto(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * blockAlign, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, 16, true);
+    escribirTexto(36, 'data');
+    view.setUint32(40, dataSize, true);
+    const canales = [];
+    for (let ch = 0; ch < numChannels; ch++) canales.push(buffer.getChannelData(ch));
+    let offset = 44;
+    for (let i = 0; i < numFrames; i++) {
+      for (let ch = 0; ch < numChannels; ch++) {
+        const s = Math.max(-1, Math.min(1, canales[ch][i]));
+        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+        offset += 2;
+      }
+    }
+    return new Blob([arrayBuffer], { type: 'audio/wav' });
+  }
+
   // Sube el audio, lo transcribe, y manda ese texto como el siguiente turno
   // de la charla — se usa tanto para lo grabado en vivo como para un
   // archivo de audio ya existente que suban. Si este turno es solo la
   // respuesta a una aclaración de parentesco/año que faltaba, ese audio
   // corto NO se guarda — solo se transcribe para seguir la charla.
-  async function procesarAudio(blob, contentType) {
+  // blobParaTranscribir/durationMsParaTranscribir son OPCIONALES (ver
+  // terminarGrabacion): cuando no se dan (el flujo de "subir un archivo ya
+  // grabado"), se transcribe el mismo "blob" de siempre, sin recortar nada
+  // — mismo comportamiento que había antes de este cambio.
+  async function procesarAudio(blob, contentType, blobParaTranscribir, durationMsParaTranscribir) {
     const esSoloAclaracion = esperandoAclaracion;
 
     if (!esSoloAclaracion) {
@@ -1544,10 +1616,13 @@
 
     let texto = '';
     try {
+      const blobFinal = blobParaTranscribir || blob;
+      const headers = { 'Content-Type': blobFinal.type || contentType };
+      if (durationMsParaTranscribir > 0) headers['X-Audio-Duration-Ms'] = String(Math.round(durationMsParaTranscribir));
       const trResp = await fetch('/api/transcribe', {
         method: 'POST',
-        headers: { 'Content-Type': contentType },
-        body: blob,
+        headers,
+        body: blobFinal,
       });
       if (trResp.ok) {
         const trData = await trResp.json();
@@ -1595,7 +1670,11 @@
       return;
     }
 
-    const ok = await procesarAudio(blob, blob.type || 'audio/webm');
+    // blob (completo, sin recortar) sigue siendo lo que se sube a
+    // /api/contribute-audio para guardar/escuchar después — paraTranscribir
+    // es una copia aparte, sin el silencio de cola, solo para esta llamada.
+    const paraTranscribir = await recortarSilencioDeCola(blob, duracionMs);
+    const ok = await procesarAudio(blob, blob.type || 'audio/webm', paraTranscribir.blob, paraTranscribir.durationMs);
     if (!ok) {
       recStatus.textContent = 'No se pudo entender el audio. Intenta de nuevo.';
       reset();
