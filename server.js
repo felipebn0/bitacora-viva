@@ -6147,6 +6147,173 @@ app.get('/api/admin/media-debug', requireAuth, requireAdmin, async (req, res) =>
   }
 });
 
+// --- Limpieza de perfiles de prueba ---------------------------------
+// Borra TODO el contenido de cualquier cuenta o subperfil cuyo nombre,
+// usuario o correo coincida con un patrón de "prueba" (prueba, pruebita,
+// test, ejemplo, demo por defecto). Solo admin.
+//
+// Por defecto NO borra nada: primero devuelve la lista de a quién
+// borraría y cuántas filas tiene cada uno (dry run). Recién con
+// { confirmar: true } ejecuta.
+//
+// Nunca toca cuentas con is_admin=true ni la propia cuenta que llama.
+const PATRONES_PRUEBA_DEFAULT = ['prueba', 'pruebita', 'test', 'ejemplo', 'demo'];
+
+// Statements de borrado del CONTENIDO de un perfil (sirve igual para una
+// cuenta o un subperfil: las tablas de contenido usan user_id/profile_id
+// con el mismo id). No incluye la fila de users/bitacoras en sí.
+function stmtsBorrarContenidoDe(id) {
+  return [
+    sql`DELETE FROM historia_versiones WHERE tabla = 'family_members' AND registro_id IN (SELECT id FROM family_members WHERE user_id = ${id})`,
+    sql`DELETE FROM sessions WHERE user_id = ${id}`,
+    sql`DELETE FROM resumen WHERE user_id = ${id}`,
+    sql`DELETE FROM family_notes WHERE user_id = ${id} RETURNING audio_url, audio_urls, media_urls`,
+    sql`DELETE FROM media WHERE user_id = ${id} RETURNING url`,
+    sql`DELETE FROM family_members WHERE user_id = ${id}`,
+    sql`DELETE FROM timeline_events WHERE user_id = ${id}`,
+    sql`DELETE FROM story_log WHERE user_id = ${id} RETURNING audio_url, audio_urls, media_urls`,
+    sql`DELETE FROM chapters WHERE user_id = ${id}`,
+    sql`DELETE FROM usage_events WHERE user_id = ${id}`,
+    sql`DELETE FROM notification_preferences WHERE user_id = ${id}`,
+    sql`DELETE FROM reminder_deliveries WHERE user_id = ${id}`,
+    sql`DELETE FROM whatsapp_reminder_log WHERE profile_id = ${id}`,
+    sql`DELETE FROM subscriptions WHERE user_id = ${id}`,
+    sql`DELETE FROM billing_orders WHERE user_id = ${id}`,
+  ];
+}
+
+function urlsDeResultadoBorrado(results) {
+  const urls = [];
+  const empujar = (rows) => (rows || []).forEach((row) => {
+    if (row.url) urls.push(row.url);
+    if (row.audio_url) urls.push(row.audio_url);
+    parseJsonArray(row.audio_urls).forEach((u) => { if (typeof u === 'string') urls.push(u); });
+    parseJsonArray(row.media_urls).forEach((m) => { if (m && typeof m.url === 'string') urls.push(m.url); });
+  });
+  results.forEach(empujar);
+  return urls;
+}
+
+app.post('/api/admin/purgar-perfiles-prueba', requireAuth, requireAdmin, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+
+    let patrones = Array.isArray(req.body && req.body.patrones) ? req.body.patrones : PATRONES_PRUEBA_DEFAULT;
+    patrones = patrones
+      .map((p) => String(p || '').toLowerCase().trim().replace(/[^a-z0-9áéíóúñ ]/gi, ''))
+      .filter((p) => p.length >= 2 && p.length <= 40)
+      .slice(0, 20);
+    if (!patrones.length) return res.status(400).json({ error: 'No hay patrones válidos.' });
+    const patronRegex = patrones.join('|'); // sin metacaracteres de regex: ya se filtraron arriba
+
+    const confirmar = !!(req.body && req.body.confirmar);
+
+    const cuentas = await sql`
+      SELECT id, name, username, email, created_at
+      FROM users
+      WHERE owner_user_id IS NULL AND is_admin = false AND id <> ${req.userId}
+        AND (coalesce(name,'') ~* ${patronRegex} OR coalesce(username,'') ~* ${patronRegex} OR coalesce(email,'') ~* ${patronRegex})
+      ORDER BY created_at
+    `;
+    const subperfiles = await sql`
+      SELECT id, nombre, admin_user_id, created_at
+      FROM bitacoras
+      WHERE coalesce(nombre,'') ~* ${patronRegex}
+      ORDER BY created_at
+    `;
+
+    async function conteos(id) {
+      const r = await sql`
+        SELECT
+          (SELECT count(*) FROM sessions WHERE user_id = ${id})::int AS sessions,
+          (SELECT count(*) FROM story_log WHERE user_id = ${id})::int AS story_log,
+          (SELECT count(*) FROM family_notes WHERE user_id = ${id})::int AS family_notes,
+          (SELECT count(*) FROM media WHERE user_id = ${id})::int AS media,
+          (SELECT count(*) FROM chapters WHERE user_id = ${id})::int AS chapters,
+          (SELECT count(*) FROM family_members WHERE user_id = ${id})::int AS family_members,
+          (SELECT count(*) FROM usage_events WHERE user_id = ${id})::int AS usage_events
+      `;
+      return r[0];
+    }
+
+    if (!confirmar) {
+      const cuentasInfo = await Promise.all(cuentas.map(async (c) => ({
+        tipo: 'cuenta', id: c.id, nombre: capitalizarNombre(c.name || '') || null, username: c.username, email: c.email || null, creada: c.created_at, filas: await conteos(c.id),
+      })));
+      const subInfo = await Promise.all(subperfiles.map(async (b) => ({
+        tipo: 'subperfil', id: b.id, nombre: capitalizarNombre(b.nombre), adminUserId: b.admin_user_id, creada: b.created_at, filas: await conteos(b.id),
+      })));
+      return res.json({
+        dryRun: true,
+        patrones,
+        aviso: 'Nada se borró. Repite el pedido con { "confirmar": true } para ejecutar.',
+        cuentas: cuentasInfo,
+        subperfiles: subInfo,
+        totalPerfiles: cuentasInfo.length + subInfo.length,
+      });
+    }
+
+    const blobUrls = [];
+    const resultados = [];
+
+    // Subperfiles cuyo nombre coincide.
+    for (const b of subperfiles) {
+      try {
+        const r = await sql.transaction([...stmtsBorrarContenidoDe(b.id), sql`DELETE FROM bitacoras WHERE id = ${b.id}`]);
+        urlsDeResultadoBorrado(r).forEach((u) => blobUrls.push(u));
+        resultados.push({ tipo: 'subperfil', id: b.id, nombre: b.nombre, ok: true });
+      } catch (err) {
+        resultados.push({ tipo: 'subperfil', id: b.id, nombre: b.nombre, ok: false, error: String((err && err.message) || err).slice(0, 200) });
+      }
+    }
+
+    // Cuentas cuyo nombre/usuario/correo coincide — con sus propios
+    // subperfiles administrados (aunque no coincidan de nombre) y las
+    // referencias que otras filas le hagan.
+    for (const c of cuentas) {
+      try {
+        const subsDeCuenta = await sql`SELECT id FROM bitacoras WHERE admin_user_id = ${c.id}`;
+        const stmtsSubs = subsDeCuenta.flatMap((s) => [...stmtsBorrarContenidoDe(s.id), sql`DELETE FROM bitacoras WHERE id = ${s.id}`]);
+        const r = await sql.transaction([
+          ...stmtsSubs,
+          ...stmtsBorrarContenidoDe(c.id),
+          sql`UPDATE users SET owner_user_id = NULL WHERE owner_user_id = ${c.id}`,
+          sql`DELETE FROM collaborations WHERE owner_user_id = ${c.id} OR collaborator_user_id = ${c.id}`,
+          sql`UPDATE family_notes SET contributed_by = NULL WHERE contributed_by = ${c.id}`,
+          sql`UPDATE historia_versiones SET editado_por = NULL WHERE editado_por = ${c.id}`,
+          sql`DELETE FROM gift_redemptions WHERE bought_by_user_id = ${c.id} OR redeemed_by_user_id = ${c.id}`,
+          sql`DELETE FROM users WHERE id = ${c.id}`,
+        ]);
+        urlsDeResultadoBorrado(r).forEach((u) => blobUrls.push(u));
+        resultados.push({ tipo: 'cuenta', id: c.id, username: c.username, subperfilesBorrados: subsDeCuenta.length, ok: true });
+      } catch (err) {
+        resultados.push({ tipo: 'cuenta', id: c.id, username: c.username, ok: false, error: String((err && err.message) || err).slice(0, 200) });
+      }
+    }
+
+    // Borrado de los archivos en Blob: best-effort, fuera de transacción.
+    // Ahora mismo puede fallar todo (el store está pasado del cupo del plan
+    // Hobby) — no importa, las filas de la base ya se fueron.
+    const urlsUnicas = [...new Set(blobUrls.map((u) => urlHttpValida(u)).filter(Boolean))];
+    let blobBorrados = 0;
+    for (const u of urlsUnicas) {
+      try { await del(u); blobBorrados++; } catch (e) { /* cupo / archivo ya no está: se ignora */ }
+    }
+
+    res.json({
+      ok: true,
+      patrones,
+      perfilesBorrados: resultados.filter((x) => x.ok).length,
+      perfilesConError: resultados.filter((x) => !x.ok),
+      archivosBlob: { total: urlsUnicas.length, borrados: blobBorrados, sinBorrar: urlsUnicas.length - blobBorrados },
+      detalle: resultados,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo purgar los perfiles de prueba.' });
+  }
+});
+
 // --- Pagos (Wava) --------------------------------------------------------
 // Planes fijos en código (no en una tabla) — son 3 y cambian poco; si
 // alguna vez hace falta editarlos sin desplegar, ahí sí vale la pena
