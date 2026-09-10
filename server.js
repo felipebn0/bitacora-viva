@@ -6578,18 +6578,18 @@ app.get('/api/admin/usage', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-// Ajuste puntual, a pedido de Felipe (2026-09-09): cost_usd se calcula y se
-// GUARDA en el momento de cada evento (ver logUsage) — no se recalcula
-// después solo, así que las dos correcciones de tarifa de ElevenLabs de
-// hoy (primero el modelo de "créditos", equivocado; después el de la API
-// real, $/1000 caracteres y $/hora) dejaron el historial YA GUARDADO con
-// el número viejo, aunque el cálculo de acá en adelante ya salga bien.
-// Este botón (ver el de "Recalcular costos" en /admin.html) reescribe
-// cost_usd de TODO lo ya guardado de ElevenLabs con la tarifa de HOY —
-// se puede correr las veces que haga falta (siempre vuelve a dejar todo
-// alineado con la tarifa configurada en ese momento), pero solo tiene
-// sentido después de cambiar una tarifa; no hace falta como parte del uso
-// normal del panel.
+// Utilidad de mantenimiento (a pedido de Felipe, 2026-09-09): cost_usd se
+// calcula y se GUARDA en el momento de cada evento (ver logUsage) — no se
+// recalcula después solo, así que si se cambia una tarifa de ElevenLabs
+// (como pasó ese día, dos veces), el historial YA GUARDADO queda con el
+// número viejo aunque el cálculo de acá en adelante salga bien. Este
+// endpoint reescribe cost_usd de TODO lo ya guardado de ElevenLabs con la
+// tarifa configurada AHORA MISMO — es idempotente (correrlo de nuevo
+// vuelve a dejar todo alineado), pero solo tiene sentido después de
+// cambiar una tarifa. Ya no hay botón en /admin.html (se sacó una vez
+// hecho el recálculo de ese día); si vuelve a hacer falta, se dispara a
+// mano: fetch('/api/admin/recalculate-eleven-costs', { method: 'POST' })
+// desde la consola del navegador, logueado como admin.
 app.post('/api/admin/recalculate-eleven-costs', requireAuth, requireAdmin, async (req, res) => {
   try {
     await ensureSchema();
