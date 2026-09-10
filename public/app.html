@@ -3060,19 +3060,106 @@
     if (seguir) fetchNext();
   }
 
-  async function saveSessionLog() {
-    if (!sessionLog.length) return;
+  // Estado de guardado persistente (MEJORA 1: Resiliencia)
+  let pendingSessionLog = [];
+  let lastSaveError = null;
+  let saveRetryCount = 0;
+  let pendingSaveTimeout = null;
+
+  // Cargar backup al iniciar
+  function restorePendingSession() {
+    const backup = localStorage.getItem('bitacora_backup');
+    if (backup) {
+      try {
+        pendingSessionLog = JSON.parse(backup);
+        return true;
+      } catch (e) {
+        console.error('Error al restaurar sesión pendiente:', e);
+        localStorage.removeItem('bitacora_backup');
+        return false;
+      }
+    }
+    return false;
+  }
+
+  async function saveSessionLog(options = {}) {
+    const { forceRetry = false } = options;
+    
+    if (!sessionLog.length && !forceRetry) return { ok: true };
+    
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
       const resp = await fetch('/api/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ history: sessionLog, sessionDbId: currentSessionDbId }),
+        body: JSON.stringify({ 
+          history: sessionLog, 
+          sessionDbId: currentSessionDbId 
+        }),
+        signal: controller.signal,
       });
+      
+      clearTimeout(timeoutId);
+      
       if (resp.ok) {
         const data = await resp.json();
-        if (data.sessionDbId) currentSessionDbId = data.sessionDbId;
+        if (data.sessionDbId) {
+          currentSessionDbId = data.sessionDbId;
+        }
+        // Éxito: limpiar backup
+        pendingSessionLog = [];
+        localStorage.removeItem('bitacora_backup');
+        lastSaveError = null;
+        saveRetryCount = 0;
+        return { ok: true };
+      } else if (resp.status === 500) {
+        throw new Error(`Server error: ${resp.status}`);
+      } else {
+        throw new Error(`Unexpected error: ${resp.status}`);
       }
-    } catch (e) {}
+    } catch (e) {
+      // Guardar como pendiente
+      lastSaveError = e.message;
+      pendingSessionLog = [...sessionLog];
+      localStorage.setItem('bitacora_backup', JSON.stringify(pendingSessionLog));
+      
+      console.error('saveSessionLog falló:', e);
+      return { 
+        ok: false, 
+        error: e.message,
+        hasPendingData: pendingSessionLog.length > 0,
+        retryCount: saveRetryCount
+      };
+    }
+  }
+
+  async function retrySessionSave() {
+    if (!pendingSessionLog.length) return;
+    
+    setState('retrying-save');
+    orbLabel.innerHTML = 'Reintentando guardado…';
+    
+    const saveResult = await saveSessionLog({ forceRetry: true });
+    
+    if (saveResult.ok) {
+      setState('ended');
+      orbLabel.innerHTML = '✅ Guardado completado<br>Presiona para otra charla';
+      saveRetryCount = 0;
+    } else if (saveRetryCount < 3) {
+      saveRetryCount++;
+      orbLabel.innerHTML = 
+        '⚠️ No se guardó tu charla<br>' +
+        `<small style="font-size:0.75rem">Intento ${saveRetryCount} de 3 en 5s…</small>`;
+      if (pendingSaveTimeout) clearTimeout(pendingSaveTimeout);
+      pendingSaveTimeout = setTimeout(() => retrySessionSave(), 5000);
+    } else {
+      setState('save-failed');
+      orbLabel.innerHTML =
+        '❌ No se pudo guardar<br>' +
+        '<small style="font-size:0.75rem">Revisa tu conexión o intenta en unos minutos</small>';
+    }
   }
 
   async function finishSession() {
@@ -3080,15 +3167,42 @@
     orbLabel.innerHTML = 'Presiona<br>para otra charla';
     releaseMic();
     releaseWakeLock();
-    await saveSessionLog();
-    // Si esta charla era de armar árbol (o si de una charla normal salieron
-    // personas nuevas), "armar árbol genealógico" no debe volver a
-    // ofrecerse si ya hay una base — se vuelve a comprobar al terminar.
+    
+    const saveResult = await saveSessionLog();
+    
+    if (!saveResult.ok && saveResult.hasPendingData) {
+      setState('save-failed');
+      orbLabel.innerHTML = 
+        '⚠️ No se guardó tu charla<br>' +
+        '<small style="font-size:0.75rem">Reintentamos en 5s…</small>';
+      
+      saveRetryCount++;
+      if (saveRetryCount < 3) {
+        if (pendingSaveTimeout) clearTimeout(pendingSaveTimeout);
+        pendingSaveTimeout = setTimeout(() => retrySessionSave(), 5000);
+      } else {
+        orbLabel.innerHTML =
+          '⚠️ Fallo al guardar (3+ intentos)<br>' +
+          '<small style="font-size:0.75rem">Toca para reintentar o empezar nueva charla</small>';
+      }
+    }
+    
     if (sessionMode === 'arbol') comprobarSiArbolTieneBase();
   }
 
   function startSession(mode) {
-    if (state !== 'idle' && state !== 'ended') return;
+    if (state !== 'idle' && state !== 'ended' && state !== 'save-failed') return;
+    
+    // Si hay datos pendientes, pedir confirmación
+    if (pendingSessionLog.length > 0 && state !== 'ended') {
+      const shouldDiscard = confirm(
+        `Hay ${pendingSessionLog.length} mensajes sin guardar en la charla anterior. ` +
+        `¿Descartar y empezar nueva charla?\n\n` +
+        `(Si tocas "Cancelar", vuelves a la opción de reintentar guardado)`
+      );
+      if (!shouldDiscard) return;
+    }
+    
     requestWakeLock();
     sessionMode = mode === 'arbol' ? 'arbol' : 'historia';
     sessionId += 1;
@@ -3106,6 +3220,15 @@
     sessionLog = [];
     turnIndex = 0;
     sessionKey = new Date().toISOString().replace(/[:.]/g, '-');
+    
+    // Solo limpiar backup si realmente iniciamos nueva charla
+    if (state === 'ended' || state === 'save-failed') {
+      pendingSessionLog = [];
+      localStorage.removeItem('bitacora_backup');
+      saveRetryCount = 0;
+      if (pendingSaveTimeout) clearTimeout(pendingSaveTimeout);
+    }
+    
     fetchNext();
   }
 
@@ -3297,6 +3420,20 @@
     } catch (e) {}
   }
   cargarBadgeAportes();
+
+  // MEJORA 1: Recuperar sesión incompleta al cargar
+  if (restorePendingSession()) {
+    orbLabel.innerHTML = 
+      '⚠️ Charla incompleta encontrada<br>' +
+      '<small style="font-size:0.75rem">Reintentando guardar…</small>';
+    setState('retrying-save');
+    retrySessionSave();
+  }
+
+  // Limpiar timeout al descargar la página
+  window.addEventListener('beforeunload', () => {
+    if (pendingSaveTimeout) clearTimeout(pendingSaveTimeout);
+  });
 })();
 </script>
 </body>
