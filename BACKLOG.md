@@ -145,4 +145,12 @@ Pendiente/fuera de alcance de esta vuelta (no adivinado, dejado explícito):
 
 **Qué es** (pedido de Felipe, 2026-09-08): hoy la única forma de dejarle algo a la bitácora de otra persona es "aportar una historia" (la charla completa con la entrevistadora). La idea es un camino más liviano: grabar y mandar una nota de voz corta, tipo saludo o mensaje puntual ("te quiero", "feliz cumpleaños"), que le llegue a la persona como una sorpresa — sin pasar por toda la charla de aportar.
 
+## 17. "Audio de regalo" de la historia terminada — con la voz IA expresiva (ElevenLabs v3)
+
+**Qué es** (pedido de Felipe, 2026-09-10): hoy la voz IA (ElevenLabs Flash v2.5) se usa solo para la charla en vivo — está elegida por su velocidad (empieza a hablar en ~120 ms), no por lo expresiva. La idea es que, una vez la historia está escrita (capítulos/libro), se pueda generar aparte un audio narrado lindo y cálido de esa historia, tipo regalo para escuchar o compartir, usando el modelo **ElevenLabs v3** (más emotivo, pensado para audio grabado, no para responder al momento — su lentitud no importa acá).
+
+**Por qué no se usa v3 en la charla:** v3 tarda de 1 a varios segundos en arrancar cada respuesta y su voz puede cambiar de tono entre turnos; rompería la conversación en vivo, que ya cuesta afinar (silencios, tiempos). Ver la comparación de modelos en el plan de negocios (2026-09-10).
+
+**Para retomarlo:** definir si el audio se genera por capítulo o de la historia completa, dónde se guarda (Blob, como el resto del audio) y si es una función incluida o un add-on pago. Costo estimado de v3: tarifa estándar de ElevenLabs (más créditos por caracter que Flash) — recalcular sobre el largo real del libro antes de fijar precio.
+
 **Para retomarlo:** definir cómo se le avisa a la persona que tiene "un mensaje nuevo" (¿un ícono con notificación, como ya existe para Aportes/Árbol? ¿se reproduce dentro de la charla, como ya pasa con una foto pendiente?) y si esto necesita una tabla nueva o puede apoyarse en `family_notes`/`media` con un campo que distinga "mensaje corto" de "historia".
