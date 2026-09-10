@@ -1905,20 +1905,15 @@
     const yaInstalada = window.navigator.standalone || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
     if (yaInstalada) return;
     if (promptDeInstalacion) { agregarInicioBtn.style.display = 'inline-flex'; return; }
-    // beforeinstallprompt (Chrome/Android) es un evento poco confiable —
-    // depende de criterios internos del navegador y puede no llegar nunca
-    // en esta sesión, aunque el navegador sí soporte instalar la página.
-    // En vez de dejar todo esto vacío mientras se espera un evento que
-    // quizás nunca llegue, se muestra SIEMPRE la instrucción manual de
-    // una — si el evento llega más tarde, el listener de arriba la
-    // reemplaza por el botón de un solo toque. iOS Safari nunca dispara
-    // este evento (no tiene ninguna API para esto), así que ahí la
-    // instrucción manual es la única opción posible, siempre. (esIOS ya
-    // está declarada más arriba, junto con configurarSeccionInstalacion.)
-    agregarInicioTexto.textContent = esIOS
-      ? 'Para guardar esta charla en tu pantalla de inicio: toca compartir ⬆️ y luego "Agregar a pantalla de inicio".'
-      : 'Para guardar esta charla en tu pantalla de inicio: toca el menú ⋮ (arriba a la derecha) y elige "Agregar a pantalla de inicio" o "Instalar app".';
-    agregarInicioTexto.style.display = 'block';
+    // Antes, acá abajo se mostraba SIEMPRE una instrucción manual ("Para
+    // guardar esta charla en tu pantalla de inicio: ...") mientras se
+    // esperaba un beforeinstallprompt que en celular casi nunca llega.
+    // Pedido de Luca (2026-09-09): esa leyenda quedaba duplicada con la
+    // guía manual de la sección "Instalación" en Cuenta → Opciones
+    // avanzadas (mismo texto, mismo propósito) — se saca de acá y queda
+    // solo en Instalación. Si algún día esta app suma un service worker y
+    // beforeinstallprompt SÍ llega a dispararse, el botón de un solo
+    // toque de la línea de arriba sigue funcionando igual.
   }
 
   function aplicarSesionSubperfil(data) {
