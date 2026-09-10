@@ -6198,13 +6198,29 @@ app.post('/api/admin/purgar-perfiles-prueba', requireAuth, requireAdmin, rateLim
   try {
     await ensureSchema();
 
-    let patrones = Array.isArray(req.body && req.body.patrones) ? req.body.patrones : PATRONES_PRUEBA_DEFAULT;
+    // Dos formas de elegir a quién borrar (se pueden combinar):
+    //  - patrones: subcadena (prueba, test, …). Si no se manda ninguno Y
+    //    tampoco nombresExactos, se usan los PATRONES_PRUEBA_DEFAULT.
+    //  - nombresExactos: coincidencia exacta de name/username/nombre — para
+    //    borrar cuentas puntuales por su nombre tal cual, sin arrastrar
+    //    otras que compartan una subcadena.
+    const nombresExactos = (Array.isArray(req.body && req.body.nombresExactos) ? req.body.nombresExactos : [])
+      .map((s) => String(s || '').toLowerCase().trim())
+      .filter((s) => s.length >= 1 && s.length <= 100)
+      .slice(0, 50);
+
+    let patrones = Array.isArray(req.body && req.body.patrones)
+      ? req.body.patrones
+      : (nombresExactos.length ? [] : PATRONES_PRUEBA_DEFAULT);
     patrones = patrones
       .map((p) => String(p || '').toLowerCase().trim().replace(/[^a-z0-9áéíóúñ ]/gi, ''))
       .filter((p) => p.length >= 2 && p.length <= 40)
       .slice(0, 20);
-    if (!patrones.length) return res.status(400).json({ error: 'No hay patrones válidos.' });
-    const patronRegex = patrones.join('|'); // sin metacaracteres de regex: ya se filtraron arriba
+
+    if (!patrones.length && !nombresExactos.length) return res.status(400).json({ error: 'No hay patrones ni nombres válidos.' });
+    // "(?!x)" nunca coincide: cuando no hay patrones, ~* con esto no matchea
+    // nada y solo pesa la lista de nombresExactos.
+    const patronRegex = patrones.length ? patrones.join('|') : '(?!x)x';
 
     const confirmar = !!(req.body && req.body.confirmar);
 
@@ -6212,13 +6228,16 @@ app.post('/api/admin/purgar-perfiles-prueba', requireAuth, requireAdmin, rateLim
       SELECT id, name, username, email, created_at
       FROM users
       WHERE owner_user_id IS NULL AND is_admin = false AND id <> ${req.userId}
-        AND (coalesce(name,'') ~* ${patronRegex} OR coalesce(username,'') ~* ${patronRegex} OR coalesce(email,'') ~* ${patronRegex})
+        AND (
+          coalesce(name,'') ~* ${patronRegex} OR coalesce(username,'') ~* ${patronRegex} OR coalesce(email,'') ~* ${patronRegex}
+          OR lower(coalesce(name,'')) = ANY(${nombresExactos}) OR lower(coalesce(username,'')) = ANY(${nombresExactos})
+        )
       ORDER BY created_at
     `;
     const subperfiles = await sql`
       SELECT id, nombre, admin_user_id, created_at
       FROM bitacoras
-      WHERE coalesce(nombre,'') ~* ${patronRegex}
+      WHERE coalesce(nombre,'') ~* ${patronRegex} OR lower(coalesce(nombre,'')) = ANY(${nombresExactos})
       ORDER BY created_at
     `;
 
