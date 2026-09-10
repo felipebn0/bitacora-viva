@@ -90,7 +90,7 @@
     max-width: 220px; max-height: 220px; border-radius: 10px; display: block;
   }
   /* Item 14 (ajustado 2026-09-08): administrar (privado/archivar) un aporte
-     que le hicieron a MI historia va acá, no en colaborar.html. */
+     que le hicieron a MI historia va aquí, no en colaborar.html. */
   .aporte-item .aporte-acciones { margin-top: 10px; display: flex; gap: 14px; }
   .aporte-item .aporte-acciones button {
     background: none; border: none; color: var(--gold-deep); text-decoration: underline;
@@ -169,7 +169,7 @@
         <!-- El anuncio corto (aria-live) va aparte del contenido visual: si
            aria-live estuviera en #colaboradoresLista directamente, un lector
            de pantalla anunciaría TODAS las tarjetas de golpe cada vez que la
-           lista cambia — acá solo se avisa algo corto como "Se cargaron 3
+           lista cambia — aquí solo se avisa algo corto como "Se cargaron 3
            colaboradores.", y la lista se explora aparte, a su ritmo. -->
         <p id="colaboradoresStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
         <div id="colaboradoresLista"><p class="empty">Cargando…</p></div>
@@ -178,7 +178,7 @@
       <section id="aportesSection">
         <h2>Lo que contaron</h2>
         <p class="sub">Las historias completas, con su audio y fotos si las agregaron.</p>
-        <!-- Solo aparece si se llegó acá desde una tarjeta de "Quiénes han
+        <!-- Solo aparece si se llegó aquí desde una tarjeta de "Quiénes han
              colaborado" en arbol.html (?colaborador=), ver el bloque de
              filtroColaborador más abajo. -->
         <div id="filtroAviso" class="filtro-aviso" hidden>
@@ -225,7 +225,7 @@
   const filtroAviso = document.getElementById('filtroAviso');
   const filtroAvisoTexto = document.getElementById('filtroAvisoTexto');
 
-  // Se llega acá con ?colaborador=Nombre al tocar una tarjeta de "Quiénes
+  // Se llega aquí con ?colaborador=Nombre al tocar una tarjeta de "Quiénes
   // han colaborado" en arbol.html — el nombre viaja tal cual lo devuelve
   // /api/tree/colaboradores (ya pasado por capitalizarNombre en el
   // servidor), que es el mismo formato que trae n.contributor en
@@ -235,7 +235,7 @@
     pageTitle.textContent = `Aportes de ${filtroColaborador}`;
     pageSub.textContent = 'Las historias que contó, todas juntas.';
     // Drilldown a una sola persona: la pestaña "Lo que yo dije de otros" y
-    // la grilla de "Quiénes han colaborado" no suman nada acá — ya se sabe
+    // la grilla de "Quiénes han colaborado" no suman nada aquí — ya se sabe
     // de quién es esta pantalla. (.tabs-row trae display:flex propio, así
     // que hidden="" no la esconde: se apaga por style, mismo caso que
     // .filtro-aviso[hidden].)
@@ -253,7 +253,7 @@
   }
 
   // Items 18/19: pestañas "Lo que dijeron de mí" / "Lo que yo dije de
-  // otros" -- la segunda carga sus datos recién la primera vez que se
+  // otros" -- la segunda carga sus datos solo la primera vez que se
   // abre (cargaDadosHecha), no de entrada, para no pagar un viaje al
   // servidor de más si la persona nunca la toca.
   let cargaDadosHecha = false;
@@ -273,7 +273,7 @@
   tabRecibidosBtn.addEventListener('click', () => activarTab('recibidos'));
   tabDadosBtn.addEventListener('click', () => activarTab('dados'));
 
-  // --- "Lo que yo dije de otros": primero elegís la bitácora (igual que
+  // --- "Lo que yo dije de otros": primero eliges la bitácora (igual que
   // el selector de colaborar.html), después se carga esa sola. ---
   async function cargarMisColaboraciones() {
     dadosLista.innerHTML = '<p class="empty">Cargando…</p>';
@@ -308,8 +308,8 @@
   dadosSelect.addEventListener('change', () => cargarAportesDados(dadosSelect.value));
 
   // Misma forma de pintar un aporte que ya usan colaborar.html/
-  // colaboraciones.html -- acá SIN botones de administrar (item 14: eso
-  // vive del lado de "lo que me dijeron a mí", no acá).
+  // colaboraciones.html -- aquí SIN botones de administrar (item 14: eso
+  // vive del lado de "lo que me dijeron a mí", no aquí).
   function pintarAporteSimple(container, it) {
     const div = document.createElement('div');
     div.className = 'aporte-item';
@@ -362,7 +362,7 @@
 
   // Separado en "pedir" (async, solo trae los datos) y "pintar" (sync, ya
   // con los datos en mano) para poder pedir las dos cosas EN PARALELO y
-  // recién decidir el CTA de "Invitar familiares" cuando las dos
+  // solo decidir el CTA de "Invitar familiares" cuando las dos
   // respuestas ya están — así no se repite el mismo CTA dos veces sin
   // pagar el viaje extra al servidor que costaba encadenarlas.
   async function pedirColaboradores(ownerId) {
@@ -488,7 +488,7 @@
         return;
       }
       // Si arriba (colaboradores) también está vacío, esa sección ya
-      // muestra "Invitar familiares →" — repetirlo acá es el mismo CTA
+      // muestra "Invitar familiares →" — repetirlo aquí es el mismo CTA
       // dos veces en la misma pantalla, sin agregar nada nuevo.
       aportesStatus.textContent = 'Todavía no hay historias aportadas por tu círculo.';
       aportesLista.innerHTML = colaboradoresVacios
@@ -508,7 +508,7 @@
       quienP.className = 'quien';
       // is_private (item 14): quien lo aportó lo marcó privado -- se
       // esconde del resto del círculo, pero el dueño de la bitácora lo
-      // sigue viendo siempre (decisión de Felipe), así que acá se aclara
+      // sigue viendo siempre (decisión de Felipe), así que aquí se aclara
       // por qué aparece.
       quienP.textContent = etiqueta + (n.is_private ? ' (privado — solo lo ves tú)' : '');
       item.appendChild(quienP);

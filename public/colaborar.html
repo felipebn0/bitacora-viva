@@ -68,7 +68,7 @@
        orbe (los pseudo-elementos no quedan incluidos en "*" a secas).
        "animation-duration:0.001ms" (lo que había antes) no cumple lo que
        pide "reducir movimiento": una animación en loop infinito sigue en
-       loop infinito nomás que a 0.001ms por vuelta, y las transiciones
+       loop infinito no más que a 0.001ms por vuelta, y las transiciones
        quedaban sin tocar. "none" saca la animación/transición de la
        ecuación directamente, igual que ya hace la landing. */
     *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -123,7 +123,7 @@
   #appContent { display: none; flex-direction: column; align-items: center; width: 100%; }
   /* Mismo bug que en app.html: .login (más abajo) pone display:flex por
      defecto, así que sin esto el login se alcanza a ver un instante en
-     cada recarga real de la página, aunque ya haya sesión — recién cuando
+     cada recarga real de la página, aunque ya haya sesión — solo cuando
      responde el fetch('/api/me') de abajo, showApp() lo cambia a
      appContent. #loginScreen (id) le gana en especificidad a .login
      (clase) y lo mantiene oculto hasta entonces. */
@@ -145,7 +145,7 @@
      página (pasado el <header> con el nombre grande) no quedaba ningún
      recordatorio de A QUIÉN se le está aportando la historia — fácil de
      olvidar a mitad de grabar, sobre todo yendo y viniendo entre más de
-     una. Aparece recién cuando el <header> sale de la vista (ver el
+     una. Aparece solo cuando el <header> sale de la vista (ver el
      IntersectionObserver más abajo), no desde el arranque: al principio
      ya se ve el nombre grande de sobra, mostrar las dos cosas a la vez
      sería redundante. */
@@ -218,12 +218,12 @@
   .aportes .lista .item { font-size: 0.85rem; color: var(--ink-soft); }
   .aportes .lista .item strong { color: var(--ink); }
   .aportes .lista .item audio { width: 100%; margin-top: 4px; }
-  /* Item 14: administrar (privado/archivar) un aporte ya no va acá, ver
+  /* Item 14: administrar (privado/archivar) un aporte ya no va aquí, ver
      colaboraciones.html -- esto solo indica visualmente que el que se ve
-     acá está marcado privado (lo administra el dueño de la bitácora). */
+     aquí está marcado privado (lo administra el dueño de la bitácora). */
   .aportes .lista .item.es-privado { opacity: 0.75; }
 
-  /* A diferencia de app.html, acá no hay ningún panel "sticky" con un
+  /* A diferencia de app.html, aquí no hay ningún panel "sticky" con un
      presupuesto de alto fijo — esta página siempre fue de una sola
      columna, en cualquier ancho. Aun así, se mantiene el mismo límite que
      ya tenía en desktop (nunca se tocó ni se auditó ese caso) y solo se
@@ -268,7 +268,7 @@
   }
 
   .logout-row { text-align: center; margin-top: 8px; }
-  /* "Borrar mi cuenta" es la única acción irreversible acá — antes se veía
+  /* "Borrar mi cuenta" es la única acción irreversible aquí — antes se veía
      como un link subrayado más, sin distinguirse de "cerrar sesión". */
   .danger-zone { margin-top: 18px; padding-top: 14px; border-top: 1px solid #E7DFCC; }
   /* min-height/min-width:44px: subir audio (35px), escribir (18px), cerrar
@@ -339,7 +339,7 @@
          sacó "unirme con un código" del registro) — el link ahora manda
          directo al registro normal. -->
     <p class="sub pc-53425f7d">¿No tienes cuenta? <a class="pc-07135648" href="/#registro">Crea una</a>.</p>
-    <!-- Solo aparece cuando se llegó acá desde la pantalla de invitado
+    <!-- Solo aparece cuando se llegó aquí desde la pantalla de invitado
          (?codigo=), por si tocaron "Inicia sesión" sin querer y en
          realidad no tienen cuenta — ver guestToLoginLink más abajo. -->
     <p class="sub pc-53425f7d" id="loginBackToGuest" hidden><a class="pc-07135648" href="#">← volver a entrar solo con mi nombre</a></p>
@@ -368,7 +368,7 @@
     <p class="sub pc-53425f7d">¿Ya tienes cuenta? <a class="pc-07135648" href="#" id="guestToLoginLink">Inicia sesión</a>.</p>
   </div>
 
-  <!-- Cuenta dueña que llega acá por el botón "Colaborar" de app.html sin
+  <!-- Cuenta dueña que llega aquí por el botón "Colaborar" de app.html sin
        código ni bitácora puntual (?owner=/?codigo= ausentes). Si ya
        colabora con alguna historia entra derecho ahí (ver el fetch de
        /api/me más abajo) — esta pantalla es solo para cuando todavía no
@@ -440,7 +440,7 @@
         <input class="pc-93b8ea5b" type="file" id="subirAudioInput" accept="audio/*">
         <!-- El límite de tamaño y el nombre del archivo elegido no se veían
              en ningún lado antes de intentar subir (auditoría UX
-             2026-09-07): el tope de 4MB recién aparecía como error DESPUÉS
+             2026-09-07): el tope de 4MB solo aparecía como error DESPUÉS
              de elegir un archivo pesado, y una vez elegido uno bueno no
              había forma de confirmar cuál quedó seleccionado. El botón
              ahora avisa el límite de entrada, y #fotoSeleccionadaNombre (el
@@ -477,7 +477,7 @@
     <!-- Solo tiene sentido para quien usa esta página como su cuenta
          (colaboradora 100%, sin bitácora propia) — quien ya tiene su propia
          cuenta y solo está de visita aportando a otra historia (?owner=)
-         maneja su cuenta desde app.html, no acá (ver JS: se oculta con
+         maneja su cuenta desde app.html, no aquí (ver JS: se oculta con
          id="logoutRow" cuando !isCollaborator). -->
     <div class="logout-row" id="logoutRow">
       <button class="write-toggle" id="logoutBtn" type="button">cerrar sesión (<span id="whoami"></span>)</button>
@@ -519,7 +519,7 @@
   const dangerZone = document.querySelector('.danger-zone');
 
   // Si venimos de "colaborar con otra historia" (botón en app.html), la URL
-  // trae ?owner=<id> — todas las llamadas a la API de acá en adelante deben
+  // trae ?owner=<id> — todas las llamadas a la API de aquí en adelante deben
   // avisar para cuál historia son, además de quién está logueado. "let", no
   // "const": cuando se llega con ?codigo= y una cuenta real ya sumada como
   // colaboradora (ver más abajo), se actualiza a mano después del join sin
@@ -561,7 +561,7 @@
     activarContextoFijo();
   }
 
-  // La barra de contexto fija (ver CSS de .sticky-context) aparece recién
+  // La barra de contexto fija (ver CSS de .sticky-context) aparece solo
   // cuando el <header> con el nombre grande sale de la vista al hacer
   // scroll — mostrarla desde el principio sería redundante con lo que ya
   // se está viendo. Se activa una sola vez (yaObservando), después de que
@@ -584,7 +584,7 @@
         } else {
           // Mostrar SÍ se anima: quitar "hidden" y agregar "visible" en el
           // mismo tick no dispara la transición (el navegador no llega a
-          // pintar el estado "oculto" de por medio) — el rAF de acá fuerza
+          // pintar el estado "oculto" de por medio) — el rAF de aquí fuerza
           // ese frame intermedio para que translateY sí se note animando.
           stickyContext.hidden = false;
           requestAnimationFrame(() => stickyContext.classList.add('visible'));
@@ -637,7 +637,7 @@
       // logueada. En vez de eso, arranca una sesión de invitado nueva para
       // ESTE código (mismo mecanismo que ya usa la entrada por ?codigo=
       // más abajo), reusando el nombre que ya había dado. Esto REEMPLAZA
-      // su sesión actual: mientras ayuda acá, deja de tener activo su
+      // su sesión actual: mientras ayuda aquí, deja de tener activo su
       // propio enlace hasta que vuelva a entrar con él.
       if (sesionEsGuest) {
         const resp = await fetch('/api/guest-start', {
@@ -920,7 +920,7 @@
       // colaboradora) puede "volver a su historia" — una cuenta 100%
       // colaboradora no tiene árbol, capítulos ni charla propia. Esa misma
       // cuenta ya administra su sesión y su cuenta desde app.html, así que
-      // acá (de visita aportando a otra historia) no hace falta duplicar
+      // aquí (de visita aportando a otra historia) no hace falta duplicar
       // "cerrar sesión"/"borrar cuenta" — eso queda solo para quien usa
       // esta página como su cuenta (colaboradora 100%, sin otro lugar).
       if (!data.isCollaborator) {
@@ -946,7 +946,7 @@
       }
 
       if (activeOwnerId) {
-        // Se llegó acá con un código de otra historia (botón "colaborar con
+        // Se llegó aquí con un código de otra historia (botón "colaborar con
         // otra historia" en app.html) — puede ser una cuenta dueña normal
         // sumándose a otra bitácora, o una cuenta colaboradora entrando a
         // la suya de siempre. Confirmamos acceso contra el servidor.
@@ -1007,7 +1007,7 @@
 
       // Cuenta dueña normal, sin ?owner=/?codigo= y sin ninguna
       // colaboración todavía (si tuviera alguna, ya se resolvió arriba) —
-      // se le ofrece ingresar un código acá mismo, en vez de rebotarla a
+      // se le ofrece ingresar un código aquí mismo, en vez de rebotarla a
       // /app.html sin mostrarle nada.
       if (!data.isCollaborator) { mostrarHub(); return; }
       showApp(data);
@@ -1045,7 +1045,7 @@
   // como una foto suelta sin relación visual con la historia.
   let mediaUrlsLocal = [];
   // Mientras subirFotoPendiente() está en curso (ver más abajo), guarda esa
-  // promesa acá — enviarTurno() la espera antes de mandar nada. Sin esto,
+  // promesa aquí — enviarTurno() la espera antes de mandar nada. Sin esto,
   // si la persona seguía hablando/escribiendo apenas subida la foto (sin
   // esperar el "✓ Se agregó"), el turno siguiente podía salir ANTES de que
   // mediaUrlsLocal.push() llegara a correr, y esa foto se perdía en
@@ -1079,7 +1079,7 @@
     // .aporte-chat (tiene su propio scroll acotado, ver CSS), y en el
     // celular — donde .aporte-chat ya no tiene scroll propio, ver Bloque 21
     // — es la página entera. Así el último mensaje queda visible en ambos
-    // casos sin tener que distinguir de cuál de los dos se trata acá.
+    // casos sin tener que distinguir de cuál de los dos se trata aquí.
     if (!esPrimeraBurbuja) div.scrollIntoView({ block: 'end' });
     return div;
   }
@@ -1183,7 +1183,7 @@
       // Si esta fue la despedida (la historia YA quedó guardada en el
       // servidor), mostrar "✓ guardada" y colapsar la UI PRIMERO, y hablar
       // la despedida después como un extra best-effort. Antes esto iba al
-      // revés: se esperaba a que speak() terminara para recién ahí avisar
+      // revés: se esperaba a que speak() terminara para solo ahí avisar
       // que quedó guardada — y si speak() se colgaba (pasa en Safari: el
       // <audio> reproduce pero "onended" no dispara nunca), la persona se
       // quedaba mirando el orbe en "···" sin ningún aviso y terminaba
@@ -1202,7 +1202,7 @@
       // Se espera a que termine de hablar (y, si sigue la charla, a que la
       // siguiente grabación ya haya arrancado) antes de que enviarTurno()
       // se dé por resuelto — terminarGrabacion() decide si reiniciar el
-      // orbe a "idle" según esto, y si no se esperara acá lo pisaría de
+      // orbe a "idle" según esto, y si no se esperara aquí lo pisaría de
       // vuelta a "idle" a mitad de la charla hablada.
       await new Promise((resolve) => speak(data.message, resolve));
       await manejarDesenlaceDeTurno(data);
@@ -1263,7 +1263,7 @@
   let grabando = false;
 
   // Igual que en la charla principal: no hace falta presionar de nuevo
-  // para "cortar" — mientras haya voz seguimos grabando, y recién cuando
+  // para "cortar" — mientras haya voz seguimos grabando, y solo cuando
   // pasan unos segundos de silencio se corta y se manda solo.
   // Antes eran 2000ms, después 4000ms — en uso real (2026-09-06, ver el
   // mismo ajuste en app.html) resultó demasiado lento: se quedaba
@@ -1350,7 +1350,7 @@
   // Respaldo gratis: si el servidor no puede transcribir (por ejemplo, sin
   // crédito de ElevenLabs), usamos el reconocimiento de voz del navegador
   // como plan B — mismo mecanismo que ya existía en app.html, portado
-  // acá. Solo existe en Chrome de escritorio/Android, no en iPad/Safari —
+  // aquí. Solo existe en Chrome de escritorio/Android, no en iPad/Safari —
   // por eso es respaldo y no el camino principal.
   function initFallbackRecognition() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1400,13 +1400,13 @@
   // --- Voz de la entrevistadora (TTS) + charla fluida ---------------------
   // Pedido de Felipe (2026-09-08): "aportar una historia" debía sentirse
   // igual que la charla principal (app.html) — press el botón UNA vez,
-  // conversar de corrido, y que se cierre sola al terminar. Antes acá no
+  // conversar de corrido, y que se cierre sola al terminar. Antes aquí no
   // se escuchaba nada (nunca hubo TTS en esta pantalla) y había que volver
   // a tocar el botón en cada turno. Se porta el mismo mecanismo que ya
   // funciona en app.html (mismo /api/speak, mismo elemento <audio> único
   // reusado, misma voz de respaldo del sistema si el servidor falla).
   //
-  // interaccionReal: recién se pone en true con el primer gesto de verdad
+  // interaccionReal: solo se pone en true con el primer gesto de verdad
   // de la persona (tocar el orbe o mandar un turno escrito) — antes de
   // eso NO se intenta hablar ni escuchar solo. Es la causa real de por qué
   // el primer intento de charla fluida (2026-09-07) se rompía: sin esperar
@@ -1480,7 +1480,7 @@
     // Ahora esto también se llama SOLO (sin click, ver
     // manejarDesenlaceDeTurno) para seguir la charla — un botón
     // deshabilitado no bloquea una llamada por código como sí bloquea un
-    // click real, así que hay que repetir acá el mismo chequeo que ya
+    // click real, así que hay que repetir aquí el mismo chequeo que ya
     // impide tocar el orbe cuando el navegador no puede grabar nada.
     if (micNoDisponible) { mostrarEscribirColab(true); return; }
     iniciandoGrabacion = true;
@@ -1501,7 +1501,7 @@
     } catch (e) {
       // Encontrado probando la charla fluida: si esto se llama SOLO (ver
       // manejarDesenlaceDeTurno) el orbe puede haber quedado en "hablando"
-      // (moss, disabled) apenas un momento antes — sin resetearlo acá se
+      // (moss, disabled) apenas un momento antes — sin resetearlo aquí se
       // quedaba trabado mostrando "hablando" para siempre aunque ya se
       // hubiera caído al modo escribir.
       iniciandoGrabacion = false;
@@ -1712,7 +1712,7 @@
     // ok=true: procesarAudio() ya esperó a enviarTurno() de punta a punta
     // (habló la respuesta y, si seguía la charla, ya arrancó a escuchar de
     // nuevo — ver manejarDesenlaceDeTurno) o terminó la charla del todo.
-    // reset() acá pisaría ese estado de vuelta a "idle" a mitad de la
+    // reset() aquí pisaría ese estado de vuelta a "idle" a mitad de la
     // charla hablada, así que no corresponde tocarlo.
   }
 
@@ -1720,7 +1720,7 @@
     if (grabando) { terminarGrabacion(); return; }
     // Desbloquea audio/mic con este gesto real ANTES de que arranque nada
     // async — mismo motivo que app.html: en Android, si el AudioContext se
-    // crea recién varios segundos después del toque (esperando al
+    // crea solo varios segundos después del toque (esperando al
     // servidor, a que termine de hablar), suele quedar "suspended" para
     // siempre y el detector de silencio nunca detecta voz real.
     unlockAudioPlayback();
@@ -1761,7 +1761,7 @@
     }
     // ok=true: mismo motivo que en terminarGrabacion() — procesarAudio() ya
     // dejó todo resuelto (hablando/escuchando de nuevo, o la charla
-    // terminada), no hay que reactivar nada acá encima.
+    // terminada), no hay que reactivar nada aquí encima.
   });
 
   // --- Agregar una foto o video que acompañe esta historia (BACKLOG #1:
@@ -1813,7 +1813,7 @@
     // comentario junto a subidaFotoEnCurso más arriba).
     const promesa = (async () => {
       try {
-        // El caption/contributor ya no hace falta mandarlos acá: esta foto
+        // El caption/contributor ya no hace falta mandarlos aquí: esta foto
         // no se guarda suelta — queda atada a la historia (ver más abajo,
         // mediaUrlsLocal), y ahí sí viajan junto con ella.
         const resp = await fetch(conOwner('/api/contribute-media'), {
@@ -1871,7 +1871,7 @@
             div.appendChild(audio);
           }
         });
-        // Administrar (privado/archivar, item 14) ya no va acá -- Felipe:
+        // Administrar (privado/archivar, item 14) ya no va aquí -- Felipe:
         // "no va en colaboraciones mías hacia los demás sino cuando hacen
         // aportes a mi historia" -- ver colaboraciones.html.
         aportesLista.appendChild(div);

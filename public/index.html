@@ -79,7 +79,7 @@
 
     /* ---- Tipografía: misma jerarquía serif/sans de siempre, con la escala
        clara de la versión Apple ---- */
-    /* Sin color acá a propósito: hereda del contenedor, para que los
+    /* Sin color aquí a propósito: hereda del contenedor, para que los
        títulos adentro de los bloques oscuros (problema/privacidad/
        registro, ver más abajo) salgan claros solos, sin tener que pisarlo
        bloque por bloque. */
@@ -324,7 +324,7 @@
       background:var(--surface); border:1px solid var(--hairline); border-radius:var(--radius-m);
       padding:26px; box-shadow:var(--shadow-card); position:relative;
     }
-    /* Sin ", .pc-XXXXXXXX" pegado acá a propósito: esos elementos YA son
+    /* Sin ", .pc-XXXXXXXX" pegado aquí a propósito: esos elementos YA son
        <div>/<b>/<p> reales adentro de .family-card, así que el selector
        por etiqueta ya los alcanza sin falta — sumar la clase generaba una
        segunda definición de esa misma clase sin !important, chocando con
@@ -461,7 +461,7 @@
       .voice-wave{right:0; width:200px}
       .portrait{width:260px}
     }
-    /* Acá la versión Apple original escondía el control de letra (A-/A+)
+    /* Aquí la versión Apple original escondía el control de letra (A-/A+)
        por debajo de 400px — se saca: es el mismo control de tamaño de
        letra que el resto de la app deja siempre visible en el header
        público (pensado para el público mayor), y ocultarlo justo en los
@@ -722,13 +722,13 @@
       </div>
     </section>
 
-    <!-- El registro se movió acá, justo después de mostrar producto/voz/
+    <!-- El registro se movió aquí, justo después de mostrar producto/voz/
          familia (auditoría UX 2026-09-07) — antes vivía después de
          Próximamente/privacidad/preguntas, casi al final de la página, así
          que alguien ya decidido a registrarse tenía que pasar por "esto
          todavía no existe" y un muro de privacidad/FAQ antes de llegar al
          formulario. El CTA final (más abajo, id="empezar") sigue estando
-         y sigue apuntando acá — con el registro más arriba, ese link ahora
+         y sigue apuntando aquí — con el registro más arriba, ese link ahora
          scrollea hacia ARRIBA en vez de hacia abajo, cosa normal en
          cualquier navegador. -->
     <section class="registro" id="registro">
@@ -748,7 +748,7 @@
           <!-- id propio (auditoría UX 2026-09-07): los 4 CTA "Crear cuenta"
                de la página apuntaban a #registro, el inicio de la SECCIÓN
                — en móvil (una sola columna) eso deja primero el texto de
-               .registro-copy y recién después este formulario, obligando a
+               .registro-copy y solo después este formulario, obligando a
                scrollear de más justo cuando alguien ya decidió registrarse.
                Apuntan ahora a este id, el del formulario en sí; el resto de
                la sección (.registro-copy) se ve igual, solo cambia dónde
@@ -758,7 +758,7 @@
             <p id="signupSubtitle">Nombre, correo y clave. Así de simple.</p>
             <!-- Dos botones simples, no un patrón de "tabs" — un tablist de
                  verdad promete navegación con flechas del teclado entre
-                 las opciones, que acá no está implementada. role="group"
+                 las opciones, que aquí no está implementada. role="group"
                  + aria-pressed describe justo lo que son: dos botones
                  relacionados que alternan un estado, sin prometer de más. -->
             <div class="signup-tabs" role="group" aria-label="Tipo de cuenta">
@@ -806,7 +806,7 @@
          no existe" justo antes de decidirse), después justo después de
          "Cómo funciona" (pero ahí seguía quedando ANTES de mostrar
          producto/voz/familia), y después de familia (auditoría UX
-         2026-09-06). Ahora el registro se movió justo antes de acá
+         2026-09-06). Ahora el registro se movió justo antes de aquí
          (auditoría UX 2026-09-07) — Próximamente sigue después de mostrar
          lo que la app YA hace Y después de la oportunidad de registrarse;
          quien no está listo para registrarse todavía sigue viendo esto,
@@ -814,7 +814,7 @@
     <section class="privacy" id="privacidad">
       <div class="wrap">
         <div class="privacy-box reveal">
-          <div><div class="eyebrow pc-f1b4ce9c">Recuerdos personales</div><h2>Tu historia tiene que sentirse tuya.</h2><p>Lo que se guarda acá son voces, recuerdos y relaciones familiares — no un dato cualquiera. Por eso la privacidad no es un detalle secundario, es la base de todo lo demás.</p></div>
+          <div><div class="eyebrow pc-f1b4ce9c">Recuerdos personales</div><h2>Tu historia tiene que sentirse tuya.</h2><p>Lo que se guarda aquí son voces, recuerdos y relaciones familiares — no un dato cualquiera. Por eso la privacidad no es un detalle secundario, es la base de todo lo demás.</p></div>
           <!-- Auditoría UX 2026-09-09: bajó de 7 a 5 tarjetas (diluía el
                recorrido de la portada) -- "todo viaja cifrado" se fundió con
                "audios y fotos privados" (las dos son de la misma promesa:
@@ -840,12 +840,12 @@
         <h2>Lo que la gente más nos pregunta</h2>
         <div class="faq pc-d3a18014">
           <details class="faq-item">
-            <summary>¿Quién puede escuchar o leer las historias que se guardan acá?</summary>
+            <summary>¿Quién puede escuchar o leer las historias que se guardan aquí?</summary>
             <p>Solo tu círculo de confianza: tú, y las personas que invites con tu propio código. Cualquiera de ellos puede entrar cuando quiera a escuchar, leer y disfrutar lo que se fue guardando — <strong>ese es justo el sentido de la aplicación</strong>, que esas historias no se pierdan y se puedan volver a visitar. Nadie por fuera de ese círculo puede entrar, ni creando una cuenta nueva por su cuenta.</p>
           </details>
           <details class="faq-item">
             <summary>¿Mis audios y fotos están protegidos, o cualquiera con el link los puede abrir?</summary>
-            <p>Protegidos, sí — pero no porque el archivo en sí sea inaccesible: es que la app nunca lo entrega directo. Cada vez que se pide un audio o una foto, primero confirma que iniciaste sesión y que tienes permiso real de ver esa bitácora, y recién ahí lo entrega.</p>
+            <p>Protegidos, sí — pero no porque el archivo en sí sea inaccesible: es que la app nunca lo entrega directo. Cada vez que se pide un audio o una foto, primero confirma que iniciaste sesión y que tienes permiso real de ver esa bitácora, y solo ahí lo entrega.</p>
           </details>
           <details class="faq-item">
             <summary>¿La inteligencia artificial "aprende" de lo que cuento?</summary>
@@ -879,7 +879,7 @@
 
   <script>
     // Tamaño de letra — mismo mecanismo global de font-size.js que usa el
-    // resto de la app (localStorage + document.documentElement), acá solo
+    // resto de la app (localStorage + document.documentElement), aquí solo
     // el control visual del header público.
     (function () {
       const dec = document.getElementById('navFontDecBtn');
@@ -1046,7 +1046,7 @@
     // saca de la pantalla de registro — es un feature que ya no va. El
     // servidor sigue aceptando accountType:'collaborator' por compatibilidad
     // (por si ya hay cuentas creadas así), pero ya no hay forma de llegar
-    // ahí desde acá. El ?modo=colaborar que mandaba colaborar.html quedó sin
+    // ahí desde aquí. El ?modo=colaborar que mandaba colaborar.html quedó sin
     // efecto a propósito, ver setSignupMode() y .signup-tabs más abajo.
 
     signupForm.addEventListener('submit', async (event) => {
@@ -1066,7 +1066,7 @@
       // "Unirme con un código" y por lo que sea el campo quedaba vacío
       // (lo borró, no lo tenía a mano todavía), el formulario se mandaba
       // igual sin código — y del otro lado el servidor lo tomaba como una
-      // cuenta dueña nueva, sin avisar nada. Ahora se corta acá mismo, con
+      // cuenta dueña nueva, sin avisar nada. Ahora se corta aquí mismo, con
       // un mensaje pegado al campo (no solo el globo nativo del navegador,
       // que en letra chica es fácil de no ver) y el foco puesto ahí mismo.
       if (modoColaborador && !inviteCode) {

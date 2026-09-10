@@ -186,7 +186,7 @@
   // El nombre de un subperfil es texto libre que escribió la persona — se
   // arma la fila con innerHTML, así que hay que escapar '<', '>' y '&'
   // antes de meterlo, o un nombre con forma de etiqueta HTML se ejecutaría
-  // como código. El resto de valores interpolados acá son ids numéricos
+  // como código. El resto de valores interpolados aquí son ids numéricos
   // que vienen del servidor, no hace falta escaparlos.
   function escaparHtml(s) {
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -264,7 +264,7 @@
     const box = document.getElementById(`enlaceBox-${id}`);
     if (!box) return;
     const link = `${location.origin}/app.html?codigo=${encodeURIComponent(code)}`;
-    const mensaje = `Con este enlace puedes contar tus historias sin necesitar usuario ni clave — entra acá y guárdalo en tu celular: ${link}`;
+    const mensaje = `Con este enlace puedes contar tus historias sin necesitar usuario ni clave — entra aquí y guárdalo en tu celular: ${link}`;
     const wa = `https://wa.me/?text=${encodeURIComponent(mensaje)}`;
     // data-link (no data-copiar="id"): el link cambia si se regenera el
     // código, así que conviene que el botón lleve el valor ya armado
@@ -347,7 +347,7 @@
     if (archivarId) {
       const perfil = perfilesCache.find((p) => p.id === archivarId);
       const nombre = (perfil && perfil.nombre) || 'este perfil';
-      if (!confirm(`¿Archivar la bitácora de ${nombre}? Deja de aparecer acá y se corta su enlace de narrador — sus historias y su árbol quedan guardados, no se borra nada.`)) return;
+      if (!confirm(`¿Archivar la bitácora de ${nombre}? Deja de aparecer aquí y se corta su enlace de narrador — sus historias y su árbol quedan guardados, no se borra nada.`)) return;
       try {
         const resp = await fetch(`/api/subprofiles/${archivarId}/archive`, { method: 'POST' });
         const data = await resp.json().catch(() => ({}));

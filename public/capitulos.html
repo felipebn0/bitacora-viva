@@ -138,7 +138,7 @@
   <main class="wrap">
     <!-- Items 18/19 (pedido de Felipe, 2026-09-08): "en libro solo dejar
          generar y un botón arriba que diga ver mis historias" -- la
-         sección de aportes del círculo que vivía acá se saca (ya está en
+         sección de aportes del círculo que vivía aquí se saca (ya está en
          colaboraciones.html, que ahora es el punto de entrada único de
          colaboración) y se suma este botón hacia historias.html. -->
     <a class="volver" href="/historias.html">Ver mis historias →</a>
@@ -150,7 +150,7 @@
         <option value="primera">primera persona ("yo conté...")</option>
       </select>
       <button class="generar" id="generarBtn" type="button">Generar capítulos</button>
-      <!-- role="status" aria-live: acá se anuncia "Generando…" y, cuando
+      <!-- role="status" aria-live: aquí se anuncia "Generando…" y, cuando
          termina, el resultado — sin esto no había forma de saber que
          terminó sin mirar la pantalla todo el rato. -->
       <span class="status" id="status" role="status" aria-live="polite" aria-atomic="true"></span>
@@ -174,7 +174,7 @@
   const generarBtn = document.getElementById('generarBtn');
   const personaSelect = document.getElementById('personaSelect');
 
-  // Antes cualquier falla acá (sesión vencida, error del servidor) mostraba
+  // Antes cualquier falla aquí (sesión vencida, error del servidor) mostraba
   // el mismo "Hubo un problema para conectar" sin distinguir si hacía
   // falta volver a iniciar sesión o si fue otra cosa.
   function mensajeDeError(resp, data, fallback) {
@@ -259,7 +259,7 @@
   // hay ninguna historia detectada, tocar el botón solo hace un viaje al
   // servidor para volver con "no hay nada que generar". Mejor avisar de
   // entrada y dejar el botón deshabilitado, en vez de que la persona lo
-  // descubra recién después de esperar la respuesta. Si esta consulta
+  // descubra solo después de esperar la respuesta. Si esta consulta
   // falla (sesión vencida, sin conexión), se deja el botón habilitado
   // como estaba — el servidor sigue validando igual del otro lado.
   async function chequearMaterialDisponible() {

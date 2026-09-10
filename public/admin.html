@@ -29,7 +29,7 @@
        luminosidad, piso de croma, separación CVD adyacente >=8, piso a
        ojo normal >=15, contraste >=3:1 sobre #FBF6EA) partiendo del tono
        dorado ya usado en el sitio. El sitio no tiene modo oscuro todavía,
-       así que no hace falta una variante dark acá. */
+       así que no hace falta una variante dark aquí. */
     --series-charla: #9C6420;
     --series-resumen: #007D9C;
     --series-arbol: #2E6B2E;
@@ -325,8 +325,8 @@
     return d.innerHTML;
   }
   // Delta vs. el período anterior — signo, y color según si subir es malo
-  // (siempre lo es acá: es costo). prev=0 y curr=0 no dice nada; prev=0 y
-  // curr>0 es "recién empezó a gastar", no un porcentaje con sentido.
+  // (siempre lo es aquí: es costo). prev=0 y curr=0 no dice nada; prev=0 y
+  // curr>0 es "apenas empezó a gastar", no un porcentaje con sentido.
   function deltaHtml(curr, prev) {
     if (!prev && !curr) return '';
     if (!prev) return '<span class="delta up-bad">▲ nuevo en este período</span>';
@@ -341,7 +341,7 @@
   // escribir style="width:...%" en el HTML (el smoke test de CSP lo
   // detectaría como un atributo style inline real, aunque viva dentro de
   // un template de JS), cada barra se marca con data-pct y el ancho se
-  // aplica acá, después de insertar el HTML, vía el DOM directo — nunca
+  // aplica aquí, después de insertar el HTML, vía el DOM directo — nunca
   // queda un texto "style=" en el archivo.
   function aplicarAnchosDeBarra(root) {
     root.querySelectorAll('[data-pct]').forEach((el) => {
@@ -352,7 +352,7 @@
   function showUnauthorized() {
     content.innerHTML = `
       <div class="error-box">
-        No tenés acceso a este panel. Es solo para las cuentas marcadas como administradoras.
+        No tienes acceso a este panel. Es solo para las cuentas marcadas como administradoras.
         <br><a class="volver" href="/app.html">Volver a la bitácora</a>
       </div>`;
   }
@@ -386,7 +386,7 @@
   }
 
   // Columnas de la tabla: clave de orden + de dónde sale el valor. Vive
-  // acá (no repetido en el HTML) para que el mismo array maneje el thead
+  // aquí (no repetido en el HTML) para que el mismo array maneje el thead
   // clickeable y el tbody.
   // "width" alimenta el <colgroup> de abajo (deben sumar 100) — con
   // table-layout:fixed, esto es lo que reparte el ancho real disponible
@@ -466,7 +466,7 @@
           <input type="date" id="rangeEndInput" value="${esc(isoFecha(new Date(range.end)))}">
           <button type="button" class="range-apply" id="rangeApplyBtn">Aplicar</button>
         </div>
-        <div class="range-label">Mostrando del ${fmtDate(range.start)} al ${fmtDate(range.end)}. El costo "histórico" de las tarjetas de abajo es siempre desde que se activó la medición, sin importar el rango elegido acá.</div>
+        <div class="range-label">Mostrando del ${fmtDate(range.start)} al ${fmtDate(range.end)}. El costo "histórico" de las tarjetas de abajo es siempre desde que se activó la medición, sin importar el rango elegido aquí.</div>
       </div>`;
 
     if (!profiles.length) {
@@ -525,7 +525,7 @@
         <code>ANTHROPIC_CACHE_WRITE_PRICE_PER_1M</code>/<code>ANTHROPIC_CACHE_READ_PRICE_PER_1M</code>
         — ahora mismo: entrada ${fmtUsd(data.pricing.anthropicInputPer1M)}/1M tok, salida ${fmtUsd(data.pricing.anthropicOutputPer1M)}/1M tok.
         Los caracteres de Azure (si se usa) se cuentan pero no tienen tarifa cargada.
-        El consumo de Claude/voz solo cuenta desde que se activó esta medición (2026-09-09) — no hay forma de reconstruir el uso de antes de esa fecha desde acá; para eso hace falta el historial propio de la cuenta de ElevenLabs.
+        El consumo de Claude/voz solo cuenta desde que se activó esta medición (2026-09-09) — no hay forma de reconstruir el uso de antes de esa fecha desde aquí; para eso hace falta el historial propio de la cuenta de ElevenLabs.
         ${threshold != null
           ? `Se resalta a quien supera <strong>${fmtUsd(threshold)}</strong> en el rango elegido (<code>ADMIN_ALERT_THRESHOLD_USD_30D</code>).`
           : `No hay umbral de alerta configurado — definí <code>ADMIN_ALERT_THRESHOLD_USD_30D</code> para resaltar a quien se pase de un monto en el rango elegido.`}
@@ -719,7 +719,7 @@
     waWrap.innerHTML = `
       <section class="panel">
         <h2>Recordatorios por WhatsApp</h2>
-        <p class="sub">Cada día a las 9:00 (hora Colombia) la bitácora arma la lista de a quién le toca un recordatorio y te la manda con un enlace por persona que abre WhatsApp con el mensaje ya escrito. Vos abrís cada uno y le das enviar. Quien tiene WhatsApp activo acá no recibe el recordatorio por correo.</p>
+        <p class="sub">Cada día a las 9:00 (hora Colombia) la bitácora arma la lista de a quién le toca un recordatorio y te la manda con un enlace por persona que abre WhatsApp con el mensaje ya escrito. Tú abres cada uno y le das a enviar. Quien tiene WhatsApp activo aquí no recibe el recordatorio por correo.</p>
         <div class="wa-config">
           ${waChip(cfg.callmebot, 'Aviso por WhatsApp (CallMeBot)')}
           ${waChip(!!cfg.digestEmail, 'Copia por correo' + (cfg.digestEmail ? ' → ' + cfg.digestEmail : ''))}

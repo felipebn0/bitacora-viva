@@ -14,7 +14,7 @@
      persona lo hace a mano desde Compartir); el manifest dinámico
      (/api/manifest.json, ver server.js) es lo que usa Android/Chrome para el
      cartel de "Instalar". Sin ?codigo=, /api/manifest.json devuelve el genérico
-     de la app entera — agregarlo acá de forma fija no rompe nada para quien
+     de la app entera — agregarlo aquí de forma fija no rompe nada para quien
      nunca use un enlace de subperfil. -->
 <link rel="manifest" href="/api/manifest.json" id="appManifestLink">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -43,7 +43,7 @@
      los <input> tenían :focus). :focus-visible solo aparece al navegar con
      Tab, no al hacer clic con mouse/dedo. */
   :focus-visible { outline: 3px solid var(--gold-deep); outline-offset: 2px; }
-  /* Mismas hojitas que arbol.html/index.html — acá solo se ven en desktop
+  /* Mismas hojitas que arbol.html/index.html — aquí solo se ven en desktop
      (.desktop-leaf, ver la media query de escritorio más abajo). */
   .leaf { position: fixed; font-size: 2.4rem; opacity: 0.25; pointer-events: none; z-index: 0; }
   .leaf.tl { top: 10px; left: 10px; transform: rotate(-15deg); }
@@ -61,7 +61,7 @@
     transition: top .15s ease;
   }
   .skip-link:focus { top: 12px; }
-  /* Sin esto, al saltar acá quedaba un anillo de foco rodeando TODO
+  /* Sin esto, al saltar aquí quedaba un anillo de foco rodeando TODO
      el contenido de <main> — el salto ya se nota por dónde arranca a leer
      un lector de pantalla / el scroll, no hace falta remarcarlo. */
   main:focus { outline: none; }
@@ -173,7 +173,7 @@
        activarse, porque el rojo tapaba un pedazo real de él (reportado
        por Felipe). Ahora queda apoyado bien afuera, tocando el borde nada
        más, sin comerse nada del círculo principal. */
-    /* display:none acá (no solo por JS): el botón original ("terminar la
+    /* display:none aquí (no solo por JS): el botón original ("terminar la
        charla") tenía la clase pc-93b8ea5b, que empieza oculta por
        default -- al rediseñarlo como este orbe chico rojo esa clase se
        perdió, así que quedaba SIEMPRE visible desde el primer render,
@@ -262,10 +262,10 @@
   #appContent { display: none; flex-direction: column; align-items: center; width: 100%; }
   /* .login (más abajo) pone display:flex por defecto, así que sin esto el
      login se ve un instante SIEMPRE al cargar esta página — incluso ya
-     logueado, cada vez que se navega acá con un link normal (por ejemplo
+     logueado, cada vez que se navega aquí con un link normal (por ejemplo
      "volver a la bitácora" desde historias/aportes/árbol/libro), porque es
      una recarga real de la página: entra a mostrar el login por defecto y
-     recién cuando responde el fetch('/api/me') de abajo, si hay sesión,
+     solo cuando responde el fetch('/api/me') de abajo, si hay sesión,
      showApp() lo cambia a appContent. #loginScreen (id) le gana en
      especificidad a .login (clase) y lo mantiene oculto hasta que ese
      fetch resuelve — ni el login ni la app se ven de más. */
@@ -302,7 +302,7 @@
   }
   #checkingScreen img { width: 40px; height: 40px; opacity: 0.7; }
 
-  /* width:100% acá también — ver el comentario largo junto a #appContent
+  /* width:100% aquí también — ver el comentario largo junto a #appContent
      más arriba, es la otra mitad del mismo arreglo. */
   #main-content { width: 100%; }
   .main-layout { display: flex; flex-direction: column; align-items: center; }
@@ -313,7 +313,7 @@
      en una pantalla de escritorio, esto quedaba con el mismo ancho angosto
      de celular (440px) flotando en medio de un montón de fondo vacío — se
      notaba que era un diseño de mobile estirado, no pensado para desktop.
-     Acá se agranda toda la columna (tarjeta, orbe, letra, barra de
+     Aquí se agranda toda la columna (tarjeta, orbe, letra, barra de
      íconos) en conjunto, y se suman las hojitas del árbol genealógico
      (mismo motivo que ya usan arbol.html/index.html) en las esquinas para
      que el espacio de los costados se sienta compuesto a propósito, no
@@ -429,7 +429,7 @@
      también lo agarraba a él y le sacaba la línea divisoria de arriba. */
   .user-menu-panel a.um-section-toggle:first-of-type { border-top: 1px solid #E7DFCC; margin-top: 4px; }
   /* Oculto por defecto (solo cuentas is_admin lo ven, ver showApp()) — el
-     atributo "hidden" no alcanza acá: .um-section-toggle ya fija
+     atributo "hidden" no alcanza aquí: .um-section-toggle ya fija
      display:flex como regla de autor, que le gana a [hidden] (regla del
      navegador) en la cascada sin importar la especificidad. Un selector
      por id sí le gana a la clase por especificidad; showApp() lo muestra
@@ -460,7 +460,7 @@
   /* Se muestra solo cuando el nombre/correo no entra completo en el
      cuadro a tamaño normal — en vez de achicar la letra del campo
      editable (que puede volverse ilegible), se ve el valor completo
-     acá abajo, envuelto en varias líneas si hace falta. */
+     aquí abajo, envuelto en varias líneas si hace falta. */
   .user-menu-panel .um-value-full { font-size: 0.875rem; color: var(--ink-soft); margin: -5px 0 8px; overflow-wrap: anywhere; }
   .user-menu-panel .um-hint { font-size: 0.78rem; color: var(--ink-soft); margin: -4px 0 8px; }
   /* font-size:1rem (antes 0.88rem = 14.08px): por debajo de 16px, iOS
@@ -568,7 +568,7 @@
      los cinco íconos de 56px con etiqueta no entraban en una sola fila y
      el "Libro" quedaba solo, descentrado, en una segunda fila — y el
      nombre del saludo (que puede ser largo) se partía en tres líneas
-     apretado entre el logo y el ícono de Cuenta. Acá se achican un poco
+     apretado entre el logo y el ícono de Cuenta. Aquí se achican un poco
      nada más en esas pantallas, lo suficiente para que todo entre en una
      fila y el nombre quede en dos líneas como mucho. */
   @media (max-width: 400px) {
@@ -588,7 +588,7 @@
     .topbar { row-gap: 6px; column-gap: 8px; }
     .icon-btn { width: 48px; height: 48px; font-size: 1.4rem; }
     .icon-nav-item { gap: 2px; }
-    /* Antes la etiqueta bajaba a 0.7rem (~11px) acá para que las 5 entren
+    /* Antes la etiqueta bajaba a 0.7rem (~11px) aquí para que las 5 entren
        en una sola fila — muy chico para el público de esta app. Se deja
        en el mismo 0.875rem que el resto, y en vez de forzar una fila se
        acepta que se acomoden en dos filas parejas (ver .topbar abajo). */
@@ -658,7 +658,7 @@
 
   .logout-row { text-align: center; margin-top: 20px; }
   /* "Reiniciar bitácora" y "Borrar mi cuenta" son las únicas acciones
-     irreversibles acá — antes "borrar cuenta" se veía como un link
+     irreversibles aquí — antes "borrar cuenta" se veía como un link
      subrayado más, del mismo tamaño que "invitar familiares" o "cerrar
      sesión", con el rojo como única pista de que era distinta. Las dos
      quedan agrupadas en esta franja separada, con "cerrar sesión" (que no
@@ -748,14 +748,14 @@
        ?codigo=XXXXXXXX (link permanente compartido desde el panel de Cuenta
        de quien administra el subperfil). Sin cuenta, sin clave de cuenta —
        el nombre ya lo puso quien creó el subperfil (no se vuelve a pedir
-       acá), y en su lugar se pide una clave de 4 dígitos que la persona
+       aquí), y en su lugar se pide una clave de 4 dígitos que la persona
        misma define la PRIMERA vez que entra (pedido de Felipe/Diego,
        2026-09-08) y confirma en las siguientes. Mismo patrón que
        #guestScreen en colaborar.html, pero esto narra SU PROPIA bitácora
        (ver /api/narrador-start), no un aporte a la de otro. -->
   <div class="login" id="narradorScreen">
     <h1 id="narradorBitacoraLine">Los recuerdos de mis viejos</h1>
-    <p class="sub" id="narradorSubLine">Vas a contar tus historias acá.</p>
+    <p class="sub" id="narradorSubLine">Vas a contar tus historias aquí.</p>
     <div class="login-field">
       <label for="narradorPin" id="narradorPinLabel">Tu clave de 4 números</label>
       <input type="tel" inputmode="numeric" pattern="[0-9]*" id="narradorPin" placeholder="••••" autocomplete="off" maxlength="4">
@@ -797,7 +797,7 @@
               letra, Tu copia, Plan, Recordatorios) queda un nivel más
               adentro, en Opciones avanzadas. "Perfiles" (administrar varias
               bitácoras) se sacó del todo de este menú — hacía mucho ruido
-              acá adentro — y pasó a ser su propia pantalla (perfiles.html,
+              aquí adentro — y pasó a ser su propia pantalla (perfiles.html,
               con ícono propio en la barra de abajo del orbe), igual que
               Historias o Árbol. -->
          <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecPerfil">Perfil <span class="um-chevron" aria-hidden="true">›</span></button>
@@ -859,19 +859,19 @@
               estilo que "Perfil"/"Opciones avanzadas": negrita, alineado a
               la izquierda, con su propia línea divisoria) — la diferencia
               es que ESTE lleva directo a su propia pantalla (perfiles.html)
-              en vez de desplegar contenido acá adentro. -->
+              en vez de desplegar contenido aquí adentro. -->
          <a class="um-section-toggle" id="umPerfilesLink" href="/perfiles.html">Perfiles <span class="um-chevron" aria-hidden="true">›</span></a>
 
          <!-- Panel de consumo (item pedido por Felipe, 2026-09-09): solo
               para cuentas is_admin (ver /api/admin/usage en server.js) —
               oculto por defecto, se muestra en showApp() si data.isAdmin.
               Mismo patrón visual que "Perfiles": lleva directo a su propia
-              pantalla en vez de desplegar contenido acá adentro. -->
+              pantalla en vez de desplegar contenido aquí adentro. -->
          <a class="um-section-toggle" id="umAdminLink" href="/admin.html">Panel de consumo <span class="um-chevron" aria-hidden="true">›</span></a>
 
          <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecAvanzadas">Opciones avanzadas <span class="um-chevron" aria-hidden="true">›</span></button>
          <!-- Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe):
-              "um-nested-group" le da un fondo propio a todo lo de acá
+              "um-nested-group" le da un fondo propio a todo lo de aquí
               adentro, para que se note de un vistazo que está un nivel más
               profundo que Perfiles/Perfil — antes la única pista era el
               sangrado de 14px, que se confundía fácil. -->
@@ -901,7 +901,7 @@
                 de instalar con un toque (evento beforeinstallprompt), así
                 que prometerlo sería mostrar un botón que jamás aparece. Si
                 en el futuro se agrega un service worker, ahí sí tendría
-                sentido sumar el botón acá (ver "Backlog de funcionalidades"
+                sentido sumar el botón aquí (ver "Backlog de funcionalidades"
                 en la documentación del repo). -->
            <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecInstalacion">Instalación <span class="um-chevron" aria-hidden="true">›</span></button>
            <div class="um-section-body" id="umSecInstalacion" hidden>
@@ -943,7 +943,7 @@
              <p class="um-msg" id="umPlanMsg" role="status" aria-live="polite" aria-atomic="true"></p>
 
              <hr>
-             <p class="um-hint">¿Te regalaron una bitácora? Canjea el código acá — se activa en TU cuenta, no en la de quien te lo regaló.</p>
+             <p class="um-hint">¿Te regalaron una bitácora? Canjea el código aquí — se activa en TU cuenta, no en la de quien te lo regaló.</p>
              <div class="um-fontsize-row">
                <input class="pc-39ddb588" type="text" id="umRegaloCodigo" placeholder="Código de regalo" maxlength="8" aria-label="Código de regalo">
                <button class="um-btn" id="umRegaloCanjearBtn" type="button">Canjear</button>
@@ -976,7 +976,7 @@
         Deja instalar esta charla como un ícono propio en la pantalla de
         inicio, para no depender de encontrar el link de nuevo. Fuera de
         .greeting-bar (no adentro): esa barra es una fila flex angosta
-        pensada solo para logo+saludo+cuenta — meter acá un texto largo la
+        pensada solo para logo+saludo+cuenta — meter aquí un texto largo la
         rompía entera, empujando el saludo a una columna angosta. -->
    <div class="acceso-directo-row" id="accesoDirectoRow">
      <button class="icon-btn" id="agregarInicioBtn" type="button" title="Agregar a la pantalla de inicio">➕📱</button>
@@ -984,7 +984,7 @@
    </div>
    </header>
    <!-- <main>: antes el contenido central (la charla con el orbe, y todo lo
-        de acá abajo) no estaba en ningún landmark — visualmente funciona
+        de aquí abajo) no estaba en ningún landmark — visualmente funciona
         igual, pero un lector de pantalla no tiene forma de saltar directo
         a "lo importante" sin pasar por el resto. -->
    <main id="main-content" tabindex="-1">
@@ -1063,15 +1063,15 @@
    </div>
 
     <!-- Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe): la
-         barra de 5 íconos ya no va arriba de todo — se mueve acá, debajo
+         barra de 5 íconos ya no va arriba de todo — se mueve aquí, debajo
          del orbe y arriba de "invitar a mi círculo", para que la pantalla
          principal empiece solo con lo que hace falta para narrar. -->
-    <!-- Items 18/19 (pedido de Felipe, 2026-09-08): antes había 5 íconos acá
+    <!-- Items 18/19 (pedido de Felipe, 2026-09-08): antes había 5 íconos aquí
          (Colaborar, Aportes, Historias, Árbol, Libro) -- "Colaborar" y
          "Aportes" se juntan en uno solo (colaboraciones.html pasa a tener
          las 2 pestañas "Lo que dijeron de mí"/"Lo que yo dije de otros",
          con un botón "Aportar ahora" adentro que lleva a colaborar.html
-         para grabar); "Historias" se saca de acá y pasa a ser un botón
+         para grabar); "Historias" se saca de aquí y pasa a ser un botón
          DENTRO de "Mi libro" (capitulos.html), no un ícono aparte. -->
     <nav class="topbar" aria-label="Secciones de tu bitácora">
       <div class="icon-nav-item">
@@ -1156,7 +1156,7 @@
     const displayName = name || username || '';
     greetingName.textContent = displayName;
     // "Usuario" (con qué se inicia sesión) queda separado de "correo" (dato
-    // de perfil, editable acá abajo) — antes eran lo mismo en pantalla,
+    // de perfil, editable aquí abajo) — antes eran lo mismo en pantalla,
     // ahora que el correo se puede editar hace falta dejar claro cuál es
     // cuál, para no dar a entender que cambiar uno cambia el otro.
     umUsername.textContent = username ? `Usuario: ${username}` : '';
@@ -1166,7 +1166,7 @@
     umProfileBirthdate.value = fechaNacimiento || '';
     ajustarCamposDePerfil();
     if (location.hash === '#inviteToggle') {
-      // Llegó acá con un enlace directo a "invitar familiares" (por ejemplo
+      // Llegó aquí con un enlace directo a "invitar familiares" (por ejemplo
       // desde el estado vacío de Aportes) — abrimos el código de una en vez
       // de dejar que tenga que encontrarlo y tocarlo de nuevo.
       requestAnimationFrame(() => {
@@ -1293,7 +1293,7 @@
     userMenuPanel.style.maxHeight = Math.max(120, altoDisponible - topAjustado - 12) + 'px';
   }
   // Única función que cierra el panel — Escape, click afuera y el propio
-  // botón (para el caso "ya estaba abierto") pasan todos por acá, así
+  // botón (para el caso "ya estaba abierto") pasan todos por aquí, así
   // aria-expanded nunca queda desincronizado con lo que se ve.
   function cerrarCuenta() {
     if (!userMenuPanel.classList.contains('visible')) return;
@@ -1316,14 +1316,14 @@
       const estabaAbierto = userMenuPanel.classList.contains('visible');
       cerrarCuenta();
       // Si el click aterrizó en otro elemento enfocable, ese ya tiene el
-      // foco antes de llegar acá — no se lo robamos. Si aterrizó en algo
+      // foco antes de llegar aquí — no se lo robamos. Si aterrizó en algo
       // sin foco (el fondo, texto suelto), el foco se pierde del todo, así
       // que se lo devolvemos al botón para no dejar a quien navega con
       // teclado sin ningún punto de partida.
       if (estabaAbierto && document.activeElement === document.body) userMenuBtn.focus();
     }
   });
-  // Antes Escape no hacía nada acá — el panel seguía abierto con
+  // Antes Escape no hacía nada aquí — el panel seguía abierto con
   // aria-expanded="true" aunque visualmente nadie lo notara si el foco ya
   // se había movido a otro lado.
   document.addEventListener('keydown', (e) => {
@@ -1347,7 +1347,7 @@
       const abrir = body.hidden;
       body.hidden = !abrir;
       toggle.setAttribute('aria-expanded', String(abrir));
-      // Los cuadros de nombre/correo recién se pueden medir (scrollWidth
+      // Los cuadros de nombre/correo solo se pueden medir (scrollWidth
       // vs. clientWidth) cuando su sección ya está visible — mientras
       // estaba con "hidden" el ancho medía 0 y no se ajustaba nada.
       if (abrir && body.id === 'umSecPerfil') ajustarCamposDePerfil();
@@ -1355,7 +1355,7 @@
   });
 
   // Tamaño de letra: la lógica de guardar/aplicar vive en font-size.js
-  // (compartido por todas las páginas) — acá solo está el control visual.
+  // (compartido por todas las páginas) — aquí solo está el control visual.
   // Hay DOS controles en esta misma página (uno en Cuenta, otro en la
   // pantalla de login, para que se pueda agrandar la letra ANTES de poder
   // iniciar sesión) — los dos leen/escriben el mismo estado global, así
@@ -1456,7 +1456,7 @@
 
   // Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe): toda la
   // lógica de "Perfiles" (listar, crear, cambiar, compartir el enlace de
-  // narrador) se mudó a perfiles.html — antes vivía acá adentro y hacía
+  // narrador) se mudó a perfiles.html — antes vivía aquí adentro y hacía
   // mucho ruido dentro del menú de Cuenta.
 
   // --- Plan y pagos ---
@@ -1509,11 +1509,11 @@
   document.getElementById('umPlanPersonalBtn').addEventListener('click', () => iniciarCheckout('legado_personal'));
   document.getElementById('umPlanFamiliarBtn').addEventListener('click', () => iniciarCheckout('legado_familiar'));
 
-  // Regalo: quien compra acá no tiene por qué ser quien narra — el link de
+  // Regalo: quien compra aquí no tiene por qué ser quien narra — el link de
   // pago es el mismo, pero el código que llega después por correo se
   // canjea desde CUALQUIER cuenta (ver umRegaloCanjearBtn más abajo), no
   // necesariamente esta. El botón principal solo despliega los detalles
-  // (fecha de envío + mensaje); el pago se dispara recién desde
+  // (fecha de envío + mensaje); el pago se dispara solo desde
   // umRegaloConfirmarBtn, ya con esos datos en mano.
   const umPlanRegalarBtn = document.getElementById('umPlanRegalarBtn');
   const umRegaloDetalles = document.getElementById('umRegaloDetalles');
@@ -1535,10 +1535,10 @@
       const data = await resp.json();
       if (!resp.ok) { umPlanMsg.textContent = data.error || 'No se pudo iniciar el pago.'; return; }
       if (data.dummy) {
-        // Sin Wava conectada todavía: acá ya está el código, sin pasar por
+        // Sin Wava conectada todavía: aquí ya está el código, sin pasar por
         // ningún link externo. Si se programó una fecha futura, el correo
         // todavía no se mandó (lo manda el cron cuando llegue el día) — el
-        // código igual se muestra acá para poder probar el resto del flujo.
+        // código igual se muestra aquí para poder probar el resto del flujo.
         umPlanMsg.textContent = `(Modo de prueba) Código de regalo: ${data.code} — cánjealo desde la cuenta que va a narrar (Cuenta → Plan → Canjear un regalo).`;
         return;
       }
@@ -1596,7 +1596,7 @@
       umRecordatoriosMsg.textContent = 'No se pudo conectar.';
     }
   });
-  // Se cargan recién al abrir cada sección (mismo criterio que el resto del
+  // Se cargan solo al abrir cada sección (mismo criterio que el resto del
   // acordeón: nada de pedidos de más antes de que hagan falta).
   document.querySelector('[aria-controls="umSecPlan"]').addEventListener('click', cargarEstadoPlan);
   document.querySelector('[aria-controls="umSecRecordatorios"]').addEventListener('click', cargarRecordatorios);
@@ -1680,7 +1680,7 @@
       }
       // Recargar en vez de tratar de limpiar a mano cada variable en
       // memoria (historial de la charla, resumen, nombres pendientes del
-      // árbol, etc.) — la cuenta sigue logueada, así que vuelve a caer acá
+      // árbol, etc.) — la cuenta sigue logueada, así que vuelve a caer aquí
       // mismo, pero con todo recién cargado desde cero.
       window.location.reload();
     } catch (e) {
@@ -1691,7 +1691,7 @@
   umResetConfirm.addEventListener('click', reiniciarBitacora);
   umResetPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') reiniciarBitacora(); });
 
-  // Borrar la cuenta para siempre — distinto de "reiniciar bitácora": acá
+  // Borrar la cuenta para siempre — distinto de "reiniciar bitácora": aquí
   // se va también el usuario/clave, no solo el contenido. Pide la clave de
   // nuevo y una confirmación aparte porque no se puede deshacer.
   const umDeleteToggle = document.getElementById('umDeleteToggle');
@@ -1743,7 +1743,7 @@
   const inviteWhatsappBtn = document.getElementById('inviteWhatsappBtn');
   let inviteLoaded = false;
 
-  // El link de acá abajo va a colaborar.html?codigo=... — la entrada
+  // El link de aquí abajo va a colaborar.html?codigo=... — la entrada
   // liviana de invitado (sin cuenta, sin clave, solo el nombre, ver
   // /api/guest-start): quien lo reciba por WhatsApp toca el link y arranca
   // directo a contar su historia. No manda nada por su cuenta: es un link
@@ -1756,7 +1756,7 @@
       return;
     }
     const link = `${location.origin}/colaborar.html?codigo=${encodeURIComponent(code)}`;
-    const mensaje = `Te invito a sumar una historia a nuestra bitácora familiar — entra acá, no hace falta crear cuenta: ${link}`;
+    const mensaje = `Te invito a sumar una historia a nuestra bitácora familiar — entra aquí, no hace falta crear cuenta: ${link}`;
     inviteWhatsappBtn.href = `https://wa.me/?text=${encodeURIComponent(mensaje)}`;
     inviteWhatsappBtn.style.display = 'inline-block';
   }
@@ -1850,7 +1850,7 @@
     // Este evento es de Chrome/Android y NO es confiable: depende de sus
     // propios criterios internos (a veces tarda, a veces no llega nunca en
     // esta sesión) — cuando SÍ llega, el botón de un solo toque es mejor
-    // que la instrucción manual, así que la reemplaza. Solo se usa acá
+    // que la instrucción manual, así que la reemplaza. Solo se usa aquí
     // para #accesoDirectoRow (enlace de subperfil) — la sección
     // "Instalación" de Cuenta, más abajo, muestra siempre la guía manual
     // (ver configurarSeccionInstalacion).
@@ -1868,7 +1868,7 @@
   });
 
   // Arma la sección "Instalación" del panel de Cuenta — a diferencia de
-  // #accesoDirectoRow (arriba), acá no hace falta esperar a saber si la
+  // #accesoDirectoRow (arriba), aquí no hace falta esperar a saber si la
   // sesión es de subperfil o no: la cuenta dueña y las colaboradoras
   // clásicas ya tienen el manifest genérico (/api/manifest.json, sin
   // parámetros) andando desde que carga la página.
@@ -1908,7 +1908,7 @@
       // Sin excepción: siempre la guía manual. Esta app todavía no tiene
       // un "service worker" registrado, que es requisito de Chrome para
       // que llegue a dispararse beforeinstallprompt — sin eso, un botón
-      // de un toque acá nunca aparecería, así que no se ofrece (ver nota
+      // de un toque aquí nunca aparecería, así que no se ofrece (ver nota
       // más arriba, junto al HTML de esta sección).
       umInstalOtros.hidden = false;
       umInstalIOS.hidden = true;
@@ -1930,12 +1930,12 @@
     const yaInstalada = window.navigator.standalone || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
     if (yaInstalada) return;
     if (promptDeInstalacion) { agregarInicioBtn.style.display = 'inline-flex'; return; }
-    // Antes, acá abajo se mostraba SIEMPRE una instrucción manual ("Para
+    // Antes, aquí abajo se mostraba SIEMPRE una instrucción manual ("Para
     // guardar esta charla en tu pantalla de inicio: ...") mientras se
     // esperaba un beforeinstallprompt que en celular casi nunca llega.
     // Pedido de Luca (2026-09-09): esa leyenda quedaba duplicada con la
     // guía manual de la sección "Instalación" en Cuenta → Opciones
-    // avanzadas (mismo texto, mismo propósito) — se saca de acá y queda
+    // avanzadas (mismo texto, mismo propósito) — se saca de aquí y queda
     // solo en Instalación. Si algún día esta app suma un service worker y
     // beforeinstallprompt SÍ llega a dispararse, el botón de un solo
     // toque de la línea de arriba sigue funcionando igual.
@@ -1944,7 +1944,7 @@
   function aplicarSesionSubperfil(data) {
     // "Presiona el botón para empezar a charlar" vive en #greeting, en un
     // <script> aparte (el que maneja el orbe) — no comparte variables con
-    // este, así que se agarra fresco acá en vez de duplicar esa constante.
+    // este, así que se agarra fresco aquí en vez de duplicar esa constante.
     const greetingBox = document.getElementById('greeting');
     if (data.isGuest && data.isNarradorLink) {
       // Pedido de Felipe (2026-09-07): el perfil del narrador se ve y
@@ -2018,7 +2018,7 @@
       narradorPinLabel.textContent = 'Tu clave de 4 números';
       narradorHint.textContent = 'La misma clave que elegiste la primera vez.';
     } else {
-      narradorSubLine.textContent = 'Vas a contar tus historias acá.';
+      narradorSubLine.textContent = 'Vas a contar tus historias aquí.';
       narradorPinLabel.textContent = 'Elige una clave de 4 números';
       narradorHint.textContent = 'La vas a necesitar la próxima vez que entres — no hace falta crear cuenta.';
     }
@@ -2056,7 +2056,7 @@
       // familia) no tienen esta app — solo aportan historias y le
       // preguntan a la bitácora de quien las invitó. El narrador de un
       // subperfil (isNarradorLink) es un invitado DISTINTO: sí se queda
-      // acá, narrando su propia bitácora (ver aplicarSesionSubperfil).
+      // aquí, narrando su propia bitácora (ver aplicarSesionSubperfil).
       if (data.isCollaborator) { window.location.href = '/colaborar.html'; return; }
       showApp(data.username, data.name, data.email, data.fechaNacimiento, data.isAdmin);
       aplicarSesionSubperfil(data);
@@ -2098,7 +2098,7 @@
   let history = [];       // lo que se le manda a Claude (solo role/content)
   let sessionLog = [];    // lo que se guarda en la bitácora (incluye audio)
   // Fotos/video agregados para la respuesta que se está por guardar — se
-  // manda con el turno actual (ver fetchNext) y se vacía después, porque acá
+  // manda con el turno actual (ver fetchNext) y se vacía después, porque aquí
   // cada turno es una historia distinta (a diferencia de colaborar.html,
   // donde toda una charla arma UNA sola historia).
   let mediaUrlsLocal = [];
@@ -2106,7 +2106,7 @@
   // Foto/video que la persona acaba de subir con el botón 📷 y todavía no
   // se le avisó a la IA ({url, type, caption} — ver fotoRecienSubidaPrompt
   // en server.js). Se manda una sola vez, en el próximo /api/next, y se
-  // limpia ahí mismo; url/type se quedan del lado del cliente nomás, para
+  // limpia ahí mismo; url/type se quedan del lado del cliente no más, para
   // no ocultar la foto en pantalla mientras la IA pregunta por ella.
   let fotoRecienSubida = null;
   let sessionKey = null;  // carpeta de audio de esta charla
@@ -2374,7 +2374,7 @@
 
   // El AudioContext que usa la detección de pausas por volumen (VAD, más
   // abajo) también necesita "desbloquearse" con un gesto real del usuario —
-  // igual que el audio de la voz. Si se crea recién cuando arranca a
+  // igual que el audio de la voz. Si se crea solo cuando arranca a
   // escuchar (varios segundos después del click, tras esperar la respuesta
   // del servidor y que termine de hablar), en Android Chrome suele quedar
   // "suspended" para siempre: el analizador de volumen entonces siempre lee
@@ -2390,7 +2390,7 @@
   }
 
   // Evita que la pantalla se bloquee sola por inactividad mientras dura la
-  // charla — tiene sentido acá porque a veces se pasan varios segundos sin
+  // charla — tiene sentido aquí porque a veces se pasan varios segundos sin
   // tocar nada (escuchando, pensando, hablando). El navegador libera este
   // "wake lock" solo cuando la pestaña pasa a segundo plano, así que hay
   // que volver a pedirlo cuando vuelve a quedar visible (ej. la persona
@@ -2450,7 +2450,7 @@
 
   // Detección de pausas por volumen (en vez del reconocimiento de voz del
   // navegador, que Safari/iPad no soportan): mientras haya sonido, seguimos
-  // escuchando; recién cuando pasan SILENCE_MS sin volumen, cerramos la
+  // escuchando; solo cuando pasan SILENCE_MS sin volumen, cerramos la
   // grabación y la mandamos al servidor para transcribirla.
   // Antes eran 2000ms, después 4000ms — pensado para dar tiempo a
   // recordar fechas/nombres sin cortar antes de tiempo. En uso real (2026-
@@ -2482,8 +2482,8 @@
   // perdía la historia entera ("no se pudo entender el audio") o, si el
   // texto igual se rescataba por el reconocimiento del navegador, dejaba
   // guardada la historia SIN su audio. 150 segundos queda con margen de
-  // sobra por debajo de ese tope al bitrate que graba MediaRecorder acá.
-  // Al llegar acá se corta el turno igual que con un silencio real — la
+  // sobra por debajo de ese tope al bitrate que graba MediaRecorder aquí.
+  // Al llegar aquí se corta el turno igual que con un silencio real — la
   // charla sigue pidiendo lo que falte en el turno siguiente, no se pierde
   // nada de lo ya dicho.
   const MAX_TURN_MS = 150 * 1000;
@@ -2500,7 +2500,7 @@
     // reutiliza el AudioContext entre turnos y, si quedó "suspendido"
     // (el navegador lo hace solo cuando no hay audio activo un rato, o en
     // el celular al apagar la pantalla), se pide reanudarlo y se sigue.
-    // Un intento anterior de "cerrarlo y crear otro" acá rompía el caso
+    // Un intento anterior de "cerrarlo y crear otro" aquí rompía el caso
     // normal: resume() es asíncrono, así que el chequeo inmediato de
     // .state siempre daba 'suspended' y terminaba midiendo sobre un
     // contexto nuevo todavía suspendido = SILENCIO -> el turno se cortaba
@@ -2603,13 +2603,13 @@
   // audio). SILENCE_MS (arriba) tiene que pasar SIN voz para que la
   // grabación se corte — ese silencio de espera queda grabado igual, y
   // antes se mandaba completo a transcribir aunque no tuviera nada que
-  // decir. Acá se recorta todo ese silencio salvo los últimos
+  // decir. Aquí se recorta todo ese silencio salvo los últimos
   // COLA_A_CONSERVAR_MS, dejando la grabación real intacta.
   // Importante: esto NO toca el audioBlob que se sube para guardar/
   // escuchar después (ver uploadAudio en handleAnswer) — solo cambia lo
   // que se manda a /api/transcribe. Si decodificar/recodificar falla por
   // lo que sea (formato raro, navegador viejo), se manda la grabación
-  // completa tal cual — nunca se arriesga un turno real por ahorrar acá.
+  // completa tal cual — nunca se arriesga un turno real por ahorrar aquí.
   async function recortarSilencioDeCola(blob) {
     if (!recordingStartedAt || !lastLoudTime) return { blob, durationMs: lastRecordingDurationMs };
     const finCorteMs = (lastLoudTime - recordingStartedAt) + COLA_A_CONSERVAR_MS;
@@ -2638,7 +2638,7 @@
   // WAV es un formato simple de armar a mano a partir de las muestras
   // crudas — y /api/transcribe ya acepta audio/wav (ver
   // AUDIO_MIME_PERMITIDOS en server.js). El tamaño del archivo no importa
-  // acá (ElevenLabs cobra por duración, no por bytes), así que WAV sin
+  // aquí (ElevenLabs cobra por duración, no por bytes), así que WAV sin
   // comprimir es una opción válida sin agregar ninguna dependencia nueva.
   function audioBufferToWav(buffer) {
     const numChannels = buffer.numberOfChannels;
@@ -2768,7 +2768,7 @@
     }
   }
 
-  // Antes cualquier falla acá (sesión vencida a mitad de charla, un error
+  // Antes cualquier falla aquí (sesión vencida a mitad de charla, un error
   // del servidor, o quedarse sin conexión) mostraba el mismo "Hubo un
   // problema para conectar. Prueba de nuevo." — si la sesión había
   // vencido, "prueba de nuevo" no arreglaba nada: hacía falta volver a
@@ -2886,7 +2886,7 @@
       // reintentar el turno que falló. 'error' es un estado aparte:
       // handleOrbPress() lo reintenta llamando a fetchNext() de nuevo con
       // el MISMO history (nunca se le agregó nada — el push a history
-      // pasa recién con la respuesta OK, más arriba), no arranca una
+      // pasa solo con la respuesta OK, más arriba), no arranca una
       // sesión nueva.
       stateLabel.textContent = mensajeDeErrorDeTurno(err);
       setState('error', stateLabel.textContent);
@@ -2960,13 +2960,13 @@
     writeRow.classList.remove('visible');
     setState('paused', 'En pausa — presiona para seguir');
     orbLabel.innerHTML = 'Presiona<br>para seguir';
-    saveSessionLog(); // por si no vuelve: que no se pierda lo hablado hasta acá
+    saveSessionLog(); // por si no vuelve: que no se pierda lo hablado hasta aquí
   }
 
   // Cuando la IA misma ofrece un descanso (después de un rato charlando) y
   // la persona prefiere pausar — a diferencia de pauseConversation() (que
   // corta A MITAD de turno, con grabación/reconocimiento en curso que hay
-  // que detener), acá la IA ya terminó de hablar su despedida breve, así
+  // que detener), aquí la IA ya terminó de hablar su despedida breve, así
   // que no hay nada de eso activo: solo queda dejar el estado en pausa.
   // "pausedFromState = 'thinking'" hace que, al volver, se pida una
   // pregunta nueva en vez de repetir ese mismo mensaje de despedida.
@@ -3035,7 +3035,7 @@
   // pauseConversation() cuando la persona pausa a mitad de estar grabando,
   // para no gastar un llamado a la IA que quizás se descarta si nunca
   // vuelve, y para que sea resumeConversation() (con pausedFromState =
-  // 'thinking') quien pida la pregunta nueva recién cuando de verdad vuelve.
+  // 'thinking') quien pida la pregunta nueva solo cuando de verdad vuelve.
   async function handleAnswer(text, audioBlob, { seguir = true } = {}) {
     if (!text || !text.trim()) return;
     finalizacionesVacias = 0; // hubo una respuesta de verdad: se reinicia el contador de intentos vacíos
@@ -3269,7 +3269,7 @@
   const BUTTON_KEY = 'Enter';
   document.addEventListener('keydown', (e) => {
     const tag = (e.target && e.target.tagName) || '';
-    // "A" se suma acá encontrado al agregar el link "saltar al contenido":
+    // "A" se suma aquí encontrado al agregar el link "saltar al contenido":
     // sin esto, el Enter de alguien navegando con teclado hasta CUALQUIER
     // link enfocado (el skip-link, o los del nav de arriba — Aportes,
     // Historias, Árbol, Libro) quedaba secuestrado por este listener y
@@ -3347,7 +3347,7 @@
   fotoCaptionInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') subirFotoPendiente(); });
 
   // El árbol genealógico y la línea de tiempo ahora viven en /arbol.html
-  // (se llega por el ícono 🌳 de arriba) — ya no hay un mini-árbol acá. Lo
+  // (se llega por el ícono 🌳 de arriba) — ya no hay un mini-árbol aquí. Lo
   // mismo pasa con las historias detectadas en la charla: viven en
   // /historias.html (ícono 📝) para no llenar de ruido esta pantalla.
 

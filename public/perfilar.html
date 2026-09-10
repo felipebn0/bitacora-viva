@@ -113,7 +113,7 @@
       <p class="estado" id="estado">Toca para grabar tu respuesta</p>
       <div class="respuesta-box">
         <label for="respuestaTexto">Tu respuesta (puedes corregirla o escribirla directo)</label>
-        <textarea id="respuestaTexto" placeholder="Acá va a aparecer lo que digas — también puedes escribir directo."></textarea>
+        <textarea id="respuestaTexto" placeholder="Aquí va a aparecer lo que digas — también puedes escribir directo."></textarea>
       </div>
       <div class="nav-row">
         <button class="btn plain" id="anteriorBtn" type="button">← Anterior</button>
@@ -242,7 +242,7 @@
 
   async function empezarGrabacion() {
     if (!window.MediaRecorder || !navigator.mediaDevices) {
-      estado.textContent = 'Este navegador no puede grabar audio acá — escribe tu respuesta abajo.';
+      estado.textContent = 'Este navegador no puede grabar audio aquí — escribe tu respuesta abajo.';
       return;
     }
     try {
