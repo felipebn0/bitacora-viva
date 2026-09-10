@@ -1940,14 +1940,18 @@ function recordarHostDeBlob(url) {
 // grande de operaciones y NO cobra transferencia — ver README.
 // Los archivos viejos que ya están en Vercel Blob se siguen leyendo de
 // ahí (se detectan por el host); lo nuevo va a R2.
-const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID;
-const R2_BUCKET = process.env.R2_BUCKET;
-const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID;
-const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY;
+// .trim() en todas: al pegar una clave en el panel de Vercel es fácil que
+// quede un salto de línea o un espacio al final — y eso, dentro del header
+// Authorization que arma aws4fetch, lo vuelve un valor de header inválido
+// ("Headers.set: ... is an invalid header value") y NADA se sube.
+const R2_ACCOUNT_ID = (process.env.R2_ACCOUNT_ID || '').trim();
+const R2_BUCKET = (process.env.R2_BUCKET || '').trim();
+const R2_ACCESS_KEY_ID = (process.env.R2_ACCESS_KEY_ID || '').trim();
+const R2_SECRET_ACCESS_KEY = (process.env.R2_SECRET_ACCESS_KEY || '').trim();
 // URL pública del bucket (el dominio r2.dev que da Cloudflare, o un dominio
 // propio). Hace falta: la URL que se guarda tiene que ser https y de un
 // host conocido para pasar urlHttpValida al escribir y al leer.
-const R2_PUBLIC_URL = (process.env.R2_PUBLIC_URL || '').replace(/\/+$/, '');
+const R2_PUBLIC_URL = (process.env.R2_PUBLIC_URL || '').trim().replace(/\/+$/, '');
 const USAR_R2 = !!(R2_ACCOUNT_ID && R2_BUCKET && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY && R2_PUBLIC_URL);
 const r2Cliente = USAR_R2
   ? new AwsClient({ accessKeyId: R2_ACCESS_KEY_ID, secretAccessKey: R2_SECRET_ACCESS_KEY, service: 's3', region: 'auto' })
