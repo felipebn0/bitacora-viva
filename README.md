@@ -124,7 +124,7 @@ Cada día (Vercel Cron → `GET /api/cron/reminders`, 14:00 UTC = 9:00 Colombia)
 
 Si no se configura ninguno de los tres, el cron sigue mandando los recordatorios por correo normalmente y el resumen de WhatsApp no se manda.
 
-**Cargar los números:** en `/admin.html`, sección "Recordatorios por WhatsApp", hay una tabla para escribir el teléfono de cada perfil (cuenta o subperfil) y marcar quién quiere el recordatorio por ese canal. Los usuarios también lo pueden poner ellos desde su perfil. Quien tiene WhatsApp activo **no** recibe el recordatorio por correo, para no avisar dos veces. Desde esa misma sección se puede ver a quién le toca hoy y disparar el resumen a mano (botón "Enviar el resumen ahora").
+**Cargar los números:** en `/admin.html`, sección "Recordatorios por WhatsApp", hay una tabla para escribir el teléfono de cada perfil (cuenta o subperfil) y marcar quién quiere el recordatorio por ese canal. Los usuarios también lo pueden poner ellos desde su perfil. Quien tiene WhatsApp activo **no** recibe el recordatorio por correo, para no avisar dos veces. Desde esa misma sección se puede ver a quién le toca hoy y disparar el resumen a mano (botón "Enviar el resumen ahora"). Para probar sin esperar los 14 días de inactividad, marcá **"ignorar los días de espera"** — incluye a cualquier perfil con número + opt-in activo (respeta igual a quien haya apagado los recordatorios).
 
 Cuando el envío uno a uno canse (más usuarios), el paso siguiente es la API de WhatsApp de Meta (o un intermediario como Zernio) con plantillas aprobadas — ver `.claude/agents/whatsapp-admin.md` y `BACKLOG.md`.
 

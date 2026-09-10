@@ -5732,7 +5732,10 @@ function enlaceWhatsApp(phone, nombre) {
 // FRECUENCIA_SUBPERFIL_DIAS). Separa a quién va por correo (lo de siempre)
 // de quién entra en el resumen de WhatsApp para Felipe (los que marcaron
 // ese canal y tienen número). NO manda nada — solo decide.
-async function calcularRecordatoriosPendientes() {
+// forzar: ignora los días de espera (inactividad + último aviso) — solo
+// para el botón de prueba de /admin, nunca lo pasa el cron. Igual respeta
+// que la persona no haya apagado los recordatorios.
+async function calcularRecordatoriosPendientes({ forzar = false } = {}) {
   await ensureSchema();
   const AHORA = Date.now();
   const DIA_MS = 24 * 60 * 60 * 1000;
@@ -5756,7 +5759,7 @@ async function calcularRecordatoriosPendientes() {
     if (!c.recordatorios_activos) continue;
     const inactividad = Math.min(dias(c.ultima_charla), dias(c.created_at));
     const desdeUltimoAviso = Math.min(dias(c.ultimo_correo), dias(c.ultimo_whatsapp));
-    if (inactividad < c.frecuencia_dias || desdeUltimoAviso < c.frecuencia_dias) continue;
+    if (!forzar && (inactividad < c.frecuencia_dias || desdeUltimoAviso < c.frecuencia_dias)) continue;
     const nombre = capitalizarNombre(c.name || c.username) || 'de nuevo';
     if (c.whatsapp_opt_in && c.phone) {
       paraWhatsApp.push({ profileId: c.id, nombre, phone: c.phone, diasInactivo: Math.round(inactividad), tipo: 'cuenta' });
@@ -5774,7 +5777,7 @@ async function calcularRecordatoriosPendientes() {
   `;
   for (const b of subperfiles) {
     const inactividad = Math.min(dias(b.ultima_charla), dias(b.created_at));
-    if (inactividad < FRECUENCIA_SUBPERFIL_DIAS || dias(b.ultimo_whatsapp) < FRECUENCIA_SUBPERFIL_DIAS) continue;
+    if (!forzar && (inactividad < FRECUENCIA_SUBPERFIL_DIAS || dias(b.ultimo_whatsapp) < FRECUENCIA_SUBPERFIL_DIAS)) continue;
     paraWhatsApp.push({ profileId: b.id, nombre: capitalizarNombre(b.nombre) || 'tu familiar', phone: b.phone, diasInactivo: Math.round(inactividad), tipo: 'subperfil' });
   }
   return { paraCorreo, paraWhatsApp };
@@ -6030,11 +6033,13 @@ app.get('/api/admin/whatsapp-reminders', requireAuth, requireAdmin, async (req, 
 app.post('/api/admin/whatsapp-reminders/run', requireAuth, requireAdmin, rateLimit, async (req, res) => {
   try {
     const dry = !!(req.body && req.body.dry);
-    const { paraWhatsApp } = await calcularRecordatoriosPendientes();
+    const forzar = !!(req.body && req.body.forzar);
+    const { paraWhatsApp } = await calcularRecordatoriosPendientes({ forzar });
     const resultado = await enviarResumenWhatsApp(paraWhatsApp, { soloTexto: dry });
     res.json({
       ok: true,
       dry,
+      forzar,
       ...resultado,
       lista: paraWhatsApp.map((p) => ({ nombre: p.nombre, tipo: p.tipo, diasInactivo: p.diasInactivo, enlace: enlaceWhatsApp(p.phone, p.nombre) })),
     });

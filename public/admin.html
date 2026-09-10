@@ -728,6 +728,7 @@
         <div class="wa-actions">
           <button type="button" class="range-btn" id="waPreviewBtn">Ver a quién le toca hoy</button>
           <button type="button" class="range-apply" id="waSendBtn">Enviar el resumen ahora</button>
+          <label class="wa-optin"><input type="checkbox" id="waForce"> ignorar los días de espera (para probar)</label>
         </div>
         <div class="wa-out" id="waOut" hidden></div>
         <div class="table-scroll">
@@ -770,16 +771,23 @@
 
   function correrResumen(dry) {
     const out = document.getElementById('waOut');
+    const forceBox = document.getElementById('waForce');
+    const forzar = !!(forceBox && forceBox.checked);
     out.hidden = false;
     out.textContent = dry ? 'Buscando a quién le toca…' : 'Enviando…';
     fetch('/api/admin/whatsapp-reminders/run', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ dry }),
+      body: JSON.stringify({ dry, forzar }),
     })
       .then((r) => r.json())
       .then((j) => {
         if (!j.ok) { out.textContent = j.error || 'No se pudo.'; return; }
-        if (!j.lista || !j.lista.length) { out.textContent = 'Hoy no le toca recordatorio a nadie con WhatsApp activo.'; return; }
+        if (!j.lista || !j.lista.length) {
+          out.textContent = forzar
+            ? 'Nadie tiene número + "quiere WhatsApp" activo todavía. Cargá eso en la tabla de abajo.'
+            : 'Hoy no le toca recordatorio a nadie con WhatsApp activo. (Marcá "ignorar los días de espera" para probar igual.)';
+          return;
+        }
         const cab = dry
           ? 'Le toca a ' + j.lista.length + ' persona(s). Vista previa — no se envió nada:'
           : 'Enviado. CallMeBot: ' + esc(j.callmebot) + ' · correo: ' + esc(j.email) + '.';
