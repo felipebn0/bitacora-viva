@@ -149,6 +149,11 @@
     content: ""; position: absolute; inset: -14px; border-radius: 50%;
     border: 2px solid var(--ring); animation: breathe 3.2s ease-in-out infinite;
   }
+  /* Segunda línea más chica en los mensajes de estado del orbe (reintentos
+     de guardado, etc.) — antes iba como style="font-size:..." inline en
+     cada <small>, que rompía la regla de CSP del proyecto (sin atributos
+     style="" reales, ver el smoke test sin-estilos-inline). */
+  #orbLabel small { font-size: 0.75rem; }
   @keyframes breathe { 0%,100% { transform: scale(1); opacity: .6; } 50% { transform: scale(1.08); opacity: .15; } }
   /* Colores por turno (pedido de Felipe, 2026-09-08): verde cuando le toca
      hablar a la persona, amarillo cuando habla la IA -- antes era al
@@ -3149,14 +3154,14 @@
       saveRetryCount++;
       orbLabel.innerHTML = 
         '⚠️ No se guardó tu charla<br>' +
-        `<small style="font-size:0.75rem">Intento ${saveRetryCount} de 3 en 5s…</small>`;
+        `<small>Intento ${saveRetryCount} de 3 en 5s…</small>`;
       if (pendingSaveTimeout) clearTimeout(pendingSaveTimeout);
       pendingSaveTimeout = setTimeout(() => retrySessionSave(), 5000);
     } else {
       setState('save-failed');
       orbLabel.innerHTML =
         '❌ No se pudo guardar<br>' +
-        '<small style="font-size:0.75rem">Revisa tu conexión o intenta en unos minutos</small>';
+        '<small>Revisa tu conexión o intenta en unos minutos</small>';
     }
   }
 
@@ -3172,7 +3177,7 @@
       setState('save-failed');
       orbLabel.innerHTML = 
         '⚠️ No se guardó tu charla<br>' +
-        '<small style="font-size:0.75rem">Reintentamos en 5s…</small>';
+        '<small>Reintentamos en 5s…</small>';
       
       saveRetryCount++;
       if (saveRetryCount < 3) {
@@ -3181,7 +3186,7 @@
       } else {
         orbLabel.innerHTML =
           '⚠️ Fallo al guardar (3+ intentos)<br>' +
-          '<small style="font-size:0.75rem">Toca para reintentar o empezar nueva charla</small>';
+          '<small>Toca para reintentar o empezar nueva charla</small>';
       }
     }
     
@@ -3423,7 +3428,7 @@
   if (restorePendingSession()) {
     orbLabel.innerHTML = 
       '⚠️ Charla incompleta encontrada<br>' +
-      '<small style="font-size:0.75rem">Reintentando guardar…</small>';
+      '<small>Reintentando guardar…</small>';
     setState('retrying-save');
     retrySessionSave();
   }

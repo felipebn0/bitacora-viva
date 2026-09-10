@@ -339,6 +339,10 @@
          sacó "unirme con un código" del registro) — el link ahora manda
          directo al registro normal. -->
     <p class="sub pc-53425f7d">¿No tienes cuenta? <a class="pc-07135648" href="/#registro">Crea una</a>.</p>
+    <!-- Solo aparece cuando se llegó acá desde la pantalla de invitado
+         (?codigo=), por si tocaron "Inicia sesión" sin querer y en
+         realidad no tienen cuenta — ver guestToLoginLink más abajo. -->
+    <p class="sub pc-53425f7d" id="loginBackToGuest" hidden><a class="pc-07135648" href="#">← volver a entrar solo con mi nombre</a></p>
   </div>
 
   <!-- Entrada de invitado: llega con ?codigo=XXXXXXXX (link de WhatsApp
@@ -361,6 +365,7 @@
     </div>
     <button id="guestStartBtn" type="button">Empezar</button>
     <p class="sub pc-53425f7d">No hace falta crear cuenta ni clave — solo tu nombre.</p>
+    <p class="sub pc-53425f7d">¿Ya tienes cuenta? <a class="pc-07135648" href="#" id="guestToLoginLink">Inicia sesión</a>.</p>
   </div>
 
   <!-- Cuenta dueña que llega acá por el botón "Colaborar" de app.html sin
@@ -719,6 +724,30 @@
   }
   guestStartBtn.addEventListener('click', doGuestStart);
   guestName.addEventListener('keydown', (e) => { if (e.key === 'Enter') doGuestStart(); });
+
+  // "¿Ya tienes cuenta? Inicia sesión" desde la pantalla de invitado
+  // (pedido de Felipe, 2026-09-10): cambia a la pantalla de login (que ya
+  // vive en esta misma página) sin tocar la URL — el ?codigo= sigue ahí,
+  // así que doLogin() recarga y la carga siguiente entra por la rama
+  // "cuenta real + ?codigo=" del fetch de /api/me (más abajo), que une la
+  // colaboración con la cuenta de verdad y sigue directo. No hace falta
+  // guardar el link aparte: nunca se sale de esta página.
+  const guestToLoginLink = document.getElementById('guestToLoginLink');
+  const loginBackToGuest = document.getElementById('loginBackToGuest');
+  if (guestToLoginLink) {
+    guestToLoginLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      showLogin();
+      if (loginBackToGuest) loginBackToGuest.hidden = false;
+    });
+  }
+  if (loginBackToGuest) {
+    loginBackToGuest.querySelector('a').addEventListener('click', (e) => {
+      e.preventDefault();
+      loginBackToGuest.hidden = true;
+      showGuestEntry();
+    });
+  }
 
   function ocultarClave() {
     loginPass.type = 'password';
