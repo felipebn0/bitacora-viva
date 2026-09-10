@@ -90,10 +90,21 @@ async function main() {
     const CONTENIDO = Buffer.from('contenido-real');
     const URL_NUESTRA = 'https://nuestrostoreid123.public.blob.vercel-storage.com/audio/1/x/file.webm';
     const URL_OTRO_STORE = 'https://otrostoreid999.public.blob.vercel-storage.com/audio/1/x/file.webm';
+    // Un store ajeno que además MIENTE el content-type (text/html): aunque
+    // se sirva, /api/media-file debe forzar un tipo seguro.
+    const URL_HTML = 'https://atacante123.public.blob.vercel-storage.com/media/1/x.png';
+    // Host que NO es de Vercel Blob: nunca se debe hacer fetch de ahí.
+    const URL_EXTERNA = 'https://evil.example.com/media/1/x.png';
     const fetchOriginal = global.fetch;
     global.fetch = async (url) => {
       if (url === URL_NUESTRA || url === URL_OTRO_STORE) {
         return { ok: true, status: 200, headers: { get: (k) => (k.toLowerCase() === 'content-type' ? 'audio/webm' : null) }, body: streamDesdeBuffer(CONTENIDO) };
+      }
+      if (url === URL_HTML) {
+        return { ok: true, status: 200, headers: { get: (k) => (k.toLowerCase() === 'content-type' ? 'text/html' : null) }, body: streamDesdeBuffer(Buffer.from('<script>alert(1)</script>')) };
+      }
+      if (url === URL_EXTERNA) {
+        return { ok: true, status: 200, headers: { get: () => 'text/html' }, body: streamDesdeBuffer(Buffer.from('externo')) };
       }
       return fetchOriginal(url);
     };
@@ -138,8 +149,13 @@ async function main() {
       const u = (valor) => '/api/media-file?u=' + encodeURIComponent(valor);
       const rNuestra = await request(server, { path: u(URL_NUESTRA) }, cookie);
       const rOtroStore = await request(server, { path: u(URL_OTRO_STORE) }, cookie);
+      const rHtml = await request(server, { path: u(URL_HTML) }, cookie);
+      const rExterna = await request(server, { path: u(URL_EXTERNA) }, cookie);
       console.log('STATUS_NUESTRA=' + rNuestra.status);
       console.log('STATUS_OTRO_STORE=' + rOtroStore.status);
+      console.log('CT_HTML=' + rHtml.headers['content-type']);
+      console.log('NOSNIFF_HTML=' + rHtml.headers['x-content-type-options']);
+      console.log('STATUS_EXTERNA=' + rExterna.status);
       server.close();
     })();
   `;
@@ -147,8 +163,15 @@ async function main() {
   if (r.timedOut) console.log('(el proceso hijo no terminó a tiempo)');
   if (r.stderr) console.log('--- stderr del hijo ---\\n' + r.stderr);
 
-  check('con BLOB_READ_WRITE_TOKEN puesto, una URL de NUESTRO store se acepta -> 200', /STATUS_NUESTRA=200/.test(r.stdout));
-  check('una URL de OTRO store (mismo sufijo, distinto storeId) se rechaza -> 404', /STATUS_OTRO_STORE=404/.test(r.stdout));
+  check('una URL de NUESTRO store se sirve -> 200', /STATUS_NUESTRA=200/.test(r.stdout));
+  // El pin exacto derivado del token no era confiable (con storeId "store_xxx",
+  // token.split("_")[3] da "store" y NINGÚN aporte guardaba/servía su media).
+  // Ahora se acepta cualquier host de Vercel Blob, y el riesgo de relayar un
+  // store ajeno se acota forzando un Content-Type de medios + nosniff.
+  check('una URL de OTRO store de Vercel Blob se sirve -> 200 (el pin exacto rompía todos los aportes)', /STATUS_OTRO_STORE=200/.test(r.stdout));
+  check('si el archivo dice ser text/html, se sirve como descarga genérica, nunca como HTML', /CT_HTML=application\/octet-stream/.test(r.stdout));
+  check('la respuesta lleva X-Content-Type-Options: nosniff', /NOSNIFF_HTML=nosniff/.test(r.stdout));
+  check('una URL a un host que NO es de Vercel Blob se rechaza -> 404 (sin SSRF)', /STATUS_EXTERNA=404/.test(r.stdout));
 
   console.log(`\n${passed} pasaron, ${failed} fallaron`);
   process.exit(failed ? 1 : 0);

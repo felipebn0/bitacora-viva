@@ -1917,9 +1917,38 @@ const BLOB_STORE_ID = (() => {
 })();
 const BLOB_HOST_EXACTO = BLOB_STORE_ID ? `${BLOB_STORE_ID}.public.blob.vercel-storage.com` : null;
 
+// Además del pin exacto (derivado del token), se aprende el host real que
+// devuelve put() la primera vez que sube un archivo en esta instancia —
+// porque el subdominio del CDN que usa Blob de verdad NO siempre es
+// "<storeId del token>.public.blob.vercel-storage.com" (con storeId del
+// tipo "store_xxxx", token.split('_')[3] da "store" y el pin queda mal, y
+// con el pin mal NINGÚN audio/foto de un aporte se guardaba ni se servía).
+let BLOB_HOST_APRENDIDO = null;
+function recordarHostDeBlob(url) {
+  try {
+    const h = new URL(url).hostname;
+    if (/\.blob\.vercel-storage\.com$/i.test(h)) BLOB_HOST_APRENDIDO = h;
+  } catch (e) { /* url rara: se ignora */ }
+}
+
+// El relay hacia un store ajeno (mismo sufijo, distinto dueño) queda
+// acotado por: datosDelArchivoDeBlob solo acepta rutas audio/<id>/…,
+// audio/aportes/<id>/… y media/<id>/…; estaAutorizadoParaVerArchivo exige
+// ser dueño o colaborador de ese <id>; y /api/media-file fuerza un
+// Content-Type de medios (nunca text/html) sobre lo que sirve — ver ahí.
 function esHostDeNuestroBlob(hostname) {
-  if (BLOB_HOST_EXACTO) return hostname === BLOB_HOST_EXACTO;
-  return hostname === BLOB_HOST_SUFFIX.slice(1) || hostname.endsWith(BLOB_HOST_SUFFIX);
+  if (typeof hostname !== 'string' || !hostname) return false;
+  if (BLOB_HOST_EXACTO && hostname === BLOB_HOST_EXACTO) return true;
+  if (BLOB_HOST_APRENDIDO && hostname === BLOB_HOST_APRENDIDO) return true;
+  return /^[a-z0-9-]+\.(public\.)?blob\.vercel-storage\.com$/i.test(hostname);
+}
+
+// Nunca dejar que /api/media-file sirva algo que el navegador ejecute como
+// HTML/JS en nuestro propio origen — si el archivo no declara un tipo de
+// audio/imagen/video conocido, se sirve como descarga genérica.
+function contentTypeSeguroDeMedia(valor) {
+  const ct = String(valor || '').toLowerCase().split(';')[0].trim();
+  return /^(audio|image|video)\//.test(ct) ? ct : 'application/octet-stream';
 }
 
 // Valida que un string sea una URL https real, alojada en nuestro propio
@@ -4157,7 +4186,9 @@ app.get('/api/media-file', requireAuth, async (req, res) => {
         if (externo.status >= 300 && externo.status < 400) return res.status(404).json({ error: 'No se encontró el archivo.' });
         if (!externo.ok || !externo.body) return res.status(404).json({ error: 'No se encontró el archivo.' });
         res.status(Number.isInteger(externo.status) ? externo.status : 200);
-        res.set('Content-Type', externo.headers.get('content-type') || 'application/octet-stream');
+        res.set('Content-Type', contentTypeSeguroDeMedia(externo.headers.get('content-type')));
+        res.set('X-Content-Type-Options', 'nosniff');
+        res.set('Content-Disposition', 'inline');
         res.set('Cache-Control', 'private, no-store');
         res.set('Accept-Ranges', 'bytes');
         const contentRange = externo.headers.get('content-range');
@@ -4171,7 +4202,9 @@ app.get('/api/media-file', requireAuth, async (req, res) => {
         return res.status(404).json({ error: 'No se encontró el archivo.' });
       }
     }
-    res.set('Content-Type', resultado.blob.contentType || 'application/octet-stream');
+    res.set('Content-Type', contentTypeSeguroDeMedia(resultado.blob.contentType));
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.set('Content-Disposition', 'inline');
     res.set('Cache-Control', 'private, no-store');
     res.set('Accept-Ranges', 'bytes');
     const headersPrivado = resultado.headers && typeof resultado.headers.get === 'function' ? resultado.headers : null;
@@ -4218,6 +4251,7 @@ app.post('/api/save-audio', requireAuth, bloquearColaborador, bloquearSiNoPuedeN
     // crear/migrar a un store con soporte de acceso privado y solo ahí
     // volver a poner 'private' aquí.
     const blob = await put(filename, req.body, { access: 'public', contentType: real.mime, addRandomSuffix: true });
+    recordarHostDeBlob(blob.url);
     res.json({ ok: true, file: blob.url });
   } catch (err) {
     console.error(err);
@@ -4262,6 +4296,7 @@ app.post('/api/contribute-audio', requireAuth, rateLimit, express.raw({ type: '*
     const filename = `audio/aportes/${ownerId}/${Date.now()}.${real.ext}`;
     // TEMPORAL: mismo motivo que /api/save-audio — ver comentario ahí.
     const blob = await put(filename, req.body, { access: 'public', contentType: real.mime, addRandomSuffix: true });
+    recordarHostDeBlob(blob.url);
     res.json({ ok: true, url: blob.url });
   } catch (err) {
     console.error(err);
@@ -4605,6 +4640,7 @@ app.post('/api/contribute-media', requireAuth, rateLimit, express.raw({ type: '*
       contentType: real.mime,
       addRandomSuffix: true,
     });
+    recordarHostDeBlob(blob.url);
 
     // Ya NO se inserta en la tabla "media" genérica aquí — este endpoint
     // hoy solo se llama desde "aportar una historia" (colaborar.html), y
