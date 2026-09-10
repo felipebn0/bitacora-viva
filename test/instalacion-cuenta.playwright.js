@@ -12,7 +12,7 @@
 // solo toque acá que en la práctica nunca aparecería (ver
 // configurarSeccionInstalacion en app.html).
 //
-// Tres escenarios, cada uno con su propio user agent (Playwright permite
+// Cuatro escenarios, cada uno con su propio user agent (Playwright permite
 // fijar el user agent por contexto de navegador):
 //   1. iPhone + Safari: 3 pasos (compartir → "Ver más" → "Añadir a
 //      pantalla de inicio"), con la nota de que queda en pantalla completa.
@@ -22,6 +22,11 @@
 //   3. Android/escritorio: se ve siempre la instrucción manual (menú ⋮),
 //      incluso si el navegador llega a disparar beforeinstallprompt (ese
 //      evento solo se usa en #accesoDirectoRow, no acá).
+//   4. Enlace permanente de un subperfil (#accesoDirectoRow, en la pantalla
+//      de charla, no en Cuenta): pedido de Luca (2026-09-09) — la leyenda
+//      "Para guardar esta charla en tu pantalla de inicio: ..." quedaba
+//      duplicada con la de Instalación (mismo texto, mismo propósito) y ya
+//      no se muestra ahí — ver activarAccesoDirecto en app.html.
 //
 // No usa server.js: app.html se sirve estático y todas las llamadas a
 // /api/* se interceptan con page.route() (mismo patrón que
@@ -159,6 +164,37 @@ async function scenarioAndroidSiempreManual(browser, base) {
   await context.close();
 }
 
+async function scenarioNarradorLinkSinLeyenda(browser, base) {
+  console.log('\n--- Escenario 4: enlace permanente de subperfil — sin la leyenda duplicada de "Para guardar esta charla" ---');
+  const context = await browser.newContext({ userAgent: UA_ANDROID_CHROME });
+  const page = await context.newPage();
+  page.on('pageerror', (e) => console.error('  [pageerror]', e.message));
+
+  await page.route('**/api/me', (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({
+      isCollaborator: false, isGuest: true, isNarradorLink: true,
+      guestName: 'Vargas Prueba', bitacoraNombre: 'Vargas Prueba',
+      username: null, name: null, email: null, fechaNacimiento: null,
+    }),
+  }));
+
+  await page.goto(base + '/app.html?codigo=ABCD1234');
+  await page.waitForSelector('#appContent', { state: 'visible' });
+  await page.waitForFunction(() => document.getElementById('greetingName').textContent.trim().length > 0);
+
+  const nombreMostrado = await page.textContent('#greetingName');
+  assert(nombreMostrado.trim() === 'Vargas Prueba', 'se ve el saludo del enlace de subperfil ("Vargas Prueba")');
+
+  const leyendaVisible = await page.isVisible('#agregarInicioTexto');
+  const leyendaTexto = (await page.textContent('#agregarInicioTexto')) || '';
+  assert(!leyendaVisible, 'ya no se muestra la leyenda "Para guardar esta charla..." en la pantalla de charla');
+  assert(!/pantalla de inicio/i.test(leyendaTexto), 'el bloque no le queda ningún texto de instrucción manual (queda solo en Instalación)');
+  assert(!/Para guardar esta charla/i.test(await page.textContent('body')), 'esa frase no aparece en ningún lado de la pantalla de charla');
+
+  await context.close();
+}
+
 (async () => {
   const server = await startStaticServer();
   const port = server.address().port;
@@ -168,6 +204,7 @@ async function scenarioAndroidSiempreManual(browser, base) {
     await scenarioIphoneSafari(browser, base);
     await scenarioIphoneChrome(browser, base);
     await scenarioAndroidSiempreManual(browser, base);
+    await scenarioNarradorLinkSinLeyenda(browser, base);
   } finally {
     await browser.close();
     server.close();
