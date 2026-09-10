@@ -86,6 +86,21 @@ Todo se guarda en la nube (Postgres + Vercel Blob), no en archivos locales — a
 
 Copia `DATABASE_URL` y `BLOB_READ_WRITE_TOKEN` desde **Storage** en el dashboard de Vercel (click en cada base → **.env.local** o **Quickstart**) y pegalos en tu `.env` local. Sin esto, `npm run dev` sigue prendiendo pero las charlas no se van a poder guardar.
 
+### Almacenamiento de archivos: Cloudflare R2 (opcional, recomendado a partir de cierto uso)
+
+Los audios, fotos y videos van a Vercel Blob por defecto. El plan gratis de Vercel Blob tiene un cupo bajo de **operaciones** (2.000/mes) que se topa rápido — cada subida y **cada lectura** de un archivo cuenta. Cloudflare R2 da 10 millones de operaciones/mes gratis y **no cobra transferencia nunca**.
+
+Si se definen estas 5 variables de entorno, la app usa R2 para todo lo nuevo (lo que ya está en Vercel Blob se sigue leyendo de ahí, se detecta por la URL):
+
+| Variable | De dónde sale |
+|---|---|
+| `R2_ACCOUNT_ID` | Cloudflare → R2 → arriba a la derecha, "Account ID". |
+| `R2_BUCKET` | El nombre del bucket que creaste (ej. `bitacora-viva`). |
+| `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | Cloudflare → R2 → **Manage R2 API Tokens** → **Create API Token** (permiso *Object Read & Write*, alcance ese bucket). El secret solo se muestra una vez. |
+| `R2_PUBLIC_URL` | En el bucket → **Settings** → **Public access** → activa **R2.dev subdomain** (o conecta un dominio propio). Es la URL `https://<algo>.r2.dev`, sin barra al final. |
+
+Con las 5 puestas y un Redeploy, las subidas nuevas van a R2. Si falta alguna, sigue todo por Vercel Blob como antes. No hay que migrar los archivos viejos.
+
 ## Panel de consumo (`/admin.html`)
 
 Reporte de uso y costo estimado por perfil (cuenta dueña o subperfil): tokens de Claude (incluida la parte de prompt caching), caracteres de voz (ElevenLabs/Azure), tiempo hablado, y espacio ocupado en la base de datos. Pensado para los dueños del producto, no para cuentas normales.

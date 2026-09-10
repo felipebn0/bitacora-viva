@@ -6,6 +6,7 @@ const bcrypt = require('bcryptjs');
 const Anthropic = require('@anthropic-ai/sdk');
 const { neon } = require('@neondatabase/serverless');
 const { put, del, get, list } = require('@vercel/blob');
+const { AwsClient } = require('aws4fetch');
 const archiver = require('archiver');
 const { Readable } = require('stream');
 const { calcularHashesDeInline } = require('./csp-hashes');
@@ -1931,6 +1932,41 @@ function recordarHostDeBlob(url) {
   } catch (e) { /* url rara: se ignora */ }
 }
 
+// --- Almacenamiento de archivos: Cloudflare R2 si está configurado, si no
+// --- Vercel Blob (lo de siempre) ---------------------------------------
+// Se elige por variables de entorno, sin que el código que sube/lee/borra
+// tenga que enterarse (ver almacenarArchivo/abrirArchivoAlmacenado/
+// borrarUnArchivo más abajo). R2 tiene un cupo gratis enormemente más
+// grande de operaciones y NO cobra transferencia — ver README.
+// Los archivos viejos que ya están en Vercel Blob se siguen leyendo de
+// ahí (se detectan por el host); lo nuevo va a R2.
+const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID;
+const R2_BUCKET = process.env.R2_BUCKET;
+const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID;
+const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY;
+// URL pública del bucket (el dominio r2.dev que da Cloudflare, o un dominio
+// propio). Hace falta: la URL que se guarda tiene que ser https y de un
+// host conocido para pasar urlHttpValida al escribir y al leer.
+const R2_PUBLIC_URL = (process.env.R2_PUBLIC_URL || '').replace(/\/+$/, '');
+const USAR_R2 = !!(R2_ACCOUNT_ID && R2_BUCKET && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY && R2_PUBLIC_URL);
+const r2Cliente = USAR_R2
+  ? new AwsClient({ accessKeyId: R2_ACCESS_KEY_ID, secretAccessKey: R2_SECRET_ACCESS_KEY, service: 's3', region: 'auto' })
+  : null;
+const R2_ENDPOINT = USAR_R2 ? `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${R2_BUCKET}` : null;
+const R2_PUBLIC_HOST = (() => { try { return R2_PUBLIC_URL ? new URL(R2_PUBLIC_URL).hostname : null; } catch (e) { return null; } })();
+
+function claveDeArchivo(valor) {
+  let s = String(valor || '');
+  if (/^https?:\/\//i.test(s)) { try { s = new URL(s).pathname; } catch (e) { return null; } }
+  return s.replace(/^\/+/, '') || null;
+}
+function claveParaUrl(clave) {
+  return String(clave).split('/').map(encodeURIComponent).join('/');
+}
+function esUrlDeVercelBlob(valor) {
+  return /^https?:\/\/[^/]*\.blob\.vercel-storage\.com/i.test(String(valor || ''));
+}
+
 // El relay hacia un store ajeno (mismo sufijo, distinto dueño) queda
 // acotado por: datosDelArchivoDeBlob solo acepta rutas audio/<id>/…,
 // audio/aportes/<id>/… y media/<id>/…; estaAutorizadoParaVerArchivo exige
@@ -1938,6 +1974,7 @@ function recordarHostDeBlob(url) {
 // Content-Type de medios (nunca text/html) sobre lo que sirve — ver ahí.
 function esHostDeNuestroBlob(hostname) {
   if (typeof hostname !== 'string' || !hostname) return false;
+  if (R2_PUBLIC_HOST && hostname === R2_PUBLIC_HOST) return true;
   if (BLOB_HOST_EXACTO && hostname === BLOB_HOST_EXACTO) return true;
   if (BLOB_HOST_APRENDIDO && hostname === BLOB_HOST_APRENDIDO) return true;
   return /^[a-z0-9-]+\.(public\.)?blob\.vercel-storage\.com$/i.test(hostname);
@@ -1976,6 +2013,114 @@ function urlHttpValida(str) {
   }
 }
 
+// Sube un archivo y devuelve { url } — la URL que se guarda en la base y
+// que después /api/media-file usa para servirlo. R2 si está configurado,
+// si no Vercel Blob. En los dos casos la URL final es https y de un host
+// que urlHttpValida acepta.
+async function almacenarArchivo(pathname, cuerpo, contentType) {
+  const base = String(pathname).replace(/^\/+/, '');
+  if (USAR_R2) {
+    // Sufijo aleatorio antes de la extensión — misma idea que el
+    // addRandomSuffix de @vercel/blob (que dos subidas "a la vez" no se
+    // pisen).
+    const m = base.match(/^(.*?)(\.[a-z0-9]+)?$/i);
+    const clave = `${m[1]}-${crypto.randomBytes(8).toString('hex')}${m[2] || ''}`;
+    const resp = await r2Cliente.fetch(`${R2_ENDPOINT}/${claveParaUrl(clave)}`, {
+      method: 'PUT',
+      body: cuerpo,
+      headers: { 'Content-Type': contentType || 'application/octet-stream' },
+      signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+    });
+    if (!resp.ok) throw new Error(`R2 PUT ${resp.status}: ${(await resp.text().catch(() => '')).slice(0, 200)}`);
+    return { url: `${R2_PUBLIC_URL}/${clave}` };
+  }
+  const blob = await put(base, cuerpo, { access: 'public', contentType, addRandomSuffix: true });
+  recordarHostDeBlob(blob.url);
+  return { url: blob.url };
+}
+
+// Abre un archivo para leerlo (stream). Devuelve
+// { stream, status, contentType, contentRange, contentLength } o null.
+// rangeHeader se reenvía tal cual (Safari en iOS lo exige para <audio>).
+// R2 para lo nuevo; para las URLs viejas de Vercel Blob, get() privado con
+// respaldo a un fetch del host (mismo comportamiento que antes).
+async function abrirArchivoAlmacenado(valorGuardado, rangeHeader) {
+  if (!valorGuardado || String(valorGuardado).includes('..')) return null;
+  const clave = claveDeArchivo(valorGuardado);
+  if (!clave) return null;
+
+  if (USAR_R2 && !esUrlDeVercelBlob(valorGuardado)) {
+    try {
+      const resp = await r2Cliente.fetch(`${R2_ENDPOINT}/${claveParaUrl(clave)}`, {
+        headers: rangeHeader ? { Range: rangeHeader } : undefined,
+        signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+      });
+      if (!resp.ok || !resp.body) return null;
+      return {
+        stream: resp.body,
+        status: resp.status,
+        contentType: resp.headers.get('content-type'),
+        contentRange: resp.headers.get('content-range'),
+        contentLength: resp.headers.get('content-length'),
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Vercel Blob (archivos viejos).
+  try {
+    const r = await get(clave, { access: 'private', headers: rangeHeader ? { Range: rangeHeader } : undefined });
+    if (r && r.stream) {
+      const h = r.headers && typeof r.headers.get === 'function' ? r.headers : null;
+      return {
+        stream: r.stream,
+        status: h && h.get('content-range') ? 206 : 200,
+        contentType: r.blob && r.blob.contentType,
+        contentRange: h ? h.get('content-range') : null,
+        contentLength: h ? h.get('content-length') : null,
+      };
+    }
+  } catch (e) { /* sigue al respaldo */ }
+  try {
+    const url = urlHttpValida(valorGuardado);
+    if (!url) return null;
+    const externo = await fetch(url, {
+      ...(rangeHeader ? { headers: { Range: rangeHeader } } : null),
+      redirect: 'manual',
+      signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+    });
+    if (externo.status >= 300 && externo.status < 400) return null;
+    if (!externo.ok || !externo.body) return null;
+    return {
+      stream: externo.body,
+      status: Number.isInteger(externo.status) ? externo.status : 200,
+      contentType: externo.headers.get('content-type'),
+      contentRange: externo.headers.get('content-range'),
+      contentLength: externo.headers.get('content-length'),
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+// Borra un archivo (best-effort). R2 para las claves/URLs de R2; del() de
+// @vercel/blob para las URLs viejas.
+async function borrarUnArchivo(valorGuardado) {
+  if (!valorGuardado) return;
+  if (USAR_R2 && !esUrlDeVercelBlob(valorGuardado)) {
+    const clave = claveDeArchivo(valorGuardado);
+    if (!clave) return;
+    const resp = await r2Cliente.fetch(`${R2_ENDPOINT}/${claveParaUrl(clave)}`, {
+      method: 'DELETE',
+      signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+    });
+    if (!resp.ok && resp.status !== 404) throw new Error(`R2 DELETE ${resp.status}`);
+    return;
+  }
+  await del(valorGuardado);
+}
+
 // Borra archivos reales de Vercel Blob (audio/foto) — se usa cuando se
 // reinicia la bitácora, para que "borrar tus recuerdos" también borre el
 // archivo y no solo la fila de la base de datos. Es best-effort: si Blob
@@ -1986,9 +2131,9 @@ async function borrarArchivosBlob(urls) {
   const validas = [...new Set((urls || []).map((u) => urlHttpValida(u)).filter(Boolean))];
   await Promise.all(validas.map(async (url) => {
     try {
-      await del(url);
+      await borrarUnArchivo(url);
     } catch (err) {
-      console.error('No se pudo borrar el archivo de Blob, queda registrado para reintentar:', url, err.message);
+      console.error('No se pudo borrar el archivo, queda registrado para reintentar:', url, err.message);
       try {
         await ensureSchema();
         await sql`
@@ -2024,7 +2169,7 @@ async function reintentarBorradosPendientes() {
   const pendientes = await sql`SELECT id, url FROM pending_blob_deletes ORDER BY creado_at ASC LIMIT 20`;
   for (const p of pendientes) {
     try {
-      await del(p.url);
+      await borrarUnArchivo(p.url);
       await sql`DELETE FROM pending_blob_deletes WHERE id = ${p.id}`;
     } catch (err) {
       await sql`UPDATE pending_blob_deletes SET intentos = intentos + 1, motivo = ${String(err.message || err).slice(0, 500)}, ultimo_intento_at = now() WHERE id = ${p.id}`.catch(() => {});
@@ -4086,38 +4231,16 @@ async function estaAutorizadoParaVerArchivo(req, ownerId) {
   return collab.length > 0;
 }
 
-// Mismo criterio que /api/media-file (intenta Blob privado, con respaldo a
-// un fetch directo para lo que quedó público de antes del arreglo de
-// seguridad) pero devuelve los bytes enteros en memoria en vez de un
-// stream hacia una respuesta HTTP — lo usa /api/export para meter el
-// archivo real adentro del .zip. Nunca tira: si algo falla, devuelve null
-// y quien llama decide qué hacer (aquí, dejar el link como respaldo).
+// Devuelve los bytes enteros de un archivo en memoria (no un stream) — lo
+// usa /api/export para meter el archivo real dentro del .zip. Nunca tira:
+// si algo falla, devuelve null y quien llama decide qué hacer (aquí, dejar
+// el link como respaldo).
 async function bytesDeArchivoPrivado(valorGuardado) {
-  const datos = valorGuardado && !String(valorGuardado).includes('..') ? datosDelArchivoDeBlob(valorGuardado) : null;
-  if (!datos) return null;
+  const abierto = await abrirArchivoAlmacenado(valorGuardado);
+  if (!abierto || !abierto.stream) return null;
   try {
-    const resultado = await get(datos.pathname, { access: 'private' });
-    if (resultado && resultado.stream) {
-      const buffer = Buffer.from(await new Response(resultado.stream).arrayBuffer());
-      return { buffer, contentType: resultado.blob.contentType || 'application/octet-stream' };
-    }
-  } catch (err) {
-    // sigue al respaldo de abajo
-  }
-  try {
-    // urlHttpValida (no un simple /^https?:\/\//): exige https Y que el
-    // host sea nuestro propio storage de Vercel Blob — ver el comentario en
-    // su definición (más arriba) para el porqué (SSRF, P1 de seguridad
-    // 2026-09-05). redirect:'manual' + tratar cualquier respuesta 3xx como
-    // fallo: aunque el host ya está fijo a Blob, así una redirección nunca
-    // se sigue a ciegas hacia otro lado.
-    const url = urlHttpValida(valorGuardado);
-    if (!url) return null;
-    const externo = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS) });
-    if (externo.status >= 300 && externo.status < 400) return null;
-    if (!externo.ok || !externo.body) return null;
-    const buffer = Buffer.from(await externo.arrayBuffer());
-    return { buffer, contentType: externo.headers.get('content-type') || 'application/octet-stream' };
+    const buffer = Buffer.from(await new Response(abierto.stream).arrayBuffer());
+    return { buffer, contentType: abierto.contentType || 'application/octet-stream' };
   } catch (err) {
     return null;
   }
@@ -4149,73 +4272,25 @@ app.get('/api/media-file', requireAuth, async (req, res) => {
     // Safari en iOS exige que el <audio>/<video> reciba soporte de rangos
     // (Accept-Ranges + 206 Partial Content) para reproducir el archivo —
     // una respuesta 200 completa, aunque válida, hace que falle con "Error".
-    // Por eso reenviamos el header Range del cliente hacia el origen y
-    // relayamos el status/Content-Range que responda, en vez de servir
-    // siempre el archivo completo.
+    // Por eso se reenvía el header Range del cliente hacia el origen
+    // (R2 o Blob) y se relaya el status/Content-Range que responda.
     const rangeHeader = typeof req.headers.range === 'string' ? req.headers.range : undefined;
 
-    let resultado;
-    try {
-      resultado = await get(datos.pathname, { access: 'private', headers: rangeHeader ? { Range: rangeHeader } : undefined });
-    } catch (err) {
-      resultado = null;
-    }
-    if (!resultado || !resultado.stream) {
-      // Respaldo para archivos subidos ANTES de este cambio, que todavía
-      // están marcados como públicos en Blob — se sirven igual mientras se
-      // termina de migrar el storage viejo (ver BACKLOG.md).
-      //
-      // urlHttpValida (no un simple /^https?:\/\//): exige https Y que el
-      // host sea nuestro propio storage de Vercel Blob — sin esto, este
-      // endpoint era un SSRF/proxy-abierto: `datos.ownerId` se deriva solo
-      // del PATH de la URL (ver datosDelArchivoDeBlob), así que cualquiera
-      // podía pasar su propio id en el path de una URL apuntando a
-      // cualquier host (P1 de seguridad 2026-09-05) y el server la
-      // reenviaba tal cual. redirect:'manual' + tratar cualquier 3xx como
-      // fallo: aunque el host ya está fijo a Blob, así una redirección
-      // nunca se sigue a ciegas hacia otro lado. Timeout igual que el
-      // resto de fetches salientes (PROVIDER_TIMEOUT_MS).
-      try {
-        const url = urlHttpValida(valorGuardado);
-        if (!url) return res.status(404).json({ error: 'No se encontró el archivo.' });
-        const externo = await fetch(url, {
-          ...(rangeHeader ? { headers: { Range: rangeHeader } } : null),
-          redirect: 'manual',
-          signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
-        });
-        if (externo.status >= 300 && externo.status < 400) return res.status(404).json({ error: 'No se encontró el archivo.' });
-        if (!externo.ok || !externo.body) return res.status(404).json({ error: 'No se encontró el archivo.' });
-        res.status(Number.isInteger(externo.status) ? externo.status : 200);
-        res.set('Content-Type', contentTypeSeguroDeMedia(externo.headers.get('content-type')));
-        res.set('X-Content-Type-Options', 'nosniff');
-        res.set('Content-Disposition', 'inline');
-        res.set('Cache-Control', 'private, max-age=86400');
-        res.set('Accept-Ranges', 'bytes');
-        const contentRange = externo.headers.get('content-range');
-        if (contentRange) res.set('Content-Range', contentRange);
-        const contentLength = externo.headers.get('content-length');
-        if (contentLength) res.set('Content-Length', contentLength);
-        Readable.fromWeb(externo.body).pipe(res);
-        return;
-      } catch (err) {
-        console.error('No se pudo servir el archivo (respaldo público):', err);
-        return res.status(404).json({ error: 'No se encontró el archivo.' });
-      }
-    }
-    res.set('Content-Type', contentTypeSeguroDeMedia(resultado.blob.contentType));
+    const abierto = await abrirArchivoAlmacenado(valorGuardado, rangeHeader);
+    if (!abierto || !abierto.stream) return res.status(404).json({ error: 'No se encontró el archivo.' });
+
+    // Nunca se confía el Content-Type del origen para algo que el navegador
+    // pueda ejecutar como HTML/JS bajo nuestro dominio: si no es un tipo de
+    // audio/imagen/video conocido, se sirve como descarga genérica.
+    res.status(abierto.status === 206 ? 206 : 200);
+    res.set('Content-Type', contentTypeSeguroDeMedia(abierto.contentType));
     res.set('X-Content-Type-Options', 'nosniff');
     res.set('Content-Disposition', 'inline');
     res.set('Cache-Control', 'private, max-age=86400');
     res.set('Accept-Ranges', 'bytes');
-    const headersPrivado = resultado.headers && typeof resultado.headers.get === 'function' ? resultado.headers : null;
-    const contentRangePrivado = headersPrivado ? headersPrivado.get('content-range') : null;
-    if (contentRangePrivado) {
-      res.status(206);
-      res.set('Content-Range', contentRangePrivado);
-    }
-    const contentLengthPrivado = headersPrivado ? headersPrivado.get('content-length') : null;
-    if (contentLengthPrivado) res.set('Content-Length', contentLengthPrivado);
-    Readable.fromWeb(resultado.stream).pipe(res);
+    if (abierto.contentRange) res.set('Content-Range', abierto.contentRange);
+    if (abierto.contentLength) res.set('Content-Length', abierto.contentLength);
+    Readable.fromWeb(abierto.stream).pipe(res);
   } catch (err) {
     console.error(err);
     if (!res.headersSent) res.status(500).json({ error: 'No se pudo cargar el archivo.' });
@@ -4250,9 +4325,8 @@ app.post('/api/save-audio', requireAuth, bloquearColaborador, bloquearSiNoPuedeN
     // 'private' TODO upload fallaba con 500. Ver BACKLOG.md — hay que
     // crear/migrar a un store con soporte de acceso privado y solo ahí
     // volver a poner 'private' aquí.
-    const blob = await put(filename, req.body, { access: 'public', contentType: real.mime, addRandomSuffix: true });
-    recordarHostDeBlob(blob.url);
-    res.json({ ok: true, file: blob.url });
+    const { url } = await almacenarArchivo(filename, req.body, real.mime);
+    res.json({ ok: true, file: url });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo guardar el audio.' });
@@ -4294,10 +4368,8 @@ app.post('/api/contribute-audio', requireAuth, rateLimit, express.raw({ type: '*
     const real = await verificarArchivoReal(req.body, AUDIO_MIME_PERMITIDOS);
     if (!real) return res.status(400).json({ error: 'El archivo no parece ser un audio válido.' });
     const filename = `audio/aportes/${ownerId}/${Date.now()}.${real.ext}`;
-    // TEMPORAL: mismo motivo que /api/save-audio — ver comentario ahí.
-    const blob = await put(filename, req.body, { access: 'public', contentType: real.mime, addRandomSuffix: true });
-    recordarHostDeBlob(blob.url);
-    res.json({ ok: true, url: blob.url });
+    const { url } = await almacenarArchivo(filename, req.body, real.mime);
+    res.json({ ok: true, url });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo guardar el audio.' });
@@ -4634,13 +4706,7 @@ app.post('/api/contribute-media', requireAuth, rateLimit, express.raw({ type: '*
     if (!real) return res.status(400).json({ error: 'El archivo no parece ser una foto o un video válido.' });
     const type = real.mime.startsWith('video/') ? 'video' : 'foto';
 
-    // TEMPORAL: mismo motivo que /api/save-audio — ver comentario ahí.
-    const blob = await put(`media/${ownerId}/${type}-${Date.now()}.${real.ext}`, req.body, {
-      access: 'public',
-      contentType: real.mime,
-      addRandomSuffix: true,
-    });
-    recordarHostDeBlob(blob.url);
+    const { url: blobUrl } = await almacenarArchivo(`media/${ownerId}/${type}-${Date.now()}.${real.ext}`, req.body, real.mime);
 
     // Ya NO se inserta en la tabla "media" genérica aquí — este endpoint
     // hoy solo se llama desde "aportar una historia" (colaborar.html), y
@@ -4653,7 +4719,7 @@ app.post('/api/contribute-media', requireAuth, rateLimit, express.raw({ type: '*
     // pendiente para siempre, sin que nadie hablara de ella. Ver
     // loadPendingFamilyNote/notaPendiente en /api/next: ahora la foto se
     // presenta JUNTO con su historia, no por separado.
-    res.json({ ok: true, url: blob.url, type });
+    res.json({ ok: true, url: blobUrl, type });
   } catch (err) {
     console.error(err);
     // Nota: el caso de archivo demasiado grande no llega hasta aquí — el
@@ -6316,7 +6382,7 @@ app.post('/api/admin/purgar-perfiles-prueba', requireAuth, requireAdmin, rateLim
     const urlsUnicas = [...new Set(blobUrls.map((u) => urlHttpValida(u)).filter(Boolean))];
     let blobBorrados = 0;
     for (const u of urlsUnicas) {
-      try { await del(u); blobBorrados++; } catch (e) { /* cupo / archivo ya no está: se ignora */ }
+      try { await borrarUnArchivo(u); blobBorrados++; } catch (e) { /* cupo / archivo ya no está: se ignora */ }
     }
 
     res.json({
@@ -6886,6 +6952,30 @@ app.get('/api/cron/billing', async (req, res) => {
 // una app de este tamaño una sola vuelta alcanza casi siempre, pero se seguye
 // el cursor por si algún perfil ya acumuló más.
 async function listarTodosLosBlobs(prefix) {
+  if (USAR_R2) {
+    // R2 responde ListObjectsV2 en XML (API estilo S3). Se parsean Key y
+    // Size de cada <Contents>, y se sigue el continuation-token.
+    const items = [];
+    let token = null;
+    try {
+      do {
+        const qs = new URLSearchParams({ 'list-type': '2', prefix, 'max-keys': '1000' });
+        if (token) qs.set('continuation-token', token);
+        const resp = await r2Cliente.fetch(`${R2_ENDPOINT}?${qs.toString()}`, { signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS) });
+        if (!resp.ok) break;
+        const xml = await resp.text();
+        const re = /<Contents>[\s\S]*?<Key>([^<]+)<\/Key>[\s\S]*?<Size>(\d+)<\/Size>[\s\S]*?<\/Contents>/g;
+        let m;
+        while ((m = re.exec(xml))) {
+          items.push({ pathname: m[1].replace(/&amp;/g, '&'), size: Number(m[2]) });
+        }
+        token = /<IsTruncated>true<\/IsTruncated>/.test(xml)
+          ? (xml.match(/<NextContinuationToken>([^<]+)<\/NextContinuationToken>/) || [])[1] || null
+          : null;
+      } while (token);
+    } catch (e) { /* el panel de consumo tolera un desglose vacío */ }
+    return items;
+  }
   const blobs = [];
   let cursor;
   do {
