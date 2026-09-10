@@ -4333,7 +4333,7 @@ app.post('/api/save-audio', requireAuth, bloquearColaborador, bloquearSiNoPuedeN
     res.json({ ok: true, file: url });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'No se pudo guardar el audio.', detalle: String((err && err.message) || err).slice(0, 300) });
+    res.status(500).json({ error: 'No se pudo guardar el audio.' });
   }
 });
 
@@ -4376,7 +4376,7 @@ app.post('/api/contribute-audio', requireAuth, rateLimit, express.raw({ type: '*
     res.json({ ok: true, url });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'No se pudo guardar el audio.', detalle: String((err && err.message) || err).slice(0, 300) });
+    res.status(500).json({ error: 'No se pudo guardar el audio.' });
   }
 });
 
@@ -4729,7 +4729,7 @@ app.post('/api/contribute-media', requireAuth, rateLimit, express.raw({ type: '*
     // Nota: el caso de archivo demasiado grande no llega hasta aquí — el
     // error de body-parser se dispara antes de que esta ruta se ejecute, y
     // lo atiende el manejador de errores global al final del archivo.
-    res.status(500).json({ error: 'No se pudo subir el archivo.', detalle: String((err && err.message) || err).slice(0, 300) });
+    res.status(500).json({ error: 'No se pudo subir el archivo.' });
   }
 });
 
@@ -6218,30 +6218,6 @@ app.get('/api/admin/media-debug', requireAuth, requireAdmin, async (req, res) =>
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo diagnosticar.' });
-  }
-});
-
-// Diagnóstico temporal: prueba un ciclo PUT -> GET -> DELETE real contra
-// R2 y reporta cada paso. Para entender por qué falla subir un archivo.
-// Solo admin. Sacar cuando esté resuelto.
-app.get('/api/admin/r2-test', requireAuth, requireAdmin, async (req, res) => {
-  if (!USAR_R2) return res.json({ usaR2: false, motivo: 'R2 no está configurado en este entorno.' });
-  const clave = `test/ping-${Date.now()}.txt`;
-  const target = `${R2_ENDPOINT}/${claveParaUrl(clave)}`;
-  const cuerpo = Buffer.from('ping ' + new Date().toISOString());
-  const pasos = {};
-  try {
-    const put = await r2Cliente.fetch(target, { method: 'PUT', body: cuerpo, headers: { 'Content-Type': 'text/plain' }, signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS) });
-    pasos.put = { status: put.status, ok: put.ok, cuerpo: put.ok ? null : (await put.text().catch(() => '')).slice(0, 400) };
-    if (put.ok) {
-      const g = await r2Cliente.fetch(target, { signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS) });
-      pasos.get = { status: g.status, ok: g.ok, contentType: g.headers.get('content-type'), cuerpo: g.ok ? (await g.text()).slice(0, 100) : null };
-      const d = await r2Cliente.fetch(target, { method: 'DELETE', signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS) });
-      pasos.delete = { status: d.status, ok: d.ok };
-    }
-    res.json({ usaR2: true, endpoint: `${R2_ENDPOINT}`, publicUrl: R2_PUBLIC_URL, clave, pasos });
-  } catch (err) {
-    res.json({ usaR2: true, endpoint: `${R2_ENDPOINT}`, publicUrl: R2_PUBLIC_URL, clave, pasos, error: String((err && err.message) || err).slice(0, 400) });
   }
 });
 
