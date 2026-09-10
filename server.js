@@ -6199,6 +6199,10 @@ app.get('/api/admin/media-debug', requireAuth, requireAdmin, async (req, res) =>
 
     res.json({
       config: {
+        almacen: USAR_R2 ? 'Cloudflare R2' : 'Vercel Blob',
+        r2Activo: USAR_R2,
+        r2PublicHost: R2_PUBLIC_HOST,
+        r2Faltantes: USAR_R2 ? [] : ['R2_ACCOUNT_ID', 'R2_BUCKET', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_PUBLIC_URL'].filter((k) => !process.env[k]),
         blobHostExacto: BLOB_HOST_EXACTO,
         blobHostAprendido: BLOB_HOST_APRENDIDO,
         blobStoreId: BLOB_STORE_ID,
