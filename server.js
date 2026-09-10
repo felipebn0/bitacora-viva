@@ -6085,6 +6085,68 @@ app.post('/api/admin/whatsapp-reminders/run', requireAuth, requireAdmin, rateLim
   }
 });
 
+// Diagnóstico temporal: por qué una nota de voz / foto de un aporte no
+// carga. Para cada URL guardada en los últimos aportes/historias, dice
+// dónde se rompe la cadena de /api/media-file (parseo de la ruta, chequeo
+// del host, y un HEAD real al archivo en Blob). Solo admin. Sacar cuando
+// esté resuelto.
+app.get('/api/admin/media-debug', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await ensureSchema();
+    const aportes = await sql`SELECT id, contributor, audio_url, audio_urls, media_urls, created_at FROM family_notes ORDER BY created_at DESC LIMIT 8`;
+    const historias = await sql`SELECT id, audio_url, audio_urls, media_urls, created_at FROM story_log ORDER BY created_at DESC LIMIT 8`;
+
+    async function revisar(valor) {
+      const out = { url: valor };
+      try {
+        const u = new URL(valor);
+        out.host = u.hostname;
+      } catch (e) { out.host = '(no es URL)'; }
+      out.hostAceptado = out.host ? esHostDeNuestroBlob(out.host) : false;
+      out.urlHttpValida = !!urlHttpValida(valor);
+      const datos = datosDelArchivoDeBlob(valor);
+      out.rutaParseada = datos ? datos.pathname : null;
+      out.ownerIdDeLaRuta = datos ? datos.ownerId : null;
+      try {
+        const r = await fetch(valor, { method: 'HEAD', redirect: 'manual', signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS) });
+        out.headStatus = r.status;
+        out.headContentType = r.headers.get('content-type');
+      } catch (e) {
+        out.headStatus = 'error: ' + String((e && e.message) || e).slice(0, 120);
+      }
+      return out;
+    }
+
+    async function filaInfo(fila, tipo) {
+      const urls = [];
+      if (fila.audio_url) urls.push(fila.audio_url);
+      parseJsonArray(fila.audio_urls).forEach((u) => { if (typeof u === 'string') urls.push(u); });
+      const media = parseJsonArray(fila.media_urls).map((m) => (m && typeof m.url === 'string' ? m.url : null)).filter(Boolean);
+      return {
+        tipo, id: fila.id, contributor: fila.contributor || null, created_at: fila.created_at,
+        audio: await Promise.all(urls.map(revisar)),
+        media: await Promise.all(media.map(revisar)),
+        audio_urls_raw: fila.audio_urls || null,
+        media_urls_raw: fila.media_urls || null,
+      };
+    }
+
+    res.json({
+      config: {
+        blobHostExacto: BLOB_HOST_EXACTO,
+        blobHostAprendido: BLOB_HOST_APRENDIDO,
+        blobStoreId: BLOB_STORE_ID,
+        tokenPresente: !!process.env.BLOB_READ_WRITE_TOKEN,
+      },
+      aportes: await Promise.all(aportes.map((f) => filaInfo(f, 'aporte'))),
+      historias: await Promise.all(historias.map((f) => filaInfo(f, 'historia'))),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo diagnosticar.' });
+  }
+});
+
 // --- Pagos (Wava) --------------------------------------------------------
 // Planes fijos en código (no en una tabla) — son 3 y cambian poco; si
 // alguna vez hace falta editarlos sin desplegar, ahí sí vale la pena
