@@ -5716,34 +5716,31 @@ app.post('/api/save', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
       sessionDbId = inserted[0].id;
     }
 
-    // Se espera de verdad (en Vercel, la función puede cortarse apenas se
-    // manda la respuesta — "en segundo plano" no garantiza que termine).
-    // Las dos actualizaciones van en paralelo porque son independientes.
+    // La charla YA quedó guardada arriba (la fila de "sessions"). El resumen
+    // y el árbol son datos DERIVADOS que se reconstruyen a partir de TODAS
+    // las charlas guardadas en cada save siguiente (ver updateFamilyTree /
+    // updateMemorySummary), así que si una de estas dos falla ahora —casi
+    // siempre un error transitorio de Anthropic— se recupera sola en la
+    // próxima charla. Por eso NO se le devuelve un 500 al frontend: eso
+    // hacía que el orbe mostrara "no se guardó / se agotaron los intentos"
+    // y que la persona reintentara guardar una charla que en realidad SÍ
+    // estaba a salvo. Se espera igual (en Vercel la función puede cortarse
+    // apenas se manda la respuesta) y se registra el fallo para revisarlo.
     const results = await Promise.allSettled([
       updateMemorySummary(req.profileUserId, history),
       updateFamilyTree(req.profileUserId, req.bitacoraEsPropia, history),
     ]);
-
-    // Validar que ambas actualizaciones fueron exitosas
-    const errors = [];
+    const derivadosFallidos = [];
     if (results[0].status === 'rejected') {
-      console.error('No se pudo actualizar el resumen:', results[0].reason);
-      errors.push('No se actualizó el resumen correctamente');
+      console.error('No se pudo actualizar el resumen (la charla igual quedó guardada):', results[0].reason);
+      derivadosFallidos.push('resumen');
     }
     if (results[1].status === 'rejected') {
-      console.error('No se pudo actualizar el árbol:', results[1].reason);
-      errors.push('No se actualizó el árbol familiar correctamente');
+      console.error('No se pudo actualizar el árbol (la charla igual quedó guardada):', results[1].reason);
+      derivadosFallidos.push('arbol');
     }
 
-    if (errors.length) {
-      return res.status(500).json({ 
-        error: 'La charla se guardó pero hay errores en los datos relacionados',
-        details: errors,
-        sessionDbId
-      });
-    }
-
-    res.json({ ok: true, sessionDbId });
+    res.json({ ok: true, sessionDbId, derivadosFallidos });
   } catch (err) {
     console.error(err);
     if (!res.headersSent) res.status(500).json({ error: 'No se pudo guardar la charla.' });
