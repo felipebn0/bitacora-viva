@@ -253,6 +253,7 @@
           todosLosAudios.forEach((url) => {
             const audio = document.createElement('audio');
             audio.controls = true;
+            audio.preload = 'none'; // no descargar nada hasta que la persona le de play (ahorra operaciones de Blob)
             // El Blob donde vive el audio no tiene su propia ACL privada
             // (ver "Decisiones de seguridad pendientes" en claude/links.md) —
             // la protección real la hace /api/media-file, que confirma que
@@ -283,8 +284,8 @@
             if (!m || typeof m.url !== 'string' || !/^https?:\/\//.test(m.url)) return;
             const src = '/api/media-file?u=' + encodeURIComponent(m.url);
             const el = m.type === 'video' ? document.createElement('video') : document.createElement('img');
-            if (m.type === 'video') { el.controls = true; el.src = src; }
-            else { el.src = src; el.alt = m.caption || 'Foto de la historia'; }
+            if (m.type === 'video') { el.controls = true; el.preload = 'none'; el.src = src; }
+            else { el.loading = 'lazy'; el.src = src; el.alt = m.caption || 'Foto de la historia'; }
             grid.appendChild(el);
           });
           body.appendChild(grid);

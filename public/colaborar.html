@@ -1874,6 +1874,7 @@
           if (typeof u === 'string' && /^https?:\/\//.test(u)) {
             const audio = document.createElement('audio');
             audio.controls = true;
+            audio.preload = 'none'; // no descargar nada hasta que la persona le de play (ahorra operaciones de Blob)
             // Acceso privado en Blob — /api/media-file confirma el permiso
             // antes de traerlo (ver server.js).
             audio.src = '/api/media-file?u=' + encodeURIComponent(u);

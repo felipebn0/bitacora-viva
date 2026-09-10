@@ -217,6 +217,7 @@
         if (typeof url !== 'string' || !/^https?:\/\//.test(url)) return;
         const audio = document.createElement('audio');
         audio.controls = true;
+        audio.preload = 'none'; // no descargar nada hasta que la persona le de play (ahorra operaciones de Blob)
         audio.style.display = 'block';
         audio.style.marginTop = '10px';
         audio.style.width = '100%';

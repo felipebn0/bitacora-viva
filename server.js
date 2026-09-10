@@ -4189,7 +4189,7 @@ app.get('/api/media-file', requireAuth, async (req, res) => {
         res.set('Content-Type', contentTypeSeguroDeMedia(externo.headers.get('content-type')));
         res.set('X-Content-Type-Options', 'nosniff');
         res.set('Content-Disposition', 'inline');
-        res.set('Cache-Control', 'private, no-store');
+        res.set('Cache-Control', 'private, max-age=86400');
         res.set('Accept-Ranges', 'bytes');
         const contentRange = externo.headers.get('content-range');
         if (contentRange) res.set('Content-Range', contentRange);
@@ -4205,7 +4205,7 @@ app.get('/api/media-file', requireAuth, async (req, res) => {
     res.set('Content-Type', contentTypeSeguroDeMedia(resultado.blob.contentType));
     res.set('X-Content-Type-Options', 'nosniff');
     res.set('Content-Disposition', 'inline');
-    res.set('Cache-Control', 'private, no-store');
+    res.set('Cache-Control', 'private, max-age=86400');
     res.set('Accept-Ranges', 'bytes');
     const headersPrivado = resultado.headers && typeof resultado.headers.get === 'function' ? resultado.headers : null;
     const contentRangePrivado = headersPrivado ? headersPrivado.get('content-range') : null;

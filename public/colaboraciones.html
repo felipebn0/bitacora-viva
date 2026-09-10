@@ -328,6 +328,7 @@
       if (typeof u === 'string' && /^https?:\/\//.test(u)) {
         const audio = document.createElement('audio');
         audio.controls = true;
+        audio.preload = 'none'; // no descargar nada hasta que la persona le de play (ahorra operaciones de Blob)
         audio.src = '/api/media-file?u=' + encodeURIComponent(u);
         div.appendChild(audio);
       }
@@ -520,6 +521,7 @@
         if (typeof u === 'string' && /^https?:\/\//.test(u)) {
           const audio = document.createElement('audio');
           audio.controls = true;
+          audio.preload = 'none'; // no descargar nada hasta que la persona le de play (ahorra operaciones de Blob)
           // Acceso privado en Blob — /api/media-file confirma el permiso
           // antes de traerlo (ver server.js).
           audio.src = '/api/media-file?u=' + encodeURIComponent(u);
@@ -537,8 +539,8 @@
           if (!m || typeof m.url !== 'string' || !/^https?:\/\//.test(m.url)) return;
           const src = '/api/media-file?u=' + encodeURIComponent(m.url);
           const el = m.type === 'video' ? document.createElement('video') : document.createElement('img');
-          if (m.type === 'video') { el.controls = true; el.src = src; }
-          else { el.src = src; el.alt = m.caption || 'Foto de la historia'; }
+          if (m.type === 'video') { el.controls = true; el.preload = 'none'; el.src = src; }
+          else { el.loading = 'lazy'; el.src = src; el.alt = m.caption || 'Foto de la historia'; }
           grid.appendChild(el);
         });
         item.appendChild(grid);
