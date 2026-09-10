@@ -109,6 +109,25 @@ El consumo de Claude/voz solo queda registrado desde que se activó esta medici�
 
 Si se edita el `<script>`/`<style>` de `admin.html`, correr `node tools/actualizar-hashes-vercel.js` antes de commitear (mismo criterio que el resto de `public/`, ver `test/hashes-csp-vercel.smoke.js`).
 
+## Recordatorios (correo + WhatsApp asistido)
+
+Cada día (Vercel Cron → `GET /api/cron/reminders`, 14:00 UTC = 9:00 Colombia) la app busca a quién le toca un recordatorio para seguir contando su historia:
+
+- **Por correo** (lo de siempre): a cada cuenta que no eligió WhatsApp, vía Resend (`RESEND_API_KEY`, `RESEND_FROM`). El usuario prende/apaga esto y elige cada cuántos días desde el menú de Cuenta.
+- **Por WhatsApp** (envío manual asistido, mientras hay pocos usuarios): la app **no** le escribe a los usuarios. Arma **un solo resumen para el dueño del producto** con la lista de a quién le toca y un enlace `wa.me` por persona que abre el chat con el mensaje ya redactado; el dueño abre cada uno y toca enviar desde su WhatsApp Business. El resumen llega por dos canales (los dos opcionales, se pueden usar juntos):
+
+| Variable | Para qué |
+|---|---|
+| `CALLMEBOT_PHONE` | Número del dueño (con código de país) al que llega el resumen por WhatsApp. |
+| `CALLMEBOT_APIKEY` | Clave de [CallMeBot](https://www.callmebot.com/blog/free-api-whatsapp-messages/). Se obtiene una sola vez: agendás el número que indica su página, le mandás por WhatsApp `I allow callmebot to send me messages`, y te responde con la clave. Servicio gratuito de terceros, uso personal, con tope de mensajes al día — un resumen diario está muy por debajo. |
+| `WHATSAPP_DIGEST_EMAIL` | Correo del dueño para recibir el mismo resumen por correo (necesita `RESEND_API_KEY`). Sirve de respaldo si CallMeBot falla. |
+
+Si no se configura ninguno de los tres, el cron sigue mandando los recordatorios por correo normalmente y el resumen de WhatsApp no se manda.
+
+**Cargar los números:** en `/admin.html`, sección "Recordatorios por WhatsApp", hay una tabla para escribir el teléfono de cada perfil (cuenta o subperfil) y marcar quién quiere el recordatorio por ese canal. Los usuarios también lo pueden poner ellos desde su perfil. Quien tiene WhatsApp activo **no** recibe el recordatorio por correo, para no avisar dos veces. Desde esa misma sección se puede ver a quién le toca hoy y disparar el resumen a mano (botón "Enviar el resumen ahora").
+
+Cuando el envío uno a uno canse (más usuarios), el paso siguiente es la API de WhatsApp de Meta (o un intermediario como Zernio) con plantillas aprobadas — ver `.claude/agents/whatsapp-admin.md` y `BACKLOG.md`.
+
 ## Botón físico
 
 ### Paso 1: detectar qué tecla manda tu encoder

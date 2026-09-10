@@ -211,6 +211,49 @@
   .num-sub { font-size: 0.76rem; color: var(--ink-soft); }
   .db-breakdown { display: grid; gap: 1px; font-size: 0.76rem; color: var(--ink-soft); }
 
+  /* --- Recordatorios por WhatsApp --- */
+  .wa-config { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .wa-chip {
+    font-size: 0.76rem; font-weight: 700; border-radius: 999px; padding: 4px 10px;
+    border: 1px solid var(--line); color: var(--ink-soft); background: #fff;
+  }
+  .wa-chip.ok { color: var(--moss); border-color: var(--moss); }
+  .wa-chip.off { color: var(--status-critical); border-color: var(--status-critical); }
+  .wa-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+  .wa-out {
+    background: #fff; border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px; margin-bottom: 14px; font-size: 0.86rem; white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .wa-out a { color: var(--gold-deep); }
+  .wa-table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+  .wa-table th {
+    text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--ink-soft); padding: 8px; border-bottom: 1px solid var(--line);
+  }
+  .wa-table td { padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  .wa-table tr:last-child td { border-bottom: none; }
+  .wa-name { font-weight: 700; }
+  .wa-name .wa-sub { display: block; font-weight: 400; color: var(--ink-soft); font-size: 0.76rem; }
+  .wa-due {
+    display: inline-block; font-size: 0.68rem; font-weight: 700; color: var(--gold-deep);
+    border: 1px solid var(--gold-deep); border-radius: 999px; padding: 0 6px; margin-left: 6px;
+  }
+  .wa-phone-input {
+    border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
+    font-family: var(--font-body); font-size: 0.84rem; min-height: 44px; width: 170px; max-width: 100%;
+    background: #fff; color: var(--ink);
+  }
+  .wa-optin { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; min-height: 44px; }
+  .wa-save {
+    border: 1px solid var(--moss); background: var(--moss); color: #FBF6EA;
+    border-radius: 999px; padding: 8px 14px; font-size: 0.8rem; font-weight: 700;
+    cursor: pointer; font-family: var(--font-body); min-height: 44px;
+  }
+  .wa-save:disabled { opacity: 0.5; cursor: default; }
+  .wa-row-msg { font-size: 0.76rem; color: var(--moss); margin-left: 8px; }
+  .wa-row-msg.err { color: var(--status-critical); }
+
   footer.note { max-width: 1180px; margin: 24px auto 0; color: var(--ink-soft); font-size: 0.8rem; }
 </style>
 </head>
@@ -227,6 +270,7 @@
       <p class="empty">Cargando…</p>
     </div>
   </div>
+  <div class="wrap"><div id="waWrap"></div></div>
   <footer class="note" id="footNote" hidden></footer>
 
 <script>
@@ -647,12 +691,121 @@
       });
   }
 
+  // --- Recordatorios por WhatsApp ---
+  // Vive en su propio contenedor (#waWrap), fuera de #content, porque
+  // render() reemplaza todo el innerHTML de #content en cada recarga de
+  // rango — esta sección no depende del rango de fechas.
+  const waWrap = document.getElementById('waWrap');
+
+  function waChip(ok, label) {
+    return `<span class="wa-chip ${ok ? 'ok' : 'off'}">${ok ? '✓' : '✗'} ${esc(label)}</span>`;
+  }
+
+  function renderWhatsApp(data) {
+    const cfg = data.config || {};
+    const perfiles = [...(data.cuentas || []), ...(data.subperfiles || [])];
+    const filas = perfiles.map((p) => {
+      const cuando = p.ultimaCharla ? 'última charla ' + fmtDate(p.ultimaCharla) : 'sin charlas todavía';
+      const extra = p.scope === 'bitacora' ? 'subperfil' + (p.archivado ? ' · archivado' : '') : (p.email || 'cuenta');
+      return `<tr data-scope="${p.scope}" data-id="${p.id}">
+        <td class="wa-name">${esc(p.nombre)}${p.due ? '<span class="wa-due">le toca hoy</span>' : ''}
+          <span class="wa-sub">${esc(extra)} · ${esc(cuando)}</span></td>
+        <td><input type="tel" class="wa-phone-input" value="${esc(p.phone || '')}" placeholder="+57 300 123 4567"></td>
+        <td><label class="wa-optin"><input type="checkbox" class="wa-optin-box"${p.optIn ? ' checked' : ''}> quiere WhatsApp</label></td>
+        <td><button type="button" class="wa-save">Guardar</button><span class="wa-row-msg" hidden></span></td>
+      </tr>`;
+    }).join('');
+
+    waWrap.innerHTML = `
+      <section class="panel">
+        <h2>Recordatorios por WhatsApp</h2>
+        <p class="sub">Cada día a las 9:00 (hora Colombia) la bitácora arma la lista de a quién le toca un recordatorio y te la manda con un enlace por persona que abre WhatsApp con el mensaje ya escrito. Vos abrís cada uno y le das enviar. Quien tiene WhatsApp activo acá no recibe el recordatorio por correo.</p>
+        <div class="wa-config">
+          ${waChip(cfg.callmebot, 'Aviso por WhatsApp (CallMeBot)')}
+          ${waChip(!!cfg.digestEmail, 'Copia por correo' + (cfg.digestEmail ? ' → ' + cfg.digestEmail : ''))}
+          ${waChip(cfg.cronSecret, 'Cron diario activo')}
+        </div>
+        <div class="wa-actions">
+          <button type="button" class="range-btn" id="waPreviewBtn">Ver a quién le toca hoy</button>
+          <button type="button" class="range-apply" id="waSendBtn">Enviar el resumen ahora</button>
+        </div>
+        <div class="wa-out" id="waOut" hidden></div>
+        <div class="table-scroll">
+          <table class="wa-table">
+            <thead><tr><th>Perfil</th><th>Teléfono (WhatsApp)</th><th>Recordatorio</th><th></th></tr></thead>
+            <tbody>${filas || '<tr><td colspan="4" class="muted">Sin perfiles todavía.</td></tr>'}</tbody>
+          </table>
+        </div>
+      </section>`;
+
+    waWrap.querySelectorAll('.wa-save').forEach((btn) => {
+      btn.addEventListener('click', () => guardarFila(btn.closest('tr')));
+    });
+    const prev = document.getElementById('waPreviewBtn');
+    const send = document.getElementById('waSendBtn');
+    if (prev) prev.addEventListener('click', () => correrResumen(true));
+    if (send) send.addEventListener('click', () => correrResumen(false));
+  }
+
+  function guardarFila(tr) {
+    const btn = tr.querySelector('.wa-save');
+    const msg = tr.querySelector('.wa-row-msg');
+    const phone = tr.querySelector('.wa-phone-input').value.trim();
+    const optIn = tr.querySelector('.wa-optin-box').checked;
+    btn.disabled = true;
+    msg.hidden = true;
+    fetch('/api/admin/set-phone', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scope: tr.getAttribute('data-scope'), id: Number(tr.getAttribute('data-id')), phone, optIn }),
+    })
+      .then((r) => r.json().then((j) => ({ ok: r.ok, j })))
+      .then(({ ok, j }) => {
+        msg.hidden = false;
+        if (ok) { msg.classList.remove('err'); msg.textContent = 'Guardado'; }
+        else { msg.classList.add('err'); msg.textContent = j.error || 'No se pudo guardar'; }
+      })
+      .catch(() => { msg.hidden = false; msg.classList.add('err'); msg.textContent = 'Error de conexión'; })
+      .finally(() => { btn.disabled = false; });
+  }
+
+  function correrResumen(dry) {
+    const out = document.getElementById('waOut');
+    out.hidden = false;
+    out.textContent = dry ? 'Buscando a quién le toca…' : 'Enviando…';
+    fetch('/api/admin/whatsapp-reminders/run', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dry }),
+    })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!j.ok) { out.textContent = j.error || 'No se pudo.'; return; }
+        if (!j.lista || !j.lista.length) { out.textContent = 'Hoy no le toca recordatorio a nadie con WhatsApp activo.'; return; }
+        const cab = dry
+          ? 'Le toca a ' + j.lista.length + ' persona(s). Vista previa — no se envió nada:'
+          : 'Enviado. CallMeBot: ' + esc(j.callmebot) + ' · correo: ' + esc(j.email) + '.';
+        const items = j.lista.map((x, i) =>
+          (i + 1) + '. ' + esc(x.nombre) + (x.tipo === 'subperfil' ? ' (bitácora)' : '') + ' — ' + x.diasInactivo + ' días\n   '
+          + '<a href="' + esc(x.enlace) + '" target="_blank" rel="noopener">abrir WhatsApp con el mensaje listo</a>'
+        ).join('\n\n');
+        out.innerHTML = cab + '\n\n' + items;
+      })
+      .catch(() => { out.textContent = 'Error de conexión.'; });
+  }
+
+  function cargarWhatsApp() {
+    fetch('/api/admin/whatsapp-reminders')
+      .then((r) => (r.ok ? r.json() : Promise.reject('wa')))
+      .then(renderWhatsApp)
+      .catch(() => { waWrap.innerHTML = '<section class="panel"><h2>Recordatorios por WhatsApp</h2><p class="sub">No se pudo cargar esta sección.</p></section>'; });
+  }
+
   fetch('/api/me')
     .then((resp) => (resp.ok ? resp.json() : Promise.reject('auth')))
     .then((me) => {
       if (!me.isAdmin) return Promise.reject('forbidden');
       const r = calcularRangoDePreset(activePreset);
       cargar(r.start, r.end);
+      cargarWhatsApp();
     })
     .catch((err) => {
       if (err === 'forbidden' || err === 'auth') showUnauthorized();

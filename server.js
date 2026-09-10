@@ -1068,6 +1068,45 @@ function ensureSchema() {
       )`,
       sql`CREATE INDEX IF NOT EXISTS idx_reminder_deliveries_user_fecha ON reminder_deliveries(user_id, created_at)`,
 
+      // --- Recordatorios por WhatsApp (envío manual asistido) -----------
+      // Mientras hay pocos usuarios, Felipe (dueño del producto) manda los
+      // recordatorios uno a uno desde su WhatsApp Business. El cron NO
+      // manda nada por WhatsApp: solo le arma cada día la lista de a quién
+      // le toca, con un enlace wa.me por persona que abre el chat con el
+      // mensaje ya escrito. Esa lista le llega por CallMeBot y/o correo
+      // (ver enviarResumenWhatsApp más abajo). Cuando haya volumen, se
+      // pasa a la API de Meta — ver el agente whatsapp-admin y BACKLOG.
+      //
+      // phone: en formato internacional, guardado tal cual lo escriban; el
+      // enlace wa.me se arma quitando todo lo que no sea dígito.
+      // whatsapp_opt_in: la persona (o Felipe por ella, desde /admin)
+      // marcó que quiere el recordatorio por este canal. Cuando está
+      // activo, esa cuenta NO recibe el recordatorio por correo, para no
+      // avisar dos veces.
+      sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT`,
+      sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS whatsapp_opt_in BOOLEAN NOT NULL DEFAULT false`,
+      sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS whatsapp_opt_in_at TIMESTAMPTZ`,
+      // Contraparte para un subperfil (no tiene fila en "users"): acá phone
+      // es el número de la persona que narra ESA bitácora (ej. el papá),
+      // para que el enlace del recordatorio abra el chat con ella.
+      sql`ALTER TABLE bitacoras ADD COLUMN IF NOT EXISTS phone TEXT`,
+      sql`ALTER TABLE bitacoras ADD COLUMN IF NOT EXISTS whatsapp_opt_in BOOLEAN NOT NULL DEFAULT false`,
+      sql`ALTER TABLE bitacoras ADD COLUMN IF NOT EXISTS whatsapp_opt_in_at TIMESTAMPTZ`,
+      // Un registro por cada vez que un perfil entró en el resumen diario
+      // de WhatsApp — mismo rol que reminder_deliveries para el correo:
+      // evita volver a incluirlo antes de que pase su frecuencia.
+      // profile_id abarca users.id y bitacoras.id (mismo criterio que
+      // usage_events, ver el comentario de esa tabla), por eso sin FK.
+      sql`CREATE TABLE IF NOT EXISTS whatsapp_reminder_log (
+        id SERIAL PRIMARY KEY,
+        profile_id INT NOT NULL,
+        tipo TEXT NOT NULL DEFAULT 'digest',
+        enviado_ok BOOLEAN NOT NULL DEFAULT true,
+        detalle TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      sql`CREATE INDEX IF NOT EXISTS idx_whatsapp_reminder_log_profile_fecha ON whatsapp_reminder_log(profile_id, created_at)`,
+
       // --- Panel de consumo (item pedido por Felipe, 2026-09-09) --------
       // is_admin: cuentas de los dueños del producto — nunca se ofrece en
       // la UI, se activa a mano con un UPDATE directo en la base (ver
@@ -1660,11 +1699,13 @@ app.get('/api/me', requireAuth, async (req, res) => {
         isCollaborator: true, isGuest: true, guestName: req.guestName, ownerName,
       });
     }
-    const rows = await sql`SELECT name, email, fecha_nacimiento, is_admin FROM users WHERE id = ${req.userId}`;
+    const rows = await sql`SELECT name, email, fecha_nacimiento, is_admin, phone, whatsapp_opt_in FROM users WHERE id = ${req.userId}`;
     const name = capitalizarNombre((rows[0] && rows[0].name) || '') || null;
     const email = (rows[0] && rows[0].email) || null;
     const fechaNacimiento = fechaComoInputDate(rows[0] && rows[0].fecha_nacimiento);
     const isAdmin = !!(rows[0] && rows[0].is_admin);
+    const phone = (rows[0] && rows[0].phone) || null;
+    const whatsappOptIn = !!(rows[0] && rows[0].whatsapp_opt_in);
     let ownerName = null;
     if (req.isCollaborator) {
       const ownerRows = await sql`SELECT name, username FROM users WHERE id = ${req.profileUserId}`;
@@ -1679,7 +1720,7 @@ app.get('/api/me', requireAuth, async (req, res) => {
       const bit = await leerPerfilBitacora(req.profileUserId, false);
       bitacoraActiva = { id: req.profileUserId, nombre: capitalizarNombre((bit && bit.nombre) || '') || null };
     }
-    res.json({ username: req.username, name, email, fechaNacimiento, isCollaborator: req.isCollaborator, isGuest: false, isAdmin, ownerName, puedeNarrar: req.puedeNarrar, bitacoraActiva });
+    res.json({ username: req.username, name, email, fechaNacimiento, phone, whatsappOptIn, isCollaborator: req.isCollaborator, isGuest: false, isAdmin, ownerName, puedeNarrar: req.puedeNarrar, bitacoraActiva });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo cargar la cuenta.' });
@@ -1696,7 +1737,7 @@ app.get('/api/me', requireAuth, async (req, res) => {
 app.post('/api/update-profile', requireAuth, rateLimit, async (req, res) => {
   try {
     if (req.isGuest) return res.status(403).json({ error: 'No disponible para invitados sin cuenta.' });
-    const { name, email, fechaNacimiento } = req.body || {};
+    const { name, email, fechaNacimiento, phone, whatsappOptIn } = req.body || {};
 
     const cleanName = capitalizarNombre(String(name || '').trim().slice(0, 100)) || null;
     if (!cleanName) return res.status(400).json({ error: 'Falta el nombre.' });
@@ -1713,11 +1754,23 @@ app.post('/api/update-profile', requireAuth, rateLimit, async (req, res) => {
       if (!cleanFecha) return res.status(400).json({ error: 'La fecha de nacimiento no es válida.' });
     }
 
+    // Teléfono para los recordatorios por WhatsApp (opcional). Se guarda
+    // tal cual lo escriban; el enlace wa.me se arma quitando lo que no sea
+    // dígito. Sin número, el opt-in no puede quedar activo.
+    const phoneRaw = String(phone || '').trim().slice(0, 40);
+    const cleanPhone = phoneRaw || null;
+    if (cleanPhone && cleanPhone.replace(/[^0-9]/g, '').length < 8) {
+      return res.status(400).json({ error: 'El teléfono parece muy corto — ponelo con código de país, ej. +57 300 123 4567.' });
+    }
+    const optIn = !!whatsappOptIn && !!cleanPhone;
+    const optInAt = optIn ? new Date() : null;
+
     await ensureSchema();
     const updated = await sql`
-      UPDATE users SET name = ${cleanName}, email = ${cleanEmail}, fecha_nacimiento = ${cleanFecha}
+      UPDATE users SET name = ${cleanName}, email = ${cleanEmail}, fecha_nacimiento = ${cleanFecha},
+        phone = ${cleanPhone}, whatsapp_opt_in = ${optIn}, whatsapp_opt_in_at = ${optInAt}
       WHERE id = ${req.userId}
-      RETURNING name, email, fecha_nacimiento
+      RETURNING name, email, fecha_nacimiento, phone, whatsapp_opt_in
     `;
     if (!updated.length) return res.status(404).json({ error: 'No se encontró la cuenta.' });
 
@@ -1726,6 +1779,8 @@ app.post('/api/update-profile', requireAuth, rateLimit, async (req, res) => {
       name: capitalizarNombre(updated[0].name || '') || null,
       email: updated[0].email || null,
       fechaNacimiento: fechaComoInputDate(updated[0].fecha_nacimiento),
+      phone: updated[0].phone || null,
+      whatsappOptIn: !!updated[0].whatsapp_opt_in,
     });
   } catch (err) {
     // El índice único de email (idx_users_email) es la misma restricción que
@@ -5625,6 +5680,159 @@ async function enviarCorreo({ to, subject, html }) {
   return resp.json();
 }
 
+// --- WhatsApp: recordatorios asistidos (ver agente whatsapp-admin) ----
+// CallMeBot es un servicio gratuito de terceros para "avisarme a mí mismo
+// por WhatsApp": un GET a su URL con el número y una apikey que se obtiene
+// una sola vez mandándole un mensaje (ver README). Uso personal, con tope
+// de mensajes al día — un resumen diario está muy por debajo. Si no está
+// configurado o si falla, el resumen igual sale por correo
+// (WHATSAPP_DIGEST_EMAIL); nunca corta el cron.
+const CALLMEBOT_PHONE = process.env.CALLMEBOT_PHONE;
+const CALLMEBOT_APIKEY = process.env.CALLMEBOT_APIKEY;
+const WHATSAPP_DIGEST_EMAIL = process.env.WHATSAPP_DIGEST_EMAIL;
+// Cada cuántos días se le recuerda a un subperfil (el papá, la mamá): una
+// cuenta normal tiene su preferencia en notification_preferences, un
+// subperfil no tiene esa fila, así que va este valor fijo (el mismo
+// default que una cuenta).
+const FRECUENCIA_SUBPERFIL_DIAS = 14;
+
+async function avisarPorWhatsApp(texto) {
+  if (!CALLMEBOT_PHONE || !CALLMEBOT_APIKEY) return { ok: false, motivo: 'sin-config' };
+  const num = String(CALLMEBOT_PHONE).replace(/[^0-9]/g, '');
+  const url = `https://api.callmebot.com/whatsapp.php?phone=${encodeURIComponent(num)}&text=${encodeURIComponent(texto)}&apikey=${encodeURIComponent(CALLMEBOT_APIKEY)}`;
+  try {
+    const resp = await fetch(url, { method: 'GET', signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS) });
+    const cuerpo = await resp.text().catch(() => '');
+    if (!resp.ok) return { ok: false, motivo: `HTTP ${resp.status}: ${cuerpo.slice(0, 160)}` };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, motivo: String((err && err.message) || err).slice(0, 160) };
+  }
+}
+
+// 3 variantes cálidas, en español colombiano — se rota por día del mes
+// para que el recordatorio no llegue siempre con las mismas palabras. Va
+// URL-encoded dentro del enlace wa.me.
+const MENSAJES_RECORDATORIO = [
+  (n) => `Hola ${n}, ¿cómo vas? Hace unos días no grabas una historia en tu bitácora. Cuando tengas un ratico, entra y me cuentas algo — no tiene que ser largo. Un abrazo.`,
+  (n) => `${n}, me acordé de vos y de tu bitácora. ¿Te animas a contar otra historia esta semana? Con cinco minutos alcanza. Quedo pendiente.`,
+  (n) => `Hola ${n}. Tu bitácora está esperando el próximo recuerdo. Cuando puedas, entra y grabamos otro ratico juntos. ¡Gracias!`,
+];
+function textoRecordatorio(nombre) {
+  const i = new Date().getDate() % MENSAJES_RECORDATORIO.length;
+  return MENSAJES_RECORDATORIO[i]((nombre || '').trim() || 'de nuevo');
+}
+function enlaceWhatsApp(phone, nombre) {
+  const num = String(phone || '').replace(/[^0-9]/g, '');
+  return `https://wa.me/${num}?text=${encodeURIComponent(textoRecordatorio(nombre))}`;
+}
+
+// Junta a quién le toca hoy un recordatorio: cuentas dueñas (según su
+// preferencia en notification_preferences) y subperfiles (cada
+// FRECUENCIA_SUBPERFIL_DIAS). Separa a quién va por correo (lo de siempre)
+// de quién entra en el resumen de WhatsApp para Felipe (los que marcaron
+// ese canal y tienen número). NO manda nada — solo decide.
+async function calcularRecordatoriosPendientes() {
+  await ensureSchema();
+  const AHORA = Date.now();
+  const DIA_MS = 24 * 60 * 60 * 1000;
+  const dias = (t) => (t ? (AHORA - new Date(t).getTime()) / DIA_MS : Infinity);
+
+  const cuentas = await sql`
+    SELECT u.id, u.email, u.name, u.username, u.created_at, u.phone,
+      COALESCE(u.whatsapp_opt_in, false) AS whatsapp_opt_in,
+      (SELECT MAX(fecha) FROM sessions s WHERE s.user_id = u.id) AS ultima_charla,
+      (SELECT MAX(created_at) FROM reminder_deliveries rd WHERE rd.user_id = u.id AND rd.tipo = 'recordatorio') AS ultimo_correo,
+      (SELECT MAX(created_at) FROM whatsapp_reminder_log w WHERE w.profile_id = u.id) AS ultimo_whatsapp,
+      COALESCE(np.recordatorios_activos, true) AS recordatorios_activos,
+      COALESCE(np.frecuencia_dias, 14) AS frecuencia_dias
+    FROM users u
+    LEFT JOIN notification_preferences np ON np.user_id = u.id
+    WHERE u.owner_user_id IS NULL
+  `;
+  const paraCorreo = [];
+  const paraWhatsApp = [];
+  for (const c of cuentas) {
+    if (!c.recordatorios_activos) continue;
+    const inactividad = Math.min(dias(c.ultima_charla), dias(c.created_at));
+    const desdeUltimoAviso = Math.min(dias(c.ultimo_correo), dias(c.ultimo_whatsapp));
+    if (inactividad < c.frecuencia_dias || desdeUltimoAviso < c.frecuencia_dias) continue;
+    const nombre = capitalizarNombre(c.name || c.username) || 'de nuevo';
+    if (c.whatsapp_opt_in && c.phone) {
+      paraWhatsApp.push({ profileId: c.id, nombre, phone: c.phone, diasInactivo: Math.round(inactividad), tipo: 'cuenta' });
+    } else if (c.email) {
+      paraCorreo.push({ id: c.id, email: c.email, nombre });
+    }
+  }
+
+  const subperfiles = await sql`
+    SELECT b.id, b.nombre, b.phone, b.created_at,
+      (SELECT MAX(fecha) FROM sessions s WHERE s.user_id = b.id) AS ultima_charla,
+      (SELECT MAX(created_at) FROM whatsapp_reminder_log w WHERE w.profile_id = b.id) AS ultimo_whatsapp
+    FROM bitacoras b
+    WHERE b.archived_at IS NULL AND COALESCE(b.whatsapp_opt_in, false) = true AND b.phone IS NOT NULL
+  `;
+  for (const b of subperfiles) {
+    const inactividad = Math.min(dias(b.ultima_charla), dias(b.created_at));
+    if (inactividad < FRECUENCIA_SUBPERFIL_DIAS || dias(b.ultimo_whatsapp) < FRECUENCIA_SUBPERFIL_DIAS) continue;
+    paraWhatsApp.push({ profileId: b.id, nombre: capitalizarNombre(b.nombre) || 'tu familiar', phone: b.phone, diasInactivo: Math.round(inactividad), tipo: 'subperfil' });
+  }
+  return { paraCorreo, paraWhatsApp };
+}
+
+function plantillaResumenWhatsApp(items) {
+  const filas = items.map((p) => {
+    const etiqueta = p.tipo === 'subperfil' ? ' <span style="color:#706551">(bitácora)</span>' : '';
+    return `<li style="margin-bottom:12px">
+      <strong>${p.nombre}</strong>${etiqueta} — ${p.diasInactivo} días sin grabar<br>
+      <a href="${enlaceWhatsApp(p.phone, p.nombre)}" style="color:#8F5A20">Abrir WhatsApp con el mensaje listo →</a>
+    </li>`;
+  }).join('');
+  return `<div style="font-family:Georgia,serif;max-width:520px;margin:0 auto;color:#2B241C">
+    <h1 style="font-size:1.2rem">Recordatorios para enviar hoy (${items.length})</h1>
+    <p>Abre cada enlace desde tu teléfono y toca enviar. El mensaje ya va escrito.</p>
+    <ol style="padding-left:18px">${filas}</ol>
+    <p style="color:#706551;font-size:.85rem">Este resumen lo arma solo la bitácora una vez al día. Los usuarios que marcaron WhatsApp no reciben el recordatorio por correo.</p>
+  </div>`;
+}
+
+// Arma el resumen y lo manda por los canales configurados (CallMeBot y/o
+// correo). Registra en whatsapp_reminder_log SOLO si al menos un canal
+// entregó — si fallan los dos, no registra y mañana se reintenta.
+// soloTexto: arma el mensaje y lo devuelve sin enviar ni registrar (para
+// el botón "ver qué se enviaría" de /admin).
+async function enviarResumenWhatsApp(paraWhatsApp, { soloTexto = false } = {}) {
+  if (!paraWhatsApp.length) return { incluidos: 0, callmebot: 'nada-que-enviar', email: 'nada-que-enviar' };
+
+  const lineas = paraWhatsApp.map((p, i) => {
+    const etiqueta = p.tipo === 'subperfil' ? ' (bitácora)' : '';
+    return `${i + 1}. ${p.nombre}${etiqueta} — ${p.diasInactivo} días sin grabar\n${enlaceWhatsApp(p.phone, p.nombre)}`;
+  });
+  const texto = `Recordatorios para enviar hoy (${paraWhatsApp.length}):\n\n${lineas.join('\n\n')}\n\nAbre cada enlace y toca enviar.`;
+
+  if (soloTexto) return { incluidos: paraWhatsApp.length, texto, callmebot: 'no-enviado (vista previa)', email: 'no-enviado (vista previa)' };
+
+  const wa = await avisarPorWhatsApp(texto);
+  let emailEstado = 'sin-config';
+  if (WHATSAPP_DIGEST_EMAIL && RESEND_API_KEY) {
+    try {
+      await enviarCorreo({ to: WHATSAPP_DIGEST_EMAIL, subject: `Recordatorios para enviar hoy (${paraWhatsApp.length})`, html: plantillaResumenWhatsApp(paraWhatsApp) });
+      emailEstado = 'ok';
+    } catch (err) {
+      emailEstado = String((err && err.message) || err).slice(0, 160);
+    }
+  }
+
+  const algunoOk = wa.ok || emailEstado === 'ok';
+  const detalle = `callmebot: ${wa.ok ? 'ok' : wa.motivo}; correo: ${emailEstado}`;
+  if (algunoOk) {
+    for (const p of paraWhatsApp) {
+      await sql`INSERT INTO whatsapp_reminder_log (profile_id, tipo, enviado_ok, detalle) VALUES (${p.profileId}, 'digest', true, ${detalle.slice(0, 480)})`;
+    }
+  }
+  return { incluidos: paraWhatsApp.length, callmebot: wa.ok ? 'ok' : wa.motivo, email: emailEstado, registrado: algunoOk };
+}
+
 // --- Login mágico (un solo click, sin clave) --------------------------
 // Mismo signSession/verifySession que ya usa el login normal — un mismo
 // mecanismo, dos formas de llegar a la sesión. A diferencia de la cookie
@@ -5703,48 +5911,136 @@ function plantillaRecordatorio(nombre, link) {
 // el cron está configurado. Sin CRON_SECRET configurado, esta ruta se
 // niega a correr (fallar cerrado: mejor no mandar nada a que cualquiera
 // que encuentre la URL pueda disparar correos masivos).
+//
+// Dos salidas: (1) recordatorio por correo a cada cuenta que le toca (lo
+// de siempre); (2) UN resumen con enlaces wa.me para Felipe, con las
+// cuentas y subperfiles que marcaron el canal WhatsApp (ver
+// calcularRecordatoriosPendientes / enviarResumenWhatsApp). Cada salida
+// funciona por su lado: sin RESEND_API_KEY no hay correos pero el resumen
+// de WhatsApp igual se arma y se manda por CallMeBot si está configurado.
 app.get('/api/cron/reminders', async (req, res) => {
   try {
     if (!process.env.CRON_SECRET || req.headers['authorization'] !== `Bearer ${process.env.CRON_SECRET}`) {
       return res.status(401).json({ error: 'No autorizado.' });
     }
-    if (!RESEND_API_KEY) return res.status(501).json({ error: 'RESEND_API_KEY no está configurada — no se manda nada.' });
 
-    await ensureSchema();
-    const candidatos = await sql`
-      SELECT u.id, u.email, u.name, u.username, u.created_at,
-        (SELECT MAX(fecha) FROM sessions s WHERE s.user_id = u.id) AS ultima_charla,
-        (SELECT MAX(created_at) FROM reminder_deliveries rd WHERE rd.user_id = u.id AND rd.tipo = 'recordatorio') AS ultimo_recordatorio,
-        COALESCE(np.recordatorios_activos, true) AS recordatorios_activos,
-        COALESCE(np.frecuencia_dias, 14) AS frecuencia_dias
-      FROM users u
-      LEFT JOIN notification_preferences np ON np.user_id = u.id
-      WHERE u.owner_user_id IS NULL AND u.email IS NOT NULL
-    `;
-    const AHORA = Date.now();
-    const DIA_MS = 24 * 60 * 60 * 1000;
-    let enviados = 0;
-    for (const c of candidatos) {
-      if (!c.recordatorios_activos) continue;
-      const ultimaActividad = c.ultima_charla ? new Date(c.ultima_charla).getTime() : new Date(c.created_at).getTime();
-      const diasSinCharla = (AHORA - ultimaActividad) / DIA_MS;
-      const diasDesdeRecordatorio = c.ultimo_recordatorio ? (AHORA - new Date(c.ultimo_recordatorio).getTime()) / DIA_MS : Infinity;
-      if (diasSinCharla < c.frecuencia_dias || diasDesdeRecordatorio < c.frecuencia_dias) continue;
+    const { paraCorreo, paraWhatsApp } = await calcularRecordatoriosPendientes();
 
-      const nombre = capitalizarNombre(c.name || c.username) || 'de nuevo';
-      try {
-        await enviarCorreo({ to: c.email, subject: 'Un recuerdo más para tu bitácora', html: plantillaRecordatorio(nombre, crearLinkMagico(req, c.id)) });
-        await sql`INSERT INTO reminder_deliveries (user_id, tipo, enviado_ok) VALUES (${c.id}, 'recordatorio', true)`;
-        enviados++;
-      } catch (err) {
-        console.error(`No se pudo mandar el recordatorio a ${c.email}:`, err);
-        await sql`INSERT INTO reminder_deliveries (user_id, tipo, enviado_ok, detalle) VALUES (${c.id}, 'recordatorio', false, ${String((err && err.message) || err).slice(0, 500)})`;
+    let correosEnviados = 0;
+    if (RESEND_API_KEY) {
+      for (const c of paraCorreo) {
+        try {
+          await enviarCorreo({ to: c.email, subject: 'Un recuerdo más para tu bitácora', html: plantillaRecordatorio(c.nombre, crearLinkMagico(req, c.id)) });
+          await sql`INSERT INTO reminder_deliveries (user_id, tipo, enviado_ok) VALUES (${c.id}, 'recordatorio', true)`;
+          correosEnviados++;
+        } catch (err) {
+          console.error(`No se pudo mandar el recordatorio a ${c.email}:`, err);
+          await sql`INSERT INTO reminder_deliveries (user_id, tipo, enviado_ok, detalle) VALUES (${c.id}, 'recordatorio', false, ${String((err && err.message) || err).slice(0, 500)})`;
+        }
       }
     }
-    res.json({ ok: true, evaluados: candidatos.length, enviados });
+
+    const whatsapp = await enviarResumenWhatsApp(paraWhatsApp);
+    res.json({
+      ok: true,
+      correo: { candidatos: paraCorreo.length, enviados: correosEnviados, saltado: !RESEND_API_KEY },
+      whatsapp,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo correr el recordatorio.' });
+  }
+});
+
+// --- /admin: cargar números y disparar el resumen a mano --------------
+// El teléfono y el opt-in de un perfil, para cargar a mano los usuarios
+// que ya existen (los nuevos lo ponen ellos desde su perfil). scope
+// 'user' = cuenta dueña; scope 'bitacora' = subperfil.
+app.post('/api/admin/set-phone', requireAuth, requireAdmin, rateLimit, async (req, res) => {
+  try {
+    const scope = req.body && req.body.scope === 'bitacora' ? 'bitacora' : 'user';
+    const id = parseInt(req.body && req.body.id, 10);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Falta el id del perfil.' });
+
+    const phoneRaw = String((req.body && req.body.phone) || '').trim().slice(0, 40);
+    const phone = phoneRaw || null;
+    if (phone && phone.replace(/[^0-9]/g, '').length < 8) {
+      return res.status(400).json({ error: 'El número parece muy corto — ponelo con código de país, ej. +57 300 123 4567.' });
+    }
+    const optIn = !!(req.body && req.body.optIn) && !!phone;
+    const optInAt = optIn ? new Date() : null;
+
+    await ensureSchema();
+    if (scope === 'bitacora') {
+      const r = await sql`UPDATE bitacoras SET phone = ${phone}, whatsapp_opt_in = ${optIn}, whatsapp_opt_in_at = ${optInAt} WHERE id = ${id} RETURNING id`;
+      if (!r.length) return res.status(404).json({ error: 'No se encontró ese subperfil.' });
+    } else {
+      const r = await sql`UPDATE users SET phone = ${phone}, whatsapp_opt_in = ${optIn}, whatsapp_opt_in_at = ${optInAt} WHERE id = ${id} AND owner_user_id IS NULL RETURNING id`;
+      if (!r.length) return res.status(404).json({ error: 'No se encontró esa cuenta.' });
+    }
+    res.json({ ok: true, phone, optIn });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo guardar el número.' });
+  }
+});
+
+// Estado de WhatsApp de cada perfil + config, para la tabla de /admin.
+app.get('/api/admin/whatsapp-reminders', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await ensureSchema();
+    const cuentas = await sql`
+      SELECT u.id, u.name, u.username, u.email, u.phone, COALESCE(u.whatsapp_opt_in, false) AS whatsapp_opt_in,
+        (SELECT MAX(fecha) FROM sessions s WHERE s.user_id = u.id) AS ultima_charla
+      FROM users u WHERE u.owner_user_id IS NULL ORDER BY u.created_at
+    `;
+    const subs = await sql`
+      SELECT b.id, b.nombre, b.phone, COALESCE(b.whatsapp_opt_in, false) AS whatsapp_opt_in, b.archived_at,
+        (SELECT MAX(fecha) FROM sessions s WHERE s.user_id = b.id) AS ultima_charla
+      FROM bitacoras b ORDER BY b.created_at
+    `;
+    const { paraWhatsApp } = await calcularRecordatoriosPendientes();
+    const due = new Set(paraWhatsApp.map((p) => p.profileId));
+    res.json({
+      config: {
+        callmebot: !!(CALLMEBOT_PHONE && CALLMEBOT_APIKEY),
+        digestEmail: WHATSAPP_DIGEST_EMAIL || null,
+        cronSecret: !!process.env.CRON_SECRET,
+        resend: !!RESEND_API_KEY,
+      },
+      pendientesHoy: paraWhatsApp.length,
+      cuentas: cuentas.map((c) => ({
+        scope: 'user', id: c.id, nombre: capitalizarNombre(c.name || c.username) || c.username,
+        email: c.email || null, phone: c.phone || null, optIn: c.whatsapp_opt_in,
+        ultimaCharla: c.ultima_charla || null, due: due.has(c.id),
+      })),
+      subperfiles: subs.map((b) => ({
+        scope: 'bitacora', id: b.id, nombre: capitalizarNombre(b.nombre), archivado: !!b.archived_at,
+        phone: b.phone || null, optIn: b.whatsapp_opt_in, ultimaCharla: b.ultima_charla || null, due: due.has(b.id),
+      })),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo cargar el estado de WhatsApp.' });
+  }
+});
+
+// Correr el resumen ahora, a pedido. dry:true = mostrar qué se enviaría
+// sin enviar nada ni registrar.
+app.post('/api/admin/whatsapp-reminders/run', requireAuth, requireAdmin, rateLimit, async (req, res) => {
+  try {
+    const dry = !!(req.body && req.body.dry);
+    const { paraWhatsApp } = await calcularRecordatoriosPendientes();
+    const resultado = await enviarResumenWhatsApp(paraWhatsApp, { soloTexto: dry });
+    res.json({
+      ok: true,
+      dry,
+      ...resultado,
+      lista: paraWhatsApp.map((p) => ({ nombre: p.nombre, tipo: p.tipo, diasInactivo: p.diasInactivo, enlace: enlaceWhatsApp(p.phone, p.nombre) })),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo correr el resumen.' });
   }
 });
 

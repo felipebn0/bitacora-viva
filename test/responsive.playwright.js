@@ -80,9 +80,9 @@ function fakeSql(strings, ...values) {
     const u = users[values[0]];
     return Promise.resolve(u ? [{ owner_user_id: u.owner_user_id, token_version: u.token_version }] : []);
   }
-  if (text.includes('SELECT name, email, fecha_nacimiento, is_admin FROM users WHERE id')) {
+  if (text.includes('SELECT name, email, fecha_nacimiento, is_admin, phone, whatsapp_opt_in FROM users WHERE id')) {
     const u = users[values[0]];
-    return Promise.resolve(u ? [{ name: u.name, email: u.email, fecha_nacimiento: u.fecha_nacimiento, is_admin: false }] : []);
+    return Promise.resolve(u ? [{ name: u.name, email: u.email, fecha_nacimiento: u.fecha_nacimiento, is_admin: false, phone: null, whatsapp_opt_in: false }] : []);
   }
   if (text.includes('SELECT tree_pending_names FROM users WHERE id')) {
     return Promise.resolve([{ tree_pending_names: null }]);
