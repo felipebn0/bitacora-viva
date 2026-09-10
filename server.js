@@ -4649,7 +4649,19 @@ app.post('/api/contributions/:id/privacy', requireAuth, rateLimit, async (req, r
     const nota = await aporteAdministrable(id, ownerId, req);
     if (!nota) return res.status(404).json({ error: 'No se encontró ese aporte.' });
     const privada = !!(req.body && req.body.private);
-    await sql`UPDATE family_notes SET is_private = ${privada} WHERE id = ${id}`;
+    
+    // FIX: Validar user_id en UPDATE (seguridad en profundidad)
+    const updated = await sql`
+      UPDATE family_notes 
+      SET is_private = ${privada} 
+      WHERE id = ${id} AND user_id = ${ownerId}
+      RETURNING id
+    `;
+    
+    if (!updated.length) {
+      return res.status(403).json({ error: 'No tienes permiso para modificar este aporte.' });
+    }
+    
     res.json({ ok: true, private: privada });
   } catch (err) {
     console.error(err);
@@ -4667,7 +4679,19 @@ app.post('/api/contributions/:id/archive', requireAuth, rateLimit, async (req, r
     if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
     const nota = await aporteAdministrable(id, ownerId, req);
     if (!nota) return res.status(404).json({ error: 'No se encontró ese aporte.' });
-    await sql`UPDATE family_notes SET archived_at = now() WHERE id = ${id}`;
+    
+    // FIX: Validar user_id en UPDATE (seguridad en profundidad)
+    const updated = await sql`
+      UPDATE family_notes 
+      SET archived_at = now() 
+      WHERE id = ${id} AND user_id = ${ownerId}
+      RETURNING id
+    `;
+    
+    if (!updated.length) {
+      return res.status(403).json({ error: 'No tienes permiso para archivar este aporte.' });
+    }
+    
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -5534,10 +5558,29 @@ app.post('/api/save', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
     // Se espera de verdad (en Vercel, la función puede cortarse apenas se
     // manda la respuesta — "en segundo plano" no garantiza que termine).
     // Las dos actualizaciones van en paralelo porque son independientes.
-    await Promise.all([
-      updateMemorySummary(req.profileUserId, history).catch((err) => console.error('No se pudo actualizar el resumen:', err)),
-      updateFamilyTree(req.profileUserId, req.bitacoraEsPropia, history).catch((err) => console.error('No se pudo actualizar el árbol:', err)),
+    const results = await Promise.allSettled([
+      updateMemorySummary(req.profileUserId, history),
+      updateFamilyTree(req.profileUserId, req.bitacoraEsPropia, history),
     ]);
+
+    // Validar que ambas actualizaciones fueron exitosas
+    const errors = [];
+    if (results[0].status === 'rejected') {
+      console.error('No se pudo actualizar el resumen:', results[0].reason);
+      errors.push('No se actualizó el resumen correctamente');
+    }
+    if (results[1].status === 'rejected') {
+      console.error('No se pudo actualizar el árbol:', results[1].reason);
+      errors.push('No se actualizó el árbol familiar correctamente');
+    }
+
+    if (errors.length) {
+      return res.status(500).json({ 
+        error: 'La charla se guardó pero hay errores en los datos relacionados',
+        details: errors,
+        sessionDbId
+      });
+    }
 
     res.json({ ok: true, sessionDbId });
   } catch (err) {
