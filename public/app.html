@@ -2141,7 +2141,7 @@
   // un audio que vale la pena conservar). Si no cumple ninguna de las dos,
   // se guarda el texto igual — solo se descarta el archivo de audio.
   const HISTORIA_MIN_CHARS = 180; // debe coincidir con el mismo nombre en server.js
-  const AUDIO_MIN_DURATION_MS = 50 * 1000;
+  const AUDIO_MIN_DURATION_MS = 20 * 1000; // pedido de Felipe (2026-09-10): guardar el audio de cualquier intervención de más de 20 s, aunque el texto salga corto
   // Piso duro para SUBIR el audio (pedido de Felipe, 2026-09-10): una nota
   // de 5 segundos o menos nunca se guarda como archivo, aunque el texto
   // haya salido largo. Distinto de MIN_RESPUESTA_MS (que decide si el turno
