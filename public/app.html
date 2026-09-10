@@ -181,7 +181,21 @@
     width: 56px; height: 56px; min-width: 44px; min-height: 44px;
     border-radius: 50%; border: 3px solid var(--bg); cursor: pointer;
     background: #a33; color: #fff; font-family: var(--font-body); font-weight: 700;
-    font-size: 0.68rem; line-height: 1.1; letter-spacing: 0.01em;
+    /* 0.68rem (el valor original) medía a lo ancho MÁS que el círculo ya
+       con "Tamaño de letra" en 140% (63px de texto contra ~50px de
+       interior útil, descontando el borde) — el texto no se recorta de
+       verdad, sino que sigue de largo por fuera del círculo rojo, sobre
+       el fondo de la página, donde no se distingue (reportado por Luca:
+       "Termina" se ve, la "r" no). Medido con Playwright contra la
+       fuente real (Atkinson Hyperlegible, negrita): a 0.48rem,
+       "Terminar" mide 44.6px a 140% y 31.9px a 100% — entra con margen
+       en los dos casos. overflow-wrap/word-break quedan además como red
+       de seguridad, no como solución principal: si algún día el texto
+       cambia a algo más largo, se parte en dos líneas en vez de volver a
+       desbordar en silencio. */
+    font-size: 0.48rem; line-height: 1.05; letter-spacing: 0;
+    padding: 2px; text-align: center;
+    overflow-wrap: break-word; word-break: break-word;
     box-shadow: 0 6px 16px -6px rgba(136,34,34,0.6);
   }
   .orb-mini-end:hover { background: #8f2b2b; }
@@ -874,16 +888,16 @@
            </div>
 
            <!-- Guardar la app como un ícono en la pantalla de inicio, desde
-                Cuenta — antes esto solo existía para quien entraba con el
-                enlace permanente de un subperfil (ver #accesoDirectoRow /
-                activarAccesoDirecto más abajo); esta sección lo ofrece
-                también a la cuenta dueña normal. Reutiliza el mismo
-                "promptDeInstalacion" capturado por el listener de
-                beforeinstallprompt (ver más abajo) en vez de duplicar esa
-                lógica. En iPhone, Apple no da ninguna forma de disparar este
-                paso con código — por eso ahí siempre se muestra una guía en
-                vez de un botón, sea Safari o Chrome (ver
-                configurarSeccionInstalacion). -->
+                Cuenta. Siempre son instrucciones manuales, para iPhone y
+                para el resto por igual: en iPhone porque Apple no da
+                ninguna forma de disparar este paso con código, y en
+                Android/Chrome porque esta app todavía no tiene un "service
+                worker" registrado — sin eso, Chrome nunca ofrece su botón
+                de instalar con un toque (evento beforeinstallprompt), así
+                que prometerlo sería mostrar un botón que jamás aparece. Si
+                en el futuro se agrega un service worker, ahí sí tendría
+                sentido sumar el botón acá (ver "Backlog de funcionalidades"
+                en la documentación del repo). -->
            <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecInstalacion">Instalación <span class="um-chevron" aria-hidden="true">›</span></button>
            <div class="um-section-body" id="umSecInstalacion" hidden>
              <p class="um-hint">Guarda esta charla como un ícono propio en tu pantalla de inicio, para abrirla directo sin buscarla en el navegador.</p>
@@ -894,7 +908,6 @@
              </div>
 
              <div id="umInstalOtros" hidden>
-               <button class="um-btn" id="umInstalarBtn" type="button" hidden>📲 Instalar app</button>
                <p class="um-hint" id="umInstalarFallback">Para guardarla: toca el menú ⋮ (arriba a la derecha) y elige "Agregar a pantalla de inicio" o "Instalar app".</p>
              </div>
            </div>
@@ -1824,8 +1837,6 @@
   const umInstalIOSPasos = document.getElementById('umInstalIOSPasos');
   const umInstalIOSNota = document.getElementById('umInstalIOSNota');
   const umInstalOtros = document.getElementById('umInstalOtros');
-  const umInstalarBtn = document.getElementById('umInstalarBtn');
-  const umInstalarFallback = document.getElementById('umInstalarFallback');
   const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
   let promptDeInstalacion = null;
   window.addEventListener('beforeinstallprompt', (e) => {
@@ -1834,14 +1845,13 @@
     // Este evento es de Chrome/Android y NO es confiable: depende de sus
     // propios criterios internos (a veces tarda, a veces no llega nunca en
     // esta sesión) — cuando SÍ llega, el botón de un solo toque es mejor
-    // que la instrucción manual, así que la reemplaza.
+    // que la instrucción manual, así que la reemplaza. Solo se usa acá
+    // para #accesoDirectoRow (enlace de subperfil) — la sección
+    // "Instalación" de Cuenta, más abajo, muestra siempre la guía manual
+    // (ver configurarSeccionInstalacion).
     if (agregarInicioBtn.dataset.modoNarrador === 'true') {
       agregarInicioBtn.style.display = 'inline-flex';
       agregarInicioTexto.style.display = 'none';
-    }
-    if (!esIOS) {
-      umInstalarBtn.hidden = false;
-      umInstalarFallback.hidden = true;
     }
   });
   agregarInicioBtn.addEventListener('click', async () => {
@@ -1850,14 +1860,6 @@
     await promptDeInstalacion.userChoice;
     promptDeInstalacion = null;
     agregarInicioBtn.style.display = 'none';
-  });
-  umInstalarBtn.addEventListener('click', async () => {
-    if (!promptDeInstalacion) return;
-    promptDeInstalacion.prompt();
-    await promptDeInstalacion.userChoice;
-    promptDeInstalacion = null;
-    umInstalarBtn.hidden = true;
-    umInstalarFallback.hidden = false;
   });
 
   // Arma la sección "Instalación" del panel de Cuenta — a diferencia de
@@ -1898,12 +1900,13 @@
         umInstalIOSNota.textContent = 'Con Safari queda como una app de verdad, en pantalla completa. En iPhone este paso siempre es manual — Apple no permite que ninguna app web lo haga automático.';
       }
     } else {
+      // Sin excepción: siempre la guía manual. Esta app todavía no tiene
+      // un "service worker" registrado, que es requisito de Chrome para
+      // que llegue a dispararse beforeinstallprompt — sin eso, un botón
+      // de un toque acá nunca aparecería, así que no se ofrece (ver nota
+      // más arriba, junto al HTML de esta sección).
       umInstalOtros.hidden = false;
       umInstalIOS.hidden = true;
-      if (promptDeInstalacion) {
-        umInstalarBtn.hidden = false;
-        umInstalarFallback.hidden = true;
-      }
     }
   }
   configurarSeccionInstalacion();
@@ -1922,20 +1925,15 @@
     const yaInstalada = window.navigator.standalone || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
     if (yaInstalada) return;
     if (promptDeInstalacion) { agregarInicioBtn.style.display = 'inline-flex'; return; }
-    // beforeinstallprompt (Chrome/Android) es un evento poco confiable —
-    // depende de criterios internos del navegador y puede no llegar nunca
-    // en esta sesión, aunque el navegador sí soporte instalar la página.
-    // En vez de dejar todo esto vacío mientras se espera un evento que
-    // quizás nunca llegue, se muestra SIEMPRE la instrucción manual de
-    // una — si el evento llega más tarde, el listener de arriba la
-    // reemplaza por el botón de un solo toque. iOS Safari nunca dispara
-    // este evento (no tiene ninguna API para esto), así que ahí la
-    // instrucción manual es la única opción posible, siempre. (esIOS ya
-    // está declarada más arriba, junto con configurarSeccionInstalacion.)
-    agregarInicioTexto.textContent = esIOS
-      ? 'Para guardar esta charla en tu pantalla de inicio: toca compartir ⬆️ y luego "Agregar a pantalla de inicio".'
-      : 'Para guardar esta charla en tu pantalla de inicio: toca el menú ⋮ (arriba a la derecha) y elige "Agregar a pantalla de inicio" o "Instalar app".';
-    agregarInicioTexto.style.display = 'block';
+    // Antes, acá abajo se mostraba SIEMPRE una instrucción manual ("Para
+    // guardar esta charla en tu pantalla de inicio: ...") mientras se
+    // esperaba un beforeinstallprompt que en celular casi nunca llega.
+    // Pedido de Luca (2026-09-09): esa leyenda quedaba duplicada con la
+    // guía manual de la sección "Instalación" en Cuenta → Opciones
+    // avanzadas (mismo texto, mismo propósito) — se saca de acá y queda
+    // solo en Instalación. Si algún día esta app suma un service worker y
+    // beforeinstallprompt SÍ llega a dispararse, el botón de un solo
+    // toque de la línea de arriba sigue funcionando igual.
   }
 
   function aplicarSesionSubperfil(data) {
@@ -3060,19 +3058,106 @@
     if (seguir) fetchNext();
   }
 
-  async function saveSessionLog() {
-    if (!sessionLog.length) return;
+  // Estado de guardado persistente (MEJORA 1: Resiliencia)
+  let pendingSessionLog = [];
+  let lastSaveError = null;
+  let saveRetryCount = 0;
+  let pendingSaveTimeout = null;
+
+  // Cargar backup al iniciar
+  function restorePendingSession() {
+    const backup = localStorage.getItem('bitacora_backup');
+    if (backup) {
+      try {
+        pendingSessionLog = JSON.parse(backup);
+        return true;
+      } catch (e) {
+        console.error('Error al restaurar sesión pendiente:', e);
+        localStorage.removeItem('bitacora_backup');
+        return false;
+      }
+    }
+    return false;
+  }
+
+  async function saveSessionLog(options = {}) {
+    const { forceRetry = false } = options;
+    
+    if (!sessionLog.length && !forceRetry) return { ok: true };
+    
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
       const resp = await fetch('/api/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ history: sessionLog, sessionDbId: currentSessionDbId }),
+        body: JSON.stringify({ 
+          history: sessionLog, 
+          sessionDbId: currentSessionDbId 
+        }),
+        signal: controller.signal,
       });
+      
+      clearTimeout(timeoutId);
+      
       if (resp.ok) {
         const data = await resp.json();
-        if (data.sessionDbId) currentSessionDbId = data.sessionDbId;
+        if (data.sessionDbId) {
+          currentSessionDbId = data.sessionDbId;
+        }
+        // Éxito: limpiar backup
+        pendingSessionLog = [];
+        localStorage.removeItem('bitacora_backup');
+        lastSaveError = null;
+        saveRetryCount = 0;
+        return { ok: true };
+      } else if (resp.status === 500) {
+        throw new Error(`Server error: ${resp.status}`);
+      } else {
+        throw new Error(`Unexpected error: ${resp.status}`);
       }
-    } catch (e) {}
+    } catch (e) {
+      // Guardar como pendiente
+      lastSaveError = e.message;
+      pendingSessionLog = [...sessionLog];
+      localStorage.setItem('bitacora_backup', JSON.stringify(pendingSessionLog));
+      
+      console.error('saveSessionLog falló:', e);
+      return { 
+        ok: false, 
+        error: e.message,
+        hasPendingData: pendingSessionLog.length > 0,
+        retryCount: saveRetryCount
+      };
+    }
+  }
+
+  async function retrySessionSave() {
+    if (!pendingSessionLog.length) return;
+    
+    setState('retrying-save');
+    orbLabel.innerHTML = 'Reintentando guardado…';
+    
+    const saveResult = await saveSessionLog({ forceRetry: true });
+    
+    if (saveResult.ok) {
+      setState('ended');
+      orbLabel.innerHTML = '✅ Guardado completado<br>Presiona para otra charla';
+      saveRetryCount = 0;
+    } else if (saveRetryCount < 3) {
+      saveRetryCount++;
+      orbLabel.innerHTML = 
+        '⚠️ No se guardó tu charla<br>' +
+        `<small style="font-size:0.75rem">Intento ${saveRetryCount} de 3 en 5s…</small>`;
+      if (pendingSaveTimeout) clearTimeout(pendingSaveTimeout);
+      pendingSaveTimeout = setTimeout(() => retrySessionSave(), 5000);
+    } else {
+      setState('save-failed');
+      orbLabel.innerHTML =
+        '❌ No se pudo guardar<br>' +
+        '<small style="font-size:0.75rem">Revisa tu conexión o intenta en unos minutos</small>';
+    }
   }
 
   async function finishSession() {
@@ -3080,15 +3165,42 @@
     orbLabel.innerHTML = 'Presiona<br>para otra charla';
     releaseMic();
     releaseWakeLock();
-    await saveSessionLog();
-    // Si esta charla era de armar árbol (o si de una charla normal salieron
-    // personas nuevas), "armar árbol genealógico" no debe volver a
-    // ofrecerse si ya hay una base — se vuelve a comprobar al terminar.
+    
+    const saveResult = await saveSessionLog();
+    
+    if (!saveResult.ok && saveResult.hasPendingData) {
+      setState('save-failed');
+      orbLabel.innerHTML = 
+        '⚠️ No se guardó tu charla<br>' +
+        '<small style="font-size:0.75rem">Reintentamos en 5s…</small>';
+      
+      saveRetryCount++;
+      if (saveRetryCount < 3) {
+        if (pendingSaveTimeout) clearTimeout(pendingSaveTimeout);
+        pendingSaveTimeout = setTimeout(() => retrySessionSave(), 5000);
+      } else {
+        orbLabel.innerHTML =
+          '⚠️ Fallo al guardar (3+ intentos)<br>' +
+          '<small style="font-size:0.75rem">Toca para reintentar o empezar nueva charla</small>';
+      }
+    }
+    
     if (sessionMode === 'arbol') comprobarSiArbolTieneBase();
   }
 
   function startSession(mode) {
-    if (state !== 'idle' && state !== 'ended') return;
+    if (state !== 'idle' && state !== 'ended' && state !== 'save-failed') return;
+    
+    // Si hay datos pendientes, pedir confirmación
+    if (pendingSessionLog.length > 0 && state !== 'ended') {
+      const shouldDiscard = confirm(
+        `Hay ${pendingSessionLog.length} mensajes sin guardar en la charla anterior. ` +
+        `¿Descartar y empezar nueva charla?\n\n` +
+        `(Si tocas "Cancelar", vuelves a la opción de reintentar guardado)`
+      );
+      if (!shouldDiscard) return;
+    }
+    
     requestWakeLock();
     sessionMode = mode === 'arbol' ? 'arbol' : 'historia';
     sessionId += 1;
@@ -3106,6 +3218,15 @@
     sessionLog = [];
     turnIndex = 0;
     sessionKey = new Date().toISOString().replace(/[:.]/g, '-');
+    
+    // Solo limpiar backup si realmente iniciamos nueva charla
+    if (state === 'ended' || state === 'save-failed') {
+      pendingSessionLog = [];
+      localStorage.removeItem('bitacora_backup');
+      saveRetryCount = 0;
+      if (pendingSaveTimeout) clearTimeout(pendingSaveTimeout);
+    }
+    
     fetchNext();
   }
 
@@ -3297,6 +3418,20 @@
     } catch (e) {}
   }
   cargarBadgeAportes();
+
+  // MEJORA 1: Recuperar sesión incompleta al cargar
+  if (restorePendingSession()) {
+    orbLabel.innerHTML = 
+      '⚠️ Charla incompleta encontrada<br>' +
+      '<small style="font-size:0.75rem">Reintentando guardar…</small>';
+    setState('retrying-save');
+    retrySessionSave();
+  }
+
+  // Limpiar timeout al descargar la página
+  window.addEventListener('beforeunload', () => {
+    if (pendingSaveTimeout) clearTimeout(pendingSaveTimeout);
+  });
 })();
 </script>
 </body>

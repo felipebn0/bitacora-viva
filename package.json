@@ -18,7 +18,9 @@
     "test:login-vacio": "node test/login-vacio.playwright.js",
     "test:instalacion": "node test/instalacion-cuenta.playwright.js",
     "test:arbol-colab-link": "node test/arbol-colaboraciones-link.playwright.js",
-    "eval:conversacion": "node test/eval-conversacion.js"
+    "eval:conversacion": "node test/eval-conversacion.js",
+    "test:portadas": "npx playwright test test/portadas-audiencia.playwright.js",
+    "test:admin": "node test/admin-routes.smoke.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
