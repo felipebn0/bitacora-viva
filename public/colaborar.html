@@ -1296,6 +1296,11 @@
   // vuelve vacía y se maneja ahí. No aplica mientras se responde la
   // aclaración de parentesco/año (esperandoAclaracion).
   const MIN_RESPUESTA_MS = 1000;
+  // Una nota de voz de 5 segundos o menos NO se sube a guardar (pedido de
+  // Felipe, 2026-09-10): son sobre todo "sí", "ajá", respuestas cortas que
+  // solo ocupan espacio. El texto transcrito sí sigue el hilo de la charla
+  // igual; solo se descarta el archivo de audio.
+  const NOTA_MINIMA_A_GUARDAR_MS = 5000;
   let grabacionIniciadaEn = 0;
   let audioContext = null;
   let analyser = null;
@@ -1629,7 +1634,11 @@
   async function procesarAudio(blob, contentType, blobParaTranscribir, durationMsParaTranscribir) {
     const esSoloAclaracion = esperandoAclaracion;
 
-    if (!esSoloAclaracion) {
+    // durationMsParaTranscribir > 0 solo cuando viene de una grabación (no
+    // de "subir un archivo ya grabado", que se guarda siempre). Una nota
+    // de 5 s o menos no se sube.
+    const notaMuyCorta = durationMsParaTranscribir > 0 && durationMsParaTranscribir <= NOTA_MINIMA_A_GUARDAR_MS;
+    if (!esSoloAclaracion && !notaMuyCorta) {
       try {
         const upResp = await fetch(conOwner('/api/contribute-audio'), {
           method: 'POST',

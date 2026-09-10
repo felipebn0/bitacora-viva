@@ -2142,6 +2142,12 @@
   // se guarda el texto igual — solo se descarta el archivo de audio.
   const HISTORIA_MIN_CHARS = 180; // debe coincidir con el mismo nombre en server.js
   const AUDIO_MIN_DURATION_MS = 50 * 1000;
+  // Piso duro para SUBIR el audio (pedido de Felipe, 2026-09-10): una nota
+  // de 5 segundos o menos nunca se guarda como archivo, aunque el texto
+  // haya salido largo. Distinto de MIN_RESPUESTA_MS (que decide si el turno
+  // se procesa): acá el turno se transcribe y sigue la charla igual, solo
+  // se descarta el archivo de audio.
+  const NOTA_MINIMA_A_GUARDAR_MS = 5000;
   // Grabaciones muy cortas (un ruido, un carraspeo, el micrófono
   // captando algo apenas antes de cortar) no se procesan como una
   // respuesta real. OJO: esto era 5000ms y descartaba respuestas normales
@@ -3053,12 +3059,14 @@
     if (audioBlob) {
       const esHistoriaRelevante = text.trim().length >= HISTORIA_MIN_CHARS;
       const duroBastante = lastRecordingDurationMs >= AUDIO_MIN_DURATION_MS;
-      if (esHistoriaRelevante || duroBastante) {
+      const duroLoMinimo = lastRecordingDurationMs > NOTA_MINIMA_A_GUARDAR_MS;
+      if ((esHistoriaRelevante || duroBastante) && duroLoMinimo) {
         const file = await uploadAudio(audioBlob, 'user', myTurn, audioBlob.type || 'audio/webm');
         if (file) logEntry.audioFile = file;
       }
-      // Si no calificó, el audio del navegador se descarta solo (nunca se
-      // sube) — el texto transcrito ya quedó guardado en logEntry/history.
+      // Si no calificó (o duró 5 s o menos), el audio del navegador se
+      // descarta solo — el texto transcrito ya quedó guardado en
+      // logEntry/history.
     }
     if (seguir) fetchNext();
   }
