@@ -46,15 +46,15 @@ check(`vercel.json tiene el header ${clavePolicy}`, !!(headers && headers[claveP
 const policyActual = headers && headers[clavePolicy];
 check('script-src en vercel.json trae exactamente los hashes que hoy dan las páginas de public/', !!policyActual && policyActual.includes(construirDirectiva('script-src', scriptHashes)));
 check('style-src en vercel.json trae exactamente los hashes que hoy dan las páginas de public/', !!policyActual && policyActual.includes(construirDirectiva('style-src', styleHashes)));
-// 10 páginas en total (ver PAGINAS en csp-hashes.js). general.html sigue
-// compartiendo su <script> letra por letra con index.html (mismo bloque,
-// solo cambia el copy del <body>) -- por eso el SET de <script> dedup da
-// menos; app.html aporta 2 bloques <script>, de ahí el ">=". El <style> de
-// general.html YA NO es idéntico al de index.html (se ajustó el diseño de
-// la sección "problem" y los pasos para sacar huecos vacíos), así que
-// ahora hay un hash de <style> por página: 10.
+// 19 páginas en total (ver PAGINAS en csp-hashes.js, admin.html sumado
+// 2026-09-09 para el panel de consumo). Algunas comparten el mismo
+// <script>/<style> letra por letra con otra página (dedup en el SET),
+// otras (general-apple*.html, general-raiz.html, paletas/landing.html,
+// nina.html, adulto.html) usan CSS externo y no suman hash de <style>; por
+// eso el ">="/"===" son sobre el conteo real de hoy, no una cuenta simple
+// de "una página, un hash".
 check(`hay ${scriptHashes.length} hashes de <script> (uno por bloque inline real, sin contar los que tienen src=)`, scriptHashes.length >= 9);
-check(`hay ${styleHashes.length} hashes de <style> (uno por página)`, styleHashes.length === 10);
+check(`hay ${styleHashes.length} hashes de <style> (uno por página)`, styleHashes.length === 14);
 
 console.log(`\n${pasaron} pasaron, ${fallaron} fallaron`);
 if (fallaron) {

@@ -1,67 +1,60 @@
 /* ============================================================
-       Variante "Apple HIG" de general.html — generada con el skill
-       apple-design (Apple Human Interface Guidelines, adaptadas a web).
-       Mismo HTML y mismo JS que general.html; solo cambia el
-       diseño visual: tipografía del sistema (SF), escala de tipos
-       clara, color semántico con modo claro/oscuro, materiales
-       (nav esmerilado), targets de 44px, jerarquía por espacio.
+       Variante "Apple HIG" de general.html — paleta "Crónica Analógica"
+       (Cálida y Acogedora), pedida por Felipe 2026-09-08. Mismo HTML y
+       mismo JS que general-apple.html; solo cambia la paleta de color y
+       la tipografía de títulos (serif). Terracota como acento primario,
+       verde oliva pálido como secundario.
        ============================================================ */
 
     :root {
       color-scheme: light dark;
-      /* Jerarquía de color (pedido de Felipe):
-         PRIMARIO = café (--accent), SECUNDARIO = blanco (superficies) + verde
-         (--accent-2), TERCIARIO = negro (texto, --ink). Base cálida de
-         general.html. */
-      --bg: #F4EEE1;
-      --bg-alt: #EAE0CD;
+      --bg: #FAF7F2;
+      --bg-alt: #F2ECE2;
       --surface: #FFFFFF;
-      --surface-2: #F4EEE1;
-      --ink: #241B12;
-      --ink-2: #6E5A45;
-      --ink-3: #5C4F45;
-      --hairline: #E4D9C4;
-      --hairline-soft: #EEE5D2;
-      --accent: #8A5320;
-      --accent-press: #6C3F16;
-      --accent-tint: rgba(138, 83, 32, 0.10);
-      --accent-2: #5B6B45;
-      --accent-2-tint: rgba(91, 107, 69, 0.12);
-      --on-accent: #FBF3E7;
-      --shadow-card: 0 1px 2px rgba(60,40,20,.06), 0 10px 30px rgba(60,40,20,.09);
-      --shadow-float: 0 6px 16px rgba(60,40,20,.12), 0 28px 70px rgba(60,40,20,.16);
+      --surface-2: #F2ECE2;
+      --ink: #3D342E;
+      --ink-2: #6B5F55;
+      --ink-3: #5C5450;
+      --hairline: #E8DFD3;
+      --hairline-soft: #F1EAE0;
+      --accent: #C97A63;
+      --accent-press: #B15F49;
+      --accent-tint: rgba(201, 122, 99, 0.12);
+      --accent-2: #8DA399;
+      --accent-2-tint: rgba(141, 163, 153, 0.14);
+      --on-accent: #FBF4EF;
+      --shadow-card: 0 1px 2px rgba(61,52,46,.06), 0 10px 30px rgba(61,52,46,.09);
+      --shadow-float: 0 6px 16px rgba(61,52,46,.12), 0 28px 70px rgba(61,52,46,.16);
       --radius-s: 12px;
       --radius-m: 18px;
       --radius-l: 24px;
-      --nav-bg: rgba(244, 238, 225, 0.72);
+      --nav-bg: rgba(250, 247, 242, 0.72);
       --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
               "Helvetica Neue", "Segoe UI", Roboto, system-ui, sans-serif;
-      --serif: var(--sans);
+      --serif: "Source Serif 4", Georgia, serif;
       --measure: 42rem;
     }
 
     @media (prefers-color-scheme: dark) {
       :root {
-        /* Modo oscuro cálido (café/crema), mismo orden: café primario,
-           verde secundario, texto claro. */
-        --bg: #1E160E;
-        --bg-alt: #17110A;
-        --surface: #292017;
-        --surface-2: #342A1F;
-        --ink: #F4EAD8;
-        --ink-2: #C4B199;
-        --ink-3: #BFAFAA;
-        --hairline: rgba(244, 234, 216, 0.14);
-        --hairline-soft: rgba(244, 234, 216, 0.08);
-        --accent: #CC9455;
-        --accent-press: #DDA968;
-        --accent-tint: rgba(204, 148, 85, 0.16);
-        --accent-2: #92A977;
-        --accent-2-tint: rgba(146, 169, 119, 0.16);
-        --on-accent: #1E160E;
+        --bg: #221B17;
+        --bg-alt: #1A1512;
+        --surface: #2C2420;
+        --surface-2: #362C26;
+        --ink: #F5EDE6;
+        --ink-2: #CDBBAE;
+        --ink-3: #C4B4AA;
+        --hairline: rgba(245, 237, 230, 0.14);
+        --hairline-soft: rgba(245, 237, 230, 0.08);
+        --accent: #E0906F;
+        --accent-press: #EBA688;
+        --accent-tint: rgba(224, 144, 111, 0.16);
+        --accent-2: #A2B8AC;
+        --accent-2-tint: rgba(162, 184, 172, 0.16);
+        --on-accent: #241A14;
         --shadow-card: 0 1px 2px rgba(0,0,0,.35), 0 10px 30px rgba(0,0,0,.45);
         --shadow-float: 0 8px 24px rgba(0,0,0,.5), 0 32px 70px rgba(0,0,0,.6);
-        --nav-bg: rgba(30, 22, 14, 0.66);
+        --nav-bg: rgba(34, 27, 23, 0.66);
       }
     }
 
@@ -100,7 +93,7 @@
     .wrap { width: min(980px, calc(100% - 44px)); margin: 0 auto; }
 
     /* ---- Tipografía: escala clara, pocos pesos (HIG > Typography) ---- */
-    h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -0.021em; line-height: 1.08; color: var(--ink); }
+    h1, h2, h3 { margin: 0; font-family: var(--serif); font-weight: 600; letter-spacing: -0.011em; line-height: 1.08; color: var(--ink); }
     h1 { font-size: clamp(2.4rem, 6vw, 3.75rem); font-weight: 640; line-height: 1.05; }
     h2 { font-size: clamp(1.7rem, 3.6vw, 2.5rem); }
     h3 { font-size: 1.3125rem; letter-spacing: -0.014em; line-height: 1.25; }
@@ -320,7 +313,7 @@
     .registro-points span { display: flex; gap: 10px; font-size: 0.9375rem; color: var(--ink-2); }
     .registro-points i {
       flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; margin-top: 1px;
-      background: var(--accent-2-tint) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235B6B45' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E") center / 12px no-repeat;
+      background: var(--accent-2-tint) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238DA399' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E") center / 12px no-repeat;
     }
     .signup-card {
       background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius-l);

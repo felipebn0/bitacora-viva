@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Panel de consumo — Los recuerdos de mis viejos</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/images/favicon-192.png">
+<link rel="apple-touch-icon" href="/images/favicon-192.png">
+<!-- Fuentes autoalojadas (mismo criterio que el resto de public/, ver el
+     comentario en capitulos.html): nunca fonts.googleapis.com. -->
+<link rel="stylesheet" href="/fonts/fonts.css">
+<script src="/font-size.js"></script>
+<style>
+  :root {
+    --bg: #F5EFE2;
+    --ink: #2B241C;
+    --ink-soft: #706551;
+    --gold: #93622A;
+    --gold-deep: #8F5A20;
+    --moss: #5B6B45;
+    --line: #E7DFCC;
+    --font-display: "Source Serif 4", Georgia, serif;
+    --font-body: "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif;
+
+    /* Paleta categórica (identidad, no magnitud) para el desglose por tipo
+       de uso — validada con el validador del skill dataviz (banda de
+       luminosidad, piso de croma, separación CVD adyacente >=8, piso a
+       ojo normal >=15, contraste >=3:1 sobre #FBF6EA) partiendo del tono
+       dorado ya usado en el sitio. El sitio no tiene modo oscuro todavía,
+       así que no hace falta una variante dark acá. */
+    --series-charla: #9C6420;
+    --series-resumen: #007D9C;
+    --series-arbol: #2E6B2E;
+    --series-capitulos: #B5502E;
+    --series-aportes: #8A4A9E;
+
+    /* Estado (fijo, nunca temático) para marcar quién superó el umbral de
+       gasto configurado — siempre va con ícono + texto, nunca solo color. */
+    --status-critical: #D03B3B;
+  }
+  * { box-sizing: border-box; }
+  :focus-visible { outline: 3px solid var(--gold-deep); outline-offset: 2px; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    padding: calc(28px + env(safe-area-inset-top)) calc(20px + env(safe-area-inset-right)) calc(60px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));
+  }
+  header { max-width: 1180px; margin: 0 auto 20px; display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  h1 { font-family: var(--font-display); font-size: 1.6rem; margin: 0; }
+  header p { color: var(--ink-soft); margin: 4px 0 0; font-size: 0.92rem; }
+  a.volver { color: var(--gold-deep); font-size: 0.9rem; text-decoration: none; border-bottom: 1px solid var(--gold-deep); display: inline-flex; align-items: center; min-height: 44px; padding: 10px 4px; }
+
+  .wrap { max-width: 1180px; margin: 0 auto; }
+
+  .empty { color: var(--ink-soft); font-style: italic; margin-top: 40px; }
+  .error-box { color: #a33; background: #FBF6EA; border: 1px solid var(--line); border-radius: 14px; padding: 18px 22px; margin-top: 20px; }
+
+  /* --- Selector de rango de fechas --- */
+  .range-bar {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+    background: #FBF6EA; border: 1px solid var(--line); border-radius: 14px;
+    padding: 12px 14px; margin-bottom: 18px;
+  }
+  .range-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+  button.range-btn {
+    border: 1px solid var(--line); background: #fff; color: var(--ink-soft);
+    border-radius: 999px; padding: 8px 14px; font-size: 0.82rem; font-weight: 700;
+    cursor: pointer; font-family: var(--font-body); min-height: 44px;
+  }
+  button.range-btn:hover { border-color: var(--gold-deep); color: var(--gold-deep); }
+  button.range-btn.active { background: var(--gold-deep); border-color: var(--gold-deep); color: #FBF6EA; }
+  .range-custom { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+  .range-custom label { font-size: 0.78rem; color: var(--ink-soft); }
+  .range-custom input[type="date"] {
+    border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
+    font-family: var(--font-body); font-size: 0.86rem; color: var(--ink); min-height: 44px;
+    background: #fff;
+  }
+  button.range-apply {
+    border: 1px solid var(--moss); background: var(--moss); color: #FBF6EA;
+    border-radius: 999px; padding: 8px 16px; font-size: 0.82rem; font-weight: 700;
+    cursor: pointer; font-family: var(--font-body); min-height: 44px;
+  }
+  .range-label { font-size: 0.8rem; color: var(--ink-soft); width: 100%; }
+
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    background: #FBF6EA;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 16px 18px;
+  }
+  .stat-card .label { font-size: 0.78rem; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.04em; margin: 0 0 6px; }
+  .stat-card .value { font-family: var(--font-display); font-size: 1.5rem; font-weight: 600; margin: 0; }
+  .stat-card .sub { font-size: 0.78rem; color: var(--ink-soft); margin: 4px 0 0; }
+  .delta { font-weight: 700; }
+  .delta.up-bad { color: var(--status-critical); }
+  .delta.down-good { color: var(--moss); }
+
+  .pricing-note {
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    background: #FBF6EA;
+    border: 1px dashed #CFBE9E;
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin-bottom: 22px;
+  }
+  .pricing-note code { background: rgba(0,0,0,0.05); border-radius: 4px; padding: 1px 4px; }
+  .recalc-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+  .recalc-note { margin-top: 6px; }
+
+  section.panel {
+    background: #FBF6EA;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 18px 20px;
+    margin-bottom: 22px;
+  }
+  section.panel h2 { font-family: var(--font-display); font-size: 1.1rem; margin: 0 0 4px; font-weight: 600; }
+  section.panel p.sub { color: var(--ink-soft); font-size: 0.85rem; margin: 0 0 16px; }
+
+  .kind-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .kind-row:last-child { margin-bottom: 0; }
+  .kind-swatch { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; }
+  .kind-swatch.k-charla, .kind-fill.k-charla { background: var(--series-charla); }
+  .kind-swatch.k-resumen, .kind-fill.k-resumen { background: var(--series-resumen); }
+  .kind-swatch.k-arbol, .kind-fill.k-arbol { background: var(--series-arbol); }
+  .kind-swatch.k-capitulos, .kind-fill.k-capitulos { background: var(--series-capitulos); }
+  .kind-swatch.k-aportes, .kind-fill.k-aportes { background: var(--series-aportes); }
+  .kind-swatch.k-otro, .kind-fill.k-otro { background: var(--ink-soft); }
+  .kind-label { width: 190px; flex: 0 0 auto; font-size: 0.86rem; }
+  .kind-bar-track { flex: 1; height: 10px; background: #EEE5D2; border-radius: 999px; overflow: hidden; min-width: 60px; }
+  .kind-fill { display: block; height: 100%; border-radius: 999px; width: 0; }
+  .kind-value { width: 130px; flex: 0 0 auto; text-align: right; font-size: 0.84rem; font-family: var(--font-display); font-weight: 600; }
+  .kind-calls { color: var(--ink-soft); font-weight: 400; font-family: var(--font-body); font-size: 0.76rem; }
+
+  .toolbar { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+  button.csv-btn {
+    border: 1px solid var(--gold-deep); background: #FBF6EA; color: var(--gold-deep);
+    border-radius: 999px; padding: 8px 16px; font-weight: 700; font-size: 0.82rem;
+    cursor: pointer; font-family: var(--font-body); min-height: 44px;
+  }
+  button.csv-btn:hover { background: rgba(201,138,60,0.08); }
+
+  .table-scroll {
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: #FBF6EA;
+  }
+  /* table-layout:fixed + columnas por % (ver COLUMNS.width en el JS, vía
+     <colgroup>) en vez de un min-width fijo: antes la tabla obligaba a
+     scrollear a la derecha en cualquier pantalla de menos de 1280px de
+     ancho útil — con columnas por porcentaje, el texto se envuelve
+     (white-space normal, no nowrap) y todo entra en el ancho real
+     disponible, sin importar la pantalla. */
+  table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 0.84rem; }
+  thead th {
+    text-align: left;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--ink-soft);
+    padding: 12px 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  thead th.sortable { cursor: pointer; user-select: none; }
+  thead th.sortable:hover { color: var(--ink); }
+  thead th .arrow { display: inline-block; width: 1em; opacity: 0.6; }
+  tbody td {
+    padding: 12px 10px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+    white-space: normal;
+    overflow-wrap: break-word;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: rgba(201,138,60,0.06); }
+  tbody tr.over-threshold { background: rgba(208,59,59,0.06); }
+  tbody tr.over-threshold:hover { background: rgba(208,59,59,0.1); }
+  .user-cell .name { font-weight: 700; }
+  .user-cell .sub { color: var(--ink-soft); font-size: 0.78rem; }
+  .tipo-badge {
+    display: inline-block; font-size: 0.7rem; font-weight: 700; color: var(--ink-soft);
+    border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; margin-left: 6px;
+  }
+  .admin-badge {
+    display: inline-block; font-size: 0.7rem; font-weight: 700; color: var(--moss);
+    border: 1px solid var(--moss); border-radius: 999px; padding: 1px 8px; margin-left: 6px;
+  }
+  .alert-badge {
+    display: inline-flex; align-items: center; gap: 4px; font-size: 0.7rem; font-weight: 700;
+    color: var(--status-critical); border: 1px solid var(--status-critical); border-radius: 999px;
+    padding: 1px 8px; margin-left: 6px; white-space: nowrap;
+  }
+  .cost { font-family: var(--font-display); font-weight: 600; }
+  .cost-bar-wrap { display: flex; align-items: center; gap: 8px; }
+  .cost-bar-track { flex: 1; min-width: 70px; height: 8px; background: #EEE5D2; border-radius: 999px; overflow: hidden; }
+  .cost-bar-fill { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--gold), var(--gold-deep)); }
+  .muted { color: var(--ink-soft); }
+  .num-sub { font-size: 0.76rem; color: var(--ink-soft); }
+  .db-breakdown { display: grid; gap: 1px; font-size: 0.76rem; color: var(--ink-soft); }
+
+  footer.note { max-width: 1180px; margin: 24px auto 0; color: var(--ink-soft); font-size: 0.8rem; }
+</style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Panel de consumo</h1>
+      <p>Uso y costo estimado por perfil — Claude, voz y espacio en la base de datos.</p>
+    </div>
+    <a class="volver" href="/app.html">← volver a la bitácora</a>
+  </header>
+  <div class="wrap">
+    <div id="content">
+      <p class="empty">Cargando…</p>
+    </div>
+  </div>
+  <footer class="note" id="footNote" hidden></footer>
+
+<script>
+(function () {
+  const content = document.getElementById('content');
+  const footNote = document.getElementById('footNote');
+
+  const KIND_CLASS = {
+    'Charla': 'k-charla',
+    'Resumen automático': 'k-resumen',
+    'Árbol genealógico': 'k-arbol',
+    'Capítulos': 'k-capitulos',
+    'Aportes de la familia': 'k-aportes',
+  };
+
+  function fmtNumber(n) {
+    return Number(n || 0).toLocaleString('es-CO');
+  }
+  function fmtUsd(n) {
+    return '$' + Number(n || 0).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function fmtBytes(n) {
+    const b = Number(n || 0);
+    if (b < 1024) return b + ' B';
+    if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
+    return (b / (1024 * 1024)).toFixed(2) + ' MB';
+  }
+  function fmtSeconds(n) {
+    const s = Math.round(Number(n || 0));
+    const m = Math.floor(s / 60);
+    const rest = s % 60;
+    if (m === 0) return s + ' s';
+    return m + ' min ' + rest + ' s';
+  }
+  function fmtDate(iso) {
+    if (!iso) return '—';
+    try {
+      return new Date(iso).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' });
+    } catch (e) {
+      return '—';
+    }
+  }
+  function isoFecha(d) {
+    // yyyy-mm-dd en hora LOCAL (no toISOString, que corta a UTC y puede
+    // mostrar un día distinto al que se ve en el selector).
+    const pad = (n) => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+  function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s == null ? '' : String(s);
+    return d.innerHTML;
+  }
+  // Delta vs. el período anterior — signo, y color según si subir es malo
+  // (siempre lo es acá: es costo). prev=0 y curr=0 no dice nada; prev=0 y
+  // curr>0 es "recién empezó a gastar", no un porcentaje con sentido.
+  function deltaHtml(curr, prev) {
+    if (!prev && !curr) return '';
+    if (!prev) return '<span class="delta up-bad">▲ nuevo en este período</span>';
+    const pct = ((curr - prev) / prev) * 100;
+    if (Math.abs(pct) < 1) return '<span class="muted">≈ igual que el período anterior</span>';
+    const up = pct > 0;
+    return `<span class="delta ${up ? 'up-bad' : 'down-good'}">${up ? '▲' : '▼'} ${Math.abs(pct).toFixed(0)}% vs. período anterior</span>`;
+  }
+
+  // Los anchos de barra son datos en vivo (no un valor fijo que se pueda
+  // convertir a una clase pc-XXXXXXXX como el resto del sitio) — en vez de
+  // escribir style="width:...%" en el HTML (el smoke test de CSP lo
+  // detectaría como un atributo style inline real, aunque viva dentro de
+  // un template de JS), cada barra se marca con data-pct y el ancho se
+  // aplica acá, después de insertar el HTML, vía el DOM directo — nunca
+  // queda un texto "style=" en el archivo.
+  function aplicarAnchosDeBarra(root) {
+    root.querySelectorAll('[data-pct]').forEach((el) => {
+      el.style.width = el.getAttribute('data-pct') + '%';
+    });
+  }
+
+  function showUnauthorized() {
+    content.innerHTML = `
+      <div class="error-box">
+        No tenés acceso a este panel. Es solo para las cuentas marcadas como administradoras.
+        <br><a class="volver" href="/app.html">Volver a la bitácora</a>
+      </div>`;
+  }
+
+  function showError(msg) {
+    content.innerHTML = `<div class="error-box">${esc(msg || 'No se pudo cargar el reporte.')}</div>`;
+  }
+
+  // --- Selector de rango de fechas ---
+  // null/null = "sin elegir nada todavía" -> el servidor usa su default
+  // (últimos 30 días). Los presets calculan fechas locales; "Todo" manda
+  // una fecha de arranque bien vieja (antes de que exista la app) para
+  // traer todo el histórico sin necesitar un caso especial en el backend.
+  const PRESETS = [
+    { key: '7d', label: '7 días', dias: 7 },
+    { key: '30d', label: '30 días', dias: 30 },
+    { key: '90d', label: '90 días', dias: 90 },
+    { key: 'all', label: 'Todo', dias: null },
+  ];
+  let activePreset = '30d';
+  let range = { start: null, end: null }; // se completa con lo que confirme el servidor
+
+  function calcularRangoDePreset(key) {
+    const hoy = new Date();
+    if (key === 'all') {
+      return { start: '2020-01-01', end: isoFecha(hoy) };
+    }
+    const preset = PRESETS.find((p) => p.key === key);
+    const desde = new Date(hoy.getTime() - (preset.dias - 1) * 24 * 60 * 60 * 1000);
+    return { start: isoFecha(desde), end: isoFecha(hoy) };
+  }
+
+  // Columnas de la tabla: clave de orden + de dónde sale el valor. Vive
+  // acá (no repetido en el HTML) para que el mismo array maneje el thead
+  // clickeable y el tbody.
+  // "width" alimenta el <colgroup> de abajo (deben sumar 100) — con
+  // table-layout:fixed, esto es lo que reparte el ancho real disponible
+  // entre columnas en vez de que cada una crezca según su contenido.
+  const COLUMNS = [
+    { key: 'perfil', label: 'Perfil', width: 22, sortKey: (p) => (p.nombre || '').toLowerCase() },
+    { key: 'claude', label: 'Claude', width: 15, sortKey: (p) => p.claude.costUsdRange },
+    { key: 'tts', label: 'Voz IA (TTS)', width: 13, sortKey: (p) => p.elevenlabsTts.costUsdRange },
+    { key: 'stt', label: 'Transcripción (STT)', width: 15, sortKey: (p) => p.elevenlabsStt.costUsdRange },
+    { key: 'db', label: 'En base de datos', width: 20, sortKey: (p) => p.db.totalBytes },
+    { key: 'total', label: 'Costo total', width: 15, sortKey: (p) => p.totalCostUsdRange },
+  ];
+
+  let sortState = { key: 'total', dir: 'desc' };
+
+  function sortedProfiles(profiles) {
+    const col = COLUMNS.find((c) => c.key === sortState.key) || COLUMNS[COLUMNS.length - 1];
+    const dir = sortState.dir === 'asc' ? 1 : -1;
+    return [...profiles].sort((a, b) => {
+      const va = col.sortKey(a);
+      const vb = col.sortKey(b);
+      if (va < vb) return -1 * dir;
+      if (va > vb) return 1 * dir;
+      return 0;
+    });
+  }
+
+  function csvEscape(v) {
+    const s = String(v == null ? '' : v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+
+  function downloadCsv(profiles) {
+    const headers = ['perfil', 'tipo', 'correo', 'perfil_desde',
+      'claude_usd_rango', 'claude_llamadas_rango', 'claude_tokens_in', 'claude_tokens_out',
+      'voz_ia_usd_rango', 'voz_ia_caracteres_rango',
+      'transcripcion_usd_rango', 'transcripcion_intervenciones_rango', 'transcripcion_seg_rango',
+      'db_texto_bytes', 'db_audio_bytes', 'db_audio_archivos', 'db_fotos_bytes', 'db_fotos_archivos',
+      'db_videos_bytes', 'db_videos_archivos', 'db_archivos_total',
+      'costo_total_usd_rango'];
+    const lines = [headers.join(',')];
+    profiles.forEach((p) => {
+      lines.push([
+        p.nombre, p.tipo, p.email || '', p.createdAt || '',
+        p.claude.costUsdRange.toFixed(4), p.claude.callsRange, p.claude.inputTokens, p.claude.outputTokens,
+        p.elevenlabsTts.costUsdRange.toFixed(4), p.elevenlabsTts.charactersRange,
+        p.elevenlabsStt.costUsdRange.toFixed(4), p.elevenlabsStt.callsRange, Math.round(p.elevenlabsStt.secondsRange),
+        p.db.textBytes, p.db.audioBytes, p.db.audioCount, p.db.fotoBytes, p.db.fotoCount,
+        p.db.videoBytes, p.db.videoCount, p.db.totalFiles,
+        p.totalCostUsdRange.toFixed(4),
+      ].map(csvEscape).join(','));
+    });
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'consumo-' + isoFecha(new Date()) + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function render(data) {
+    range = data.range || range;
+    const profiles = data.profiles || [];
+
+    const rangeBarHtml = `
+      <div class="range-bar">
+        <div class="range-presets">
+          ${PRESETS.map((p) => `<button type="button" class="range-btn${activePreset === p.key ? ' active' : ''}" data-preset="${p.key}">${esc(p.label)}</button>`).join('')}
+        </div>
+        <div class="range-custom">
+          <label for="rangeStartInput">Desde</label>
+          <input type="date" id="rangeStartInput" value="${esc(isoFecha(new Date(range.start)))}">
+          <label for="rangeEndInput">hasta</label>
+          <input type="date" id="rangeEndInput" value="${esc(isoFecha(new Date(range.end)))}">
+          <button type="button" class="range-apply" id="rangeApplyBtn">Aplicar</button>
+        </div>
+        <div class="range-label">Mostrando del ${fmtDate(range.start)} al ${fmtDate(range.end)}. El costo "histórico" de las tarjetas de abajo es siempre desde que se activó la medición, sin importar el rango elegido acá.</div>
+      </div>`;
+
+    if (!profiles.length) {
+      content.innerHTML = rangeBarHtml + '<p class="empty">Todavía no hay cuentas registradas.</p>';
+      conectarRangeBar();
+      return;
+    }
+
+    const threshold = data.pricing.alertThresholdUsd;
+    const totalCostRange = profiles.reduce((acc, p) => acc + (p.totalCostUsdRange || 0), 0);
+    const totalCostPrevRange = profiles.reduce((acc, p) => acc + (p.totalCostUsdPrevRange || 0), 0);
+    const totalCostAll = profiles.reduce((acc, p) => acc + (p.totalCostUsd || 0), 0);
+    const totalTokensRange = profiles.reduce((acc, p) => acc + (p.claude.inputTokensRange || 0) + (p.claude.outputTokensRange || 0), 0);
+    const totalTalkRange = profiles.reduce((acc, p) => acc + (p.elevenlabsStt.secondsRange || 0), 0);
+    const totalIntervencionesRange = profiles.reduce((acc, p) => acc + (p.elevenlabsStt.callsRange || 0), 0);
+    const maxCost = Math.max(1, ...profiles.map((p) => p.totalCostUsdRange || 0));
+
+    const statsHtml = `
+      <div class="stats-row">
+        <div class="stat-card">
+          <p class="label">Costo estimado · rango elegido</p>
+          <p class="value">${fmtUsd(totalCostRange)}</p>
+          <p class="sub">${deltaHtml(totalCostRange, totalCostPrevRange) || 'Claude + voz, todos los perfiles'}</p>
+        </div>
+        <div class="stat-card">
+          <p class="label">Intervenciones habladas · rango elegido</p>
+          <p class="value">${fmtNumber(totalIntervencionesRange)}</p>
+          <p class="sub">veces que se transcribió lo que alguien dijo, todos los perfiles</p>
+        </div>
+        <div class="stat-card">
+          <p class="label">Tokens Claude · rango elegido</p>
+          <p class="value">${fmtNumber(totalTokensRange)}</p>
+          <p class="sub">entrada + salida, todos los perfiles</p>
+        </div>
+        <div class="stat-card">
+          <p class="label">Tiempo hablado · rango elegido</p>
+          <p class="value">${fmtSeconds(totalTalkRange)}</p>
+          <p class="sub">todos los perfiles</p>
+        </div>
+        <div class="stat-card">
+          <p class="label">Costo estimado · total histórico</p>
+          <p class="value">${fmtUsd(totalCostAll)}</p>
+          <p class="sub">Desde que se activó la medición (no por rango)</p>
+        </div>
+      </div>`;
+
+    const pricingHtml = `
+      <div class="pricing-note">
+        Esta app llama a la API de ElevenLabs (no al plan de consumidor con "créditos") — cobra directo
+        en dólares por unidad, igual sin importar el plan contratado (confirmado contra
+        elevenlabs.io/app/subscription/api, 2026-09-09): voz de la IA (TTS)
+        <code>ELEVENLABS_PRICE_PER_1K_CHARS</code> (ahora ${fmtUsd(data.pricing.elevenTtsPer1kChars)}/1000 caracteres),
+        transcripción (STT) <code>ELEVENLABS_PRICE_PER_HOUR_STT</code> (ahora ${fmtUsd(data.pricing.elevenSttPerHour)}/hora).
+        Los $ de Claude también son un estimado, con
+        <code>ANTHROPIC_INPUT_PRICE_PER_1M</code>/<code>ANTHROPIC_OUTPUT_PRICE_PER_1M</code>/
+        <code>ANTHROPIC_CACHE_WRITE_PRICE_PER_1M</code>/<code>ANTHROPIC_CACHE_READ_PRICE_PER_1M</code>
+        — ahora mismo: entrada ${fmtUsd(data.pricing.anthropicInputPer1M)}/1M tok, salida ${fmtUsd(data.pricing.anthropicOutputPer1M)}/1M tok.
+        Los caracteres de Azure (si se usa) se cuentan pero no tienen tarifa cargada.
+        El consumo de Claude/voz solo cuenta desde que se activó esta medición (2026-09-09) — no hay forma de reconstruir el uso de antes de esa fecha desde acá; para eso hace falta el historial propio de la cuenta de ElevenLabs.
+        ${threshold != null
+          ? `Se resalta a quien supera <strong>${fmtUsd(threshold)}</strong> en el rango elegido (<code>ADMIN_ALERT_THRESHOLD_USD_30D</code>).`
+          : `No hay umbral de alerta configurado — definí <code>ADMIN_ALERT_THRESHOLD_USD_30D</code> para resaltar a quien se pase de un monto en el rango elegido.`}
+        <div class="recalc-row">
+          <button class="csv-btn" id="recalcBtn" type="button">Recalcular costos históricos de ElevenLabs</button>
+          <span class="num-sub muted" id="recalcStatus"></span>
+        </div>
+        <p class="num-sub muted recalc-note">Usar solo después de cambiar una tarifa — reescribe el costo (no el consumo real) de TODO lo ya guardado con la tarifa de ahora mismo.</p>
+      </div>`;
+
+    const kinds = data.kindBreakdown || [];
+    const maxKindCost = Math.max(1, ...kinds.map((k) => k.costUsd));
+    const kindHtml = kinds.length
+      ? `
+        <section class="panel">
+          <h2>Costo por tipo de uso (Claude) — rango elegido</h2>
+          <p class="sub">Qué funcionalidad de Claude sale más cara en el período de arriba, sumando todos los perfiles — útil para saber dónde ajustar si hay que bajar costos.</p>
+          ${kinds.map((k) => {
+            const cls = KIND_CLASS[k.label] || 'k-otro';
+            const pct = Math.max(2, Math.round((k.costUsd / maxKindCost) * 100));
+            return `
+              <div class="kind-row">
+                <span class="kind-swatch ${cls}"></span>
+                <span class="kind-label">${esc(k.label)}</span>
+                <span class="kind-bar-track"><span class="kind-fill ${cls}" data-pct="${pct}"></span></span>
+                <span class="kind-value">${fmtUsd(k.costUsd)} <span class="kind-calls">(${fmtNumber(k.calls)})</span></span>
+              </div>`;
+          }).join('')}
+        </section>`
+      : `<section class="panel"><h2>Costo por tipo de uso (Claude) — rango elegido</h2><p class="sub">Sin actividad de Claude en este período.</p></section>`;
+
+    function renderTable() {
+      const sorted = sortedProfiles(profiles);
+      const theadHtml = COLUMNS.map((c) => {
+        const active = sortState.key === c.key;
+        const arrow = active ? (sortState.dir === 'asc' ? '▲' : '▼') : '↕';
+        return `<th class="sortable" data-key="${c.key}"><span class="arrow">${arrow}</span> ${esc(c.label)}</th>`;
+      }).join('');
+
+      const rowsHtml = sorted.map((p) => {
+        const barPct = Math.max(2, Math.round((p.totalCostUsdRange / maxCost) * 100));
+        const overThreshold = threshold != null && p.totalCostUsdRange > threshold;
+        const tipoLabel = p.tipo === 'subperfil' ? 'subperfil' : 'cuenta';
+        const contexto = p.tipo === 'subperfil'
+          ? `${p.duenoNombre ? 'de la cuenta de ' + esc(p.duenoNombre) : 'subperfil'}${p.relacion ? ' · ' + esc(p.relacion) : ''}${p.archivado ? ' · archivado' : ''}`
+          : (p.email || p.username || '');
+        return `
+          <tr class="${overThreshold ? 'over-threshold' : ''}">
+            <td class="user-cell">
+              <div class="name">${esc(p.nombre)}<span class="tipo-badge">${tipoLabel}</span>${p.isAdmin ? '<span class="admin-badge">admin</span>' : ''}${overThreshold ? `<span class="alert-badge">⚠ supera ${fmtUsd(threshold)}</span>` : ''}</div>
+              <div class="sub">${contexto}</div>
+              <div class="sub">desde ${fmtDate(p.createdAt)} · ${fmtNumber(p.db.sessionsCount)} charla(s)</div>
+            </td>
+            <td>
+              <div class="cost">${fmtUsd(p.claude.costUsdRange)}</div>
+              <div class="num-sub">${fmtNumber(p.claude.callsRange)} intervencion(es) de la IA</div>
+              <div class="num-sub muted">${fmtNumber(p.claude.inputTokensRange)} in / ${fmtNumber(p.claude.outputTokensRange)} out</div>
+            </td>
+            <td>
+              <div class="cost">${fmtUsd(p.elevenlabsTts.costUsdRange)}</div>
+              <div class="num-sub">${fmtNumber(p.elevenlabsTts.charactersRange)} caracteres</div>
+            </td>
+            <td>
+              <div class="cost">${fmtUsd(p.elevenlabsStt.costUsdRange)}</div>
+              <div class="num-sub">${fmtNumber(p.elevenlabsStt.callsRange)} intervención(es) · ${fmtSeconds(p.elevenlabsStt.secondsRange)}</div>
+            </td>
+            <td>
+              <div>${fmtBytes(p.db.totalBytes)} <span class="num-sub">· ${fmtNumber(p.db.totalFiles)} archivo(s)</span></div>
+              <div class="db-breakdown">
+                <span>Texto: ${fmtBytes(p.db.textBytes)}</span>
+                <span>Audio: ${fmtBytes(p.db.audioBytes)} (${fmtNumber(p.db.audioCount)})</span>
+                <span>Fotos: ${fmtBytes(p.db.fotoBytes)} (${fmtNumber(p.db.fotoCount)})</span>
+                <span>Videos: ${fmtBytes(p.db.videoBytes)} (${fmtNumber(p.db.videoCount)})</span>
+              </div>
+            </td>
+            <td>
+              <div class="cost-bar-wrap">
+                <div class="cost-bar-track"><div class="cost-bar-fill" data-pct="${barPct}"></div></div>
+                <span class="cost">${fmtUsd(p.totalCostUsdRange)}</span>
+              </div>
+              <div class="num-sub muted">${deltaHtml(p.totalCostUsdRange, p.totalCostUsdPrevRange)}</div>
+              <div class="num-sub muted">histórico: ${fmtUsd(p.totalCostUsd)}</div>
+            </td>
+          </tr>`;
+      }).join('');
+
+      // data-pct, no style="width:...%" en el texto: mismo motivo que
+      // aplicarAnchosDeBarra más arriba (el smoke test de CSP busca
+      // style="..." como texto literal en el archivo, sin entender que
+      // esto es un template de JS armado en runtime) — aplicarAnchosDeBarra
+      // ya sabe leer data-pct en CUALQUIER elemento, <col> incluido.
+      const colgroupHtml = `<colgroup>${COLUMNS.map((c) => `<col data-pct="${c.width}">`).join('')}</colgroup>`;
+      const tableEl = document.getElementById('usageTable');
+      tableEl.innerHTML = `${colgroupHtml}<thead><tr>${theadHtml}</tr></thead><tbody>${rowsHtml}</tbody>`;
+      aplicarAnchosDeBarra(tableEl);
+      tableEl.querySelectorAll('th.sortable').forEach((th) => {
+        th.addEventListener('click', () => {
+          const key = th.getAttribute('data-key');
+          if (sortState.key === key) {
+            sortState.dir = sortState.dir === 'asc' ? 'desc' : 'asc';
+          } else {
+            sortState = { key, dir: 'desc' };
+          }
+          renderTable();
+        });
+      });
+    }
+
+    content.innerHTML = `
+      ${rangeBarHtml}
+      ${statsHtml}
+      ${pricingHtml}
+      ${kindHtml}
+      <div class="toolbar">
+        <button class="csv-btn" id="csvBtn" type="button">Exportar CSV (rango elegido)</button>
+      </div>
+      <div class="table-scroll">
+        <table id="usageTable"></table>
+      </div>`;
+
+    aplicarAnchosDeBarra(content);
+    renderTable();
+    document.getElementById('csvBtn').addEventListener('click', () => downloadCsv(sortedProfiles(profiles)));
+    conectarRangeBar();
+    const recalcBtn = document.getElementById('recalcBtn');
+    const recalcStatus = document.getElementById('recalcStatus');
+    if (recalcBtn) {
+      recalcBtn.addEventListener('click', () => {
+        recalcBtn.disabled = true;
+        recalcStatus.textContent = 'Recalculando…';
+        fetch('/api/admin/recalculate-eleven-costs', { method: 'POST' })
+          .then((resp) => (resp.ok ? resp.json() : Promise.reject('error')))
+          .then((r) => {
+            recalcStatus.textContent = `Listo — ${fmtNumber(r.ttsRecalculados)} de voz y ${fmtNumber(r.sttRecalculados)} de transcripción, con $${r.ttsRate}/1000 caracteres y $${r.sttRate}/hora. Refrescá la página para ver los números nuevos.`;
+          })
+          .catch(() => { recalcStatus.textContent = 'No se pudo recalcular — intentá de nuevo.'; })
+          .finally(() => { recalcBtn.disabled = false; });
+      });
+    }
+
+    footNote.hidden = false;
+    footNote.textContent = 'Generado ' + new Date(data.generatedAt).toLocaleString('es-CO') +
+      '. El consumo de Claude/voz solo cuenta desde que se activó esta medición; el tamaño en la base de datos y Blob refleja lo que hay guardado hoy.';
+  }
+
+  // Conecta los botones/inputs del selector de fechas — se llama después de
+  // CADA render() porque el rangeBar se reconstruye entero cada vez (mismo
+  // patrón que el resto de esta página, nada de listeners que sobrevivan a
+  // un innerHTML nuevo).
+  function conectarRangeBar() {
+    document.querySelectorAll('.range-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        activePreset = btn.getAttribute('data-preset');
+        const r = calcularRangoDePreset(activePreset);
+        cargar(r.start, r.end);
+      });
+    });
+    const applyBtn = document.getElementById('rangeApplyBtn');
+    if (applyBtn) {
+      applyBtn.addEventListener('click', () => {
+        const start = document.getElementById('rangeStartInput').value;
+        const end = document.getElementById('rangeEndInput').value;
+        if (!start || !end) return;
+        activePreset = null; // rango a mano, ningún preset queda marcado
+        cargar(start, end);
+      });
+    }
+  }
+
+  function cargar(start, end) {
+    content.innerHTML = '<p class="empty">Cargando…</p>';
+    const qs = (start && end) ? `?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}` : '';
+    fetch('/api/admin/usage' + qs)
+      .then((resp) => {
+        if (resp.status === 403) return Promise.reject('forbidden');
+        if (!resp.ok) return Promise.reject('error');
+        return resp.json();
+      })
+      .then(render)
+      .catch((err) => {
+        if (err === 'forbidden') showUnauthorized();
+        else showError('No se pudo cargar el reporte de consumo.');
+      });
+  }
+
+  fetch('/api/me')
+    .then((resp) => (resp.ok ? resp.json() : Promise.reject('auth')))
+    .then((me) => {
+      if (!me.isAdmin) return Promise.reject('forbidden');
+      const r = calcularRangoDePreset(activePreset);
+      cargar(r.start, r.end);
+    })
+    .catch((err) => {
+      if (err === 'forbidden' || err === 'auth') showUnauthorized();
+      else showError('No se pudo cargar el reporte de consumo.');
+    });
+})();
+</script>
+</body>
+</html>

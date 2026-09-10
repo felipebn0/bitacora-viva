@@ -10,7 +10,7 @@
        preguntas, demo de conversación) para que sirva para cualquier
        historia de vida, no solo la de un familiar mayor. En pruebas por
        ahora, en /general.html — nada la enlaza todavía desde index.html. -->
-  <title>Los recuerdos de mis viejos — Tu historia, en tu propia voz</title>
+  <title>Los recuerdos de mis viejos — Apple / Crónica Analógica (preview)</title>
   <meta name="description" content="Conversaciones guiadas que convierten tus recuerdos, anécdotas y voz en una historia que puedes volver a escuchar, consultar y compartir. Crea tu cuenta gratis." />
   <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png">
   <link rel="icon" type="image/png" sizes="192x192" href="/images/favicon-192.png">
@@ -20,433 +20,8 @@
        de la violación de CSP (font-src 'self') mandaba la IP de cada visita
        a un tercero. Ver public/fonts/fonts.css para el detalle. -->
   <link rel="stylesheet" href="/fonts/fonts.css">
+  <link rel="stylesheet" href="/general-apple-cronica.css">
   <script src="/font-size.js"></script>
-  <style>
-    /* Sistema de espacios/tipografía/tarjetas de la primera versión "Apple
-       HIG" (general-apple.css) aplicado acá con los colores y las fuentes
-       de siempre de esta página (pedido de Felipe, 2026-09-09: "la primera
-       versión... en cuanto a los espacios y demás, por ahora deja los
-       colores como están") — NO se tocó general-apple.html/css ni ningún
-       otro archivo de marketing, este es el único cambiado. */
-    :root{
-      --bg:#F5EFE2;
-      --bg-alt:#EFE6D1;
-      --surface:#FFFDF7;
-      --surface-2:#FBF6EA;
-      --ink:#2B241C;
-      --ink-2:#706551;
-      --ink-3:#9A8B76;
-      --hairline:#E5DBC6;
-      --hairline-soft:#EEE5D2;
-      --accent:#93622A;
-      --accent-press:#8F5A20;
-      --accent-tint:rgba(147,98,42,.10);
-      --accent-2:#5B6B45;
-      --accent-2-press:#3F4D31;
-      --accent-2-tint:rgba(91,107,69,.12);
-      --on-accent:#FFF8EA;
-      --shadow-card:0 1px 2px rgba(69,54,34,.06), 0 10px 30px rgba(69,54,34,.09);
-      --shadow-float:0 6px 16px rgba(69,54,34,.12), 0 28px 70px rgba(69,54,34,.16);
-      --radius-s:12px;
-      --radius-m:18px;
-      --radius-l:24px;
-      --nav-bg:rgba(245,239,226,.78);
-      --sans:"Atkinson Hyperlegible", system-ui, sans-serif;
-      --serif:"Source Serif 4", Georgia, serif;
-      --measure:42rem;
-    }
-
-    *{box-sizing:border-box}
-    html{scroll-behavior:smooth; -webkit-text-size-adjust:100%}
-    html{scroll-padding-top:76px}
-    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
-
-    body{
-      margin:0; background:var(--bg); color:var(--ink);
-      font-family:var(--sans); font-size:17px; line-height:1.47; letter-spacing:-0.011em;
-      -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
-    }
-    main{overflow-x:hidden}
-    a{color:var(--accent); text-decoration:none}
-    a:hover{text-decoration:underline}
-    button,input{font:inherit; color:inherit}
-    img{max-width:100%}
-
-    :focus-visible{outline:2px solid var(--accent); outline-offset:3px; border-radius:4px}
-    main:focus{outline:none}
-
-    .skip-link{
-      position:absolute; top:-100px; left:12px; z-index:100;
-      background:var(--accent); color:var(--on-accent); padding:12px 18px;
-      border-radius:10px; text-decoration:none; font-weight:600;
-      transition:top .15s ease;
-    }
-    .skip-link:focus{top:12px}
-
-    .wrap{width:min(980px, calc(100% - 44px)); margin:0 auto}
-
-    /* ---- Tipografía: misma jerarquía serif/sans de siempre, con la escala
-       clara de la versión Apple ---- */
-    /* Sin color acá a propósito (a diferencia de la versión Apple original):
-       hereda del contenedor, para que los títulos adentro de los bloques
-       oscuros (problema/privacidad/registro, ver más abajo) salgan claros
-       solos, sin tener que pisarlo bloque por bloque. */
-    h1,h2,h3{margin:0; font-family:var(--serif); font-weight:600; letter-spacing:-0.021em; line-height:1.08}
-    h1{font-size:clamp(2.4rem, 6vw, 3.75rem); font-weight:640; line-height:1.05}
-    h1 em{font-style:italic; color:var(--accent-2); font-weight:500}
-    h2{font-size:clamp(1.7rem, 3.6vw, 2.5rem)}
-    h3{font-size:1.3125rem; letter-spacing:-0.014em; line-height:1.25}
-    p{margin:0; color:var(--ink-2)}
-    em{font-style:normal; color:var(--accent-2)}
-
-    .eyebrow{
-      font-size:0.8125rem; font-weight:600; letter-spacing:0.01em;
-      color:var(--accent-2); margin-bottom:14px; display:inline-flex; align-items:center; gap:9px;
-    }
-    .eyebrow:before{content:""; width:34px; height:1px; background:var(--accent-2)}
-    .lead{font-size:clamp(1.125rem, 2.2vw, 1.375rem); color:var(--ink); line-height:1.4}
-
-    section{padding:clamp(64px, 9vw, 120px) 0}
-    .section-head{max-width:var(--measure); margin:0 0 clamp(36px, 5vw, 56px)}
-    .section-head.center{margin-left:auto; margin-right:auto; text-align:center}
-    .section-head p{margin-top:16px; font-size:1.0625rem}
-    .quiet{color:var(--ink-3)}
-
-    /* ---- Botones: pill, 44px, un acento por rol (café=secundario/enlace,
-       verde=CTA principal — mismo reparto de color que ya tenía esta
-       página) ---- */
-    .btn{
-      display:inline-flex; align-items:center; justify-content:center;
-      min-height:44px; padding:11px 22px; border-radius:980px;
-      font-size:1.0625rem; font-weight:500; letter-spacing:-0.011em;
-      text-decoration:none; cursor:pointer; border:1px solid transparent;
-      transition:background-color .18s ease, opacity .18s ease, transform .1s ease;
-    }
-    .btn:hover{text-decoration:none}
-    .btn:active{transform:scale(0.97)}
-    .btn-primary{background:var(--accent-2); color:var(--on-accent)}
-    .btn-primary:hover{background:var(--accent-2-press)}
-    .btn-secondary{background:transparent; color:var(--accent); border-color:var(--hairline)}
-    .btn-secondary:hover{background:var(--accent-tint)}
-
-    /* ---- Nav: material esmerilado ---- */
-    nav{
-      position:sticky; top:0; z-index:30;
-      background:var(--nav-bg);
-      -webkit-backdrop-filter:saturate(180%) blur(20px);
-      backdrop-filter:saturate(180%) blur(20px);
-      border-bottom:1px solid var(--hairline-soft);
-    }
-    .nav-inner{
-      display:flex; align-items:center; gap:18px;
-      min-height:56px; padding:8px 0; flex-wrap:wrap;
-    }
-    /* min-height/min-width:44px en .brand: la versión Apple original no lo
-       traía, pero esta página ya lo había corregido (zona táctil mínima) —
-       se mantiene ese arreglo. */
-    .brand{display:inline-flex; align-items:center; justify-content:center; gap:10px; min-height:44px; font-weight:600; color:var(--ink); font-family:var(--serif); font-size:1.15rem; letter-spacing:-0.014em}
-    .brand:hover{text-decoration:none}
-    .brand span{white-space:nowrap}
-    .brand-mark{width:30px; height:30px; object-fit:contain; display:block}
-    .nav-links{display:flex; align-items:center; gap:6px; margin-left:auto; flex-wrap:wrap}
-    /* min-height:44px (la versión Apple original traía 40px). */
-    .nav-links > a{
-      color:var(--ink-2); font-size:0.9375rem; font-weight:500;
-      padding:8px 12px; border-radius:8px; min-height:44px; display:inline-flex; align-items:center; white-space:nowrap;
-    }
-    .nav-links > a:hover{color:var(--ink); background:var(--surface-2); text-decoration:none}
-    .nav-login{color:var(--ink) !important}
-    .nav-cta{color:var(--on-accent) !important; padding:8px 16px !important; background:var(--accent-2)}
-    .nav-cta:hover{background:var(--accent-2-press)}
-    .nav-font-ctrl{
-      display:inline-flex; align-items:center; gap:4px;
-      border:1px solid var(--hairline); border-radius:980px; padding:2px;
-    }
-    /* min-width/min-height:44px (la versión Apple original traía 36x32 —
-       por debajo del mínimo de zona táctil de toda la app; el mismo motivo
-       por el que /paletas/ se sacó del despliegue el 2026-09-09). */
-    .nav-font-ctrl button{
-      min-width:44px; min-height:44px; border:none; background:transparent;
-      color:var(--ink-2); border-radius:980px; cursor:pointer; font-weight:600; font-size:0.875rem;
-    }
-    .nav-font-ctrl button:hover{background:var(--surface-2); color:var(--ink)}
-    .nav-font-ctrl button:disabled{opacity:.5; cursor:default}
-    .nav-font-ctrl span{font-size:0.8125rem; color:var(--ink-3); min-width:40px; text-align:center}
-    /* padding:2px 0 (normal es 8px 0): con los targets de 44px de los
-       propios controles (nav-font-ctrl button, nav-links a), bajar solo
-       min-height no alcanzaba para que compacto midiera menos que el
-       header normal — el contenido ya empujaba el alto por su cuenta. */
-    nav.is-compact .nav-inner{min-height:48px; padding:2px 0}
-    .brand-mark,.nav-inner{transition:width .18s ease,height .18s ease,min-height .18s ease}
-    @media(prefers-reduced-motion:reduce){.nav-inner,.brand-mark{transition:none}}
-
-    /* ---- Hero ---- */
-    .hero{padding-top:clamp(56px, 8vw, 96px)}
-    .hero-grid{display:grid; grid-template-columns:1.05fr 0.95fr; gap:clamp(32px, 5vw, 64px); align-items:center}
-    .hero-copy{max-width:34rem}
-    .hero-copy > p{margin-top:20px; font-size:clamp(1.0625rem, 1.6vw, 1.25rem); color:var(--ink-2)}
-    .hero-emotional{font-family:var(--serif); font-style:italic; font-size:1.0625rem; color:var(--accent-2); max-width:52ch; margin-top:14px}
-    .hero-actions{display:flex; flex-wrap:wrap; gap:12px; margin-top:28px}
-    .trust-row{display:flex; flex-wrap:wrap; gap:16px 22px; margin-top:28px; color:var(--ink-3); font-size:0.9375rem}
-    .trust-row span{display:inline-flex; align-items:center; gap:8px}
-    .dot{width:6px; height:6px; border-radius:50%; background:var(--accent); display:inline-block}
-
-    /* ---- Mockup del hero (captura real de la app) ---- */
-    .hero-device-wrap{position:relative}
-    .device{
-      width:min(430px,100%); background:var(--surface); border:1px solid var(--hairline);
-      border-radius:var(--radius-l); box-shadow:var(--shadow-float); overflow:hidden;
-      padding:12px; position:relative; z-index:1; margin:0 auto;
-    }
-    .app-shot{display:block; width:100%; height:auto; border-radius:var(--radius-m)}
-    .product-window .app-shot{border-radius:0}
-    .voice-art .app-shot{width:min(460px,100%); margin:0 auto; border:1px solid var(--hairline); border-radius:var(--radius-l); box-shadow:var(--shadow-card)}
-    .shot-figure{margin:clamp(36px,5vw,56px) 0 0; text-align:center}
-    .shot-figure .app-shot{max-width:900px; margin:0 auto; border:1px solid var(--hairline); border-radius:var(--radius-l); box-shadow:var(--shadow-card)}
-    .shot-figure figcaption{margin-top:14px; color:var(--ink-2); font-size:0.9375rem}
-    .memory-chip{
-      position:absolute; z-index:2; background:var(--surface); border:1px solid var(--hairline);
-      border-radius:14px; padding:10px 14px; box-shadow:var(--shadow-card);
-      font-size:0.8125rem; color:var(--ink-2); max-width:200px;
-    }
-    .memory-chip strong{display:block; color:var(--ink); font-weight:600; margin-bottom:2px}
-    .chip-a{top:-18px; left:-14px}
-    .chip-b{bottom:-20px; right:-10px}
-
-    /* ---- "Problema" / preguntas ---- */
-    .problem-grid{display:grid; grid-template-columns:1fr 1fr; gap:clamp(28px, 4vw, 52px); align-items:start}
-    .problem-grid h2{max-width:18ch}
-    .questions{display:grid; gap:12px}
-    .question-card{
-      background:var(--surface); border:1px solid var(--hairline); border-radius:var(--radius-s);
-      padding:16px 18px; color:var(--ink); font-family:var(--serif); font-style:italic; font-size:1.0625rem;
-    }
-    .problem-note{margin-top:18px; font-size:0.9375rem; color:var(--ink-2)}
-
-    /* ---- Pasos ---- */
-    .steps-grid{display:grid; grid-template-columns:repeat(3, 1fr); gap:20px}
-    .step{
-      background:var(--surface); border:1px solid var(--hairline); border-radius:var(--radius-m);
-      padding:28px; box-shadow:var(--shadow-card);
-    }
-    .step-num{font-family:var(--serif); font-size:0.9375rem; font-weight:700; color:var(--accent); letter-spacing:0.04em}
-    .step h3{margin:12px 0 8px}
-    .step p{font-size:0.9375rem}
-
-    /* ---- Ventana de producto ---- */
-    .product-window{
-      background:var(--surface); border:1px solid var(--hairline);
-      border-radius:var(--radius-l); box-shadow:var(--shadow-float); overflow:hidden;
-      max-width:900px; margin:0 auto;
-    }
-    .window-bar{
-      display:flex; align-items:center; gap:12px; padding:12px 16px;
-      background:var(--surface-2); border-bottom:1px solid var(--hairline-soft);
-      font-size:0.8125rem; color:var(--ink-3);
-    }
-    .traffic{display:flex; gap:6px}
-    .traffic i{width:11px; height:11px; border-radius:50%; background:var(--hairline); display:block}
-    .window-bar .quiet{margin-left:4px}
-    .window-bar > span:last-child{margin-left:auto; letter-spacing:2px}
-
-    /* ---- Sección "voz" ---- */
-    .voice-grid{display:grid; grid-template-columns:0.85fr 1.15fr; gap:clamp(32px, 5vw, 64px); align-items:center}
-    .voice-copy p{margin-top:14px}
-    .voice-copy .lead{margin-top:12px; font-family:var(--serif); color:var(--accent-2)}
-
-    /* ---- Tarjetas familia / próximamente ---- */
-    .family-cards, .soon-cards{
-      display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); gap:20px; margin-top:clamp(28px, 4vw, 48px);
-    }
-    .family-card, .soon-card{
-      background:var(--surface); border:1px solid var(--hairline); border-radius:var(--radius-m);
-      padding:26px; box-shadow:var(--shadow-card); position:relative;
-    }
-    /* Sin ", .pc-XXXXXXXX" pegado acá a propósito (a diferencia de la
-       versión Apple original): esos elementos YA son <div>/<b>/<p> reales
-       adentro de .family-card/.soon-card, así que el selector por
-       etiqueta ya los alcanza sin falta — sumar la clase generaba una
-       segunda definición de esa misma clase sin !important, chocando con
-       la que sí lo lleva (ver el bloque de clases extraídas de inline). */
-    .family-card > div:first-child, .soon-card > div:nth-child(2){font-size:1.75rem; line-height:1}
-    .family-card b, .soon-card b{display:block; margin:14px 0 8px; font-weight:600; color:var(--ink); font-size:1.0625rem}
-    .family-card p, .soon-card p{font-size:0.9375rem; color:var(--ink-2)}
-    .soon-badge{
-      display:inline-block; font-size:0.6875rem; font-weight:600; letter-spacing:0.03em;
-      color:var(--accent-2); background:var(--accent-2-tint); border-radius:980px; padding:4px 10px; margin-bottom:4px;
-    }
-
-    /* ---- Registro ---- */
-    .registro-box{display:grid; grid-template-columns:1fr 1fr; gap:clamp(32px, 5vw, 64px); align-items:start}
-    .registro-copy > p{margin-top:14px}
-    .registro-points{display:grid; gap:12px; margin-top:22px}
-    .registro-points span{display:flex; gap:10px; font-size:0.9375rem; color:var(--ink-2)}
-    /* Fondo oscuro (ver el bloque "Bloques de fondo oscuro" más abajo) —
-       se queda con el puntito dorado simple de siempre en vez del ícono de
-       chulo de la versión Apple, que estaba pensado para un fondo claro. */
-    .registro-points i{
-      width:7px; height:7px; border-radius:50%; background:#D9B479; margin-top:8px; flex:0 0 auto;
-    }
-    .signup-card{
-      background:var(--surface); color:var(--ink); border:1px solid var(--hairline); border-radius:var(--radius-l);
-      padding:clamp(24px, 3vw, 34px); box-shadow:var(--shadow-float);
-    }
-    .signup-card h3{margin-bottom:6px; font-family:var(--serif)}
-    .signup-card > p{font-size:0.9375rem; margin-bottom:18px}
-    /* Experimento (rama pruebas, 2026-09-08, pedido de Felipe): "unirme con
-       un código" sigue sin ir — se mantiene oculta la fila de tabs. */
-    .signup-tabs{display:none}
-    .signup-tab{
-      border:none; background:transparent; cursor:pointer; padding:10px; border-radius:9px;
-      font-size:0.875rem; font-weight:500; color:var(--ink-2); min-height:44px; box-sizing:border-box;
-      display:flex; align-items:center; justify-content:center;
-    }
-    .signup-tab.active{background:var(--surface); color:var(--ink); box-shadow:var(--shadow-card)}
-    .signup-form{display:grid; gap:14px}
-    .field{display:grid; gap:6px}
-    .field label{font-size:0.8125rem; font-weight:600; color:var(--ink-2)}
-    .field input{
-      width:100%; min-height:44px; padding:11px 14px; font-size:1.0625rem;
-      background:var(--bg); color:var(--ink);
-      border:1px solid var(--hairline); border-radius:var(--radius-s);
-      transition:border-color .15s ease, box-shadow .15s ease;
-    }
-    .field input::placeholder{color:var(--ink-3)}
-    .field input:focus-visible{
-      outline:none; border-color:var(--accent);
-      box-shadow:0 0 0 4px var(--accent-tint);
-    }
-    .field-hint, .field-note{font-size:0.8125rem; color:var(--ink-3)}
-    .field-error{font-size:0.8125rem; color:#a33}
-    .submit{width:100%; margin-top:4px}
-    .form-status{font-size:0.875rem; color:var(--accent-2); font-weight:700; min-height:1.2em}
-    .form-status.error{color:#a33}
-    .form-note, .signup-alt{font-size:0.8125rem; color:var(--ink-3)}
-    .signup-alt a{display:inline-block; padding:14px 4px; margin:-14px -4px}
-
-    /* ---- details / summary (privacidad + FAQ) — divulgación progresiva ---- */
-    .privacy-box{display:grid; grid-template-columns:0.9fr 1.1fr; gap:clamp(28px, 4vw, 52px); align-items:start}
-    .privacy-box > div:first-child p{margin-top:14px}
-    .privacy-list, .faq{display:grid; gap:8px}
-    .privacy-item, .faq-item{
-      background:var(--surface); border:1px solid var(--hairline); border-radius:14px; overflow:hidden;
-    }
-    .privacy-item summary, .faq-item summary{
-      list-style:none; cursor:pointer; padding:16px 18px; font-weight:500; font-size:0.9375rem;
-      color:var(--ink); display:flex; align-items:center; justify-content:space-between; gap:12px;
-      min-height:44px;
-    }
-    .privacy-item summary::-webkit-details-marker, .faq-item summary::-webkit-details-marker{display:none}
-    .privacy-item summary::after, .faq-item summary::after{
-      content:""; flex:0 0 auto; width:9px; height:9px; margin-right:2px;
-      border-right:2px solid var(--ink-3); border-bottom:2px solid var(--ink-3);
-      transform:rotate(-45deg); transition:transform .2s ease;
-    }
-    .privacy-item[open] summary::after, .faq-item[open] summary::after{transform:rotate(45deg)}
-    .privacy-item p, .faq-item p{padding:0 18px 18px; font-size:0.9375rem; color:var(--ink-2)}
-    #preguntas .eyebrow, #preguntas h2{max-width:var(--measure)}
-    #preguntas h2{margin-bottom:clamp(24px, 3vw, 36px)}
-
-    /* ---- CTA final ---- */
-    .final-cta .inner{max-width:var(--measure); margin:0 auto; text-align:center}
-    .final-cta p{margin:16px auto 28px; font-family:var(--serif); font-style:italic; color:var(--ink-2)}
-    .final-cta .btn{margin:0 auto}
-
-    /* ---- Footer ---- */
-    footer{border-top:1px solid var(--hairline-soft); padding:40px 0; background:var(--bg-alt)}
-    .footer-row{display:flex; flex-wrap:wrap; align-items:center; gap:16px 28px}
-    .footer-row .brand{font-size:0.9375rem}
-    .footer-tagline{color:var(--ink-3); font-size:0.875rem; min-width:0; max-width:100%}
-    .footer-links{display:flex; flex-wrap:wrap; gap:6px 18px; margin-left:auto}
-    .footer-links a{color:var(--ink-2); font-size:0.875rem; display:inline-flex; align-items:center; min-height:44px; padding:4px 2px}
-    .footer-links a:hover{color:var(--ink)}
-
-    /* ---- Reveal on scroll (lo controla el JS más abajo) ---- */
-    .reveal{opacity:0; transform:translateY(14px); transition:opacity .6s ease, transform .6s ease}
-    .reveal.show{opacity:1; transform:none}
-    @media(prefers-reduced-motion:reduce){
-      *{scroll-behavior:auto !important; animation:none !important; transition:none !important}
-      .reveal{opacity:1; transform:none}
-    }
-
-    /* ---- Responsive ---- */
-    /* Se había perdido al pasar esta página al sistema de espacios de la
-       versión Apple (encontrado al revisar el nav en 320px): sin esto,
-       "Cómo funciona"/"Familia"/"Privacidad" nunca se ocultaban, y el
-       header terminaba en 4-5 filas en vez de 1-2. "Iniciar sesión"/
-       "Crear cuenta" son las dos acciones reales del menú y quedan
-       siempre visibles. */
-    @media(max-width:1220px){
-      .nav-links > a:not(.nav-cta):not(.nav-login){display:none}
-    }
-    @media(max-width:900px){
-      .hero-grid, .problem-grid, .voice-grid, .registro-box, .privacy-box{grid-template-columns:1fr}
-      .steps-grid{grid-template-columns:1fr}
-      .voice-art{order:-1}
-      .chip-a, .chip-b{position:static; margin:0 0 10px; max-width:none}
-    }
-    @media(max-width:620px){
-      .nav-inner{gap:8px 10px}
-      .nav-links{gap:2px 4px; margin-left:0}
-      .nav-links > a{font-size:0.875rem; padding:6px 8px}
-      .nav-cta{margin-left:auto}
-      .hero-actions .btn{flex:1 1 100%}
-    }
-    /* Acá la versión Apple original escondía el control de letra (A-/A+)
-       por debajo de 400px — se saca: es el mismo control de tamaño de
-       letra que el resto de la app deja siempre visible en el header
-       público (pensado para el público mayor), y ocultarlo justo en los
-       celulares más chicos/comunes (320-375px) le sacaba la herramienta a
-       quien más la puede necesitar. Con flex-wrap ya puesto en
-       .nav-inner, se pasa a su propia fila en vez de desaparecer. */
-    /* El nombre completo ("Los recuerdos de mis viejos") no entra a 320px
-       con la letra agrandada (140%) — desborde horizontal real, encontrado
-       al pasar este mismo cambio a index.html. Se esconde el texto y
-       queda solo el ícono. */
-    @media(max-width:640px){
-      .brand span{display:none}
-    }
-
-    /* ---- Bloques de fondo oscuro ----
-       La versión Apple original no los traía (ahí estas secciones son
-       planas, sin tarjeta), pero esta página SÍ los tenía y son los que le
-       dan el golpe de atención a "el problema", "privacidad" y "crea tu
-       cuenta" — se mantienen, con los mismos colores de siempre. */
-    .problem{background:var(--ink); color:#F9F1E3; position:relative; overflow:hidden}
-    .problem:before{content:"\201C"; position:absolute; font-family:var(--serif); font-size:30rem; line-height:.6; right:4%; top:20px; color:rgba(255,255,255,.035)}
-    .problem-note{color:#BAAD97}
-    .question-card{background:rgba(255,255,255,.035); border-color:rgba(255,255,255,.12); color:#EADFCB}
-
-    .registro-box{background:var(--ink); color:#F9F1E3; border-radius:var(--radius-l); padding:clamp(32px,5vw,58px); position:relative; overflow:hidden}
-    .registro-copy p{color:#CFC2AE}
-    .registro-points{color:#E9DECC}
-
-    .privacy{padding-top:0}
-    .privacy-box{background:var(--accent-2-press); color:#F9F1E3; border-radius:var(--radius-l); padding:clamp(28px,4vw,48px)}
-    .privacy-box p{color:#D9DCCF}
-    .privacy-item{background:rgba(255,255,255,.035); border-color:rgba(255,255,255,.12)}
-    .privacy-item summary{color:#F9F1E3}
-    .privacy-item p{color:#CCD0C2}
-    .privacy-item summary::after{border-color:#F9F1E3}
-
-    /* Extraído de atributos style="" inline (mismo criterio que el resto de
-       la app — ver el comentario largo junto a estas mismas clases en
-       index.html/app.html). Se conservan tal cual, sin cambios: no son
-       parte de "los espacios", son necesarias para que el registro y las
-       tarjetas de arriba funcionen igual que antes. */
-    .pc-f1b4ce9c{color:#D9B479 !important;}
-    .pc-9b54a373{justify-content:center !important;}
-    .pc-1e28117f{font-size:.85rem !important;}
-    .pc-fa3e1c7d{margin-bottom:12px !important;}
-    .pc-6899e93a{font-size:1.8rem !important; margin-bottom:10px !important;}
-    .pc-f3b0f625{display:block; margin-bottom:4px !important;}
-    .pc-166017f1{color:var(--ink-2) !important; font-size:.92rem !important; margin:0 !important;}
-    .pc-d3a18014{margin-top:36px !important;}
-    .pc-93b8ea5b{display:none;}
-    .pc-39ddb588{text-transform:uppercase !important;}
-    .pc-81e00bde{display:none; color:#B3261E !important; font-size:.85rem !important; margin:4px 0 0 !important;}
-    .pc-a2ef1fee{width:30px !important; height:30px !important;}
-</style>
 </head>
 <body>
   <a class="skip-link" href="#main-content">Saltar al contenido</a>
@@ -492,8 +67,17 @@
           <div class="memory-chip chip-a"><strong>Nuevo recuerdo</strong>“Mi primer trabajo...”</div>
           <div class="memory-chip chip-b"><strong>Historia guardada</strong>Viajes · 4 min de audio</div>
           <div class="device">
-            <img class="app-shot app-shot-phone" src="/images/lp-charla.png" width="430" height="880"
-                 alt="La pantalla de charla de la app: el saludo por el nombre y el botón grande para empezar a hablar.">
+            <div class="device-top">
+              <div class="device-title">Los recuerdos de mis viejos</div>
+              <div class="device-icons"><span class="mini-icon">🌳</span><span class="mini-icon">📖</span></div>
+            </div>
+            <div class="demo-panel">
+              <span class="demo-badge">Demostración visual</span>
+              <div class="demo-kicker">Una conversación. Un recuerdo que queda.</div>
+              <button class="orb" id="demoOrb" aria-label="Probar demostración visual (no graba audio real)"><span id="orbText">Presiona<br>para hablar</span></button>
+              <div class="demo-state" id="demoState">Prueba el botón — es solo un ejemplo</div>
+              <div class="demo-question" id="demoQuestion">“Quiero guardar una historia de mi vida.”</div>
+            </div>
           </div>
         </div>
       </div>
@@ -540,9 +124,23 @@
           <p>Las conversaciones pueden convertirse en recuerdos consultables, capítulos y conexiones familiares.</p>
         </div>
         <div class="product-window reveal">
-          <div class="window-bar"><div class="traffic"><i></i><i></i><i></i></div><span class="quiet">Mi libro</span><span>•••</span></div>
-          <img class="app-shot" src="/images/lp-libro.png" width="1180" height="900"
-               alt="La pantalla &quot;Mi libro&quot;: capítulos generados con IA a partir de las historias contadas en las charlas.">
+          <div class="window-bar"><div class="traffic"><i></i><i></i><i></i></div><span class="quiet">Charla familiar</span><span>•••</span></div>
+          <div class="window-content">
+            <div class="conversation">
+              <div class="bubble q">Cuéntame de tu primer trabajo.</div>
+              <div class="bubble a">Era en una tienda pequeña del centro, mi primer sueldo lo gasté casi todo el mismo día. Ahí conocí a la que después fue mi mejor amiga...</div>
+              <div class="bubble q">¿Hay algo de esos días que recuerdes especialmente?</div>
+              <div class="bubble a">Sí. El día que me tocó cerrar sola por primera vez y me sentí grande de verdad.</div>
+              <div class="audio-card"><button class="play" id="playDemo" aria-label="Vista previa visual — este ejemplo no tiene audio real">▶</button><div><strong>Así se guarda un recuerdo con audio</strong><div class="quiet pc-1e28117f">Vista previa · sin audio</div></div><div class="wave" id="waveDemo"></div></div>
+            </div>
+            <aside class="story-side">
+              <h3>Libro de la historia</h3>
+              <div class="chapter"><small>Capítulo 01</small><b>Los años del colegio</b></div>
+              <div class="chapter"><small>Capítulo 02</small><b>El primer trabajo</b></div>
+              <div class="chapter"><small>Capítulo 03</small><b>El viaje que cambió todo</b></div>
+              <div class="tree-mini"><div class="quiet pc-fa3e1c7d">Árbol familiar</div><div class="tree-row"><span class="person">Abuelo</span><span class="arrow">→</span><span class="person">Papá</span><span class="arrow">→</span><span class="person">Hijos</span></div></div>
+            </aside>
+          </div>
         </div>
       </div>
     </section>
@@ -550,8 +148,8 @@
     <section>
       <div class="wrap voice-grid">
         <div class="voice-art reveal">
-          <img class="app-shot voice-shot" src="/images/lp-historias.png" width="900" height="980"
-               alt="La pantalla de historias detectadas: cada historia queda anotada con su audio, para volver a escucharla con la voz real.">
+          <div class="portrait" role="img" aria-label="Representación abstracta de un retrato familiar"></div>
+          <div class="voice-wave"><button class="play" aria-label="Vista previa visual — este ejemplo no tiene audio real">▶</button><div class="wave"></div></div>
         </div>
         <div class="voice-copy reveal">
           <div class="eyebrow">Más que palabras</div>
@@ -591,11 +189,6 @@
             <p class="pc-166017f1">Tu propia bitácora y, con un código, colaborar en la historia de alguien más — sin cerrar sesión ni crear otra cuenta.</p>
           </div>
         </div>
-        <figure class="shot-figure reveal">
-          <img class="app-shot" src="/images/lp-arbol.png" width="1180" height="980"
-               alt="El árbol genealógico de la app: se va armando solo con los nombres y parentescos que aparecen en las charlas.">
-          <figcaption>El árbol se va armando solo, con lo que cada quien cuenta.</figcaption>
-        </figure>
       </div>
     </section>
 
@@ -855,50 +448,44 @@
       actualizar();
     })();
 
-    // Demo orb (decorativo) — el hero ahora muestra una captura real de la
-    // app en vez del orbe de ejemplo, así que estos elementos pueden no
-    // existir; se deja el código por si vuelve el mockup.
+    // Demo orb (decorativo, no llama al backend)
     const orb = document.getElementById('demoOrb');
-    if (orb) {
-      const orbText = document.getElementById('orbText');
-      const state = document.getElementById('demoState');
-      const question = document.getElementById('demoQuestion');
-      let active = false;
-      const demoQuestions = [
-        '“¿Cuál es uno de tus primeros recuerdos de infancia?”',
-        '“¿Quién era la persona que más te hacía reír en tu familia?”',
-        '“¿Qué lugar de tu infancia todavía puedes imaginar perfectamente?”'
-      ];
-      let qIndex = 0;
-      orb.addEventListener('click', () => {
-        active = !active;
-        orb.classList.toggle('listening', active);
-        if (active) {
-          orbText.innerHTML = 'Ejemplo:<br>escuchando…';
-          state.textContent = 'Así te escucharía la app — cuéntale el recuerdo con tus propias palabras';
-          question.textContent = demoQuestions[qIndex % demoQuestions.length];
-          qIndex++;
-        } else {
-          orbText.innerHTML = 'Presiona<br>para hablar';
-          state.textContent = 'Así se vería un recuerdo guardado';
-          question.textContent = '“La historia queda lista para volver a encontrarla.”';
-        }
-      });
-    }
+    const orbText = document.getElementById('orbText');
+    const state = document.getElementById('demoState');
+    const question = document.getElementById('demoQuestion');
+    let active = false;
+    const demoQuestions = [
+      '“¿Cuál es uno de tus primeros recuerdos de infancia?”',
+      '“¿Quién era la persona que más te hacía reír en tu familia?”',
+      '“¿Qué lugar de tu infancia todavía puedes imaginar perfectamente?”'
+    ];
+    let qIndex = 0;
+    orb.addEventListener('click', () => {
+      active = !active;
+      orb.classList.toggle('listening', active);
+      if (active) {
+        orbText.innerHTML = 'Ejemplo:<br>escuchando…';
+        state.textContent = 'Así te escucharía la app — cuéntale el recuerdo con tus propias palabras';
+        question.textContent = demoQuestions[qIndex % demoQuestions.length];
+        qIndex++;
+      } else {
+        orbText.innerHTML = 'Presiona<br>para hablar';
+        state.textContent = 'Así se vería un recuerdo guardado';
+        question.textContent = '“La historia queda lista para volver a encontrarla.”';
+      }
+    });
 
-    // Reproducción decorativa (sin audio real) — igual que arriba, puede no existir.
+    // Reproducción decorativa (sin audio real)
     const playDemo = document.getElementById('playDemo');
     const waveDemo = document.getElementById('waveDemo');
-    if (playDemo && waveDemo) {
-      let playing = false;
-      playDemo.addEventListener('click', () => {
-        playing = !playing;
-        playDemo.textContent = playing ? '❚❚' : '▶';
-        waveDemo.style.opacity = playing ? '.95' : '.55';
-        waveDemo.style.transform = playing ? 'scaleY(1.18)' : 'scaleY(1)';
-        waveDemo.style.transition = 'all .25s ease';
-      });
-    }
+    let playing = false;
+    playDemo.addEventListener('click', () => {
+      playing = !playing;
+      playDemo.textContent = playing ? '❚❚' : '▶';
+      waveDemo.style.opacity = playing ? '.95' : '.55';
+      waveDemo.style.transform = playing ? 'scaleY(1.18)' : 'scaleY(1)';
+      waveDemo.style.transition = 'all .25s ease';
+    });
 
     // Registro: crea la cuenta contra POST /api/signup y, si sale bien,
     // ya queda la sesión iniciada (la respuesta pone la cookie), así que

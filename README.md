@@ -86,6 +86,29 @@ Todo se guarda en la nube (Postgres + Vercel Blob), no en archivos locales — a
 
 Copiá `DATABASE_URL` y `BLOB_READ_WRITE_TOKEN` desde **Storage** en el dashboard de Vercel (click en cada base → **.env.local** o **Quickstart**) y pegalos en tu `.env` local. Sin esto, `npm run dev` sigue prendiendo pero las charlas no se van a poder guardar.
 
+## Panel de consumo (`/admin.html`)
+
+Reporte de uso y costo estimado por perfil (cuenta dueña o subperfil): tokens de Claude (incluida la parte de prompt caching), caracteres de voz (ElevenLabs/Azure), tiempo hablado, y espacio ocupado en la base de datos. Pensado para los dueños del producto, no para cuentas normales.
+
+**Dar acceso a alguien:** no hay botón para esto a propósito — se activa con un `UPDATE` directo en la base (Neon → **Query** en el dashboard de Vercel, o cualquier cliente de Postgres):
+
+```sql
+UPDATE users SET is_admin = true WHERE email = 'correo-de-la-persona@ejemplo.com';
+```
+
+La cuenta tiene que existir primero. Una vez marcada, al loguearse le va a aparecer un link a `/admin.html`.
+
+**Tarifas usadas para estimar el costo en $:** configurables por variable de entorno — sin configurar, usa valores de referencia que conviene ajustar a la factura real:
+
+- `ANTHROPIC_INPUT_PRICE_PER_1M` / `ANTHROPIC_OUTPUT_PRICE_PER_1M` — USD por millón de tokens de entrada/salida de Claude.
+- `ANTHROPIC_CACHE_WRITE_PRICE_PER_1M` / `ANTHROPIC_CACHE_READ_PRICE_PER_1M` — tarifa de los tokens de prompt caching que usa `/api/next` (ver el comentario junto a `cache_control` en server.js). Sin configurar, se calculan como 1.25x/0.1x del precio de entrada normal (las proporciones típicas de Anthropic).
+- `ELEVENLABS_PRICE_PER_1K_CHARS` / `ELEVENLABS_PRICE_PER_HOUR_STT` — USD por 1000 caracteres de voz (TTS) / por hora de transcripción (STT). Esta app llama a la API de ElevenLabs (no el plan de consumidor con "créditos") — esa tarifa es la misma sin importar el plan contratado (Free/Starter/Creator/...), confirmado contra elevenlabs.io/app/subscription/api: $0.05/1000 caracteres (modelo Flash/Turbo) y $0.22/hora (modelo Scribe v1), los mismos que usa esta app.
+- `ADMIN_ALERT_THRESHOLD_USD_30D` (opcional) — si un perfil supera este monto en el rango de fechas elegido en el panel, se resalta con un aviso. Sin configurar, no se resalta a nadie.
+
+El consumo de Claude/voz solo queda registrado desde que se activó esta medición (no hay forma de reconstruir tokens de charlas viejas); el tamaño en la base de datos, en cambio, se calcula sobre los datos tal como están hoy, así que sí incluye lo histórico.
+
+Si se edita el `<script>`/`<style>` de `admin.html`, correr `node tools/actualizar-hashes-vercel.js` antes de commitear (mismo criterio que el resto de `public/`, ver `test/hashes-csp-vercel.smoke.js`).
+
 ## Botón físico
 
 ### Paso 1: detectar qué tecla manda tu encoder

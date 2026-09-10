@@ -1,0 +1,49 @@
+/* Urbanist (variable), autoalojada -- solo para la exploración de marca
+ * "RAÍZ" (pedido de Felipe 2026-09-08), aparte de fonts.css a propósito:
+ * ninguna otra página de la app pide Urbanist, y sumarla a fonts.css le
+ * agregaría este peso de más a cada carga de app.html/index.html/etc.
+ * sin necesidad.
+ *
+ * Archivos extraídos de @fontsource-variable/urbanist (mismo binario que
+ * sirve Google Fonts, empaquetado para autoalojar, licencia OFL) -- mismo
+ * criterio que ya usa fonts.css para Atkinson Hyperlegible/Source Serif 4:
+ * nunca un <link> a fonts.googleapis.com/fonts.gstatic.com, que violaría
+ * la política de CSP "font-src 'self'" del resto del proyecto.
+ *
+ * Variable (wght 100-900, el navegador interpola cualquier peso dentro
+ * del archivo), redonda e itálica, subconjuntos latin + latin-ext (cubren
+ * el español entero).
+ */
+
+@font-face {
+  font-family: 'Urbanist Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('./files/urbanist-latin-ext-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Urbanist Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('./files/urbanist-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face {
+  font-family: 'Urbanist Variable';
+  font-style: italic;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('./files/urbanist-latin-ext-wght-italic.woff2') format('woff2-variations');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Urbanist Variable';
+  font-style: italic;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('./files/urbanist-latin-wght-italic.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}

@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<!-- Landing pensada para un adulto de unos 30 años (pedido de Felipe
+     2026-09-08, "a tu criterio"). Este es quien probablemente ADMINISTRA
+     la cuenta (sus papás narran, él/ella paga y comparte el link) --
+     copy y features apuntan a eso, no a "contar tu propia historia".
+     Decisiones de diseño:
+     - Fondo oscuro, tipografía Urbanist (autoalojada, la misma que ya
+       trajimos para RAÍZ) -- el registro visual de un producto de
+       software moderno, lo opuesto a la calidez tipo álbum de fotos de
+       la versión para adulto mayor.
+     - Un solo acento cálido (ámbar) sobre negro -- no el azul genérico
+       de SaaS, para que seguir sintiéndose "familiar/personal" y no
+       "corporativo frío".
+     - Copy corto, directo, orientado a beneficio -- no hay espacio para
+       párrafos largos con esta audiencia. -->
+<title>Los recuerdos de mis viejos — el legado de tu familia</title>
+<meta name="description" content="Una IA guía la conversación por voz. Vos compartís el link, ellos cuentan su historia, y queda guardada para siempre.">
+<link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/images/favicon-192.png">
+<link rel="apple-touch-icon" href="/images/favicon-192.png">
+<link rel="stylesheet" href="/fonts/urbanist.css">
+<style>
+  :root {
+    --bg: #0B0D10;
+    --surface: #15181D;
+    --surface-2: #1D2127;
+    --ink: #F4F5F3;
+    --ink-2: #9BA1AA;
+    --ink-3: #656B74;
+    --border: rgba(244,245,243,0.10);
+    --amber: #F0A93E;
+    --amber-press: #D9922B;
+    --font: 'Urbanist Variable', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  :focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+  body {
+    margin: 0; min-height: 100vh; min-height: 100dvh;
+    background: var(--bg); color: var(--ink); font-family: var(--font);
+    font-size: 16px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+    padding: calc(20px + env(safe-area-inset-top)) calc(20px + env(safe-area-inset-right)) calc(60px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));
+  }
+  .wrap { max-width: 620px; margin: 0 auto; }
+  a { color: var(--amber); }
+
+  nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 56px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; text-decoration: none; color: var(--ink); }
+  .brand img { width: 26px; height: 26px; }
+  nav a.login { color: var(--ink-2); font-size: 0.9rem; text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; }
+
+  .eyebrow { color: var(--amber); font-weight: 700; font-size: 0.85rem; letter-spacing: 0.03em; text-transform: uppercase; margin-bottom: 16px; }
+  h1 {
+    font-size: clamp(2.2rem, 7vw, 3.1rem); font-weight: 800; letter-spacing: -0.02em;
+    line-height: 1.08; margin: 0 0 18px;
+  }
+  h1 span { color: var(--amber); }
+  .lead { font-size: 1.15rem; color: var(--ink-2); margin: 0 0 30px; max-width: 34rem; }
+
+  .cta-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 44px; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; min-height: 52px;
+    padding: 0 26px; border-radius: 12px; font-weight: 700; font-size: 1rem;
+    text-decoration: none; cursor: pointer; border: 1px solid transparent;
+  }
+  .btn-primary { background: var(--amber); color: #1A1305; }
+  .btn-primary:hover { background: var(--amber-press); }
+  .btn-secondary { background: transparent; color: var(--ink); border-color: var(--border); }
+  .btn-secondary:hover { background: var(--surface); }
+
+  .stats { display: flex; flex-wrap: wrap; gap: 28px; margin-bottom: 56px; }
+  .stats div strong { display: block; font-size: 1.6rem; font-weight: 800; }
+  .stats div span { color: var(--ink-3); font-size: 0.85rem; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 56px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    padding: 22px 20px;
+  }
+  .card .icono { font-size: 1.4rem; margin-bottom: 12px; display: block; }
+  .card strong { display: block; font-size: 1rem; margin-bottom: 6px; }
+  .card p { margin: 0; font-size: 0.9rem; color: var(--ink-2); line-height: 1.45; }
+
+  .prueba {
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 20px;
+    padding: 30px 26px; text-align: center; margin-bottom: 56px;
+  }
+  .prueba p { font-size: 1.15rem; margin: 0 0 6px; }
+  .prueba span { color: var(--ink-3); font-size: 0.9rem; }
+
+  .cta-final { text-align: center; }
+  .cta-final h2 { font-size: 1.6rem; font-weight: 800; margin: 0 0 12px; }
+  .cta-final p { color: var(--ink-2); margin: 0 0 24px; }
+
+  footer { text-align: center; margin-top: 56px; font-size: 0.85rem; color: var(--ink-3); }
+  footer a { color: var(--ink-2); }
+
+  @media (max-width: 480px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <nav>
+      <a class="brand" href="#"><img src="/images/logo-icon.png" alt=""> Los recuerdos de mis viejos</a>
+      <a class="login" href="/app.html">Iniciar sesión</a>
+    </nav>
+
+    <div class="eyebrow">Para quien administra la bitácora familiar</div>
+    <h1>El legado de tu familia, <span>antes de que sea tarde.</span></h1>
+    <p class="lead">Compartís un link por WhatsApp. Una IA hace las preguntas y guía la conversación por voz — tus papás solo tienen que hablar. Vos administrás, pagás y organizás todo desde una sola cuenta.</p>
+
+    <div class="cta-row">
+      <a class="btn btn-primary" href="/index.html#registro-form">Crear mi cuenta gratis</a>
+      <a class="btn btn-secondary" href="#como-funciona">Ver cómo funciona</a>
+    </div>
+
+    <div class="stats">
+      <div><strong>0</strong><span>apps que instalar</span></div>
+      <div><strong>1</strong><span>link para compartir</span></div>
+      <div><strong>∞</strong><span>veces que la pueden volver a escuchar</span></div>
+    </div>
+
+    <section class="grid" id="como-funciona">
+      <div class="card">
+        <span class="icono">🎙️</span>
+        <strong>Conversación guiada por IA</strong>
+        <p>Nada de pantalla en blanco. La IA pregunta, escucha y sigue el hilo — como una entrevista, no como un formulario.</p>
+      </div>
+      <div class="card">
+        <span class="icono">👨‍👩‍👧</span>
+        <strong>Administra varios perfiles</strong>
+        <p>La bitácora de tu papá, la de tu mamá — todo desde tu misma cuenta, sin que ellos necesiten usuario ni clave.</p>
+      </div>
+      <div class="card">
+        <span class="icono">🔒</span>
+        <strong>Privado, no público</strong>
+        <p>Solo entra quien vos invitás con un código. Nadie más puede crear una cuenta y llegar a tu bitácora.</p>
+      </div>
+      <div class="card">
+        <span class="icono">📲</span>
+        <strong>Se comparte por WhatsApp</strong>
+        <p>Un link directo, sin apps que instalar ni formularios que llenar del otro lado.</p>
+      </div>
+    </section>
+
+    <div class="prueba">
+      <p>"La voz de mi mamá contando cómo conoció a mi papá — eso no lo iba a tener de ninguna otra forma."</p>
+      <span>Así se siente cuando ya es tarde para preguntar. Empezá ahora que todavía no lo es.</span>
+    </div>
+
+    <div class="cta-final">
+      <h2>Andá por esa historia que todavía no le preguntaste.</h2>
+      <p>Crear la cuenta toma menos de un minuto.</p>
+      <a class="btn btn-primary" href="/index.html#registro-form">Crear mi cuenta gratis</a>
+    </div>
+
+    <footer>
+      <a href="/index.html">Los recuerdos de mis viejos</a> — Las historias pasan. Los recuerdos pueden quedarse.
+    </footer>
+  </div>
+</body>
+</html>

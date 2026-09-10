@@ -150,9 +150,12 @@
     border: 2px solid var(--ring); animation: breathe 3.2s ease-in-out infinite;
   }
   @keyframes breathe { 0%,100% { transform: scale(1); opacity: .6; } 50% { transform: scale(1.08); opacity: .15; } }
-  .orb[data-state="listening"] { background: radial-gradient(circle at 35% 30%, #9A6524, var(--gold-deep)); }
+  /* Colores por turno (pedido de Felipe, 2026-09-08): verde cuando le toca
+     hablar a la persona, amarillo cuando habla la IA -- antes era al
+     revés (dorado/verde), sin ese código de color explícito. */
+  .orb[data-state="listening"] { background: radial-gradient(circle at 35% 30%, #7C8F5E, var(--moss)); }
   .orb[data-state="listening"]::before { animation-duration: 1.4s; }
-  .orb[data-state="speaking"], .orb[data-state="thinking"] { background: radial-gradient(circle at 35% 30%, #67774D, var(--moss)); }
+  .orb[data-state="speaking"], .orb[data-state="thinking"] { background: radial-gradient(circle at 35% 30%, #E8B923, #B8860B); }
   .orb[data-state="paused"] { background: radial-gradient(circle at 35% 30%, #7D7050, #706551); }
   .orb[data-state="paused"]::before { animation: none; opacity: 0.3; }
   /* Experimento UX (rama ux-pruebas, 2026-09-08): "terminar la charla" como
@@ -420,6 +423,14 @@
      esto la regla de arriba (pensada para el primer <button>, "Perfil")
      también lo agarraba a él y le sacaba la línea divisoria de arriba. */
   .user-menu-panel a.um-section-toggle:first-of-type { border-top: 1px solid #E7DFCC; margin-top: 4px; }
+  /* Oculto por defecto (solo cuentas is_admin lo ven, ver showApp()) — el
+     atributo "hidden" no alcanza acá: .um-section-toggle ya fija
+     display:flex como regla de autor, que le gana a [hidden] (regla del
+     navegador) en la cascada sin importar la especificidad. Un selector
+     por id sí le gana a la clase por especificidad; showApp() lo muestra
+     con .style.display (mismo mecanismo que ya usa umPerfilesLink más
+     abajo para el caso de subperfil). */
+  #umAdminLink { display: none; }
   .user-menu-panel .um-section-toggle-warn { color: #a33; }
   .user-menu-panel .um-chevron { flex-shrink: 0; margin-left: 10px; color: var(--ink-soft); transition: transform 0.15s ease; }
   .user-menu-panel .um-section-toggle[aria-expanded="true"] .um-chevron { transform: rotate(90deg); }
@@ -846,6 +857,13 @@
               en vez de desplegar contenido acá adentro. -->
          <a class="um-section-toggle" id="umPerfilesLink" href="/perfiles.html">Perfiles <span class="um-chevron" aria-hidden="true">›</span></a>
 
+         <!-- Panel de consumo (item pedido por Felipe, 2026-09-09): solo
+              para cuentas is_admin (ver /api/admin/usage en server.js) —
+              oculto por defecto, se muestra en showApp() si data.isAdmin.
+              Mismo patrón visual que "Perfiles": lleva directo a su propia
+              pantalla en vez de desplegar contenido acá adentro. -->
+         <a class="um-section-toggle" id="umAdminLink" href="/admin.html">Panel de consumo <span class="um-chevron" aria-hidden="true">›</span></a>
+
          <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecAvanzadas">Opciones avanzadas <span class="um-chevron" aria-hidden="true">›</span></button>
          <!-- Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe):
               "um-nested-group" le da un fondo propio a todo lo de acá
@@ -978,7 +996,7 @@
              puntual de qué hablar y desaparece en cuanto la charla sigue
              con otra cosa. -->
         <div class="media-momento" id="mediaMomento" hidden>
-          <img id="mediaMomentoImg" alt="Foto que compartió tu familia" hidden>
+          <img id="mediaMomentoImg" alt="Foto de esta historia" hidden>
           <video id="mediaMomentoVideo" controls hidden></video>
         </div>
         <!-- BACKLOG #12: se ve en vez del orbe cuando cambiaste a un
@@ -1001,7 +1019,7 @@
             <button class="orb" id="orb" data-state="idle" aria-label="Presionar para comenzar la charla">
               <span id="orbLabel">Presiona<br>para hablar</span>
             </button>
-            <button class="orb-mini-end" id="endBtn" type="button" aria-label="Terminar la charla">Terminar</button>
+            <button class="orb-mini-end" id="endBtn" type="button" aria-label="Terminar la charla">Fin</button>
           </div>
           <!-- role="status" aria-live="polite" aria-atomic="true": este texto
                cambia solo (Escuchando…/Transcribiendo…/pausa/errores) sin que
@@ -1096,6 +1114,7 @@
   const loginError = document.getElementById('loginError');
   const greetingName = document.getElementById('greetingName');
   const umUsername = document.getElementById('umUsername');
+  const umAdminLink = document.getElementById('umAdminLink');
   const umProfileName = document.getElementById('umProfileName');
   const umProfileEmail = document.getElementById('umProfileEmail');
   const umProfileNameFull = document.getElementById('umProfileNameFull');
@@ -1125,7 +1144,7 @@
   umProfileName.addEventListener('input', () => mostrarCompletoSiNoCabe(umProfileName, umProfileNameFull));
   umProfileEmail.addEventListener('input', () => mostrarCompletoSiNoCabe(umProfileEmail, umProfileEmailFull));
 
-  function showApp(username, name, email, fechaNacimiento) {
+  function showApp(username, name, email, fechaNacimiento, isAdmin) {
     checkingScreen.style.display = 'none';
     loginScreen.style.display = 'none';
     appContent.style.display = 'flex';
@@ -1136,6 +1155,7 @@
     // ahora que el correo se puede editar hace falta dejar claro cuál es
     // cuál, para no dar a entender que cambiar uno cambia el otro.
     umUsername.textContent = username ? `Usuario: ${username}` : '';
+    if (umAdminLink) umAdminLink.style.display = isAdmin ? 'flex' : 'none';
     umProfileName.value = name || '';
     umProfileEmail.value = email || '';
     umProfileBirthdate.value = fechaNacimiento || '';
@@ -2038,7 +2058,7 @@
       // subperfil (isNarradorLink) es un invitado DISTINTO: sí se queda
       // acá, narrando su propia bitácora (ver aplicarSesionSubperfil).
       if (data.isCollaborator) { window.location.href = '/colaborar.html'; return; }
-      showApp(data.username, data.name, data.email, data.fechaNacimiento);
+      showApp(data.username, data.name, data.email, data.fechaNacimiento, data.isAdmin);
       aplicarSesionSubperfil(data);
     })
     .catch(() => {
@@ -2083,6 +2103,12 @@
   // donde toda una charla arma UNA sola historia).
   let mediaUrlsLocal = [];
   let subidaFotoEnCurso = null; // ver el comentario igual en colaborar.html
+  // Foto/video que la persona acaba de subir con el botón 📷 y todavía no
+  // se le avisó a la IA ({url, type, caption} — ver fotoRecienSubidaPrompt
+  // en server.js). Se manda una sola vez, en el próximo /api/next, y se
+  // limpia ahí mismo; url/type se quedan del lado del cliente nomás, para
+  // no ocultar la foto en pantalla mientras la IA pregunta por ella.
+  let fotoRecienSubida = null;
   let sessionKey = null;  // carpeta de audio de esta charla
   let currentSessionDbId = null;  // fila de "sessions" de esta charla, para actualizar en vez de duplicar
   let sessionMode = 'historia';  // 'historia' (charla normal) o 'arbol' (armar árbol genealógico)
@@ -2310,6 +2336,7 @@
     const resting = next === 'idle' || next === 'ended';
     let orbHint = 'Presionar para comenzar la charla';
     if (next === 'paused') orbHint = 'Presionar para seguir la charla';
+    else if (next === 'error') orbHint = 'Presionar para reintentar';
     else if (!resting) orbHint = 'Presionar para pausar la charla';
     orb.setAttribute('aria-label', orbHint);
     endBtn.style.display = resting ? 'none' : 'inline';
@@ -2429,8 +2456,17 @@
   // recordar fechas/nombres sin cortar antes de tiempo. En uso real (2026-
   // 09-06) resultó demasiado: se quedaba "escuchando" varios segundos
   // después de que la persona ya había dejado de hablar, sintiéndose lento
-  // y poco fluido. Bajado a 1200ms (cerca del segundo pedido).
-  const SILENCE_MS = 1200; // pausa tolerada antes de dar la respuesta por terminada
+  // y poco fluido. Bajado a 1200ms (cerca del segundo pedido) — pero
+  // reportado de nuevo (2026-09-09, usuarios reales): cortaba pausas
+  // normales de alguien pensando o recordando un nombre a mitad de
+  // frase, mandando la respuesta a medias. La IA recibía solo el
+  // fragmento y a veces reaccionaba como si la persona hubiera terminado
+  // (o se hubiera quedado sin nada que decir) en vez de esperar el resto
+  // — de ahí también las preguntas repetidas sobre algo que sí se había
+  // contado, solo que cortado a la mitad. Subido a 2200ms: más cerca del
+  // valor original (2000ms, nunca reportado como lento) que del
+  // extremo de 4000ms que sí lo fue.
+  const SILENCE_MS = 2200; // pausa tolerada antes de dar la respuesta por terminada
   // Subido de 0.02: con ruido de fondo (ventilador, TV, eco del cuarto) el
   // volumen ambiente solía superar 0.02 seguido, así que lastLoudTime nunca
   // dejaba de renovarse y SILENCE_MS de arriba no llegaba a cumplirse nunca
@@ -2528,11 +2564,23 @@
     vadRafId = null;
   }
 
-  async function transcribeAudio(blob) {
+  // durationMsOverride: cuando el audio que se manda es el recortado por
+  // recortarSilencioDeCola (más abajo), su duración real ya no es
+  // lastRecordingDurationMs (la de la grabación completa, sin recortar) —
+  // sin este parámetro, el panel de consumo mostraría más segundos de los
+  // que en verdad se mandaron a transcribir.
+  async function transcribeAudio(blob, durationMsOverride) {
     try {
+      // lastRecordingDurationMs ya se calcula más arriba (ver
+      // stopRecordingAudio) para la lógica de "respuesta demasiado corta" —
+      // se manda también al servidor para el "tiempo hablando" del panel
+      // de consumo, sin cambiar nada de esa lógica existente.
+      const headers = { 'Content-Type': blob.type || 'audio/webm' };
+      const duracionAMandar = durationMsOverride != null ? durationMsOverride : lastRecordingDurationMs;
+      if (duracionAMandar > 0) headers['X-Audio-Duration-Ms'] = String(Math.round(duracionAMandar));
       const resp = await fetch('/api/transcribe', {
         method: 'POST',
-        headers: { 'Content-Type': blob.type || 'audio/webm' },
+        headers,
         body: blob,
       });
       if (!resp.ok) return '';
@@ -2541,6 +2589,90 @@
     } catch (e) {
       return '';
     }
+  }
+
+  // Cuánto silencio de cola se deja SIN recortar (ver recortarSilencioDeCola
+  // más abajo) — un margen chico por si la persona todavía estaba
+  // terminando de hablar justo cuando el detector marcó "silencio", para
+  // no arriesgarse a cortar la última palabra.
+  const COLA_A_CONSERVAR_MS = 500;
+
+  // Recorta el silencio de "cola" que queda grabado al final de cada
+  // respuesta antes de mandarla a transcribir (pedido de Felipe,
+  // 2026-09-09, revisión de costos: la transcripción cobra por minuto de
+  // audio). SILENCE_MS (arriba) tiene que pasar SIN voz para que la
+  // grabación se corte — ese silencio de espera queda grabado igual, y
+  // antes se mandaba completo a transcribir aunque no tuviera nada que
+  // decir. Acá se recorta todo ese silencio salvo los últimos
+  // COLA_A_CONSERVAR_MS, dejando la grabación real intacta.
+  // Importante: esto NO toca el audioBlob que se sube para guardar/
+  // escuchar después (ver uploadAudio en handleAnswer) — solo cambia lo
+  // que se manda a /api/transcribe. Si decodificar/recodificar falla por
+  // lo que sea (formato raro, navegador viejo), se manda la grabación
+  // completa tal cual — nunca se arriesga un turno real por ahorrar acá.
+  async function recortarSilencioDeCola(blob) {
+    if (!recordingStartedAt || !lastLoudTime) return { blob, durationMs: lastRecordingDurationMs };
+    const finCorteMs = (lastLoudTime - recordingStartedAt) + COLA_A_CONSERVAR_MS;
+    // Respuestas cortas, con poca o ninguna cola de silencio de más: no
+    // vale la pena decodificar/recodificar para ahorrar casi nada.
+    if (finCorteMs >= lastRecordingDurationMs - 200) return { blob, durationMs: lastRecordingDurationMs };
+    try {
+      const arrayBuffer = await blob.arrayBuffer();
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+      const sampleRate = audioBuffer.sampleRate;
+      const finCorteSample = Math.min(audioBuffer.length, Math.max(1, Math.round((finCorteMs / 1000) * sampleRate)));
+      const recortado = ctx.createBuffer(audioBuffer.numberOfChannels, finCorteSample, sampleRate);
+      for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
+        recortado.copyToChannel(audioBuffer.getChannelData(ch).subarray(0, finCorteSample), ch);
+      }
+      try { ctx.close(); } catch (e) {}
+      return { blob: audioBufferToWav(recortado), durationMs: (finCorteSample / sampleRate) * 1000 };
+    } catch (e) {
+      return { blob, durationMs: lastRecordingDurationMs };
+    }
+  }
+
+  // Codificador WAV manual (sin librería): un AudioBuffer decodificado no
+  // se puede volver a comprimir a webm/opus fácil desde el navegador, pero
+  // WAV es un formato simple de armar a mano a partir de las muestras
+  // crudas — y /api/transcribe ya acepta audio/wav (ver
+  // AUDIO_MIME_PERMITIDOS en server.js). El tamaño del archivo no importa
+  // acá (ElevenLabs cobra por duración, no por bytes), así que WAV sin
+  // comprimir es una opción válida sin agregar ninguna dependencia nueva.
+  function audioBufferToWav(buffer) {
+    const numChannels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const numFrames = buffer.length;
+    const blockAlign = numChannels * 2; // 16-bit PCM
+    const dataSize = numFrames * blockAlign;
+    const arrayBuffer = new ArrayBuffer(44 + dataSize);
+    const view = new DataView(arrayBuffer);
+    const escribirTexto = (offset, texto) => { for (let i = 0; i < texto.length; i++) view.setUint8(offset + i, texto.charCodeAt(i)); };
+    escribirTexto(0, 'RIFF');
+    view.setUint32(4, 36 + dataSize, true);
+    escribirTexto(8, 'WAVE');
+    escribirTexto(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true); // PCM
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * blockAlign, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, 16, true);
+    escribirTexto(36, 'data');
+    view.setUint32(40, dataSize, true);
+    const canales = [];
+    for (let ch = 0; ch < numChannels; ch++) canales.push(buffer.getChannelData(ch));
+    let offset = 44;
+    for (let i = 0; i < numFrames; i++) {
+      for (let ch = 0; ch < numChannels; ch++) {
+        const s = Math.max(-1, Math.min(1, canales[ch][i]));
+        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+        offset += 2;
+      }
+    }
+    return new Blob([arrayBuffer], { type: 'audio/wav' });
   }
 
   // Antes, si la grabación salía muy corta o no se pudo transcribir, el
@@ -2620,7 +2752,11 @@
       return;
     }
     setState('thinking', 'Transcribiendo…');
-    let text = await transcribeAudio(audioBlob);
+    // audioBlob (completo, sin recortar) sigue siendo lo que se guarda para
+    // escuchar después (ver handleAnswer) — paraTranscribir es una copia
+    // aparte, sin el silencio de cola, solo para esta llamada.
+    const paraTranscribir = await recortarSilencioDeCola(audioBlob);
+    let text = await transcribeAudio(paraTranscribir.blob, paraTranscribir.durationMs);
     if (!text && fallbackTranscript.trim()) {
       text = fallbackTranscript.trim(); // el servidor no pudo: usamos lo que captó el navegador
     }
@@ -2684,6 +2820,8 @@
     try {
       const mediaUrls = mediaUrlsLocal;
       mediaUrlsLocal = []; // las fotos de este turno ya se van a mandar; el próximo empieza vacío
+      const fotoRecienSubidaAAvisar = fotoRecienSubida;
+      fotoRecienSubida = null; // se avisa una sola vez; el próximo turno ya no lo repite
       const lastEntry = sessionLog.length ? sessionLog[sessionLog.length - 1] : null;
       const lastAudioUrl = lastEntry && lastEntry.role === 'user' ? lastEntry.audioFile || null : null;
       // Si el turno anterior ofreció la pausa, este turno tiene que avisarle
@@ -2705,7 +2843,7 @@
       const resp = await fetch('/api/next', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ history, lastAudioUrl, mode: sessionMode, ofrecerPausa, interpretarRespuestaPausa, mediaUrls }),
+        body: JSON.stringify({ history, lastAudioUrl, mode: sessionMode, ofrecerPausa, interpretarRespuestaPausa, mediaUrls, fotoRecienSubida: fotoRecienSubidaAAvisar ? { caption: fotoRecienSubidaAAvisar.caption } : null }),
       });
       if (mySession !== sessionId) return;
       if (!resp.ok) {
@@ -2720,7 +2858,12 @@
       history.push({ role: 'assistant', content: data.message });
       const logEntry = { role: 'assistant', content: data.message, timestamp: new Date().toISOString() };
       sessionLog.push(logEntry);
-      mostrarMediaMomento(data.media);
+      // Si este turno es la reacción a una foto que la propia persona
+      // acaba de subir (ver fotoRecienSubidaAAvisar arriba), data.media
+      // viene vacío (eso es solo para fotos de un familiar) — se sigue
+      // mostrando la que ya se subió, para que no desaparezca justo cuando
+      // la IA está preguntando por ella.
+      mostrarMediaMomento(data.media || (fotoRecienSubidaAAvisar ? { url: fotoRecienSubidaAAvisar.url, type: fotoRecienSubidaAAvisar.type } : null));
       setState('speaking', 'Hablando…');
       speak(data.message, () => {
         if (mySession !== sessionId) return;
@@ -2734,9 +2877,20 @@
       }, logEntry, myTurn);
     } catch (err) {
       if (mySession !== sessionId) return;
+      // Bug real reportado (auditoría UX 2026-09-09): con un 500 del
+      // servidor o sin conexión, esto ponía state='idle' -- el MISMO
+      // estado que "todavía no arranqué ninguna charla". handleOrbPress()
+      // trata 'idle' como "empezar de cero" (startSession(), que BORRA
+      // history/sessionLog) — así que tocar el orbe para reintentar
+      // borraba en silencio todo lo ya hablado en la sesión, en vez de
+      // reintentar el turno que falló. 'error' es un estado aparte:
+      // handleOrbPress() lo reintenta llamando a fetchNext() de nuevo con
+      // el MISMO history (nunca se le agregó nada — el push a history
+      // pasa recién con la respuesta OK, más arriba), no arranca una
+      // sesión nueva.
       stateLabel.textContent = mensajeDeErrorDeTurno(err);
-      setState('idle', stateLabel.textContent);
-      orbLabel.innerHTML = 'Presiona<br>para hablar';
+      setState('error', stateLabel.textContent);
+      orbLabel.innerHTML = 'Reintentar';
       releaseMic();
       await saveSessionLog(); // best-effort: no perder lo ya hablado si de verdad fue un problema de red
     }
@@ -2909,19 +3063,106 @@
     if (seguir) fetchNext();
   }
 
-  async function saveSessionLog() {
-    if (!sessionLog.length) return;
+  // Estado de guardado persistente (MEJORA 1: Resiliencia)
+  let pendingSessionLog = [];
+  let lastSaveError = null;
+  let saveRetryCount = 0;
+  let pendingSaveTimeout = null;
+
+  // Cargar backup al iniciar
+  function restorePendingSession() {
+    const backup = localStorage.getItem('bitacora_backup');
+    if (backup) {
+      try {
+        pendingSessionLog = JSON.parse(backup);
+        return true;
+      } catch (e) {
+        console.error('Error al restaurar sesión pendiente:', e);
+        localStorage.removeItem('bitacora_backup');
+        return false;
+      }
+    }
+    return false;
+  }
+
+  async function saveSessionLog(options = {}) {
+    const { forceRetry = false } = options;
+    
+    if (!sessionLog.length && !forceRetry) return { ok: true };
+    
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
       const resp = await fetch('/api/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ history: sessionLog, sessionDbId: currentSessionDbId }),
+        body: JSON.stringify({ 
+          history: sessionLog, 
+          sessionDbId: currentSessionDbId 
+        }),
+        signal: controller.signal,
       });
+      
+      clearTimeout(timeoutId);
+      
       if (resp.ok) {
         const data = await resp.json();
-        if (data.sessionDbId) currentSessionDbId = data.sessionDbId;
+        if (data.sessionDbId) {
+          currentSessionDbId = data.sessionDbId;
+        }
+        // Éxito: limpiar backup
+        pendingSessionLog = [];
+        localStorage.removeItem('bitacora_backup');
+        lastSaveError = null;
+        saveRetryCount = 0;
+        return { ok: true };
+      } else if (resp.status === 500) {
+        throw new Error(`Server error: ${resp.status}`);
+      } else {
+        throw new Error(`Unexpected error: ${resp.status}`);
       }
-    } catch (e) {}
+    } catch (e) {
+      // Guardar como pendiente
+      lastSaveError = e.message;
+      pendingSessionLog = [...sessionLog];
+      localStorage.setItem('bitacora_backup', JSON.stringify(pendingSessionLog));
+      
+      console.error('saveSessionLog falló:', e);
+      return { 
+        ok: false, 
+        error: e.message,
+        hasPendingData: pendingSessionLog.length > 0,
+        retryCount: saveRetryCount
+      };
+    }
+  }
+
+  async function retrySessionSave() {
+    if (!pendingSessionLog.length) return;
+    
+    setState('retrying-save');
+    orbLabel.innerHTML = 'Reintentando guardado…';
+    
+    const saveResult = await saveSessionLog({ forceRetry: true });
+    
+    if (saveResult.ok) {
+      setState('ended');
+      orbLabel.innerHTML = '✅ Guardado completado<br>Presiona para otra charla';
+      saveRetryCount = 0;
+    } else if (saveRetryCount < 3) {
+      saveRetryCount++;
+      orbLabel.innerHTML = 
+        '⚠️ No se guardó tu charla<br>' +
+        `<small style="font-size:0.75rem">Intento ${saveRetryCount} de 3 en 5s…</small>`;
+      if (pendingSaveTimeout) clearTimeout(pendingSaveTimeout);
+      pendingSaveTimeout = setTimeout(() => retrySessionSave(), 5000);
+    } else {
+      setState('save-failed');
+      orbLabel.innerHTML =
+        '❌ No se pudo guardar<br>' +
+        '<small style="font-size:0.75rem">Revisa tu conexión o intenta en unos minutos</small>';
+    }
   }
 
   async function finishSession() {
@@ -2929,15 +3170,42 @@
     orbLabel.innerHTML = 'Presiona<br>para otra charla';
     releaseMic();
     releaseWakeLock();
-    await saveSessionLog();
-    // Si esta charla era de armar árbol (o si de una charla normal salieron
-    // personas nuevas), "armar árbol genealógico" no debe volver a
-    // ofrecerse si ya hay una base — se vuelve a comprobar al terminar.
+    
+    const saveResult = await saveSessionLog();
+    
+    if (!saveResult.ok && saveResult.hasPendingData) {
+      setState('save-failed');
+      orbLabel.innerHTML = 
+        '⚠️ No se guardó tu charla<br>' +
+        '<small style="font-size:0.75rem">Reintentamos en 5s…</small>';
+      
+      saveRetryCount++;
+      if (saveRetryCount < 3) {
+        if (pendingSaveTimeout) clearTimeout(pendingSaveTimeout);
+        pendingSaveTimeout = setTimeout(() => retrySessionSave(), 5000);
+      } else {
+        orbLabel.innerHTML =
+          '⚠️ Fallo al guardar (3+ intentos)<br>' +
+          '<small style="font-size:0.75rem">Toca para reintentar o empezar nueva charla</small>';
+      }
+    }
+    
     if (sessionMode === 'arbol') comprobarSiArbolTieneBase();
   }
 
   function startSession(mode) {
-    if (state !== 'idle' && state !== 'ended') return;
+    if (state !== 'idle' && state !== 'ended' && state !== 'save-failed') return;
+    
+    // Si hay datos pendientes, pedir confirmación
+    if (pendingSessionLog.length > 0 && state !== 'ended') {
+      const shouldDiscard = confirm(
+        `Hay ${pendingSessionLog.length} mensajes sin guardar en la charla anterior. ` +
+        `¿Descartar y empezar nueva charla?\n\n` +
+        `(Si tocas "Cancelar", vuelves a la opción de reintentar guardado)`
+      );
+      if (!shouldDiscard) return;
+    }
+    
     requestWakeLock();
     sessionMode = mode === 'arbol' ? 'arbol' : 'historia';
     sessionId += 1;
@@ -2949,11 +3217,21 @@
     greeting.style.display = 'none';
     mostrarMediaMomento(null);
     mediaUrlsLocal = [];
+    fotoRecienSubida = null;
     fotoCaptionRow.classList.remove('visible');
     history = [];
     sessionLog = [];
     turnIndex = 0;
     sessionKey = new Date().toISOString().replace(/[:.]/g, '-');
+    
+    // Solo limpiar backup si realmente iniciamos nueva charla
+    if (state === 'ended' || state === 'save-failed') {
+      pendingSessionLog = [];
+      localStorage.removeItem('bitacora_backup');
+      saveRetryCount = 0;
+      if (pendingSaveTimeout) clearTimeout(pendingSaveTimeout);
+    }
+    
     fetchNext();
   }
 
@@ -2962,6 +3240,12 @@
       unlockAudioPlayback();
       unlockMicAudioContext();
       startSession();
+    } else if (state === 'error') {
+      // Reintenta el turno que falló, sin tocar history/sessionLog (ver
+      // el comentario en el catch de fetchNext()).
+      unlockAudioPlayback();
+      unlockMicAudioContext();
+      fetchNext();
     } else if (state === 'paused') {
       unlockMicAudioContext();
       resumeConversation();
@@ -3038,7 +3322,14 @@
         });
         if (resp.ok) {
           const data = await resp.json();
-          if (data.url) mediaUrlsLocal.push({ url: data.url, type: data.type, caption });
+          if (data.url) {
+            mediaUrlsLocal.push({ url: data.url, type: data.type, caption });
+            // Item 9: mostrarla ya mismo (antes quedaba guardada en
+            // silencio y la IA nunca se enteraba ni preguntaba por ella —
+            // ver fotoRecienSubidaPrompt en server.js).
+            mostrarMediaMomento({ url: data.url, type: data.type });
+            fotoRecienSubida = { url: data.url, type: data.type, caption };
+          }
           stateLabel.textContent = '✓ Se agregó a esta historia.';
         } else {
           stateLabel.textContent = 'No se pudo subir el archivo. Intenta de nuevo.';
@@ -3132,6 +3423,20 @@
     } catch (e) {}
   }
   cargarBadgeAportes();
+
+  // MEJORA 1: Recuperar sesión incompleta al cargar
+  if (restorePendingSession()) {
+    orbLabel.innerHTML = 
+      '⚠️ Charla incompleta encontrada<br>' +
+      '<small style="font-size:0.75rem">Reintentando guardar…</small>';
+    setState('retrying-save');
+    retrySessionSave();
+  }
+
+  // Limpiar timeout al descargar la página
+  window.addEventListener('beforeunload', () => {
+    if (pendingSaveTimeout) clearTimeout(pendingSaveTimeout);
+  });
 })();
 </script>
 </body>
