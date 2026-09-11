@@ -775,6 +775,11 @@
                 <input id="suEmail" name="email" type="email" autocomplete="email" placeholder="nombre@correo.com" required>
               </div>
               <div class="field">
+                <label for="suPhone">Teléfono</label>
+                <input id="suPhone" name="phone" type="tel" autocomplete="tel" placeholder="+57 300 123 4567" required>
+              </div>
+              <p class="field-hint">Con código de país. Lo usamos para avisarte por WhatsApp cuando lo actives desde tu perfil.</p>
+              <div class="field">
                 <label for="suPass">Clave</label>
                 <input id="suPass" name="password" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres" minlength="6" required>
               </div>
@@ -1056,6 +1061,7 @@
 
       const name = document.getElementById('suName').value.trim();
       const email = document.getElementById('suEmail').value.trim();
+      const phone = document.getElementById('suPhone').value.trim();
       const password = document.getElementById('suPass').value;
       const password2 = document.getElementById('suPass2').value;
       const inviteCode = suCode.value.trim().toUpperCase();
@@ -1097,6 +1103,12 @@
         document.getElementById('suEmail').focus();
         return;
       }
+      if (!phone) {
+        signupStatus.classList.add('error');
+        signupStatus.textContent = 'Falta tu teléfono.';
+        document.getElementById('suPhone').focus();
+        return;
+      }
       if (!signupForm.checkValidity()) {
         signupForm.reportValidity();
         return;
@@ -1104,6 +1116,12 @@
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         signupStatus.classList.add('error');
         signupStatus.textContent = 'El correo no parece válido.';
+        return;
+      }
+      if (phone.replace(/[^0-9]/g, '').length < 8) {
+        signupStatus.classList.add('error');
+        signupStatus.textContent = 'El teléfono parece muy corto — ponlo con código de país, ej. +57 300 123 4567.';
+        document.getElementById('suPhone').focus();
         return;
       }
       if (password.length < 6) {
@@ -1123,7 +1141,7 @@
         const response = await fetch('/api/signup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, email, password, inviteCode, accountType: modoColaborador ? 'collaborator' : 'owner' })
+          body: JSON.stringify({ name, email, phone, password, inviteCode, accountType: modoColaborador ? 'collaborator' : 'owner' })
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {

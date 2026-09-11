@@ -2860,12 +2860,19 @@ app.post('/api/register', rateLimit, async (req, res) => {
 // funcionando sin tocarlo.
 app.post('/api/signup', rateLimit, async (req, res) => {
   try {
-    const { name, email, password, inviteCode, accountType } = req.body || {};
+    const { name, email, phone, password, inviteCode, accountType } = req.body || {};
     const cleanName = capitalizarNombre(String(name || '').trim().slice(0, 100));
     const cleanEmail = String(email || '').trim().toLowerCase().slice(0, 200);
     if (!cleanName) return res.status(400).json({ error: 'Falta el nombre.' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
       return res.status(400).json({ error: 'El correo no parece válido.' });
+    }
+    // Obligatorio desde el registro (pedido de Felipe, 2026-09-11) — mismo
+    // chequeo que ya usan /api/update-profile y /api/admin/set-phone.
+    const cleanPhone = String(phone || '').trim().slice(0, 40);
+    if (!cleanPhone) return res.status(400).json({ error: 'Falta el teléfono.' });
+    if (cleanPhone.replace(/[^0-9]/g, '').length < 8) {
+      return res.status(400).json({ error: 'El teléfono parece muy corto — ponlo con código de país, ej. +57 300 123 4567.' });
     }
     if (!password || String(password).length < 6) {
       return res.status(400).json({ error: 'La clave debe tener al menos 6 caracteres.' });
@@ -2899,8 +2906,8 @@ app.post('/api/signup', rateLimit, async (req, res) => {
 
     const hash = await bcrypt.hash(password, 12);
     const rows = await sql`
-      INSERT INTO users (username, name, email, password_hash, owner_user_id)
-      VALUES (${cleanEmail}, ${cleanName}, ${cleanEmail}, ${hash}, ${ownerUserId})
+      INSERT INTO users (username, name, email, phone, password_hash, owner_user_id)
+      VALUES (${cleanEmail}, ${cleanName}, ${cleanEmail}, ${cleanPhone}, ${hash}, ${ownerUserId})
       RETURNING id, username, token_version
     `;
     setSessionCookie(req, res, { userId: rows[0].id, username: rows[0].username, tokenVersion: rows[0].token_version });

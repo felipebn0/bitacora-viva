@@ -60,7 +60,8 @@ function fakeSql(strings, ...values) {
     return Promise.resolve(found ? [{ id: found.id }] : []);
   }
   if (text.includes('INSERT INTO users')) {
-    const [username, passwordHash] = values;
+    // Orden real: username, name, email, phone, password_hash, owner_user_id.
+    const [username, , , , passwordHash] = values;
     const row = { id: nextId++, username, password_hash: passwordHash, token_version: 0, owner_user_id: null };
     usersTable.push(row);
     return Promise.resolve([{ id: row.id }]);
@@ -134,7 +135,7 @@ async function main() {
   const claveConTildes = 'ñ'.repeat(37);
   check('la clave de prueba tiene .length=37 pero 74 bytes en UTF-8 (así se arma el caso)', claveConTildes.length === 37 && Buffer.byteLength(claveConTildes, 'utf8') === 74);
   const rTildes = await request(server, { path: '/api/signup', method: 'POST', body: {
-    name: 'Alguien', email: 'alguien@example.com', password: claveConTildes, accountType: 'owner',
+    name: 'Alguien', email: 'alguien@example.com', phone: '+57 300 123 4567', password: claveConTildes, accountType: 'owner',
   } });
   check('signup: clave de 37 "ñ" (74 bytes, no 37) -> 400 — medir por .length la hubiera dejado pasar', rTildes.status === 400 && /larga/.test(JSON.parse(rTildes.body).error));
 

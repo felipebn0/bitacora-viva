@@ -45,8 +45,8 @@ function fakeSql(strings, ...values) {
     return Promise.resolve(found ? [{ id: found.id }] : []);
   }
   if (text.includes('INSERT INTO users')) {
-    const [username, name, email, passwordHash, ownerUserId] = values;
-    const row = { id: nextId++, username, name, email, password_hash: passwordHash, owner_user_id: ownerUserId, token_version: 0, invite_code: null };
+    const [username, name, email, phone, passwordHash, ownerUserId] = values;
+    const row = { id: nextId++, username, name, email, phone, password_hash: passwordHash, owner_user_id: ownerUserId, token_version: 0, invite_code: null };
     usersTable.push(row);
     return Promise.resolve([{ id: row.id, username: row.username, token_version: row.token_version }]);
   }
@@ -118,7 +118,7 @@ async function main() {
 
   // --- 3) Modo colaborador con el código real -> crea colaborador, bien atado a la cuenta dueña ---
   const r3 = await request(server, { path: '/api/signup', method: 'POST', body: {
-    name: 'Diego', email: 'diego3@example.com', password: 'miclave123', inviteCode: 'b46nwec7', accountType: 'collaborator',
+    name: 'Diego', email: 'diego3@example.com', phone: '+57 300 111 2233', password: 'miclave123', inviteCode: 'b46nwec7', accountType: 'collaborator',
   } });
   const data3 = JSON.parse(r3.body || '{}');
   check('colaborador con código real (minúsculas incluido) -> 200', r3.status === 200);
@@ -128,7 +128,7 @@ async function main() {
 
   // --- 4) Modo owner (o sin accountType) sin código -> sigue funcionando igual que siempre ---
   const r4 = await request(server, { path: '/api/signup', method: 'POST', body: {
-    name: 'Nueva Dueña', email: 'nuevadueña@example.com', password: 'miclave123', accountType: 'owner',
+    name: 'Nueva Dueña', email: 'nuevadueña@example.com', phone: '+57 300 111 2233', password: 'miclave123', accountType: 'owner',
   } });
   const data4 = JSON.parse(r4.body || '{}');
   check('owner sin código -> 200 (comportamiento normal intacto)', r4.status === 200);
@@ -138,7 +138,7 @@ async function main() {
 
   // --- 5) Un código real "colado" en modo owner se ignora (no convierte en colaborador por accidente) ---
   const r5 = await request(server, { path: '/api/signup', method: 'POST', body: {
-    name: 'Otra Dueña', email: 'otradueña@example.com', password: 'miclave123', inviteCode: 'B46NWEC7', accountType: 'owner',
+    name: 'Otra Dueña', email: 'otradueña@example.com', phone: '+57 300 111 2233', password: 'miclave123', inviteCode: 'B46NWEC7', accountType: 'owner',
   } });
   const data5 = JSON.parse(r5.body || '{}');
   check('owner con un código colado igual -> 200, se ignora el código', r5.status === 200 && data5.isCollaborator === false);
