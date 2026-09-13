@@ -27,7 +27,11 @@
       --surface-2:#FBF6EA;
       --ink:#2B241C;
       --ink-2:#706551;
-      --ink-3:#9A8B76;
+      /* Oscurecido de #9A8B76 (fix de accesibilidad, 2026-09-13): contra
+         --bg y --bg-alt daba 2.89:1 y 2.67:1 — falla WCAG AA (hace falta
+         4.5:1 para texto normal), detectado por axe-core en test:a11y.
+         #6D6354 da 5.14:1 y 4.75:1 contra esos mismos fondos, con margen. */
+      --ink-3:#6D6354;
       --hairline:#E5DBC6;
       --hairline-soft:#EEE5D2;
       --accent:#93622A;
