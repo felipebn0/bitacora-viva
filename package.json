@@ -32,8 +32,7 @@
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "file-type": "^22.0.2",
-    "grapify": "^1.0.7"
+    "file-type": "^22.0.2"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
