@@ -475,7 +475,12 @@ async function limitePorClave(clave, windowMs, max) {
   return { permitido: count <= max, retryAfterSegundos };
 }
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+// .trim(): al pegar una clave en el panel de Vercel es fácil que quede un
+// salto de línea o un espacio al final — mismo problema que ya pasó con
+// las claves de R2 (ver esHostDeNuestroBlob/R2_ACCESS_KEY_ID más abajo),
+// donde eso rompía el header de autenticación y todo fallaba con un error
+// genérico, sin ninguna pista de que la causa era un simple espacio de más.
+const anthropic = new Anthropic({ apiKey: (process.env.ANTHROPIC_API_KEY || '').trim() });
 const MODEL = 'claude-haiku-4-5-20251001';
 
 // --- Aislamiento de contexto: separar "lo que hay que hacer" de "lo que
