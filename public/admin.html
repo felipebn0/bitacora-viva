@@ -254,6 +254,17 @@
   .wa-row-msg { font-size: 0.76rem; color: var(--moss); margin-left: 8px; }
   .wa-row-msg.err { color: var(--status-critical); }
 
+  /* --- Prueba A/B de la landing --- */
+  .ab-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+  .ab-card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+  .ab-card.leader { border-color: var(--moss); }
+  .ab-card .ab-name { font-family: var(--font-display); font-size: 1.05rem; font-weight: 600; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+  .ab-card .ab-leader-badge { font-size: 0.68rem; font-weight: 700; color: var(--moss); border: 1px solid var(--moss); border-radius: 999px; padding: 1px 8px; }
+  .ab-card dl { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; margin: 0; }
+  .ab-card dt { color: var(--ink-soft); font-size: 0.82rem; }
+  .ab-card dd { margin: 0; font-family: var(--font-display); font-weight: 600; text-align: right; }
+  .ab-note { font-size: 0.8rem; color: var(--ink-soft); margin-top: 12px; }
+
   footer.note { max-width: 1180px; margin: 24px auto 0; color: var(--ink-soft); font-size: 0.8rem; }
 </style>
 </head>
@@ -271,6 +282,7 @@
     </div>
   </div>
   <div class="wrap"><div id="waWrap"></div></div>
+  <div class="wrap"><div id="abWrap"></div></div>
   <footer class="note" id="footNote" hidden></footer>
 
 <script>
@@ -807,6 +819,56 @@
       .catch(() => { waWrap.innerHTML = '<section class="panel"><h2>Recordatorios por WhatsApp</h2><p class="sub">No se pudo cargar esta sección.</p></section>'; });
   }
 
+  // --- Prueba A/B de la landing ---
+  // "/" reparte 50/50 entre index.html (v1) e index-v2.html (v2) — ver
+  // AB_LANDING_COOKIE en server.js. Este panel solo lee los números que ya
+  // quedaron guardados, no dispara nada.
+  const abWrap = document.getElementById('abWrap');
+
+  function tasa(registros, asignados) {
+    return asignados > 0 ? ((registros / asignados) * 100).toFixed(1) + '%' : '—';
+  }
+
+  function renderAbLanding(data) {
+    const v1 = data.v1 || { asignados: 0, registros: 0 };
+    const v2 = data.v2 || { asignados: 0, registros: 0 };
+    const tasaV1 = v1.asignados > 0 ? v1.registros / v1.asignados : 0;
+    const tasaV2 = v2.asignados > 0 ? v2.registros / v2.asignados : 0;
+    // Solo se marca un "líder" si de verdad hay algo que comparar — con
+    // muestras muy chicas (menos de 20 asignados en cada lado) la
+    // diferencia puede ser puro azar, así que no se resalta nada todavía.
+    const hayMuestraSuficiente = v1.asignados >= 20 && v2.asignados >= 20;
+    const gana = hayMuestraSuficiente ? (tasaV1 > tasaV2 ? 'v1' : (tasaV2 > tasaV1 ? 'v2' : null)) : null;
+
+    const tarjeta = (nombre, key, datos) => `
+      <div class="ab-card ${gana === key ? 'leader' : ''}">
+        <p class="ab-name">${esc(nombre)} ${gana === key ? '<span class="ab-leader-badge">va ganando</span>' : ''}</p>
+        <dl>
+          <dt>Visitantes nuevos</dt><dd>${fmtNumber(datos.asignados)}</dd>
+          <dt>Se registraron</dt><dd>${fmtNumber(datos.registros)}</dd>
+          <dt>Tasa de conversión</dt><dd>${tasa(datos.registros, datos.asignados)}</dd>
+        </dl>
+      </div>`;
+
+    abWrap.innerHTML = `
+      <section class="panel">
+        <h2>Prueba A/B de la landing</h2>
+        <p class="sub">A cada visitante nuevo de "/" le toca al azar la versión de siempre (V1) o la de copy más nostálgico (V2, index-v2.html) — y se queda con esa versión en visitas futuras.</p>
+        <div class="ab-row">
+          ${tarjeta('Versión 1 — la de siempre', 'v1', v1)}
+          ${tarjeta('Versión 2 — copy nostálgico', 'v2', v2)}
+        </div>
+        <p class="ab-note">${hayMuestraSuficiente ? 'Con esta cantidad de visitantes ya se puede mirar la diferencia, aunque para una conclusión firme conviene dejarla correr unos días más.' : 'Todavía hay pocos visitantes nuevos para sacar una conclusión — con menos de 20 de cada lado, la diferencia puede ser solo azar.'}</p>
+      </section>`;
+  }
+
+  function cargarAbLanding() {
+    fetch('/api/admin/ab-landing')
+      .then((r) => (r.ok ? r.json() : Promise.reject('ab')))
+      .then(renderAbLanding)
+      .catch(() => { abWrap.innerHTML = '<section class="panel"><h2>Prueba A/B de la landing</h2><p class="sub">No se pudo cargar esta sección.</p></section>'; });
+  }
+
   fetch('/api/me')
     .then((resp) => (resp.ok ? resp.json() : Promise.reject('auth')))
     .then((me) => {
@@ -814,6 +876,7 @@
       const r = calcularRangoDePreset(activePreset);
       cargar(r.start, r.end);
       cargarWhatsApp();
+      cargarAbLanding();
     })
     .catch((err) => {
       if (err === 'forbidden' || err === 'auth') showUnauthorized();

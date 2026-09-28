@@ -45,8 +45,8 @@ function fakeSql(strings, ...values) {
     return Promise.resolve(found ? [{ id: found.id }] : []);
   }
   if (text.includes('INSERT INTO users')) {
-    const [username, name, email, phone, passwordHash, ownerUserId] = values;
-    const row = { id: nextId++, username, name, email, phone, password_hash: passwordHash, owner_user_id: ownerUserId, token_version: 0, invite_code: null };
+    const [username, name, email, phone, passwordHash, ownerUserId, signupVariant] = values;
+    const row = { id: nextId++, username, name, email, phone, password_hash: passwordHash, owner_user_id: ownerUserId, signup_variant: signupVariant ?? null, token_version: 0, invite_code: null };
     usersTable.push(row);
     return Promise.resolve([{ id: row.id, username: row.username, token_version: row.token_version }]);
   }
@@ -144,6 +144,22 @@ async function main() {
   check('owner con un código colado igual -> 200, se ignora el código', r5.status === 200 && data5.isCollaborator === false);
   const otraDueña = usersTable.find((u) => u.email === 'otradueña@example.com');
   check('esa cuenta quedó sin owner_user_id (el código no la ató a nadie)', !!otraDueña && otraDueña.owner_user_id === null);
+
+  // --- 6) Prueba A/B de la landing: signup_variant sale de la cookie que pone "/" ---
+  const r6 = await request(server, {
+    path: '/api/signup', method: 'POST', headers: { Cookie: 'bv_ab_landing=v2' },
+    body: { name: 'Con Variante', email: 'convariante@example.com', phone: '+57 300 111 2233', password: 'miclave123', accountType: 'owner' },
+  });
+  check('signup con cookie bv_ab_landing=v2 -> 200', r6.status === 200);
+  const conVariante = usersTable.find((u) => u.email === 'convariante@example.com');
+  check('esa cuenta quedó con signup_variant = "v2"', !!conVariante && conVariante.signup_variant === 'v2');
+
+  const r7 = await request(server, { path: '/api/signup', method: 'POST', body: {
+    name: 'Sin Variante', email: 'sinvariante@example.com', phone: '+57 300 111 2233', password: 'miclave123', accountType: 'owner',
+  } });
+  check('signup sin esa cookie -> 200', r7.status === 200);
+  const sinVariante = usersTable.find((u) => u.email === 'sinvariante@example.com');
+  check('esa cuenta quedó con signup_variant = null', !!sinVariante && sinVariante.signup_variant === null);
 
   server.close();
   console.log(`\n${passed} pasaron, ${failed} fallaron`);

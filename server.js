@@ -191,6 +191,56 @@ app.use((req, res, next) => {
   if (req.path === CSP_REPORT_PATH) return next(); // ya se parseó arriba, con el límite chico
   jsonBodyParserGlobal(req, res, next);
 });
+// --- Prueba A/B de la landing (pedido de Felipe, 2026-09-28) -----------
+// Un solo link ("/") reparte 50/50 entre index.html (v1, la de siempre) e
+// index-v2.html (v2, el copy más nostálgico) — no dos links distintos que
+// Felipe tenga que repartir a mano. La primera vez que alguien llega, se
+// tira una moneda y queda fija en una cookie (90 días) para que esa misma
+// persona siga viendo siempre la misma versión, en vez de que le cambie
+// en cada visita. vercel.json ahora manda "/" acá (antes iba directo al
+// archivo estático) — sin este route(), Express serviría public/index.html
+// solo porque express.static() lo hace por defecto para una carpeta, así
+// que ni siquiera hace falta un "else" explícito para v1.
+//
+// La cookie NO es la de sesión (bv_session): esta no protege nada, solo
+// es una etiqueta de qué versión le tocó a este navegador — por eso no
+// va firmada ni HttpOnly hace falta por seguridad (queda igual, por
+// prolijidad, ver más abajo).
+const AB_LANDING_COOKIE = 'bv_ab_landing';
+const AB_LANDING_MAX_AGE = 60 * 60 * 24 * 90; // 90 días
+const AB_LANDING_ARCHIVOS = {
+  v1: path.join(__dirname, 'public', 'index.html'),
+  v2: path.join(__dirname, 'public', 'index-v2.html'),
+};
+
+app.get('/', async (req, res, next) => {
+  try {
+    const cookies = parseCookies(req.headers.cookie);
+    const yaAsignada = cookies[AB_LANDING_COOKIE];
+    let variante = yaAsignada === 'v1' || yaAsignada === 'v2' ? yaAsignada : null;
+    if (!variante) {
+      variante = Math.random() < 0.5 ? 'v1' : 'v2';
+      const secure = cookieEsSegura(req) ? '; Secure' : '';
+      res.setHeader('Set-Cookie', `${AB_LANDING_COOKIE}=${variante}; Max-Age=${AB_LANDING_MAX_AGE}; Path=/; HttpOnly; SameSite=Lax${secure}`);
+      // Contador de personas nuevas, no de vistas — best-effort: si la base
+      // falla acá, igual se sirve la página (fallar cerrado dejaría a
+      // alguien sin poder ver la landing por un problema de métricas).
+      try {
+        await ensureSchema();
+        await sql`
+          INSERT INTO ab_landing_counters (variant, asignados) VALUES (${variante}, 1)
+          ON CONFLICT (variant) DO UPDATE SET asignados = ab_landing_counters.asignados + 1
+        `;
+      } catch (err) {
+        console.error('No se pudo contar la asignación de A/B de la landing:', err);
+      }
+    }
+    res.sendFile(AB_LANDING_ARCHIVOS[variante]);
+  } catch (err) {
+    next(err);
+  }
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Manifest dinámico (Web App Manifest) — para que el link permanente de un
@@ -1112,6 +1162,23 @@ function ensureSchema() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`,
       sql`CREATE INDEX IF NOT EXISTS idx_whatsapp_reminder_log_profile_fecha ON whatsapp_reminder_log(profile_id, created_at)`,
+
+      // --- Prueba A/B de la landing (pedido de Felipe, 2026-09-28) ------
+      // signup_variant: qué versión de "/" (index.html = v1, index-v2.html
+      // = v2) vio la persona antes de registrarse — NULL si no llegó por
+      // ahí (por ejemplo, un colaborador que entró con un código directo).
+      // Se completa en /api/signup a partir de la cookie que pone "/".
+      sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_variant TEXT`,
+      // Cuántos visitantes NUEVOS le tocaron a cada versión — se suma una
+      // sola vez por visitante (cuando "/" les pone la cookie por primera
+      // vez), no en cada visita repetida, así que esto es "personas", no
+      // "vistas de página". Junto con signup_variant de arriba alcanza
+      // para calcular una tasa de conversión real por versión, no solo
+      // contar registros sueltos.
+      sql`CREATE TABLE IF NOT EXISTS ab_landing_counters (
+        variant TEXT PRIMARY KEY,
+        asignados INT NOT NULL DEFAULT 0
+      )`,
 
       // --- Panel de consumo (item pedido por Felipe, 2026-09-09) --------
       // is_admin: cuentas de los dueños del producto — nunca se ofrece en
@@ -2909,10 +2976,18 @@ app.post('/api/signup', rateLimit, async (req, res) => {
       ownerUserId = ownerRows[0].id;
     }
 
+    // Qué versión de la landing ("/") vio antes de llegar acá — para medir
+    // la prueba A/B (ver AB_LANDING_COOKIE más arriba). NULL si no pasó
+    // por ahí (ej. un colaborador que entró directo con un link de código).
+    const cookiesReq = parseCookies(req.headers.cookie);
+    const signupVariant = cookiesReq[AB_LANDING_COOKIE] === 'v1' || cookiesReq[AB_LANDING_COOKIE] === 'v2'
+      ? cookiesReq[AB_LANDING_COOKIE]
+      : null;
+
     const hash = await bcrypt.hash(password, 12);
     const rows = await sql`
-      INSERT INTO users (username, name, email, phone, password_hash, owner_user_id)
-      VALUES (${cleanEmail}, ${cleanName}, ${cleanEmail}, ${cleanPhone}, ${hash}, ${ownerUserId})
+      INSERT INTO users (username, name, email, phone, password_hash, owner_user_id, signup_variant)
+      VALUES (${cleanEmail}, ${cleanName}, ${cleanEmail}, ${cleanPhone}, ${hash}, ${ownerUserId}, ${signupVariant})
       RETURNING id, username, token_version
     `;
     setSessionCookie(req, res, { userId: rows[0].id, username: rows[0].username, tokenVersion: rows[0].token_version });
@@ -6278,6 +6353,30 @@ function urlsDeResultadoBorrado(results) {
   results.forEach(empujar);
   return urls;
 }
+
+// Resultados de la prueba A/B de la landing (ver AB_LANDING_COOKIE más
+// arriba): cuántas personas nuevas le tocaron a cada versión y cuántas
+// terminaron creando una cuenta — para /admin.html.
+app.get('/api/admin/ab-landing', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await ensureSchema();
+    const asignados = await sql`SELECT variant, asignados FROM ab_landing_counters`;
+    const registros = await sql`
+      SELECT signup_variant AS variant, count(*)::int AS total
+      FROM users
+      WHERE signup_variant IS NOT NULL
+      GROUP BY signup_variant
+    `;
+    const armar = (variant) => ({
+      asignados: (asignados.find((r) => r.variant === variant) || {}).asignados || 0,
+      registros: (registros.find((r) => r.variant === variant) || {}).total || 0,
+    });
+    res.json({ v1: armar('v1'), v2: armar('v2') });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo cargar la prueba A/B.' });
+  }
+});
 
 app.post('/api/admin/purgar-perfiles-prueba', requireAuth, requireAdmin, rateLimit, async (req, res) => {
   try {
