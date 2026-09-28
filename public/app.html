@@ -3146,9 +3146,34 @@
     }
   }
 
+  // Para una sesión pendiente de una visita ANTERIOR (ver restorePendingSession
+  // al final del archivo): reintenta en segundo plano, sin tocar el orbe ni
+  // el texto de la pantalla — pedido de Felipe (2026-09-28): "si entro de
+  // nuevo a la app no me debería salir eso, debería estar fresca la app".
+  // Antes esto tapaba la pantalla de inicio con "⚠️ Charla incompleta
+  // encontrada" apenas se abría la app, aunque la persona todavía no
+  // hubiera hecho nada — confuso, y encima quedaba ahí colgado si el
+  // reintento tardaba. Si se guarda bien, nadie tiene que enterarse de que
+  // hubo un problema que ya se resolvió solo. Si los 3 intentos fallan, el
+  // dato sigue a salvo en el navegador (bitacora_backup) — no se pierde;
+  // el único aviso que queda es el de startSession() si la persona intenta
+  // empezar una charla nueva teniendo esto todavía pendiente.
+  async function reintentarGuardadoEnSilencio(intento = 1) {
+    if (!pendingSessionLog.length) return;
+    const saveResult = await saveSessionLog({ forceRetry: true });
+    if (saveResult.ok) return; // saveSessionLog ya limpió el backup y el contador
+    if (intento < 3) {
+      if (pendingSaveTimeout) clearTimeout(pendingSaveTimeout);
+      pendingSaveTimeout = setTimeout(() => reintentarGuardadoEnSilencio(intento + 1), 5000);
+    }
+  }
+
+  // Para cuando el fallo pasa EN VIVO (la charla recién terminó y no se
+  // pudo guardar) — ahí sí tiene sentido mostrarlo, la persona está mirando
+  // la pantalla en ese momento.
   async function retrySessionSave() {
     if (!pendingSessionLog.length) return;
-    
+
     setState('retrying-save');
     orbLabel.innerHTML = 'Reintentando guardado…';
     
@@ -3432,13 +3457,11 @@
   }
   cargarBadgeAportes();
 
-  // MEJORA 1: Recuperar sesión incompleta al cargar
+  // MEJORA 1: Recuperar sesión incompleta al cargar — en silencio (ver
+  // reintentarGuardadoEnSilencio más arriba). La pantalla de inicio se ve
+  // igual de fresca que si no hubiera nada pendiente.
   if (restorePendingSession()) {
-    orbLabel.innerHTML = 
-      '⚠️ Charla incompleta encontrada<br>' +
-      '<small>Reintentando guardar…</small>';
-    setState('retrying-save');
-    retrySessionSave();
+    reintentarGuardadoEnSilencio();
   }
 
   // Limpiar timeout al descargar la página
