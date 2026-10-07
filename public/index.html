@@ -378,6 +378,10 @@
       box-shadow:0 0 0 4px var(--accent-tint);
     }
     .field-hint, .field-note{font-size:0.8125rem; color:var(--ink-3)}
+    .field-check{display:flex; align-items:flex-start; gap:12px}
+    .field-check input{flex:0 0 auto; width:28px; height:28px; margin:0; accent-color:var(--accent-2); cursor:pointer}
+    .field-check label{font-size:0.875rem; color:var(--ink-2); cursor:pointer}
+    .field-check label a{display:inline-block; padding:10px 0; margin:-10px 0}
     .field-error{font-size:0.8125rem; color:#a33}
     .submit{width:100%; margin-top:4px}
     .form-status{font-size:0.875rem; color:var(--accent-2); font-weight:700; min-height:1.2em}
@@ -759,7 +763,7 @@
                aterriza el link. -->
           <div class="signup-card" id="registro-form">
             <h3 id="signupTitle">Crea tu cuenta</h3>
-            <p id="signupSubtitle">Nombre, correo y clave. Así de simple.</p>
+            <p id="signupSubtitle">Gratis por ahora. Nombre, correo, teléfono y clave.</p>
             <!-- Dos botones simples, no un patrón de "tabs" — un tablist de
                  verdad promete navegación con flechas del teclado entre
                  las opciones, que aquí no está implementada. role="group"
@@ -800,9 +804,14 @@
               </div>
               <p class="field-note pc-93b8ea5b" id="familyCodeNote">Vas a poder aportar historias a esa bitácora, contando con tu propia voz — no vas a tener una bitácora propia.</p>
 
+              <div class="field-check">
+                <input id="suTerms" name="acceptTerms" type="checkbox" required>
+                <label for="suTerms">Acepto los <a href="/terminos.html" target="_blank" rel="noopener">Términos y Condiciones</a> y la <a href="/privacidad.html" target="_blank" rel="noopener">Política de Privacidad</a>, y autorizo el tratamiento de mis datos como allí se explica.</label>
+              </div>
+
               <button class="btn btn-primary submit" id="signupSubmit" type="submit">Crear cuenta y entrar</button>
               <p class="form-status" id="signupStatus" role="status" aria-live="polite"></p>
-              <p class="form-note">Tus datos se usan solo para tu cuenta en Los recuerdos de mis viejos.</p>
+              <p class="form-note">Tus datos se usan solo para tu cuenta en Los recuerdos de mis viejos. Nadie más ve tu bitácora sin tu código.</p>
               <p class="signup-alt">¿Ya tienes cuenta? <a href="/app.html">Inicia sesión</a>.</p>
             </form>
           </div>
@@ -823,7 +832,7 @@
     <section class="privacy" id="privacidad">
       <div class="wrap">
         <div class="privacy-box reveal">
-          <div><div class="eyebrow pc-f1b4ce9c">Recuerdos personales</div><h2>Tu historia tiene que sentirse tuya.</h2><p>Lo que se guarda aquí son voces, recuerdos y relaciones familiares — no un dato cualquiera. Por eso la privacidad no es un detalle secundario, es la base de todo lo demás.</p></div>
+          <div><div class="eyebrow pc-f1b4ce9c">Recuerdos personales</div><h2>Tu historia tiene que sentirse tuya.</h2><p>Lo que se guarda aquí son voces, recuerdos y relaciones familiares — no un dato cualquiera. Por eso la privacidad no es un detalle secundario, es la base de todo lo demás.</p><p><a class="pc-f1b4ce9c" href="/privacidad.html">Leer la Política de Privacidad completa →</a></p><p><a class="pc-f1b4ce9c" href="/terminos.html">Leer los Términos y Condiciones →</a></p></div>
           <!-- Auditoría UX 2026-09-09: bajó de 7 a 5 tarjetas (diluía el
                recorrido de la portada) -- "todo viaja cifrado" se fundió con
                "audios y fotos privados" (las dos son de la misma promesa:
@@ -833,11 +842,13 @@
                juntas las que ya decían cosas parecidas. El detalle completo
                de cada una sigue estando en las preguntas frecuentes. -->
           <div class="privacy-list">
-            <details class="privacy-item"><summary>🔐 Tu clave nunca queda expuesta</summary><p>Inicias sesión con usuario y contraseña — la tuya nunca se guarda en texto plano: se guarda como un hash de un solo sentido, así que ni siquiera nosotros podemos leerla ni revertirla a la clave original.</p></details>
-            <details class="privacy-item"><summary>🔒 Todo cifrado y con permiso real</summary><p>Cada conexión con el sitio va por HTTPS (la misma tecnología que usa tu banco), y tus audios y fotos nunca se entregan directo desde donde se guardan — la app confirma primero que tienes permiso real de ver esa bitácora.</p></details>
-            <details class="privacy-item"><summary>👨‍👩‍👧 Solo entra quien tú invitas</summary><p>Nadie ve tu bitácora sin el código de invitación que tú generas — ni siquiera creándose una cuenta nueva por su cuenta. Más detalle en las preguntas frecuentes, abajo.</p></details>
-            <details class="privacy-item"><summary>🤖 La IA no aprende de tus historias</summary><p>Claude, la inteligencia artificial que hace las preguntas de seguimiento, es una herramienta ya entrenada que usamos — no algo que "aprende" de cada charla. Más detalle en las preguntas frecuentes, abajo.</p></details>
-            <details class="privacy-item"><summary>🗑️ Tú tienes el control</summary><p>Puedes borrar todos tus recuerdos guardados cuando quieras, con una acción tuya deliberada — nada se borra por accidente ni por un mensaje de chat. Si algo se corrige en vez de borrarse, la versión anterior queda guardada, nunca se reescribe sin dejar rastro. Al confirmar un borrado, se borra de la base de datos y de donde se guardan tus audios y fotos; puede quedar, por un tiempo limitado, en una copia de resguardo interna que usamos solo para recuperarnos de una falla grave, nunca para volver a mostrar tu contenido.</p></details>
+            <details class="privacy-item" open><summary>🔒 Tus audios, fotos y videos son privados</summary><p>Se guardan en almacenamiento privado y no existe un enlace público para abrirlos. Cada vez que se pide un archivo, la app comprueba primero que iniciaste sesión y que tienes permiso sobre esa bitácora, y solo entonces lo entrega.</p></details>
+            <details class="privacy-item" open><summary>👨‍👩‍👧 Solo entra quien tú invitas</summary><p>Nadie ve tu bitácora sin el código de invitación que tú generas — ni siquiera creándose una cuenta nueva por su cuenta. Puedes cambiar el código cuando quieras para cerrar ese acceso.</p></details>
+            <details class="privacy-item" open><summary>🤫 Nadie de nuestro equipo lee ni escucha tus historias</summary><p>No es parte de cómo funciona la app. Solo accederíamos a tu contenido si tú nos lo pides para ayudarte con un problema, o si una autoridad competente lo exige por ley.</p></details>
+            <details class="privacy-item" open><summary>🚫 No vendemos tus datos ni mostramos publicidad</summary><p>Tus historias no se venden, no se publican y no se usan para publicidad. Tampoco usamos cookies de seguimiento de terceros.</p></details>
+            <details class="privacy-item" open><summary>🤖 Quién procesa tu voz y tus palabras</summary><p>Para funcionar, el texto de tus charlas pasa por Claude (Anthropic) y tu voz por ElevenLabs: así te hacen preguntas, transcriben lo que dices y te hablan. Según los términos comerciales de Anthropic, lo enviado por este canal no se usa para entrenar sus modelos. Todos los proveedores que usamos están nombrados en la Política de Privacidad.</p></details>
+            <details class="privacy-item" open><summary>🔐 Tu clave nunca queda expuesta</summary><p>La tuya nunca se guarda en texto plano: se guarda como un hash de un solo sentido, así que ni siquiera nosotros podemos leerla ni revertirla. Toda la conexión va cifrada por HTTPS.</p></details>
+            <details class="privacy-item" open><summary>🗑️ Tú tienes el control</summary><p>Puedes descargar todo y borrarlo cuando quieras, desde el menú de Cuenta, con una acción tuya deliberada — nada se borra por accidente. Al confirmar, se borra de la base de datos y del almacenamiento de audios y fotos; puede quedar un tiempo limitado en copias de respaldo de nuestros proveedores, nunca para volver a mostrar tu contenido.</p></details>
           </div>
         </div>
       </div>
@@ -854,11 +865,15 @@
           </details>
           <details class="faq-item">
             <summary>¿Mis audios y fotos están protegidos, o cualquiera con el link los puede abrir?</summary>
-            <p>Protegidos, sí — pero no porque el archivo en sí sea inaccesible: es que la app nunca lo entrega directo. Cada vez que se pide un audio o una foto, primero confirma que iniciaste sesión y que tienes permiso real de ver esa bitácora, y solo ahí lo entrega.</p>
+            <p>Protegidos de verdad: se guardan en almacenamiento privado y no existe un enlace público para abrirlos. Cada vez que se pide un audio o una foto, la app primero comprueba que iniciaste sesión y que tienes permiso real de ver esa bitácora, y solo ahí lo entrega.</p>
           </details>
           <details class="faq-item">
             <summary>¿La inteligencia artificial "aprende" de lo que cuento?</summary>
             <p>No. Claude, la IA que hace las preguntas de seguimiento, es una herramienta ya entrenada que usamos como se usa un traductor — no algo que va aprendiendo de cada charla que tiene. Es la política estándar de Anthropic (quien la crea) para cualquiera que use su tecnología, no algo que configuramos nosotros para esta app en particular.</p>
+          </details>
+          <details class="faq-item">
+            <summary>¿Tiene algún costo?</summary>
+            <p>Por ahora es <strong>gratis</strong>. Si algún día cambia, te avisamos por correo con al menos 30 días de anticipación, nunca te cobramos sin que lo aceptes, y siempre vas a poder descargar lo que ya guardaste.</p>
           </details>
           <details class="faq-item">
             <summary>¿Voy a poder escuchar las historias con la voz real de quien las contó, no una voz generada?</summary>
@@ -882,7 +897,7 @@
     <div class="wrap footer-row">
       <div class="brand"><img class="brand-mark pc-a2ef1fee" src="/images/logo-icon.png" alt="" aria-hidden="true"><span>Los recuerdos de mis viejos</span></div>
       <div class="footer-tagline">Las historias pasan. Los recuerdos pueden quedarse.</div>
-      <div class="footer-links"><a href="#como-funciona">Cómo funciona</a><a href="#registro-form">Crear cuenta</a><a href="/app.html">Iniciar sesión</a><a href="#privacidad">Privacidad</a><a href="#preguntas">Preguntas frecuentes</a></div>
+      <div class="footer-links"><a href="#como-funciona">Cómo funciona</a><a href="#registro-form">Crear cuenta</a><a href="/app.html">Iniciar sesión</a><a href="#privacidad">Privacidad</a><a href="#preguntas">Preguntas frecuentes</a><a href="/privacidad.html">Política de Privacidad</a><a href="/terminos.html">Términos y Condiciones</a></div>
     </div>
   </footer>
 
@@ -1043,7 +1058,7 @@
       signupTitle.textContent = esColaborador ? 'Únete a una familia' : 'Crea tu cuenta';
       signupSubtitle.textContent = esColaborador
         ? 'Nombre, correo, clave y el código que te compartieron.'
-        : 'Nombre, correo y clave. Así de simple.';
+        : 'Gratis por ahora. Nombre, correo, teléfono y clave.';
       signupSubmit.textContent = esColaborador ? 'Unirme y entrar' : 'Crear cuenta y entrar';
     }
 
@@ -1113,6 +1128,12 @@
         document.getElementById('suPhone').focus();
         return;
       }
+      if (!document.getElementById('suTerms').checked) {
+        signupStatus.classList.add('error');
+        signupStatus.textContent = 'Para crear tu cuenta tienes que aceptar los Términos y la Política de Privacidad.';
+        document.getElementById('suTerms').focus();
+        return;
+      }
       if (!signupForm.checkValidity()) {
         signupForm.reportValidity();
         return;
@@ -1145,7 +1166,7 @@
         const response = await fetch('/api/signup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, email, phone, password, inviteCode, accountType: modoColaborador ? 'collaborator' : 'owner' })
+          body: JSON.stringify({ name, email, phone, password, inviteCode, accountType: modoColaborador ? 'collaborator' : 'owner', acceptTerms: true })
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {

@@ -206,6 +206,10 @@ app.use((req, res, next) => {
 // es una etiqueta de qué versión le tocó a este navegador — por eso no
 // va firmada ni HttpOnly hace falta por seguridad (queda igual, por
 // prolijidad, ver más abajo).
+// Versión vigente de los Términos y la Política de Privacidad (public/
+// terminos.html y public/privacidad.html). Si se cambia el texto de fondo,
+// subir esta fecha — queda guardada junto a cada aceptación.
+const TERMS_VERSION = '2026-10-07';
 const AB_LANDING_COOKIE = 'bv_ab_landing';
 const AB_LANDING_MAX_AGE = 60 * 60 * 24 * 90; // 90 días
 const AB_LANDING_ARCHIVOS = {
@@ -1169,6 +1173,12 @@ function ensureSchema() {
       // ahí (por ejemplo, un colaborador que entró con un código directo).
       // Se completa en /api/signup a partir de la cookie que pone "/".
       sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_variant TEXT`,
+      // Prueba de que la persona aceptó los Términos y la Política de
+      // Privacidad al registrarse (autorización previa, expresa e informada
+      // — Ley 1581 de 2012): cuándo y cuál versión del texto. Las cuentas
+      // anteriores al 2026-10-07 quedan en NULL.
+      sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ`,
+      sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_version TEXT`,
       // Cuántos visitantes NUEVOS le tocaron a cada versión — se suma una
       // sola vez por visitante (cuando "/" les pone la cookie por primera
       // vez), no en cada visita repetida, así que esto es "personas", no
@@ -2932,7 +2942,10 @@ app.post('/api/register', rateLimit, async (req, res) => {
 // funcionando sin tocarlo.
 app.post('/api/signup', rateLimit, async (req, res) => {
   try {
-    const { name, email, phone, password, inviteCode, accountType } = req.body || {};
+    const { name, email, phone, password, inviteCode, accountType, acceptTerms } = req.body || {};
+    if (acceptTerms !== true) {
+      return res.status(400).json({ error: 'Para crear tu cuenta tienes que aceptar los Términos y la Política de Privacidad.' });
+    }
     const cleanName = capitalizarNombre(String(name || '').trim().slice(0, 100));
     const cleanEmail = String(email || '').trim().toLowerCase().slice(0, 200);
     if (!cleanName) return res.status(400).json({ error: 'Falta el nombre.' });
@@ -2986,8 +2999,8 @@ app.post('/api/signup', rateLimit, async (req, res) => {
 
     const hash = await bcrypt.hash(password, 12);
     const rows = await sql`
-      INSERT INTO users (username, name, email, phone, password_hash, owner_user_id, signup_variant)
-      VALUES (${cleanEmail}, ${cleanName}, ${cleanEmail}, ${cleanPhone}, ${hash}, ${ownerUserId}, ${signupVariant})
+      INSERT INTO users (username, name, email, phone, password_hash, owner_user_id, signup_variant, terms_accepted_at, terms_version)
+      VALUES (${cleanEmail}, ${cleanName}, ${cleanEmail}, ${cleanPhone}, ${hash}, ${ownerUserId}, ${signupVariant}, now(), ${TERMS_VERSION})
       RETURNING id, username, token_version
     `;
     setSessionCookie(req, res, { userId: rows[0].id, username: rows[0].username, tokenVersion: rows[0].token_version });
@@ -3226,6 +3239,21 @@ app.post('/api/delete-account', requireAuth, rateLimit, async (req, res) => {
       sql`DELETE FROM collaborations WHERE owner_user_id = ${req.userId} OR collaborator_user_id = ${req.userId}`,
       sql`UPDATE family_notes SET contributed_by = NULL WHERE contributed_by = ${req.userId}`,
       sql`UPDATE historia_versiones SET editado_por = NULL WHERE editado_por = ${req.userId}`,
+      // Tablas que también apuntan a users(id) y que esta ruta no limpiaba:
+      // si la cuenta tenía una sola fila en alguna (por ejemplo
+      // notification_preferences, que se crea sola la primera vez que se
+      // abre el menú de recordatorios), el DELETE de users de más abajo
+      // fallaba por la llave foránea y la persona NO podía borrar su cuenta.
+      // Van después de los índices que se leen más abajo (results[3], [4],
+      // [7]) para no moverlos.
+      sql`DELETE FROM family_members_excluidos WHERE user_id = ${req.userId}`,
+      sql`DELETE FROM notification_preferences WHERE user_id = ${req.userId}`,
+      sql`DELETE FROM reminder_deliveries WHERE user_id = ${req.userId}`,
+      sql`DELETE FROM whatsapp_reminder_log WHERE profile_id = ${req.userId}`,
+      sql`UPDATE gift_redemptions SET redeemed_by_user_id = NULL WHERE redeemed_by_user_id = ${req.userId}`,
+      sql`DELETE FROM gift_redemptions WHERE bought_by_user_id = ${req.userId}`,
+      sql`DELETE FROM billing_orders WHERE user_id = ${req.userId}`,
+      sql`DELETE FROM subscriptions WHERE user_id = ${req.userId}`,
       sql`DELETE FROM users WHERE id = ${req.userId}`,
     ]);
     const n = results[3];
@@ -7145,6 +7173,125 @@ async function resumenBlobDePerfil(profileId) {
 // usage_events, que existe desde que se agregó esto — no hay forma de
 // reconstruir tokens/caracteres de antes de esa fecha; el tamaño en la
 // base sí se calcula sobre los datos tal como están hoy (incluye lo viejo).
+// --- Migración de archivos viejos: Vercel Blob (store público) -> R2 ------
+// Todo lo que se subió antes de usar R2 vive en un store de Vercel Blob que
+// es PÚBLICO de verdad (cualquiera con la URL larga puede abrirlo, sin
+// sesión). Esta ruta copia cada archivo a R2 con la MISMA clave, cambia la
+// URL guardada en la base y recién entonces borra el original de Blob.
+// Para que lo copiado quede realmente privado, además hay que apagar el
+// acceso público del bucket en Cloudflare (ver README → "Privacidad de los
+// archivos"): la app lee R2 siempre con sus llaves, nunca por la URL
+// pública. Por defecto solo cuenta y no toca nada ("dry run");
+// { "confirmar": true } ejecuta, de a pocos por pedido ("limite", máx. 30).
+const RE_URL_BLOB_VIEJA = /https:\/\/[a-z0-9-]+(?:\.public)?\.blob\.vercel-storage\.com\/[^\s"'\\<>]+/gi;
+const LIKE_BLOB = '%.blob.vercel-storage.com/%';
+
+function urlsDeBlobEn(...textos) {
+  const out = new Set();
+  for (const t of textos) {
+    if (typeof t !== 'string') continue;
+    for (const m of t.matchAll(RE_URL_BLOB_VIEJA)) out.add(m[0]);
+  }
+  return [...out];
+}
+
+async function r2PublicoAbierto() {
+  if (!USAR_R2) return null;
+  const rows = await sql`
+    SELECT u FROM (
+      SELECT audio_url AS u FROM story_log WHERE audio_url LIKE ${R2_PUBLIC_URL + '/%'}
+      UNION ALL SELECT url AS u FROM media WHERE url LIKE ${R2_PUBLIC_URL + '/%'}
+    ) t LIMIT 1`;
+  if (!rows.length) return null;
+  try {
+    const r = await fetch(rows[0].u, { method: 'HEAD', redirect: 'manual', signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS) });
+    return r.status >= 200 && r.status < 300;
+  } catch (e) {
+    return null;
+  }
+}
+
+app.post('/api/admin/migrar-blob-a-r2', requireAuth, requireAdmin, rateLimit, async (req, res) => {
+  try {
+    if (!USAR_R2) return res.status(409).json({ error: 'R2 no está configurado en este entorno (faltan variables R2_*). No hay a dónde migrar.' });
+    await ensureSchema();
+    const confirmar = !!(req.body && req.body.confirmar);
+    const limite = Math.min(30, Math.max(1, parseInt(req.body && req.body.limite, 10) || 10));
+
+    const sl = await sql`SELECT id, audio_url, audio_urls, media_urls FROM story_log WHERE audio_url LIKE ${LIKE_BLOB} OR audio_urls LIKE ${LIKE_BLOB} OR media_urls LIKE ${LIKE_BLOB} ORDER BY id LIMIT ${limite}`;
+    const fn = await sql`SELECT id, audio_url, audio_urls, media_urls FROM family_notes WHERE audio_url LIKE ${LIKE_BLOB} OR audio_urls LIKE ${LIKE_BLOB} OR media_urls LIKE ${LIKE_BLOB} ORDER BY id LIMIT ${limite}`;
+    const md = await sql`SELECT id, url FROM media WHERE url LIKE ${LIKE_BLOB} ORDER BY id LIMIT ${limite}`;
+
+    const pendientes = new Set();
+    sl.forEach((r) => urlsDeBlobEn(r.audio_url, r.audio_urls, r.media_urls).forEach((u) => pendientes.add(u)));
+    fn.forEach((r) => urlsDeBlobEn(r.audio_url, r.audio_urls, r.media_urls).forEach((u) => pendientes.add(u)));
+    md.forEach((r) => urlsDeBlobEn(r.url).forEach((u) => pendientes.add(u)));
+    const lote = [...pendientes].slice(0, limite);
+
+    const filas = {
+      story_log: (await sql`SELECT count(*)::int AS n FROM story_log WHERE audio_url LIKE ${LIKE_BLOB} OR audio_urls LIKE ${LIKE_BLOB} OR media_urls LIKE ${LIKE_BLOB}`)[0].n,
+      family_notes: (await sql`SELECT count(*)::int AS n FROM family_notes WHERE audio_url LIKE ${LIKE_BLOB} OR audio_urls LIKE ${LIKE_BLOB} OR media_urls LIKE ${LIKE_BLOB}`)[0].n,
+      media: (await sql`SELECT count(*)::int AS n FROM media WHERE url LIKE ${LIKE_BLOB}`)[0].n,
+    };
+
+    if (!confirmar) {
+      return res.json({
+        dryRun: true,
+        aviso: 'Nada se tocó. Repite con { "confirmar": true } (y opcionalmente "limite") para migrar un lote.',
+        filasConArchivoViejo: filas,
+        archivosEnEsteLote: lote.length,
+        r2PublicoAbierto: await r2PublicoAbierto(),
+        explicacionR2Publico: 'true = el bucket de R2 todavía responde sin sesión (apágalo en Cloudflare); false = ya está cerrado; null = aún no hay archivos en R2 para probar.',
+      });
+    }
+
+    const migradas = [];
+    const fallidas = [];
+    for (const vieja of lote) {
+      try {
+        const abierto = await abrirArchivoAlmacenado(vieja);
+        if (!abierto || !abierto.stream) throw new Error('no se pudo leer el archivo original');
+        const buf = Buffer.from(await new Response(abierto.stream).arrayBuffer());
+        if (!buf.length) throw new Error('el archivo original está vacío');
+        const clave = claveDeArchivo(vieja);
+        if (!clave) throw new Error('clave inválida');
+        const destino = `${R2_ENDPOINT}/${claveParaUrl(clave)}`;
+        const put = await r2Cliente.fetch(destino, {
+          method: 'PUT', body: buf,
+          headers: { 'Content-Type': contentTypeSeguroDeMedia(abierto.contentType) },
+          signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+        });
+        if (!put.ok) throw new Error(`R2 PUT ${put.status}`);
+        const head = await r2Cliente.fetch(destino, { method: 'HEAD', signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS) });
+        if (!head.ok || Number(head.headers.get('content-length')) !== buf.length) throw new Error('la copia en R2 no coincide con el original');
+
+        const nueva = `${R2_PUBLIC_URL}/${clave}`;
+        const like = '%' + vieja.replace(/[\\%_]/g, '\\$&') + '%';
+        await sql.transaction([
+          sql`UPDATE story_log SET audio_url = replace(audio_url, ${vieja}, ${nueva}), audio_urls = replace(audio_urls, ${vieja}, ${nueva}), media_urls = replace(media_urls, ${vieja}, ${nueva}) WHERE audio_url LIKE ${like} OR audio_urls LIKE ${like} OR media_urls LIKE ${like}`,
+          sql`UPDATE family_notes SET audio_url = replace(audio_url, ${vieja}, ${nueva}), audio_urls = replace(audio_urls, ${vieja}, ${nueva}), media_urls = replace(media_urls, ${vieja}, ${nueva}) WHERE audio_url LIKE ${like} OR audio_urls LIKE ${like} OR media_urls LIKE ${like}`,
+          sql`UPDATE media SET url = replace(url, ${vieja}, ${nueva}) WHERE url LIKE ${like}`,
+        ]);
+        let originalBorrado = true;
+        try { await del(vieja); } catch (e) { originalBorrado = false; }
+        migradas.push({ clave, originalBorrado });
+      } catch (err) {
+        fallidas.push({ url: vieja, motivo: String((err && err.message) || err).slice(0, 200) });
+      }
+    }
+    res.json({
+      dryRun: false,
+      migradas: migradas.length,
+      fallidas,
+      sinBorrarEnBlob: migradas.filter((m) => !m.originalBorrado).length,
+      quedanFilasPorMigrar: filas.story_log + filas.family_notes + filas.media > 0 ? 'repite el pedido hasta que el dry run diga 0 en todo' : 'ninguna',
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo migrar.' });
+  }
+});
+
 app.get('/api/admin/usage', requireAuth, requireAdmin, async (req, res) => {
   try {
     await ensureSchema();

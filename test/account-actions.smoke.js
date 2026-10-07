@@ -303,6 +303,14 @@ async function main() {
     allCalls.every((c) => !c.values.includes(users[1].id))
   );
   check('delete-account: éxito borra la cookie de sesión', (deleteOk.headers['set-cookie'] || []).some((c) => c.startsWith('bv_session=;') || /bv_session=;.*Max-Age=0|bv_session=;.*Expires/i.test(c)));
+  // Derecho de supresión: toda tabla que apunta a users(id) tiene que
+  // limpiarse ANTES de borrar la fila de users, o la llave foránea hace fallar
+  // todo el borrado (le pasaba a cualquiera con notification_preferences).
+  for (const tabla of ['family_members_excluidos', 'notification_preferences', 'reminder_deliveries', 'whatsapp_reminder_log', 'billing_orders', 'subscriptions', 'gift_redemptions']) {
+    const idxTabla = allCalls.findIndex((c) => c.text.includes('DELETE FROM ' + tabla));
+    const idxUsers = allCalls.findIndex((c) => c.text.includes('DELETE FROM users WHERE id'));
+    check(`delete-account: borra ${tabla} antes que la fila de users`, idxTabla !== -1 && idxUsers !== -1 && idxTabla < idxUsers);
+  }
 
   // ============================================================
   // POST /api/change-password

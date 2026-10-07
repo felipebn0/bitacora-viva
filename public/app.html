@@ -921,10 +921,16 @@
            <div class="um-section-body" id="umSecCopia" hidden>
              <a class="um-btn um-plain" id="umExportLink" href="/api/export" download>⬇️ Descargar mi historia</a>
              <p class="um-hint">Un archivo .zip con todas tus historias, aportes de tu círculo, árbol genealógico y capítulos — para que tengas tu propia copia, aparte de esta app.</p>
+             <p class="um-hint">Cómo cuidamos tu información: <a href="/privacidad.html" target="_blank" rel="noopener">Política de Privacidad</a> · <a href="/terminos.html" target="_blank" rel="noopener">Términos y Condiciones</a></p>
            </div>
 
            <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecPlan">Plan <span class="um-chevron" aria-hidden="true">›</span></button>
            <div class="um-section-body" id="umSecPlan" hidden>
+             <p class="um-msg">Los recuerdos de mis viejos es <strong>gratis durante el lanzamiento</strong>. Si algún día cambia, te avisamos con al menos 30 días de anticipación y nunca te cobramos sin que lo aceptes. Siempre vas a poder descargar lo que ya guardaste.</p>
+             <!-- Cobro (Wava) apagado mientras se lanza gratis — ver BACKLOG #11.
+                  Se deja en el HTML, oculto, porque el JS de más abajo todavía
+                  lo referencia y se reactiva quitando este "hidden". -->
+             <div id="umPlanPago" hidden>
              <p class="um-msg" id="umPlanEstado">Cargando…</p>
              <div class="pc-cb458930" id="umPlanOpciones">
                <button class="um-btn" id="umPlanPersonalBtn" type="button">Legado personal — $399.000/año</button>
@@ -949,6 +955,7 @@
                <button class="um-btn" id="umRegaloCanjearBtn" type="button">Canjear</button>
              </div>
              <p class="um-msg" id="umRegaloMsg" role="status" aria-live="polite" aria-atomic="true"></p>
+             </div>
            </div>
 
            <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecRecordatorios">Recordatorios <span class="um-chevron" aria-hidden="true">›</span></button>

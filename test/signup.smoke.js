@@ -45,8 +45,8 @@ function fakeSql(strings, ...values) {
     return Promise.resolve(found ? [{ id: found.id }] : []);
   }
   if (text.includes('INSERT INTO users')) {
-    const [username, name, email, phone, passwordHash, ownerUserId, signupVariant] = values;
-    const row = { id: nextId++, username, name, email, phone, password_hash: passwordHash, owner_user_id: ownerUserId, signup_variant: signupVariant ?? null, token_version: 0, invite_code: null };
+    const [username, name, email, phone, passwordHash, ownerUserId, signupVariant, termsVersion] = values;
+    const row = { id: nextId++, username, name, email, phone, password_hash: passwordHash, owner_user_id: ownerUserId, signup_variant: signupVariant ?? null, terms_version: termsVersion ?? null, token_version: 0, invite_code: null };
     usersTable.push(row);
     return Promise.resolve([{ id: row.id, username: row.username, token_version: row.token_version }]);
   }
@@ -104,21 +104,21 @@ async function main() {
   // --- 1) El bug reportado: modo colaborador, código vacío -> ya NO crea una cuenta dueña suelta ---
   const antesDeIntentar = usersTable.length;
   const r1 = await request(server, { path: '/api/signup', method: 'POST', body: {
-    name: 'Diego', email: 'diego1@example.com', password: 'miclave123', inviteCode: '', accountType: 'collaborator',
+    name: 'Diego', email: 'diego1@example.com', password: 'miclave123', inviteCode: '', accountType: 'collaborator', acceptTerms: true,
   } });
   check('colaborador sin código -> 400 (antes: 200 y creaba cuenta dueña)', r1.status === 400);
   check('colaborador sin código -> no se creó ninguna cuenta', usersTable.length === antesDeIntentar);
 
   // --- 2) Modo colaborador con un código que no existe -> 400, tampoco crea nada ---
   const r2 = await request(server, { path: '/api/signup', method: 'POST', body: {
-    name: 'Diego', email: 'diego2@example.com', password: 'miclave123', inviteCode: 'ZZZZZZZZ', accountType: 'collaborator',
+    name: 'Diego', email: 'diego2@example.com', password: 'miclave123', inviteCode: 'ZZZZZZZZ', accountType: 'collaborator', acceptTerms: true,
   } });
   check('colaborador con código inexistente -> 400', r2.status === 400);
   check('colaborador con código inexistente -> no se creó ninguna cuenta', usersTable.length === antesDeIntentar);
 
   // --- 3) Modo colaborador con el código real -> crea colaborador, bien atado a la cuenta dueña ---
   const r3 = await request(server, { path: '/api/signup', method: 'POST', body: {
-    name: 'Diego', email: 'diego3@example.com', phone: '+57 300 111 2233', password: 'miclave123', inviteCode: 'b46nwec7', accountType: 'collaborator',
+    name: 'Diego', email: 'diego3@example.com', phone: '+57 300 111 2233', password: 'miclave123', inviteCode: 'b46nwec7', accountType: 'collaborator', acceptTerms: true,
   } });
   const data3 = JSON.parse(r3.body || '{}');
   check('colaborador con código real (minúsculas incluido) -> 200', r3.status === 200);
@@ -128,7 +128,7 @@ async function main() {
 
   // --- 4) Modo owner (o sin accountType) sin código -> sigue funcionando igual que siempre ---
   const r4 = await request(server, { path: '/api/signup', method: 'POST', body: {
-    name: 'Nueva Dueña', email: 'nuevadueña@example.com', phone: '+57 300 111 2233', password: 'miclave123', accountType: 'owner',
+    name: 'Nueva Dueña', email: 'nuevadueña@example.com', phone: '+57 300 111 2233', password: 'miclave123', accountType: 'owner', acceptTerms: true,
   } });
   const data4 = JSON.parse(r4.body || '{}');
   check('owner sin código -> 200 (comportamiento normal intacto)', r4.status === 200);
@@ -138,7 +138,7 @@ async function main() {
 
   // --- 5) Un código real "colado" en modo owner se ignora (no convierte en colaborador por accidente) ---
   const r5 = await request(server, { path: '/api/signup', method: 'POST', body: {
-    name: 'Otra Dueña', email: 'otradueña@example.com', phone: '+57 300 111 2233', password: 'miclave123', inviteCode: 'B46NWEC7', accountType: 'owner',
+    name: 'Otra Dueña', email: 'otradueña@example.com', phone: '+57 300 111 2233', password: 'miclave123', inviteCode: 'B46NWEC7', accountType: 'owner', acceptTerms: true,
   } });
   const data5 = JSON.parse(r5.body || '{}');
   check('owner con un código colado igual -> 200, se ignora el código', r5.status === 200 && data5.isCollaborator === false);
@@ -148,18 +148,33 @@ async function main() {
   // --- 6) Prueba A/B de la landing: signup_variant sale de la cookie que pone "/" ---
   const r6 = await request(server, {
     path: '/api/signup', method: 'POST', headers: { Cookie: 'bv_ab_landing=v2' },
-    body: { name: 'Con Variante', email: 'convariante@example.com', phone: '+57 300 111 2233', password: 'miclave123', accountType: 'owner' },
+    body: { name: 'Con Variante', email: 'convariante@example.com', phone: '+57 300 111 2233', password: 'miclave123', accountType: 'owner', acceptTerms: true },
   });
   check('signup con cookie bv_ab_landing=v2 -> 200', r6.status === 200);
   const conVariante = usersTable.find((u) => u.email === 'convariante@example.com');
   check('esa cuenta quedó con signup_variant = "v2"', !!conVariante && conVariante.signup_variant === 'v2');
 
   const r7 = await request(server, { path: '/api/signup', method: 'POST', body: {
-    name: 'Sin Variante', email: 'sinvariante@example.com', phone: '+57 300 111 2233', password: 'miclave123', accountType: 'owner',
+    name: 'Sin Variante', email: 'sinvariante@example.com', phone: '+57 300 111 2233', password: 'miclave123', accountType: 'owner', acceptTerms: true,
   } });
   check('signup sin esa cookie -> 200', r7.status === 200);
   const sinVariante = usersTable.find((u) => u.email === 'sinvariante@example.com');
   check('esa cuenta quedó con signup_variant = null', !!sinVariante && sinVariante.signup_variant === null);
+
+  // --- 7) Términos y Política de Privacidad: sin aceptar no se crea la cuenta ---
+  const antesDeTerminos = usersTable.length;
+  const base = { name: 'Sin Aceptar', email: 'sinaceptar@example.com', phone: '+57 300 111 2233', password: 'miclave123', accountType: 'owner' };
+  const rt1 = await request(server, { path: '/api/signup', method: 'POST', body: base });
+  check('sin acceptTerms -> 400', rt1.status === 400 && /Términos/.test(JSON.parse(rt1.body).error));
+  const rt2 = await request(server, { path: '/api/signup', method: 'POST', body: { ...base, acceptTerms: 'true' } });
+  check('acceptTerms que no es el booleano true (ej. el texto "true") -> 400', rt2.status === 400);
+  const rt3 = await request(server, { path: '/api/signup', method: 'POST', body: { ...base, acceptTerms: false } });
+  check('acceptTerms false -> 400', rt3.status === 400);
+  check('ninguno de esos intentos creó una cuenta', usersTable.length === antesDeTerminos);
+  const rt4 = await request(server, { path: '/api/signup', method: 'POST', body: { ...base, acceptTerms: true } });
+  check('acceptTerms true -> 200', rt4.status === 200);
+  const conTerminos = usersTable.find((u) => u.email === 'sinaceptar@example.com');
+  check('la cuenta guarda la versión de los términos que aceptó', !!conTerminos && conTerminos.terms_version === '2026-10-07');
 
   server.close();
   console.log(`\n${passed} pasaron, ${failed} fallaron`);

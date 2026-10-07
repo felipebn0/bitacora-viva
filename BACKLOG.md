@@ -62,6 +62,8 @@ Cosas que se pidieron pero se decidió posponer, con suficiente detalle para ret
 
 ## 9. Terminar de verdad la migración a Blob privado (hoy vuelto a público)
 
+> **Actualización 2026-10-07:** se resolvió por otro camino, sin store privado de Blob. Lo nuevo ya va a Cloudflare R2 y lo viejo se migra con `POST /api/admin/migrar-blob-a-r2` (dry run por defecto, con test). Falta que Felipe **apague el acceso público del bucket en Cloudflare** y corra la migración — pasos exactos en el README, sección "Privacidad de los archivos". Lo de abajo queda solo como contexto histórico.
+
 **Qué pasó:** se subió `access:'private'` en los 3 uploads (audio/fotos) y en la lectura de `/api/media-file`, pero en producción esto rompía TODO upload (500: *"Vercel Blob: Cannot use private access on a public store. The store must be configured with private access."*). El store de Vercel Blob conectado a este proyecto es del tipo público de siempre — `access:'private'` por upload no alcanza, el STORE ENTERO tiene que estar configurado como privado. Se revirtieron los 3 `put()` a `access:'public'` para que guardar audio/fotos vuelva a funcionar mientras tanto — confirmado con un pago de un familiar real que fallaba con este mismo error.
 
 **Para terminarlo bien:**
@@ -73,6 +75,8 @@ Cosas que se pidieron pero se decidió posponer, con suficiente detalle para ret
 **Migración de los ya subidos (público → privado), una vez el store lo soporte:** un script/endpoint temporal (protegido con SETUP_KEY, con "dry run" por defecto — mismo patrón ya usado antes en este proyecto) que recorra `story_log.audio_url`, `family_notes.audio_url`/`audio_urls` y `media.url`, baje cada archivo, lo vuelva a subir con `access:'private'`, actualice la fila con la nueva ruta, y borre la copia pública vieja. Hacerlo de a poco y con logs claros — son archivos reales de familias reales.
 
 ## 11. Poner en marcha de verdad los pagos (Wava) y los recordatorios (correo)
+
+> **Actualización 2026-10-07:** se lanza **gratis**. El menú "Plan" de `app.html` ya no muestra precios ni botones de pago (el bloque `#umPlanPago` quedó oculto con `hidden`, no borrado); los Términos prometen avisar con 30 días antes de cobrar. Para reactivar el cobro: quitar ese `hidden`, cargar las variables de abajo y cambiar el texto de "gratis" en `app.html`, en las dos landings y en `terminos.html`/`privacidad.html` (subir `TERMS_VERSION` en `server.js`). Los recordatorios por correo (Resend) son independientes del cobro y siguen pendientes de configurar.
 
 **Qué es:** la infraestructura completa ya está construida y con tests (`/api/billing/*` incluyendo el regalo con comprador y narrador en cuentas distintas, `/api/webhooks/wava`, `/api/cron/*`, `/api/notification-preferences`, `/api/magic-login`, tablas `subscriptions`/`billing_orders`/`notification_preferences`/`reminder_deliveries`/`gift_redemptions`) — pero no está conectada a nada real todavía. Sin las variables de entorno de abajo, `/api/billing/checkout` (y `/api/billing/gift-checkout`) responde 501 y los recordatorios simplemente no se mandan — no rompe nada, solo no hace nada.
 

@@ -101,6 +101,22 @@ Si se definen estas 5 variables de entorno, la app usa R2 para todo lo nuevo (lo
 
 Con las 5 puestas y un Redeploy, las subidas nuevas van a R2. Si falta alguna, sigue todo por Vercel Blob como antes. No hay que migrar los archivos viejos.
 
+## Privacidad de los archivos (audios, fotos, videos)
+
+La landing promete que los archivos son privados y que no existe un enlace público. Para que sea verdad hacen falta **dos pasos que no se pueden hacer desde el código**:
+
+1. **Apagar el acceso público del bucket de R2.** Cloudflare → R2 → el bucket → **Settings** → **Public access** → en *R2.dev subdomain* pulsar **Disable** (y no tener ningún *Custom Domain* conectado). La app no necesita ese acceso: lee y borra siempre con sus llaves (`aws4fetch`, firmado), y solo entrega un archivo por `/api/media-file` después de comprobar sesión y permiso. **No** borrar `R2_PUBLIC_URL` de Vercel: se sigue usando para armar la URL que se guarda en la base.
+2. **Pasar lo viejo de Vercel Blob (público) a R2.** Todo lo subido antes de activar R2 vive en un store de Blob público de verdad. Con la sesión de un admin abierta en la app, desde la consola del navegador:
+
+```js
+// 1) Solo contar (no toca nada) — también dice si R2 sigue abierto al público.
+await fetch('/api/admin/migrar-blob-a-r2', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(r => r.json())
+// 2) Migrar un lote (máx. 30 archivos por pedido). Repetir hasta que el paso 1 dé 0 en todo.
+await fetch('/api/admin/migrar-blob-a-r2', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirmar: true, limite: 10 }) }).then(r => r.json())
+```
+
+Cada archivo se copia a R2 con la misma clave, se cambia la URL en todas las filas que lo usan (`story_log`, `family_notes`, `media`) y recién después se borra el original de Blob; si algo falla queda tal cual y aparece en `fallidas`. Cuando el paso 1 dé `r2PublicoAbierto: false` y 0 filas pendientes, el store de Blob puede vaciarse.
+
 ## Panel de consumo (`/admin.html`)
 
 Reporte de uso y costo estimado por perfil (cuenta dueña o subperfil): tokens de Claude (incluida la parte de prompt caching), caracteres de voz (ElevenLabs/Azure), tiempo hablado, y espacio ocupado en la base de datos. Pensado para los dueños del producto, no para cuentas normales.
