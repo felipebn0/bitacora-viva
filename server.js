@@ -7314,6 +7314,40 @@ app.post('/api/admin/migrar-blob-a-r2', requireAuth, requireAdmin, rateLimit, as
   }
 });
 
+// Diagnóstico de la voz en producción: dice qué proveedor está configurado y
+// hace una prueba real y mínima ("Hola.", ~5 caracteres) con el modelo elegido
+// y con el de respaldo, devolviendo el error EXACTO de ElevenLabs si falla
+// (permiso de la llave, voz que no existe, plan, etc.). Nunca devuelve la
+// llave: solo si está puesta y las últimas 4 letras del voice ID.
+app.get('/api/admin/voz-debug', requireAuth, requireAdmin, rateLimit, async (req, res) => {
+  try {
+    const out = {
+      proveedorQueSeUsa: ELEVEN_KEY && ELEVEN_VOICE_ID ? 'elevenlabs' : (AZURE_KEY && AZURE_REGION ? 'azure' : 'ninguno (la app cae a la voz del navegador)'),
+      llaveElevenLabsPuesta: !!ELEVEN_KEY,
+      voiceIdPuesto: !!ELEVEN_VOICE_ID,
+      voiceIdTerminaEn: ELEVEN_VOICE_ID ? ELEVEN_VOICE_ID.slice(-4) : null,
+      modelo: ELEVEN_MODEL_ID,
+      modeloDeRespaldo: ELEVEN_MODEL_RESPALDO,
+      pruebas: [],
+    };
+    if (ELEVEN_KEY && ELEVEN_VOICE_ID) {
+      for (const modelo of [...new Set([ELEVEN_MODEL_ID, ELEVEN_MODEL_RESPALDO])]) {
+        const t0 = Date.now();
+        try {
+          const audio = await pedirVozAElevenLabs('Hola.', modelo);
+          out.pruebas.push({ modelo, ok: true, ms: Date.now() - t0, bytes: audio.length });
+        } catch (err) {
+          out.pruebas.push({ modelo, ok: false, ms: Date.now() - t0, error: String((err && err.message) || err).slice(0, 500) });
+        }
+      }
+    }
+    res.json(out);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo hacer el diagnóstico.' });
+  }
+});
+
 app.get('/api/admin/usage', requireAuth, requireAdmin, async (req, res) => {
   try {
     await ensureSchema();

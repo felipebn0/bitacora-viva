@@ -16,7 +16,10 @@ const bcrypt = require('bcryptjs');
 
 const serverPath = path.resolve(__dirname, '..', 'server.js');
 const HASH = bcrypt.hashSync('miclave123', 4);
-const users = { 1: { id: 1, username: 'duena', password_hash: HASH, token_version: 0, owner_user_id: null } };
+const users = {
+  1: { id: 1, username: 'duena', password_hash: HASH, token_version: 0, owner_user_id: null, is_admin: true },
+  2: { id: 2, username: 'normal', password_hash: HASH, token_version: 0, owner_user_id: null, is_admin: false },
+};
 
 function fakeSql(strings, ...values) {
   const text = strings.join('?');
@@ -30,6 +33,7 @@ function fakeSql(strings, ...values) {
     const u = users[values[0]];
     return Promise.resolve(u ? [{ owner_user_id: u.owner_user_id, token_version: u.token_version }] : []);
   }
+  if (text.includes('SELECT is_admin FROM users')) return Promise.resolve([{ is_admin: users[values[0]].is_admin }]);
   return Promise.resolve([]);
 }
 fakeSql.transaction = (q) => Promise.all(q);
@@ -70,14 +74,24 @@ function hablar(server, cookie, texto) {
     r.on('error', reject); r.write(data); r.end();
   });
 }
-async function login(server) {
-  const data = JSON.stringify({ username: 'duena', password: 'miclave123' });
+async function login(server, username = 'duena') {
+  const data = JSON.stringify({ username, password: 'miclave123' });
   return new Promise((resolve, reject) => {
     const host = '127.0.0.1:' + server.address().port;
     const r = http.request({ host: '127.0.0.1', port: server.address().port, path: '/api/login', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data), Origin: 'http://' + host } }, (res) => {
       const ch = []; res.on('data', (c) => ch.push(c)); res.on('end', () => resolve(res.headers['set-cookie'][0].split(';')[0]));
     });
     r.on('error', reject); r.write(data); r.end();
+  });
+}
+
+function pedirJson(server, cookie, pth) {
+  return new Promise((resolve, reject) => {
+    const host = '127.0.0.1:' + server.address().port;
+    const r = http.request({ host: '127.0.0.1', port: server.address().port, path: pth, method: 'GET', headers: { Origin: 'http://' + host, Cookie: cookie } }, (res) => {
+      const ch = []; res.on('data', (c) => ch.push(c)); res.on('end', () => { let j = null; try { j = JSON.parse(Buffer.concat(ch).toString()); } catch (e) {} resolve({ status: res.statusCode, json: j }); });
+    });
+    r.on('error', reject); r.end();
   });
 }
 
@@ -105,6 +119,18 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
   const r3 = await hablar(server, cookie, 'Una más.');
   ok(r3.status === 500, 'si fallan los dos modelos -> 500 (no se queda colgado)');
   ok(modelosPedidos.length === 2, 'no reintenta más de una vez');
+
+  // --- Diagnóstico de la voz (solo admin) ---
+  const normal = await login(server, 'normal');
+  const d0 = await pedirJson(server, normal, '/api/admin/voz-debug');
+  ok(d0.status === 403, 'voz-debug: una cuenta que no es admin -> 403');
+
+  modelosPedidos.length = 0;
+  fallan = new Set(['eleven_v4_turbo']);
+  const d1 = await pedirJson(server, cookie, '/api/admin/voz-debug');
+  ok(d1.status === 200 && d1.json.proveedorQueSeUsa === 'elevenlabs' && d1.json.modelo === 'eleven_v4_turbo', 'voz-debug: dice qué proveedor y modelo se usan');
+  ok(d1.json.pruebas.length === 2 && d1.json.pruebas[0].ok === false && /500/.test(d1.json.pruebas[0].error) && d1.json.pruebas[1].ok === true, 'voz-debug: prueba los dos modelos y devuelve el error exacto del que falla');
+  ok(!JSON.stringify(d1.json).includes('clave-de-prueba') && d1.json.voiceIdTerminaEn === 'z123', 'voz-debug: nunca devuelve la llave; solo las últimas 4 letras del voice ID');
 
   server.close();
   console.log(`\n${pasaron} pasaron, ${fallaron} fallaron`);
