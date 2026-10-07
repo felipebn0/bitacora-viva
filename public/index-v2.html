@@ -108,8 +108,8 @@
     .eyebrow:before{content:""; width:34px; height:1px; background:var(--accent-2)}
     .lead{font-size:clamp(1.125rem, 2.2vw, 1.375rem); color:var(--ink); line-height:1.4}
 
-    section{padding:clamp(64px, 9vw, 120px) 0}
-    .section-head{max-width:var(--measure); margin:0 0 clamp(36px, 5vw, 56px)}
+    section{padding:clamp(40px, 5.5vw, 64px) 0}
+    .section-head{max-width:var(--measure); margin:0 0 clamp(28px, 4vw, 44px)}
     .section-head.center{margin-left:auto; margin-right:auto; text-align:center}
     .section-head p{margin-top:16px; font-size:1.0625rem}
     .quiet{color:var(--ink-3)}
@@ -347,7 +347,7 @@
     .registro-box{display:grid; grid-template-columns:1fr 1fr; gap:clamp(32px, 5vw, 64px); align-items:start}
     .registro-copy > p{margin-top:14px}
     .registro-points{display:grid; gap:12px; margin-top:22px}
-    .registro-points span{display:flex; gap:10px; font-size:0.9375rem; color:var(--ink-2)}
+    .registro-points span{display:flex; gap:10px; font-size:0.9375rem; color:#E9DECC}
     /* Fondo oscuro (ver el bloque "Bloques de fondo oscuro" más abajo) —
        se queda con el puntito dorado simple de siempre en vez del ícono de
        chulo de la versión Apple, que estaba pensado para un fondo claro. */
@@ -470,6 +470,8 @@
       .orb{width:112px; height:112px}
       .memory-chip{display:none}
       .conversation, .story-side{padding:20px}
+      .registro .registro-box{padding:26px 14px}
+      .signup-card{padding:22px 18px}
       .bubble{max-width:94%}
       .voice-art{min-height:300px}
       .voice-wave{right:0; width:200px}
@@ -1216,6 +1218,13 @@
         signupSubmit.disabled = false;
       }
     });
+
+    // En pantallas chicas las siete promesas de privacidad abiertas alargan
+    // mucho la página: quedan abiertas las tres primeras y las demás se abren
+    // tocando el título (que ya dice la promesa completa).
+    if (window.matchMedia('(max-width: 620px)').matches) {
+      document.querySelectorAll('.privacy-item[open]').forEach((d, i) => { if (i >= 3) d.removeAttribute('open'); });
+    }
 
     // Scroll reveals
     const io = new IntersectionObserver((entries) => {
