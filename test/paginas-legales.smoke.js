@@ -54,6 +54,16 @@ for (const f of ['index.html', 'index-v2.html']) {
   ok(/<footer>[\s\S]*Términos y Condiciones[\s\S]*<\/footer>/.test(h), `${f}: el pie de página lleva los enlaces legales`);
 }
 
+// --- V2 (la nostálgica): construir recuerdos en vida, con casos de uso ---
+const v2 = pub('index-v2.html');
+ok(/<section id="para-quien">/.test(v2), 'v2: tiene la sección de casos de uso');
+const bloquePara = v2.slice(v2.indexOf('<section id="para-quien">'), v2.indexOf('<section id="familia">'));
+ok((bloquePara.match(/class="family-card"/g) || []).length === 3, 'v2: son tres casos de uso (papás/abuelos, familia, hijos)');
+ok(/Para tus papás o abuelos/.test(bloquePara) && /Para toda tu familia/.test(bloquePara) && /Para tus hijos/.test(bloquePara), 'v2: los tres casos tienen su título');
+const cuerpoV2 = v2.slice(v2.indexOf('<main'), v2.indexOf('</main>'));
+ok(!/morir|muert|falleci|extrañar|se apag|última vez|mientras todavía/i.test(cuerpoV2), 'v2: el texto no gira alrededor de la muerte ni de la pérdida');
+ok(/noindex/.test(v2), 'v2: sigue con noindex');
+
 // --- App: sin precios visibles mientras no se cobra ---
 const app = pub('app.html');
 const iPago = app.indexOf('id="umPlanPago" hidden');

@@ -159,7 +159,7 @@
     .nav-links > a:hover{color:var(--ink); background:var(--surface-2); text-decoration:none}
     .nav-login{color:var(--ink) !important}
     .nav-cta{color:var(--on-accent) !important; padding:8px 16px !important; background:var(--accent-2)}
-    .nav-cta:hover{background:var(--accent-2-press)}
+    .nav-links > a.nav-cta:hover{background:var(--accent-2-press); color:var(--on-accent) !important}
     .nav-font-ctrl{
       display:inline-flex; align-items:center; gap:4px;
       border:1px solid var(--hairline); border-radius:980px; padding:2px;
@@ -593,9 +593,9 @@
     <section class="hero" id="inicio">
       <div class="wrap hero-grid">
         <div class="hero-copy reveal">
-          <div class="eyebrow">El legado que ninguna foto puede contar</div>
-          <h1>Hay una voz en tu familia que un día vas a extrañar escuchar. <em>Guárdala hoy, mientras todavía puedes.</em></h1>
-          <p>Los recuerdos de mis viejos convierte una charla de sobremesa en un legado que tu familia va a poder escuchar para siempre — con su voz real, sus pausas, su forma de contar las cosas. No un resumen de lo que dijo. Su voz.</p>
+          <div class="eyebrow">Los recuerdos que se cuentan, se quedan</div>
+          <h1>Cada familia guarda historias que merecen contarse en voz alta. <em>Empieza a guardarlas hoy.</em></h1>
+          <p>Los recuerdos de mis viejos convierte una charla de sobremesa en un libro vivo que tu familia puede escuchar cuando quiera — con la voz real de quien cuenta, sus pausas, su forma de decir las cosas. No un resumen de lo que dijo. Su voz.</p>
           <div class="hero-actions">
             <a class="btn btn-primary" href="#registro-form">Crear mi cuenta</a>
             <a class="btn btn-secondary" href="#como-funciona">Ver cómo funciona ↓</a>
@@ -630,8 +630,8 @@
     <section class="problem">
       <div class="wrap problem-grid">
         <div class="reveal">
-          <div class="eyebrow pc-f1b4ce9c">Lo que no se pregunta, puede perderse</div>
-          <h2>Cuando esa voz se apaga, se apagan también todas las preguntas que nunca le hiciste.</h2>
+          <div class="eyebrow pc-f1b4ce9c">Las preguntas que dejamos para después</div>
+          <h2>Casi nadie se sienta a preguntar. Y casi todos se quedan con ganas de saber más.</h2>
         </div>
         <div class="reveal">
           <div class="questions">
@@ -640,7 +640,7 @@
             <div class="question-card">“¿Cuál fue uno de los días más importantes de tu vida?”</div>
             <div class="question-card">“¿Qué historia quieres que nunca olvidemos?”</div>
           </div>
-          <p class="problem-note">Nadie avisa cuándo es la última vez que alguien va a poder contar su historia. Por eso esas preguntas casi nunca se hacen a tiempo — y lo que queda después es el silencio, y un "ojalá le hubiera preguntado" que ya no se puede resolver. Los recuerdos de mis viejos existe para que esa conversación pase hoy, mientras todavía hay alguien del otro lado para responderla.</p>
+          <p class="problem-note">Siempre parece que hay tiempo. Entre el trabajo, los días ocupados y los chats de familia, esas conversaciones se van quedando para "cuando haya un rato". Los recuerdos de mis viejos te da el rato y el lugar: una charla tranquila, por voz, que queda guardada y que cualquiera de tu familia puede volver a escuchar.</p>
         </div>
       </div>
     </section>
@@ -663,7 +663,7 @@
     <section class="product" id="producto">
       <div class="wrap">
         <div class="section-head center reveal">
-          <div class="eyebrow pc-9b54a373">Un legado que se puede volver a abrir</div>
+          <div class="eyebrow pc-9b54a373">Un recuerdo que se puede volver a abrir</div>
           <h2>No es un archivo guardado en un cajón. Es una historia a la que puedes volver.</h2>
           <p>Cada charla se convierte en capítulos, en un árbol familiar, en recuerdos que se pueden buscar y volver a escuchar — no algo que se guarda una vez y se olvida, sino algo vivo que tu familia va a seguir abriendo dentro de 5, 10, 20 años.</p>
         </div>
@@ -697,9 +697,36 @@
         </div>
         <div class="voice-copy reveal">
           <div class="eyebrow">Lo que una foto no puede guardar</div>
-          <h2>No solo guarda lo que dijo. Guarda cómo se le quebraba la voz al contarlo.</h2>
-          <p class="lead">Su risa antes de llegar al final del chiste. El silencio justo antes de una parte difícil. La forma en que decía tu nombre.</p>
-          <p>Una foto conserva cómo alguien se veía. Los recuerdos de mis viejos conserva cómo sonaba — para que dentro de muchos años, cuando ya no puedas verla, todavía puedas escucharla.</p>
+          <h2>No solo guarda lo que contaron. Guarda cómo se les iluminaba la voz al contarlo.</h2>
+          <p class="lead">La risa antes de llegar al final del chiste. La pausa justo antes de lo mejor de la historia. La forma en que alguien dice tu nombre.</p>
+          <p>Una foto conserva cómo alguien se veía. Los recuerdos de mis viejos conserva cómo sonaba — para que puedas volver a escuchar esa voz cuando quieras: hoy, dentro de un año o dentro de veinte.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="para-quien">
+      <div class="wrap">
+        <div class="section-head center reveal">
+          <div class="eyebrow pc-9b54a373">Para quién es</div>
+          <h2>Para quien tiene mucho que contar. Y para quien quiere escucharlo.</h2>
+          <p>Una misma bitácora, tres formas de usarla. Empieza por la que más te llame.</p>
+        </div>
+        <div class="family-cards reveal">
+          <div class="family-card">
+            <div class="pc-6899e93a">👵</div>
+            <b class="pc-f3b0f625">Para tus papás o abuelos</b>
+            <p class="pc-166017f1">Siéntalos a charlar sin presión. Cuentan su vida con sus propias palabras y tú guardas su voz, sus anécdotas y esas historias que solo ellos saben — para que no se pierdan con el tiempo.</p>
+          </div>
+          <div class="family-card">
+            <div class="pc-6899e93a">👨‍👩‍👧‍👦</div>
+            <b class="pc-f3b0f625">Para toda tu familia</b>
+            <p class="pc-166017f1">Cada quien guarda un pedazo de la historia. Invita a tus hermanos, tíos y primos con un link: cada uno suma su versión y juntos arman el libro de la familia.</p>
+          </div>
+          <div class="family-card">
+            <div class="pc-6899e93a">🧒</div>
+            <b class="pc-f3b0f625">Para tus hijos</b>
+            <p class="pc-166017f1">Cuéntales tú tu historia: cómo era tu infancia, cómo conociste a su mamá o a su papá, qué soñabas. Que cuando crezcan puedan escuchar de dónde vienen, con tu propia voz.</p>
+          </div>
         </div>
       </div>
     </section>
@@ -892,9 +919,9 @@
     <section class="final-cta" id="empezar">
       <div class="wrap inner reveal">
         <div class="eyebrow pc-9b54a373">Una historia empieza con una pregunta</div>
-        <h2>Algún día vas a querer escuchar esa historia una vez más — y vas a agradecer haberla guardado hoy.</h2>
-        <p>Su voz, sus palabras, su forma de contar las cosas: eso no se hereda solo, y no se recupera después. Se guarda ahora, mientras todavía hay alguien ahí para contarlo.</p>
-        <a class="btn btn-primary" href="#registro-form">Empezar a guardar su historia</a>
+        <h2>Las mejores historias de tu familia todavía se están contando. Guárdalas hoy.</h2>
+        <p>Su voz, sus palabras, su forma de contar las cosas: eso no se hereda solo. Se construye charla a charla, y es gratis empezar hoy.</p>
+        <a class="btn btn-primary" href="#registro-form">Empezar a guardar nuestra historia</a>
       </div>
     </section>
   </main>
