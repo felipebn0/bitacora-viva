@@ -64,6 +64,12 @@ const cuerpoV2 = v2.slice(v2.indexOf('<main'), v2.indexOf('</main>'));
 ok(!/morir|muert|falleci|extrañar|se apag|última vez|mientras todavía/i.test(cuerpoV2), 'v2: el texto no gira alrededor de la muerte ni de la pérdida');
 ok(/noindex/.test(v2), 'v2: sigue con noindex');
 
+// --- V1 (control): también lleva la sección de casos de uso ---
+const v1 = pub('index.html');
+const bloquePara1 = v1.indexOf('<section id="para-quien">') === -1 ? '' : v1.slice(v1.indexOf('<section id="para-quien">'), v1.indexOf('<section id="familia">'));
+ok((bloquePara1.match(/class="family-card"/g) || []).length === 3, 'v1: tiene la sección de casos de uso con tres tarjetas');
+ok(bloquePara1 === bloquePara, 'v1 y v2: la sección de casos de uso es idéntica en las dos landings');
+
 // --- App: sin precios visibles mientras no se cobra ---
 const app = pub('app.html');
 const iPago = app.indexOf('id="umPlanPago" hidden');
