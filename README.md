@@ -23,6 +23,8 @@ Más simple que Azure: solo mail y contraseña, sin tarjeta para el nivel gratis
 
 Si el uso diario supera el nivel gratis, el plan Starter son $5 USD/mes (30.000 caracteres) — igual muy barato para este uso.
 
+**Modelo de voz:** por defecto la app usa **Eleven v4 Turbo** (`eleven_v4_turbo`): más expresivo que Flash, mismo precio de lista ($0,04 por 1.000 caracteres) pero más lento (~1,8 s contra ~0,6 s por frase). Para cambiarlo sin tocar código, definir `ELEVENLABS_MODEL_ID` en Vercel (por ejemplo `eleven_flash_v2_5` para volver al rápido) y hacer Redeploy. Si el modelo elegido falla, la app reintenta una vez con Flash v2.5 antes de caer a la voz del sistema. La llave necesita permiso de *Text to Speech* y *Speech to Text*.
+
 ### Alternativa: Azure Speech
 
 Si prefieres la voz colombiana específica de Microsoft (`es-CO-SalomeNeural`) y puedes acceder a Azure:

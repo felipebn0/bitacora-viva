@@ -4172,8 +4172,17 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
 // bastante antes de cualquier límite de tiempo de Vercel.
 const PROVIDER_TIMEOUT_MS = 20000;
 
-const ELEVEN_KEY = process.env.ELEVENLABS_API_KEY;
-const ELEVEN_VOICE_ID = process.env.ELEVENLABS_VOICE_ID;
+// .trim() en las tres: al pegar un valor en el panel de Vercel es fácil que
+// quede un espacio o un salto de línea al final, y eso rompe el header o la
+// URL sin un error claro (ya pasó con las claves de R2 y de Anthropic).
+const ELEVEN_KEY = (process.env.ELEVENLABS_API_KEY || '').trim();
+const ELEVEN_VOICE_ID = (process.env.ELEVENLABS_VOICE_ID || '').trim();
+// Modelo de voz. v4 Turbo (decidido por Felipe el 2026-10-08): más expresivo
+// que Flash, mismo precio de lista ($0,04 / 1.000 caracteres) pero ~3x más
+// lento (~1,8 s vs ~0,6 s por frase). Se puede cambiar sin tocar código con
+// ELEVENLABS_MODEL_ID en Vercel (ej. eleven_flash_v2_5 para volver al rápido).
+const ELEVEN_MODEL_ID = (process.env.ELEVENLABS_MODEL_ID || 'eleven_v4_turbo').trim();
+const ELEVEN_MODEL_RESPALDO = 'eleven_flash_v2_5';
 
 const AZURE_KEY = process.env.AZURE_SPEECH_KEY;
 const AZURE_REGION = process.env.AZURE_SPEECH_REGION;
@@ -4186,7 +4195,7 @@ function escapeSsml(text) {
     .replace(/>/g, '&gt;');
 }
 
-async function speakWithElevenLabs(text) {
+async function pedirVozAElevenLabs(text, modelId) {
   const resp = await fetch(
     `https://api.elevenlabs.io/v1/text-to-speech/${ELEVEN_VOICE_ID}`,
     {
@@ -4198,7 +4207,7 @@ async function speakWithElevenLabs(text) {
       },
       body: JSON.stringify({
         text,
-        model_id: 'eleven_flash_v2_5', // la mitad de precio por caracter que multilingual_v2, y más rápido
+        model_id: modelId,
         // "style" le da variación emocional/prosódica a la voz — sin este
         // parámetro (o en 0) suena plana, casi robótica, porque queda sin
         // ninguna inflexión de estilo. "use_speaker_boost" mejora la
@@ -4209,8 +4218,21 @@ async function speakWithElevenLabs(text) {
       signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
     }
   );
-  if (!resp.ok) throw new Error(`ElevenLabs ${resp.status}: ${await resp.text()}`);
+  if (!resp.ok) throw new Error(`ElevenLabs ${resp.status} (${modelId}): ${await resp.text()}`);
   return Buffer.from(await resp.arrayBuffer());
+}
+
+// Si el modelo elegido falla (por ejemplo un modelo nuevo con un problema
+// del lado de ElevenLabs), se reintenta UNA vez con Flash v2.5 en vez de
+// dejar que la charla caiga a la voz robótica del sistema.
+async function speakWithElevenLabs(text) {
+  try {
+    return await pedirVozAElevenLabs(text, ELEVEN_MODEL_ID);
+  } catch (err) {
+    if (ELEVEN_MODEL_ID === ELEVEN_MODEL_RESPALDO) throw err;
+    console.error(`ElevenLabs falló con ${ELEVEN_MODEL_ID}, se reintenta con ${ELEVEN_MODEL_RESPALDO}:`, err.message);
+    return await pedirVozAElevenLabs(text, ELEVEN_MODEL_RESPALDO);
+  }
 }
 
 async function speakWithAzure(text) {
