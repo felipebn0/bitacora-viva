@@ -2305,7 +2305,8 @@
     if (n.includes('google')) score += 3;
     if (n.includes('enhanced') || n.includes('mejorada') || n.includes('premium') || n.includes('neural')) score += 4;
     if (/^es-co$/i.test(v.lang) || n.includes('colombia')) score += 5;
-    if (/^es-(es|419|us|mx|ar)$/i.test(v.lang)) score += 1;
+    if (/^es-(es|419|us|mx)$/i.test(v.lang)) score += 1;
+    if (/^es-(ar|uy)$/i.test(v.lang) || /argentin|uruguay/.test(n)) score -= 5; // la app es 100% colombiana: nunca una voz rioplatense
     if (v.localService === false) score += 1;
     return score;
   }
@@ -2435,30 +2436,67 @@
     }
   });
 
-  async function speak(text, onEnd, logEntry, index) {
-    try {
-      const resp = await fetch('/api/speak', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-      });
-      if (!resp.ok) throw new Error('tts-unavailable');
-      const blob = await resp.blob();
-      if (logEntry && index != null) {
-        uploadAudio(blob, 'assistant', index, 'audio/mpeg').then((file) => {
-          if (file) logEntry.audioFile = file;
-        });
-      }
+  // Para que la entrevistadora empiece a hablar antes: un texto de varias frases
+  // se parte en DOS pedazos (la primera frase y el resto), se pide la voz de
+  // los dos a la vez, y suena apenas está lista la primera mientras la segunda
+  // todavía se genera. El tiempo de la voz crece con el largo del texto, así
+  // que la primera frase sola llega bastante antes que el mensaje entero.
+  // Un texto corto se pide completo, como siempre.
+  function dividirParaVoz(texto) {
+    const limpio = String(texto || '').trim();
+    if (limpio.length < 90) return [limpio];
+    const m = limpio.match(/^([\s\S]{20,}?[.!?…])\s+([\s\S]+)$/);
+    if (!m || !m[2].trim()) return [limpio];
+    return [m[1].trim(), m[2].trim()];
+  }
+
+  async function pedirVoz(texto) {
+    const resp = await fetch('/api/speak', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: texto }),
+    });
+    if (!resp.ok) throw new Error('tts-unavailable');
+    return resp.blob();
+  }
+
+  function reproducirBlob(blob) {
+    return new Promise((resolve, reject) => {
       const url = URL.createObjectURL(blob);
       if (!ttsAudioEl) ttsAudioEl = new Audio();
       ttsAudioEl.src = url;
-      ttsAudioEl.onended = () => { URL.revokeObjectURL(url); if (onEnd) onEnd(); };
-      ttsAudioEl.onerror = () => { URL.revokeObjectURL(url); speakWithSystemVoice(text, onEnd); };
-      await ttsAudioEl.play();
-    } catch (err) {
-      // la voz del sistema no se puede grabar: solo queda el texto para este turno
-      speakWithSystemVoice(text, onEnd);
+      ttsAudioEl.onended = () => { URL.revokeObjectURL(url); resolve(); };
+      ttsAudioEl.onerror = () => { URL.revokeObjectURL(url); reject(new Error('audio')); };
+      ttsAudioEl.play().catch((e) => { URL.revokeObjectURL(url); reject(e); });
+    });
+  }
+
+  async function speak(text, onEnd, logEntry, index) {
+    const partes = dividirParaVoz(text);
+    const pedidos = partes.map((parte) => pedirVoz(parte)); // en paralelo
+    pedidos.forEach((pedido) => pedido.catch(() => {})); // una que falla mientras suena la otra no es un error "sin atender"
+    if (logEntry && index != null) {
+      // El audio completo (todas las partes juntas) se sube para poder
+      // escucharlo después, igual que antes: en paralelo con la reproducción.
+      Promise.all(pedidos)
+        .then((blobs) => uploadAudio(new Blob(blobs, { type: 'audio/mpeg' }), 'assistant', index, 'audio/mpeg'))
+        .then((file) => { if (file) logEntry.audioFile = file; })
+        .catch(() => {});
     }
+    let ya = 0; // cuántas partes ya sonaron completas
+    try {
+      for (let i = 0; i < pedidos.length; i++) {
+        const blob = await pedidos[i];
+        await reproducirBlob(blob);
+        ya = i + 1;
+      }
+    } catch (err) {
+      // la voz del sistema no se puede grabar: lo que falte se dice con ella y
+      // solo queda el texto para este turno
+      speakWithSystemVoice(partes.slice(ya).join(' ') || text, onEnd);
+      return;
+    }
+    if (onEnd) onEnd();
   }
 
   // Detección de pausas por volumen (en vez del reconocimiento de voz del
@@ -2577,11 +2615,8 @@
     vadRafId = null;
   }
 
-  // durationMsOverride: cuando el audio que se manda es el recortado por
-  // recortarSilencioDeCola (más abajo), su duración real ya no es
-  // lastRecordingDurationMs (la de la grabación completa, sin recortar) —
-  // sin este parámetro, el panel de consumo mostraría más segundos de los
-  // que en verdad se mandaron a transcribir.
+  // durationMsOverride: duración (en ms) del audio que se manda, para el
+  // "tiempo hablando" del panel de consumo.
   async function transcribeAudio(blob, durationMsOverride) {
     try {
       // lastRecordingDurationMs ya se calcula más arriba (ver
@@ -2602,90 +2637,6 @@
     } catch (e) {
       return '';
     }
-  }
-
-  // Cuánto silencio de cola se deja SIN recortar (ver recortarSilencioDeCola
-  // más abajo) — un margen chico por si la persona todavía estaba
-  // terminando de hablar justo cuando el detector marcó "silencio", para
-  // no arriesgarse a cortar la última palabra.
-  const COLA_A_CONSERVAR_MS = 500;
-
-  // Recorta el silencio de "cola" que queda grabado al final de cada
-  // respuesta antes de mandarla a transcribir (pedido de Felipe,
-  // 2026-09-09, revisión de costos: la transcripción cobra por minuto de
-  // audio). SILENCE_MS (arriba) tiene que pasar SIN voz para que la
-  // grabación se corte — ese silencio de espera queda grabado igual, y
-  // antes se mandaba completo a transcribir aunque no tuviera nada que
-  // decir. Aquí se recorta todo ese silencio salvo los últimos
-  // COLA_A_CONSERVAR_MS, dejando la grabación real intacta.
-  // Importante: esto NO toca el audioBlob que se sube para guardar/
-  // escuchar después (ver uploadAudio en handleAnswer) — solo cambia lo
-  // que se manda a /api/transcribe. Si decodificar/recodificar falla por
-  // lo que sea (formato raro, navegador viejo), se manda la grabación
-  // completa tal cual — nunca se arriesga un turno real por ahorrar aquí.
-  async function recortarSilencioDeCola(blob) {
-    if (!recordingStartedAt || !lastLoudTime) return { blob, durationMs: lastRecordingDurationMs };
-    const finCorteMs = (lastLoudTime - recordingStartedAt) + COLA_A_CONSERVAR_MS;
-    // Respuestas cortas, con poca o ninguna cola de silencio de más: no
-    // vale la pena decodificar/recodificar para ahorrar casi nada.
-    if (finCorteMs >= lastRecordingDurationMs - 200) return { blob, durationMs: lastRecordingDurationMs };
-    try {
-      const arrayBuffer = await blob.arrayBuffer();
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
-      const sampleRate = audioBuffer.sampleRate;
-      const finCorteSample = Math.min(audioBuffer.length, Math.max(1, Math.round((finCorteMs / 1000) * sampleRate)));
-      const recortado = ctx.createBuffer(audioBuffer.numberOfChannels, finCorteSample, sampleRate);
-      for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
-        recortado.copyToChannel(audioBuffer.getChannelData(ch).subarray(0, finCorteSample), ch);
-      }
-      try { ctx.close(); } catch (e) {}
-      return { blob: audioBufferToWav(recortado), durationMs: (finCorteSample / sampleRate) * 1000 };
-    } catch (e) {
-      return { blob, durationMs: lastRecordingDurationMs };
-    }
-  }
-
-  // Codificador WAV manual (sin librería): un AudioBuffer decodificado no
-  // se puede volver a comprimir a webm/opus fácil desde el navegador, pero
-  // WAV es un formato simple de armar a mano a partir de las muestras
-  // crudas — y /api/transcribe ya acepta audio/wav (ver
-  // AUDIO_MIME_PERMITIDOS en server.js). El tamaño del archivo no importa
-  // aquí (ElevenLabs cobra por duración, no por bytes), así que WAV sin
-  // comprimir es una opción válida sin agregar ninguna dependencia nueva.
-  function audioBufferToWav(buffer) {
-    const numChannels = buffer.numberOfChannels;
-    const sampleRate = buffer.sampleRate;
-    const numFrames = buffer.length;
-    const blockAlign = numChannels * 2; // 16-bit PCM
-    const dataSize = numFrames * blockAlign;
-    const arrayBuffer = new ArrayBuffer(44 + dataSize);
-    const view = new DataView(arrayBuffer);
-    const escribirTexto = (offset, texto) => { for (let i = 0; i < texto.length; i++) view.setUint8(offset + i, texto.charCodeAt(i)); };
-    escribirTexto(0, 'RIFF');
-    view.setUint32(4, 36 + dataSize, true);
-    escribirTexto(8, 'WAVE');
-    escribirTexto(12, 'fmt ');
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true); // PCM
-    view.setUint16(22, numChannels, true);
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * blockAlign, true);
-    view.setUint16(32, blockAlign, true);
-    view.setUint16(34, 16, true);
-    escribirTexto(36, 'data');
-    view.setUint32(40, dataSize, true);
-    const canales = [];
-    for (let ch = 0; ch < numChannels; ch++) canales.push(buffer.getChannelData(ch));
-    let offset = 44;
-    for (let i = 0; i < numFrames; i++) {
-      for (let ch = 0; ch < numChannels; ch++) {
-        const s = Math.max(-1, Math.min(1, canales[ch][i]));
-        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-        offset += 2;
-      }
-    }
-    return new Blob([arrayBuffer], { type: 'audio/wav' });
   }
 
   // Antes, si la grabación salía muy corta o no se pudo transcribir, el
@@ -2765,11 +2716,12 @@
       return;
     }
     setState('thinking', 'Transcribiendo…');
-    // audioBlob (completo, sin recortar) sigue siendo lo que se guarda para
-    // escuchar después (ver handleAnswer) — paraTranscribir es una copia
-    // aparte, sin el silencio de cola, solo para esta llamada.
-    const paraTranscribir = await recortarSilencioDeCola(audioBlob);
-    let text = await transcribeAudio(paraTranscribir.blob, paraTranscribir.durationMs);
+    // Se manda la grabación tal cual salió del micrófono (comprimida, ~10 KB por
+    // segundo). Antes se recortaba el silencio de cola decodificando y
+    // recodificando el audio como WAV sin comprimir (~10 veces más pesado, y
+    // subirlo en cada turno tardaba más de lo que ahorraba: esos ~2 s de
+    // silencio cuestan ~$0,0001 en la transcripción).
+    let text = await transcribeAudio(audioBlob, lastRecordingDurationMs);
     if (!text && fallbackTranscript.trim()) {
       text = fallbackTranscript.trim(); // el servidor no pudo: usamos lo que captó el navegador
     }
@@ -3063,19 +3015,44 @@
     sessionLog.push(logEntry);
     writeRow.classList.remove('visible');
     writeInput.value = '';
+    let subidaDelAudio = null;
     if (audioBlob) {
       const esHistoriaRelevante = text.trim().length >= HISTORIA_MIN_CHARS;
       const duroBastante = lastRecordingDurationMs >= AUDIO_MIN_DURATION_MS;
       const duroLoMinimo = lastRecordingDurationMs > NOTA_MINIMA_A_GUARDAR_MS;
       if ((esHistoriaRelevante || duroBastante) && duroLoMinimo) {
-        const file = await uploadAudio(audioBlob, 'user', myTurn, audioBlob.type || 'audio/webm');
-        if (file) logEntry.audioFile = file;
+        // La subida va EN PARALELO con /api/next (antes se esperaba a que
+        // terminara para mandarle la URL, y cada respuesta larga pagaba esa
+        // subida en fila con la IA). /api/next guarda la historia sin audio y,
+        // cuando las dos terminan, se enlaza con /api/story-log/audio.
+        subidaDelAudio = uploadAudio(audioBlob, 'user', myTurn, audioBlob.type || 'audio/webm').then((file) => {
+          if (file) logEntry.audioFile = file;
+          return file;
+        });
       }
       // Si no calificó (o duró 5 s o menos), el audio del navegador se
       // descarta solo — el texto transcrito ya quedó guardado en
       // logEntry/history.
     }
-    if (seguir) fetchNext();
+    if (seguir) {
+      const siguiente = fetchNext();
+      if (subidaDelAudio) {
+        Promise.all([subidaDelAudio, siguiente])
+          .then(([file]) => { if (file) enlazarAudioConHistoria(text.trim(), file); })
+          .catch(() => {});
+      }
+    }
+  }
+
+  // Completa la historia guardada por /api/next con el audio que se subió en
+  // paralelo (ver handleAnswer). Best-effort: si falla, el audio igual queda
+  // en el registro de la sesión que se guarda al final.
+  function enlazarAudioConHistoria(texto, audioUrl) {
+    fetch('/api/story-log/audio', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: texto, audioUrl }),
+    }).catch(() => {});
   }
 
   // Estado de guardado persistente (MEJORA 1: Resiliencia)

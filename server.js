@@ -354,10 +354,16 @@ app.use('/api', (req, res, next) => {
 // guardar y limpiar una lista de horarios por cada IP.
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX = 30;
+// La voz tiene su propio cupo (y su propia clave en rate_limits): la entrevistadora
+// pide una o dos frases habladas por turno, y varias personas de una misma casa
+// comparten IP — si compartieran los 30/minuto con transcribir/guardar/siguiente,
+// una charla ágil se toparía con el tope. Ver /api/speak.
+const RATE_LIMIT_MAX_VOZ = 120;
 
-async function rateLimit(req, res, next) {
+function crearRateLimit(prefijoClave, maximo) {
+  return async function rateLimit(req, res, next) {
   try {
-    const ip = req.ip || 'desconocida';
+    const ip = prefijoClave + (req.ip || 'desconocida');
     const windowStart = Math.floor(Date.now() / RATE_LIMIT_WINDOW_MS);
     await ensureSchema();
     const rows = await sql`
@@ -380,7 +386,7 @@ async function rateLimit(req, res, next) {
       });
     }
 
-    if (count > RATE_LIMIT_MAX) {
+    if (count > maximo) {
       // Segundos que faltan para que arranque la ventana siguiente (las
       // ventanas son de RATE_LIMIT_WINDOW_MS de ancho, ancladas a
       // Date.now() / RATE_LIMIT_WINDOW_MS): así quien llama sabe cuánto
@@ -398,7 +404,10 @@ async function rateLimit(req, res, next) {
     console.error('No se pudo aplicar el límite de pedidos:', err);
     next();
   }
+  };
 }
+const rateLimit = crearRateLimit('', RATE_LIMIT_MAX);
+const rateLimitVoz = crearRateLimit('voz:', RATE_LIMIT_MAX_VOZ);
 
 // Recibe los reportes de violación de CSP que manda el navegador solo,
 // disparados por la propia política (Content-Security-Policy-Report-Only,
@@ -570,6 +579,33 @@ function escaparParaEnvoltorio(texto) {
 function envolverDatoNoConfiable(origen, texto) {
   if (!texto || !String(texto).trim()) return '';
   return `\n\n<datos_no_confiables origen="${origen}">\n${escaparParaEnvoltorio(texto)}\n</datos_no_confiables>`;
+}
+
+// --- Medición de tiempos de cada turno ---
+// Pedido de Felipe (2026-10-08): "se demora mucho desde que uno habla hasta que
+// la IA vuelve y habla". Para dejar de adivinar dónde se va el tiempo, las
+// rutas del turno (/api/transcribe, /api/next, /api/speak) miden sus pasos y los
+// devuelven en el header Server-Timing (se ve en el navegador: F12, Network, el
+// pedido, Timing) y los dejan en una línea [latencia] en los logs de Vercel.
+function medirTurno(ruta) {
+  const t0 = Date.now();
+  let ultimo = t0;
+  const pasos = [];
+  return {
+    marca(nombre) {
+      const ahora = Date.now();
+      pasos.push([nombre, ahora - ultimo]);
+      ultimo = ahora;
+    },
+    cerrar(res) {
+      const total = Date.now() - t0;
+      const detalle = pasos.map(([n, ms]) => `${n}=${ms}`).join(' ');
+      console.log(`[latencia] ruta=${ruta} total=${total}ms ${detalle}`.trim());
+      if (res && !res.headersSent) {
+        res.setHeader('Server-Timing', [...pasos.map(([n, ms]) => `${n};dur=${ms}`), `total;dur=${total}`].join(', '));
+      }
+    },
+  };
 }
 
 // --- Español de Colombia, 100% ---
@@ -4278,7 +4314,17 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
       if (m.content.length > 4000) m.content = m.content.slice(0, 4000);
     }
     const mode = req.body.mode === 'arbol' ? 'arbol' : 'historia';
-    const memoria = await loadMemorySummary(req.profileUserId);
+    // Tiempos de este turno (Server-Timing + línea [latencia]): ver medirTurno.
+    const medida = medirTurno('next');
+    // Estas tres lecturas no dependen una de otra: en paralelo cuestan lo de la
+    // más lenta, no la suma (cada una es un viaje a la base de datos). Antes se
+    // pedían una tras otra, en distintos puntos de esta ruta.
+    const [memoria, conocidosArbol, familiaCtx] = await Promise.all([
+      loadMemorySummary(req.profileUserId),
+      mode === 'arbol' ? loadKnownFamilyMembers(req.profileUserId) : null,
+      mode === 'arbol' ? null : loadFamilyContext(req.profileUserId, req.bitacoraEsPropia),
+    ]);
+    medida.marca('db');
     const esPrimeraVez = mode === 'historia' && !memoria && !history.length;
     // Item 12 (pedido de Felipe, 2026-09-08): A/B test de DÓNDE se
     // menciona una historia aportada — 'inicio' (arranca la charla con
@@ -4367,10 +4413,9 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
 
     let system;
     if (mode === 'arbol') {
-      const conocidos = await loadKnownFamilyMembers(req.profileUserId);
-      system = ARBOL_SYSTEM_PROMPT + conocidos;
+      system = ARBOL_SYSTEM_PROMPT + conocidosArbol;
     } else {
-      const familia = await loadFamilyContext(req.profileUserId, req.bitacoraEsPropia);
+      const familia = familiaCtx;
       system =
         SYSTEM_PROMPT +
         (memoria ? `\n\nResumen de charlas anteriores (no repitas lo que ya está aquí):` + envolverDatoNoConfiable('resumen_charlas_anteriores', memoria) : '') +
@@ -4396,6 +4441,7 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
       { timeout: PROVIDER_TIMEOUT_MS }
     );
     await logClaudeUsage(req.profileUserId, mode === 'arbol' ? 'arbol_charla' : 'charla', response);
+    medida.marca('claude');
 
     const bloqueDeTexto = primerBloqueDeTexto(response);
     if (!bloqueDeTexto) throw new Error('Respuesta de Anthropic sin bloque de texto utilizable.');
@@ -4434,6 +4480,7 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
     // Siempre al final, también en el cierre y en la pausa: nada que no sea
     // español de Colombia le llega a la persona (ver REGLA_ESPANOL_COLOMBIANO).
     text = await asegurarEspanolColombiano(req.profileUserId, text);
+    medida.marca('postproceso');
 
     // Los mensajes "sintéticos" que le mandamos a Claude por dentro (avisos
     // de que se presionó un botón, no algo que la persona realmente dijo)
@@ -4485,6 +4532,8 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
       : (notaPendiente && notaPendiente.media)
       ? { url: notaPendiente.media.url, type: notaPendiente.media.type }
       : null;
+    medida.marca('guardado');
+    medida.cerrar(res);
     res.json({ message: text, done, pausado, media });
   } catch (err) {
     console.error(err);
@@ -4601,8 +4650,10 @@ app.post('/api/transcribe', requireAuth, rateLimit, express.raw({ type: '*/*', l
     // Content-Type que manda el navegador, verificar los bytes de verdad.
     // Antes esta ruta era la única de las tres que subían audio que se
     // saltaba este chequeo.
+    const medida = medirTurno('transcribe');
     const real = await verificarArchivoReal(req.body, AUDIO_MIME_PERMITIDOS);
     if (!real) return res.status(400).json({ error: 'El archivo no parece ser un audio válido.' });
+    medida.marca('verificar');
 
     const formData = new FormData();
     formData.append('model_id', 'scribe_v1');
@@ -4622,6 +4673,7 @@ app.post('/api/transcribe', requireAuth, rateLimit, express.raw({ type: '*/*', l
     }
 
     const data = await resp.json();
+    medida.marca('stt');
 
     // Duración real del audio grabado, mandada por el cliente (ver
     // lastRecordingDurationMs en app.html) — alimenta el "tiempo hablando"
@@ -4632,6 +4684,7 @@ app.post('/api/transcribe', requireAuth, rateLimit, express.raw({ type: '*/*', l
       : null;
     await logUsage(req.profileUserId, { service: 'elevenlabs', kind: 'stt', audioSeconds, costUsd: elevenSttCostUsd(audioSeconds) });
 
+    medida.cerrar(res);
     res.json({ text: (data.text || '').trim() });
   } catch (err) {
     console.error(err);
@@ -4639,15 +4692,49 @@ app.post('/api/transcribe', requireAuth, rateLimit, express.raw({ type: '*/*', l
   }
 });
 
-app.post('/api/speak', requireAuth, rateLimit, async (req, res) => {
+// Enlaza el audio de la respuesta de la persona con su historia DESPUÉS de que
+// /api/next ya contestó. Antes el cliente esperaba a que terminara de subir el
+// audio antes de llamar a /api/next (para mandarle la URL), así que cada
+// respuesta larga pagaba la subida en fila con la transcripción y con Claude.
+// Ahora la subida va en paralelo con /api/next (que guarda la historia sin
+// audio) y, cuando ambas terminaron, el cliente llama aquí para completarlo.
+// Solo completa una historia de ESTA bitácora, de los últimos 10 minutos, que
+// todavía no tiene audio, y solo con un archivo que es de esta misma bitácora.
+app.post('/api/story-log/audio', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar, rateLimit, async (req, res) => {
+  try {
+    const texto = typeof req.body.text === 'string' ? req.body.text.trim().slice(0, 4000) : '';
+    const audioUrl = urlHttpValida(typeof req.body.audioUrl === 'string' ? req.body.audioUrl.slice(0, 1000) : null);
+    if (!texto || !audioUrl) return res.status(400).json({ error: 'Faltan datos.' });
+    const datos = datosDelArchivoDeBlob(audioUrl);
+    if (!datos || datos.ownerId !== req.profileUserId) return res.status(403).json({ error: 'Ese audio no es de esta bitácora.' });
+    await ensureSchema();
+    const textoAGuardar = capitalizarInicio(texto);
+    const actualizadas = await sql`
+      UPDATE story_log SET audio_url = ${audioUrl}
+      WHERE id = (
+        SELECT id FROM story_log
+        WHERE user_id = ${req.profileUserId} AND texto = ${textoAGuardar} AND audio_url IS NULL AND created_at > now() - interval '10 minutes'
+        ORDER BY created_at DESC LIMIT 1
+      )
+      RETURNING id`;
+    res.json({ ok: true, enlazado: actualizadas.length > 0 });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo enlazar el audio.' });
+  }
+});
+
+app.post('/api/speak', requireAuth, rateLimitVoz, async (req, res) => {
   try {
     let text = (req.body.text || '').trim();
     if (!text) return res.status(400).json({ error: 'Falta texto.' });
     if (text.length > 2000) text = text.slice(0, 2000);
 
+    const medida = medirTurno('speak');
     let buffer;
     if (ELEVEN_KEY && ELEVEN_VOICE_ID) {
       buffer = await speakWithElevenLabs(text);
+      medida.marca('tts');
       await logUsage(req.profileUserId, { service: 'elevenlabs', kind: 'tts', characters: text.length, costUsd: elevenTtsCostUsd(text.length) });
     } else if (AZURE_KEY && AZURE_REGION) {
       buffer = await speakWithAzure(text);
@@ -4658,6 +4745,7 @@ app.post('/api/speak', requireAuth, rateLimit, async (req, res) => {
       return res.status(501).json({ error: 'No hay proveedor de voz configurado.' });
     }
 
+    medida.cerrar(res);
     res.set('Content-Type', 'audio/mpeg');
     res.send(buffer);
   } catch (err) {
