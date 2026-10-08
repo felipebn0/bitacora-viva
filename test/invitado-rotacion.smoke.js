@@ -58,7 +58,7 @@ function fakeSql(strings, ...values) {
     return Promise.resolve(u ? [{ owner_user_id: u.owner_user_id }] : []);
   }
   // /api/collaboration-info: nombre a mostrar del dueño.
-  if (text.includes('SELECT name, username FROM users WHERE id')) {
+  if (/SELECT name, username(, tratamiento)? FROM users WHERE id/.test(text)) {
     const u = usersTable.find((x) => x.id === values[0]);
     return Promise.resolve(u ? [{ name: u.name, username: u.username }] : []);
   }

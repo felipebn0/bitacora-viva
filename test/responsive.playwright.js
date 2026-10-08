@@ -87,7 +87,7 @@ function fakeSql(strings, ...values) {
   if (text.includes('SELECT tree_pending_names FROM users WHERE id')) {
     return Promise.resolve([{ tree_pending_names: null }]);
   }
-  if (text.includes('SELECT name, username FROM users WHERE id')) {
+  if (/SELECT name, username(, tratamiento)? FROM users WHERE id/.test(text)) {
     const u = users[values[0]];
     return Promise.resolve(u ? [{ name: u.name, username: u.username }] : []);
   }

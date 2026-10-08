@@ -38,6 +38,7 @@ const user = {
   token_version: 0,
   owner_user_id: null, // null = cuenta dueña, no colaboradora
   fecha_nacimiento: null,
+  tratamiento: 'masculino',
   resumenTexto: '', // memoria de charlas anteriores (loadMemorySummary)
   pendingFamilyNote: null, // { id, contributor, parentesco, texto } | null
   pendingMedia: null, // { id, type, caption, contributor } | null
@@ -100,8 +101,8 @@ function fakeSql(strings, ...values) {
     return Promise.resolve([]);
   }
   // leerPerfilBitacora (BACKLOG #12): para la bitácora propia lee "users".
-  if (text.includes('SELECT name AS nombre, fecha_nacimiento, created_at FROM users WHERE id')) {
-    if (values[0] === user.id) return Promise.resolve([{ nombre: user.username, fecha_nacimiento: user.fecha_nacimiento, created_at: null }]);
+  if (text.includes('SELECT name AS nombre, fecha_nacimiento, created_at, tratamiento FROM users WHERE id')) {
+    if (values[0] === user.id) return Promise.resolve([{ nombre: user.username, fecha_nacimiento: user.fecha_nacimiento, created_at: null, tratamiento: user.tratamiento }]);
     return Promise.resolve([]);
   }
 
@@ -289,6 +290,7 @@ async function main() {
   check('turno normal: done=false', normalBody.done === false);
   check('turno normal: un solo llamado (una sola pregunta, no dispara segunda pasada)', capturedCalls.length === 1);
   check('turno normal: mensaje tal cual (sin marcadores)', !normalBody.message.includes('[FIN]') && !normalBody.message.includes('[PAUSA]'));
+  check('turno normal: el system lleva el trato elegido (masculino), no asume mujer', capturedCalls[0].system[0].text.includes('TRATO DE LA PERSONA') && capturedCalls[0].system[0].text.includes('MASCULINO'));
   check('turno normal: el system va con cache_control ephemeral (prompt caching)', capturedCalls[0].system[0].cache_control && capturedCalls[0].system[0].cache_control.type === 'ephemeral');
 
   // --- 3) Cierre con [FIN] ---------------------------------------------------

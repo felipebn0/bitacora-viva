@@ -91,8 +91,8 @@ function fakeSql(strings, ...values) {
 
   if (text.includes('UPDATE users SET name') && text.includes('fecha_nacimiento') && text.includes('RETURNING name, email, fecha_nacimiento')) {
     // Posiciones: name, email, fecha_nacimiento, phone, whatsapp_opt_in,
-    // whatsapp_opt_in_at, id (ver /api/update-profile en server.js).
-    const [newName, newEmail, newFecha, newPhone, newOptIn, , id] = values;
+    // whatsapp_opt_in_at, tratamiento, id (ver /api/update-profile en server.js).
+    const [newName, newEmail, newFecha, newPhone, newOptIn, , newTratamiento, id] = values;
     const u = users[id];
     if (!u) return Promise.resolve([]);
     if (newEmail && newEmail !== u.email) {
@@ -108,7 +108,8 @@ function fakeSql(strings, ...values) {
     u.fecha_nacimiento = newFecha;
     u.phone = newPhone;
     u.whatsapp_opt_in = newOptIn;
-    return Promise.resolve([{ name: u.name, email: u.email, fecha_nacimiento: u.fecha_nacimiento, phone: u.phone, whatsapp_opt_in: u.whatsapp_opt_in }]);
+    if (newTratamiento) u.tratamiento = newTratamiento;
+    return Promise.resolve([{ name: u.name, email: u.email, fecha_nacimiento: u.fecha_nacimiento, phone: u.phone, whatsapp_opt_in: u.whatsapp_opt_in, tratamiento: u.tratamiento || null }]);
   }
 
   if (text.includes('UPDATE users SET password_hash') && text.includes('RETURNING username, token_version')) {

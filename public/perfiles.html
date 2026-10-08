@@ -103,6 +103,8 @@
     width: 100%; min-height: 44px; box-sizing: border-box; border: 1px solid #E7DFCC; border-radius: 10px; padding: 10px 12px;
     font-family: var(--font-body); background: #fff; color: var(--ink); font-size: 1rem; margin-bottom: 14px;
   }
+  .trato-fila { margin-top: 10px; font-size: 0.85rem; color: var(--ink-soft); }
+  .trato-fila select { margin-left: 6px; min-height: 36px; border: 1px solid #E7DFCC; border-radius: 8px; padding: 4px 8px; font-family: var(--font-body); background: #fff; color: var(--ink); font-size: 0.9rem; }
   .form-nueva .hint { font-size: 0.8rem; color: var(--ink-soft); margin: -8px 0 14px; }
 </style>
 </head>
@@ -133,6 +135,12 @@
         <input type="text" id="nuevoNombre" placeholder="Ej: Papá" maxlength="100">
         <label for="nuevaFecha">Fecha de nacimiento (opcional)</label>
         <input type="date" id="nuevaFecha" aria-label="Fecha de nacimiento (opcional)">
+        <label for="nuevoTratamiento">¿Cómo quiere que lo traten?</label>
+        <select id="nuevoTratamiento">
+          <option value="">Elige una opción</option>
+          <option value="masculino">En masculino (él)</option>
+          <option value="femenino">En femenino (ella)</option>
+        </select>
         <label for="nuevaRelacion">¿Para quién es? (opcional)</label>
         <select id="nuevaRelacion">
           <option value="">Prefiero no decir</option>
@@ -160,6 +168,7 @@
   const nuevoNombre = document.getElementById('nuevoNombre');
   const nuevaFecha = document.getElementById('nuevaFecha');
   const nuevaRelacion = document.getElementById('nuevaRelacion');
+  const nuevoTratamiento = document.getElementById('nuevoTratamiento');
   const nuevaRelacionOtro = document.getElementById('nuevaRelacionOtro');
   const crearBtn = document.getElementById('crearBtn');
   const crearMsg = document.getElementById('crearMsg');
@@ -208,13 +217,14 @@
     const enlaceToggleBtn = p.esPropia ? '' : `<button class="btn small plain" data-enlace="${p.id}" type="button">${enlaceAbiertoId === p.id ? 'Ocultar enlace' : 'Compartir enlace'}</button>`;
     // Onboarding hablado (item 15, pedido de Felipe 2026-09-08): contarle
     // a la IA gustos/contexto de esta persona antes de su primera charla.
-    const onboardingBtn = p.esPropia ? '' : `<a class="btn small plain" href="/perfilar.html?id=${p.id}">${p.tieneOnboarding ? 'Editar lo que sabemos de ella' : 'Contarle a la IA sobre ella'}</a>`;
+    const onboardingBtn = p.esPropia ? '' : `<a class="btn small plain" href="/perfilar.html?id=${p.id}">${p.tieneOnboarding ? 'Editar lo que sabemos de esta persona' : 'Contarle a la IA sobre esta persona'}</a>`;
     // Archivar (pedido de Felipe, 2026-09-08): no borra nada, solo lo saca
     // de esta lista y corta sus enlaces — ver POST /api/subprofiles/:id/archive.
     // No se ofrece para "tú" (esPropia) ni para el perfil activo ahora
     // mismo (el servidor lo rechazaría igual, pero es más claro no
     // ofrecer un botón que va a fallar).
     const archivarBtn = (!p.esPropia && !esActivo) ? `<button class="btn small plain warn" data-archivar="${p.id}" type="button">Archivar</button>` : '';
+    const tratoFila = p.esPropia ? '' : `<label class="trato-fila">Cómo quiere que lo traten:<select data-tratamiento="${p.id}" aria-label="Cómo quiere que lo traten"><option value=""${p.tratamiento ? '' : ' selected'}>Sin elegir</option><option value="masculino"${p.tratamiento === 'masculino' ? ' selected' : ''}>En masculino (él)</option><option value="femenino"${p.tratamiento === 'femenino' ? ' selected' : ''}>En femenino (ella)</option></select></label>`;
     const enlaceBox = enlaceAbiertoId === p.id ? `<div class="enlace-box" id="enlaceBox-${p.id}"><p class="msg">Cargando…</p></div>` : '';
     return `<div class="perfil-card">
       <div class="fila-principal">
@@ -227,6 +237,7 @@
         </div>
         <div class="acciones-fila">${cambiarBtn}${enlaceToggleBtn}${onboardingBtn}${archivarBtn}</div>
       </div>
+      ${tratoFila}
       ${enlaceBox}
     </div>`;
   }
@@ -289,6 +300,23 @@
 
   // Un solo listener con delegación (en vez de uno por fila) — las filas se
   // reemplazan enteras cada vez que se repinta la lista.
+  lista.addEventListener('change', async (e) => {
+    const id = Number(e.target.dataset.tratamiento);
+    if (!id) return;
+    try {
+      const resp = await fetch(`/api/subprofiles/${id}/tratamiento`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tratamiento: e.target.value || null }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) { listaStatus.textContent = data.error || 'No se pudo guardar cómo quiere que lo traten.'; return; }
+      const perfil = perfilesCache.find((p) => p.id === id);
+      if (perfil) perfil.tratamiento = data.tratamiento || null;
+      listaStatus.textContent = 'Listo, guardamos cómo quiere que lo traten.';
+    } catch (e7) {
+      listaStatus.textContent = 'No se pudo conectar. Intenta de nuevo.';
+    }
+  });
+
   lista.addEventListener('click', async (e) => {
     const cambiarId = e.target.dataset.cambiar;
     if (cambiarId) {
@@ -363,18 +391,20 @@
   crearBtn.addEventListener('click', async () => {
     const nombre = nuevoNombre.value.trim();
     if (!nombre) { crearMsg.textContent = 'Falta el nombre.'; crearMsg.classList.remove('error'); return; }
+    if (!nuevoTratamiento.value) { crearMsg.textContent = 'Elige cómo quiere que lo traten.'; crearMsg.classList.remove('error'); return; }
     crearBtn.disabled = true;
     crearMsg.textContent = '';
     const relacion = nuevaRelacion.value === 'otro' ? nuevaRelacionOtro.value.trim() : nuevaRelacion.value;
     try {
       const resp = await fetch('/api/subprofiles', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre, fechaNacimiento: nuevaFecha.value || null, relacion: relacion || null }),
+        body: JSON.stringify({ nombre, fechaNacimiento: nuevaFecha.value || null, relacion: relacion || null, tratamiento: nuevoTratamiento.value }),
       });
       const data = await resp.json();
       if (!resp.ok) { crearMsg.textContent = mensajeDeError(resp, data, 'No se pudo crear el subperfil.'); crearMsg.classList.add('error'); return; }
       nuevoNombre.value = '';
       nuevaFecha.value = '';
+      nuevoTratamiento.value = '';
       nuevaRelacion.value = '';
       nuevaRelacionOtro.value = '';
       nuevaRelacionOtro.hidden = true;

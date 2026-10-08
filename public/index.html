@@ -366,14 +366,14 @@
     .signup-form{display:grid; gap:14px}
     .field{display:grid; gap:6px}
     .field label{font-size:0.8125rem; font-weight:600; color:var(--ink-2)}
-    .field input{
+    .field input, .field select{
       width:100%; min-height:44px; padding:11px 14px; font-size:1.0625rem;
       background:var(--bg); color:var(--ink);
       border:1px solid var(--hairline); border-radius:var(--radius-s);
       transition:border-color .15s ease, box-shadow .15s ease;
     }
     .field input::placeholder{color:var(--ink-3)}
-    .field input:focus-visible{
+    .field input:focus-visible, .field select:focus-visible{
       outline:none; border-color:var(--accent);
       box-shadow:0 0 0 4px var(--accent-tint);
     }
@@ -817,6 +817,14 @@
               </div>
               <p class="field-hint">Con código de país. Lo usamos para avisarte por WhatsApp cuando lo actives desde tu perfil.</p>
               <div class="field">
+                <label for="suTratamiento">¿Cómo quieres que te traten?</label>
+                <select id="suTratamiento" name="tratamiento" required>
+                  <option value="" selected disabled>Elige una opción</option>
+                  <option value="masculino">En masculino (él)</option>
+                  <option value="femenino">En femenino (ella)</option>
+                </select>
+              </div>
+              <div class="field">
                 <label for="suPass">Clave</label>
                 <input id="suPass" name="password" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres" minlength="6" required>
               </div>
@@ -1110,6 +1118,7 @@
       const name = document.getElementById('suName').value.trim();
       const email = document.getElementById('suEmail').value.trim();
       const phone = document.getElementById('suPhone').value.trim();
+      const tratamiento = document.getElementById('suTratamiento').value;
       const password = document.getElementById('suPass').value;
       const password2 = document.getElementById('suPass2').value;
       const inviteCode = suCode.value.trim().toUpperCase();
@@ -1157,6 +1166,12 @@
         document.getElementById('suPhone').focus();
         return;
       }
+      if (!tratamiento) {
+        signupStatus.classList.add('error');
+        signupStatus.textContent = 'Elige cómo quieres que te traten.';
+        document.getElementById('suTratamiento').focus();
+        return;
+      }
       if (!document.getElementById('suTerms').checked) {
         signupStatus.classList.add('error');
         signupStatus.textContent = 'Para crear tu cuenta tienes que aceptar los Términos y la Política de Privacidad.';
@@ -1195,7 +1210,7 @@
         const response = await fetch('/api/signup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, email, phone, password, inviteCode, accountType: modoColaborador ? 'collaborator' : 'owner', acceptTerms: true })
+          body: JSON.stringify({ name, email, phone, tratamiento, password, inviteCode, accountType: modoColaborador ? 'collaborator' : 'owner', acceptTerms: true })
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {

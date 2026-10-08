@@ -52,7 +52,7 @@ function fakeSql(strings, ...values) {
     const u = Object.values(users).find((x) => x.invite_code === values[0]);
     return Promise.resolve(u ? [{ id: u.id, name: u.name, username: u.username }] : []);
   }
-  if (text.includes('SELECT name, username FROM users WHERE id')) {
+  if (/SELECT name, username(, tratamiento)? FROM users WHERE id/.test(text)) {
     const u = users[values[0]];
     return Promise.resolve(u ? [{ name: u.name, username: u.username }] : []);
   }

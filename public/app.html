@@ -816,6 +816,12 @@
            <label class="um-field-label" for="umProfileBirthdate">Fecha de nacimiento</label>
            <input type="date" id="umProfileBirthdate" aria-label="Tu fecha de nacimiento">
            <p class="um-hint">Para que la entrevistadora entienda mejor el contexto de tu edad al charlar — es opcional.</p>
+           <label class="um-field-label" for="umProfileTratamiento">¿Cómo quieres que te traten?</label>
+           <select id="umProfileTratamiento" aria-label="Cómo quieres que te traten">
+             <option value="">Sin elegir</option>
+             <option value="masculino">En masculino (él)</option>
+             <option value="femenino">En femenino (ella)</option>
+           </select>
            <button class="um-btn" id="umProfileSaveBtn" type="button">Guardar perfil</button>
            <p class="um-msg" id="umProfileMsg" role="status" aria-live="polite" aria-atomic="true"></p>
 
@@ -1132,6 +1138,7 @@
   const umProfileNameFull = document.getElementById('umProfileNameFull');
   const umProfileEmailFull = document.getElementById('umProfileEmailFull');
   const umProfileBirthdate = document.getElementById('umProfileBirthdate');
+  const umProfileTratamiento = document.getElementById('umProfileTratamiento');
 
   // El correo (o el nombre) puede ser más largo de lo que entra en el
   // cuadro del panel de Cuenta. Antes se achicaba la letra del campo para
@@ -1156,7 +1163,7 @@
   umProfileName.addEventListener('input', () => mostrarCompletoSiNoCabe(umProfileName, umProfileNameFull));
   umProfileEmail.addEventListener('input', () => mostrarCompletoSiNoCabe(umProfileEmail, umProfileEmailFull));
 
-  function showApp(username, name, email, fechaNacimiento, isAdmin) {
+  function showApp(username, name, email, fechaNacimiento, isAdmin, tratamiento) {
     checkingScreen.style.display = 'none';
     loginScreen.style.display = 'none';
     appContent.style.display = 'flex';
@@ -1171,6 +1178,7 @@
     umProfileName.value = name || '';
     umProfileEmail.value = email || '';
     umProfileBirthdate.value = fechaNacimiento || '';
+    umProfileTratamiento.value = tratamiento || '';
     ajustarCamposDePerfil();
     if (location.hash === '#inviteToggle') {
       // Llegó aquí con un enlace directo a "invitar familiares" (por ejemplo
@@ -1429,6 +1437,7 @@
           name: umProfileName.value,
           email: umProfileEmail.value,
           fechaNacimiento: umProfileBirthdate.value || null,
+          tratamiento: umProfileTratamiento.value || null,
         }),
       });
       const data = await resp.json();
@@ -1444,6 +1453,7 @@
       umProfileName.value = data.name || '';
       umProfileEmail.value = data.email || '';
       umProfileBirthdate.value = data.fechaNacimiento || '';
+      umProfileTratamiento.value = data.tratamiento || '';
       ajustarCamposDePerfil();
       greetingName.textContent = data.name || umUsername.textContent.replace(/^Usuario:\s*/, '') || '';
       umProfileMsg.textContent = 'Perfil guardado ✓';
@@ -1984,7 +1994,7 @@
     if (data.bitacoraActiva) {
       // Pedido de Felipe (2026-09-08): texto más directo — "puedo
       // administrar pero no puedo contar su historia".
-      subperfilBannerTexto.textContent = `Puedes administrar la bitácora de ${data.bitacoraActiva.nombre || 'esa persona'}, pero no puedes contar su historia por ella.`;
+      subperfilBannerTexto.textContent = `Puedes administrar la bitácora de ${data.bitacoraActiva.nombre || 'esa persona'}, pero no puedes contar su historia en su nombre.`;
       subperfilBanner.style.display = 'flex';
       orbZone.style.display = 'none';
       // Sin esto, "Presiona el botón para empezar a charlar" quedaba
@@ -2065,7 +2075,7 @@
       // subperfil (isNarradorLink) es un invitado DISTINTO: sí se queda
       // aquí, narrando su propia bitácora (ver aplicarSesionSubperfil).
       if (data.isCollaborator) { window.location.href = '/colaborar.html'; return; }
-      showApp(data.username, data.name, data.email, data.fechaNacimiento, data.isAdmin);
+      showApp(data.username, data.name, data.email, data.fechaNacimiento, data.isAdmin, data.tratamiento);
       aplicarSesionSubperfil(data);
     })
     .catch(() => {
@@ -2516,8 +2526,10 @@
   // — de ahí también las preguntas repetidas sobre algo que sí se había
   // contado, solo que cortado a la mitad. Subido a 2200ms: más cerca del
   // valor original (2000ms, nunca reportado como lento) que del
-  // extremo de 4000ms que sí lo fue.
-  const SILENCE_MS = 2200; // pausa tolerada antes de dar la respuesta por terminada
+  // extremo de 4000ms que sí lo fue. Bajado a 2000ms (2026-10-08, pedido de
+  // Felipe al ver que la IA tardaba en contestar): 200ms menos de espera
+  // en cada turno.
+  const SILENCE_MS = 2000; // pausa tolerada antes de dar la respuesta por terminada
   // Subido de 0.02: con ruido de fondo (ventilador, TV, eco del cuarto) el
   // volumen ambiente solía superar 0.02 seguido, así que lastLoudTime nunca
   // dejaba de renovarse y SILENCE_MS de arriba no llegaba a cumplirse nunca

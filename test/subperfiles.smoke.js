@@ -68,15 +68,15 @@ function fakeSql(strings, ...values) {
   }
 
   // --- /api/subprofiles ---
-  if (text.includes('INSERT INTO bitacoras (admin_user_id, nombre, fecha_nacimiento, relacion)')) {
-    const [adminUserId, nombre, fechaNacimiento, relacion] = values;
+  if (text.includes('INSERT INTO bitacoras (admin_user_id, nombre, fecha_nacimiento, relacion, tratamiento)')) {
+    const [adminUserId, nombre, fechaNacimiento, relacion, tratamiento] = values;
     const id = nextBitacoraId++;
-    bitacoras[id] = { id, admin_user_id: adminUserId, nombre, fecha_nacimiento: fechaNacimiento, relacion: relacion || null, narrador_code: null, invite_code: null, aportes_pending_names: null, pin_hash: null, contexto_onboarding: null };
+    bitacoras[id] = { id, admin_user_id: adminUserId, nombre, fecha_nacimiento: fechaNacimiento, relacion: relacion || null, tratamiento: tratamiento || null, narrador_code: null, invite_code: null, aportes_pending_names: null, pin_hash: null, contexto_onboarding: null };
     return Promise.resolve([{ id }]);
   }
-  if (text.includes('SELECT id, nombre, relacion, contexto_onboarding FROM bitacoras WHERE admin_user_id')) {
+  if (text.includes('SELECT id, nombre, relacion, contexto_onboarding, tratamiento FROM bitacoras WHERE admin_user_id')) {
     const lista = Object.values(bitacoras).filter((b) => b.admin_user_id === values[0]);
-    return Promise.resolve(lista.map((b) => ({ id: b.id, nombre: b.nombre, relacion: b.relacion || null, contexto_onboarding: b.contexto_onboarding || null })));
+    return Promise.resolve(lista.map((b) => ({ id: b.id, nombre: b.nombre, relacion: b.relacion || null, contexto_onboarding: b.contexto_onboarding || null, tratamiento: b.tratamiento || null })));
   }
   if (text.includes('SELECT id FROM bitacoras WHERE id') && text.includes('admin_user_id')) {
     const bit = bitacoras[values[0]];
@@ -91,6 +91,11 @@ function fakeSql(strings, ...values) {
   if (text.includes('SELECT id, narrador_code FROM bitacoras WHERE id')) {
     const bit = bitacoras[values[0]];
     return Promise.resolve(bit ? [{ id: bit.id, narrador_code: bit.narrador_code }] : []);
+  }
+  if (text.includes('UPDATE bitacoras SET tratamiento = ')) {
+    const [tratamiento, id] = values;
+    if (bitacoras[id]) bitacoras[id].tratamiento = tratamiento;
+    return Promise.resolve([]);
   }
   if (text.includes('UPDATE bitacoras SET narrador_code = NULL WHERE id')) {
     // Revocar: NULL va como literal en el SQL, no como parámetro -> 1 solo value (el id).
@@ -277,16 +282,25 @@ function check(nombre, cond) {
     const cookieOtra = await login(server, 'otrafamilia');
 
     // --- Crear ---
-    const crear = await request(server, { path: '/api/subprofiles', method: 'POST', body: { nombre: 'papá' } }, cookieFelipe);
+    const crear = await request(server, { path: '/api/subprofiles', method: 'POST', body: { nombre: 'papá', tratamiento: 'masculino' } }, cookieFelipe);
     check('crear subperfil -> 200', crear.status === 200);
     const { id: papaId } = JSON.parse(crear.body);
     check('el id del subperfil es disjunto de cualquier id de "users" del fixture', papaId !== 1 && papaId !== 2);
     check('el subperfil quedó administrado por Felipe', bitacoras[papaId].admin_user_id === 1);
+    check('el subperfil guardó el trato elegido (masculino)', bitacoras[papaId].tratamiento === 'masculino');
 
     // --- Listar: solo lo mío, nunca lo de otra familia ---
     const listaFelipe = await request(server, { path: '/api/subprofiles' }, cookieFelipe);
     const perfilesFelipe = JSON.parse(listaFelipe.body).perfiles;
     check('la lista de Felipe incluye "vos" + el subperfil de papá', perfilesFelipe.some((p) => p.esPropia) && perfilesFelipe.some((p) => p.id === papaId));
+
+    check('la lista devuelve el trato del subperfil', perfilesFelipe.find((p) => p.id === papaId).tratamiento === 'masculino');
+
+    const cambiarTrato = await request(server, { path: `/api/subprofiles/${papaId}/tratamiento`, method: 'POST', body: { tratamiento: 'femenino' } }, cookieFelipe);
+    check('cambiar el trato de un subperfil propio -> 200', cambiarTrato.status === 200 && bitacoras[papaId].tratamiento === 'femenino');
+    const tratoAjeno = await request(server, { path: `/api/subprofiles/${papaId}/tratamiento`, method: 'POST', body: { tratamiento: 'masculino' } }, cookieOtra);
+    check('cambiar el trato del subperfil de otra familia -> 404 y no cambia', tratoAjeno.status === 404 && bitacoras[papaId].tratamiento === 'femenino');
+    await request(server, { path: `/api/subprofiles/${papaId}/tratamiento`, method: 'POST', body: { tratamiento: 'masculino' } }, cookieFelipe);
 
     const listaOtra = await request(server, { path: '/api/subprofiles' }, cookieOtra);
     const perfilesOtra = JSON.parse(listaOtra.body).perfiles;

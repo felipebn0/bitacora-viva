@@ -47,7 +47,7 @@ function fakeSql(strings, ...values) {
     const u = users[values[0]];
     return Promise.resolve(u ? [{ owner_user_id: u.owner_user_id, token_version: u.token_version }] : []);
   }
-  if (text.includes('SELECT name, username FROM users WHERE id')) {
+  if (/SELECT name, username(, tratamiento)? FROM users WHERE id/.test(text)) {
     const u = users[values[0]];
     return Promise.resolve(u ? [{ name: null, username: u.username }] : []);
   }
