@@ -190,6 +190,17 @@ El consumo de Claude/voz solo queda registrado desde que se activó esta medici�
 
 Si se edita el `<script>`/`<style>` de `admin.html`, correr `node tools/actualizar-hashes-vercel.js` antes de commitear (mismo criterio que el resto de `public/`, ver `test/hashes-csp-vercel.smoke.js`).
 
+## Invitados con enlace personal (SEC-002A / SEC-002C)
+
+Quien aporta historias **sin cuenta** entra con un enlace personal que crea el dueño (o quien administra el subperfil) desde "Invitar a mi círculo a colaborar": escribe el **nombre y el celular** de la persona, la app crea `/colaborar.html?invitacion=…` y abre WhatsApp con el chat de ese número y el mensaje ya escrito. El celular es único por bitácora (tabla `invitados`); el mismo celular es la misma persona.
+
+- La sesión del invitado lleva un `guestId` y cada aporte guarda `family_notes.guest_id`: dos invitados llamados igual **no** ven ni tocan los aportes del otro (antes se comparaba por nombre).
+- El dueño puede **quitar el acceso** (corta la sesión en el siguiente pedido; los aportes se conservan) o dar un **enlace nuevo** (mismo `guestId`, recupera sus aportes).
+- El código familiar ya **no** sirve para entrar sin cuenta (`POST /api/guest-start` pide `invitacion`); sigue sirviendo para registrarse con cuenta y para colaboradores con cuenta. Rotar el código familiar no corta a los invitados personales; quitar su acceso sí.
+- Las sesiones de invitado anteriores (firmadas con el código familiar, sin `guestId`) siguen funcionando hasta que expiren (30 días) o se rote el código familiar, y solo ven los aportes viejos sin `guest_id` de su mismo nombre.
+- Cerrar o actualizar un borrador de aporte (`/api/contribute-chat`, `draftId`) exige ser quien lo escribió (`contributed_by` / `guest_id`); un `draftId` ajeno no modifica nada y se guarda como aporte nuevo.
+- Pendiente (SEC-002B): `/api/media-file` todavía deja a cualquier colaborador o invitado de la familia pedir cualquier archivo de esa familia si conoce la ruta; ver `BACKLOG.md` #19.
+
 ## Recordatorios (correo + WhatsApp asistido)
 
 Cada día (Vercel Cron → `GET /api/cron/reminders`, 14:00 UTC = 9:00 Colombia) la app busca a quién le toca un recordatorio para seguir contando su historia:
@@ -229,7 +240,6 @@ Con `WHATSAPP_TOKEN` y `WHATSAPP_PHONE_NUMBER_ID` configurados, el cron diario *
 5. En `/admin`, la sección de WhatsApp debe mostrar "Envío automático" en verde. Probar con tu propio número (opt-in + teléfono) y mirar el JSON del cron (`whatsappApi`).
 
 El número tiene que traer código de país; un celular colombiano de 10 dígitos que empieza por 3 se completa con 57. Todavía no se procesan las respuestas de la gente (no hay webhook): quien no quiere más avisos los apaga en su perfil.
-
 
 ## Botón físico
 

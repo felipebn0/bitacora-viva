@@ -39,10 +39,27 @@ let storyLog = {}; // profileUserId -> [{ id, texto, audio_url, media_urls }]
 let nextStoryLogId = 1;
 let familyNotesInserts = []; // [{ userId, contributor, parentesco, texto }]
 
+const { crearFakeInvitados } = require('./_fake-invitados');
+const fakeInvitados = crearFakeInvitados();
+
 function fakeSql(strings, ...values) {
   const text = strings.join('?');
   if (text.includes('CREATE TABLE') || text.includes('ALTER TABLE') || text.includes('CREATE INDEX')) return Promise.resolve([]);
   if (text.includes('rate_limits')) return Promise.resolve([{ count: 1 }]);
+  const deInvitados = fakeInvitados.manejar(text, values);
+  if (deInvitados) return deInvitados;
+  if (text.includes('SELECT 1 FROM bitacoras WHERE id') && text.includes('admin_user_id')) {
+    const bit = bitacoras[values[0]];
+    return Promise.resolve(bit && bit.admin_user_id === values[1] ? [{ '?column?': 1 }] : []);
+  }
+  if (text.includes('SELECT id, nombre FROM bitacoras WHERE id') && text.includes('archived_at IS NULL')) {
+    const bit = bitacoras[values[0]];
+    return Promise.resolve(bit ? [{ id: bit.id, nombre: bit.nombre }] : []);
+  }
+  if (text.includes('SELECT nombre FROM bitacoras WHERE id')) {
+    const bit = bitacoras[values[0]];
+    return Promise.resolve(bit ? [{ nombre: bit.nombre }] : []);
+  }
 
   if (text.includes('SELECT id, username, password_hash, token_version FROM users WHERE username')) {
     const u = Object.values(users).find((x) => x.username === values[0]);
@@ -171,7 +188,7 @@ function fakeSql(strings, ...values) {
   }
   // /api/contribute-story: family_notes.user_id es a qué bitácora quedó
   // atado el aporte — se guarda para verificar que cayó en el subperfil.
-  if (text.includes('INSERT INTO family_notes (user_id, contributor, parentesco, texto, audio_url, contributed_by)')) {
+  if (text.includes('INSERT INTO family_notes (user_id, contributor, parentesco, texto, audio_url, contributed_by, guest_id)')) {
     const [userId, contributor, parentesco, texto] = values;
     familyNotesInserts.push({ userId, contributor, parentesco, texto });
     return Promise.resolve([]);
@@ -406,8 +423,15 @@ function check(nombre, cond) {
     const infoAportes = await request(server, { path: `/api/guest-code-info?codigo=${codigoAportesMama}` });
     check('el código de aportes de un subperfil resuelve a su nombre -> 200', infoAportes.status === 200 && JSON.parse(infoAportes.body).ownerName === 'Mamá');
 
-    const guestStartAportes = await request(server, { path: '/api/guest-start', method: 'POST', body: { codigo: codigoAportesMama, name: 'Tía Rosa' } });
-    check('un familiar entra como invitado clásico con el código de un subperfil -> 200', guestStartAportes.status === 200);
+    // Felipe (cambiado al perfil de mamá) invita a la tía con su nombre y celular;
+    // ella entra con su enlace personal.
+    const invitarTia = await request(server, { path: '/api/invitaciones', method: 'POST', body: { nombre: 'Tía Rosa', telefono: '+57 311 222 3344' } }, cookieComoMama);
+    check('invitar a la tía a la bitácora de un subperfil -> 200', invitarTia.status === 200);
+    const codigoTia = new URL(JSON.parse(invitarTia.body).invitacion.enlace).searchParams.get('invitacion');
+    const guestStartAportes = await request(server, { path: '/api/guest-start', method: 'POST', body: { invitacion: codigoTia } });
+    check('un familiar entra como invitado con su enlace personal a un subperfil -> 200', guestStartAportes.status === 200);
+    const invitarAjena = await request(server, { path: '/api/invitaciones', method: 'POST', body: { nombre: 'Intrusa', telefono: '+57 311 999 0000', owner: mamaId } }, cookieOtra);
+    check('otra familia no puede invitar a la bitácora de mamá -> 403', invitarAjena.status === 403);
     const cookieTiaRosa = guestStartAportes.headers['set-cookie'][0].split(';')[0];
 
     const aporte = await request(server, {

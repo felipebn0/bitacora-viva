@@ -246,6 +246,19 @@
     box-shadow: 0 10px 22px -12px rgba(63,77,49,0.55);
   }
   .invite-cta:hover { background: #4a5738; }
+  /* Invitar a una persona con su nombre y celular (enlace personal). */
+  .invite-personal { max-width: 340px; margin: 0 auto 10px; text-align: left; }
+  .invite-personal label { display: block; font-size: 0.8rem; color: var(--ink-soft); margin: 8px 0 4px; }
+  .invite-personal input { width: 100%; box-sizing: border-box; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 12px; font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink); }
+  .invite-personal .invite-send { display: block; width: 100%; margin-top: 10px; border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px; min-height: 44px; font-weight: 700; font-family: var(--font-body); font-size: 1rem; cursor: pointer; }
+  .invite-personal .invite-send:disabled { opacity: 0.6; cursor: default; }
+  .invite-msg { font-size: 0.85rem; color: var(--ink-soft); margin: 8px 0 0; min-height: 1.2em; }
+  .invite-list { list-style: none; margin: 10px 0 0; padding: 0; }
+  .invite-list li { border-top: 1px solid #E7DFCC; padding: 8px 0; font-size: 0.9rem; }
+  .invite-list .invite-quien { font-weight: 700; }
+  .invite-list .invite-estado { color: var(--ink-soft); font-size: 0.8rem; }
+  .invite-list .invite-acciones { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 2px; }
+  .invite-list .write-toggle { font-size: 0.8rem; }
 
   /* width:100% en appContent Y en #main-content (ver más abajo): el bug real
      que reportó Felipe. Con align-items:center, un contenedor flex NO
@@ -1110,9 +1123,18 @@
     <div class="logout-row">
       <button class="invite-cta" id="inviteToggle" type="button" aria-expanded="false" aria-controls="inviteRow">Invitar a mi círculo a colaborar</button>
       <div class="pc-71494e54" id="inviteRow">
-        <p class="sub pc-ccc12387">Comparte este código con familiares — se unen a tu bitácora, pueden escuchar y leer lo que ya guardaste, y también sumar sus propias historias. Nadie de fuera de tu familia puede entrar con este código.</p>
+        <div class="invite-personal">
+          <p class="sub pc-ccc12387">Invita a una persona con su nombre y su celular: le llega SU enlace personal por WhatsApp y entra a sumar historias sin crear cuenta. Cada enlace es de una sola persona y lo puedes quitar cuando quieras.</p>
+          <label for="inviteNombre">Nombre</label>
+          <input type="text" id="inviteNombre" maxlength="60" placeholder="Ej: Tía Marta" autocomplete="off">
+          <label for="invitePhone">Celular con WhatsApp</label>
+          <input type="tel" id="invitePhone" placeholder="+57 300 123 4567" autocomplete="off">
+          <button class="invite-send" id="inviteSendBtn" type="button">📲 Invitar por WhatsApp</button>
+          <p class="invite-msg" id="inviteMsg" role="status" aria-live="polite"></p>
+          <ul class="invite-list" id="inviteList"></ul>
+        </div>
+        <p class="sub pc-ccc12387">Si la persona va a crear una cuenta, comparte este código: se une a tu bitácora, puede escuchar y leer lo que ya guardaste y sumar sus propias historias. Nadie de fuera de tu familia puede entrar con este código.</p>
         <p class="pc-298fc7ae" id="inviteCode">…</p>
-        <a class="write-toggle pc-93b8ea5b" id="inviteWhatsappBtn" href="#" target="_blank" rel="noopener">📲 mandar por WhatsApp</a>
         <button class="write-toggle" id="inviteCopyBtn" type="button">copiar código</button>
         <button class="write-toggle" id="inviteRegenBtn" type="button">generar código nuevo</button>
       </div>
@@ -1757,26 +1779,105 @@
   const inviteRow = document.getElementById('inviteRow');
   const inviteCode = document.getElementById('inviteCode');
   const inviteCopyBtn = document.getElementById('inviteCopyBtn');
-  const inviteWhatsappBtn = document.getElementById('inviteWhatsappBtn');
   let inviteLoaded = false;
 
-  // El link de aquí abajo va a colaborar.html?codigo=... — la entrada
-  // liviana de invitado (sin cuenta, sin clave, solo el nombre, ver
-  // /api/guest-start): quien lo reciba por WhatsApp toca el link y arranca
-  // directo a contar su historia. No manda nada por su cuenta: es un link
-  // de WhatsApp normal (wa.me) que abre con el mensaje ya escrito, listo
-  // para elegir a quién mandárselo — la persona sigue eligiendo y tocando
-  // enviar, como cualquier mensaje.
-  function actualizarLinkWhatsapp(code) {
-    if (!code || code === 'No se pudo obtener el código.' || code === 'No se pudo generar el código.') {
-      inviteWhatsappBtn.style.display = 'none';
-      return;
-    }
-    const link = `${location.origin}/colaborar.html?codigo=${encodeURIComponent(code)}`;
-    const mensaje = `Te invito a sumar una historia a nuestra bitácora familiar — entra aquí, no hace falta crear cuenta: ${link}`;
-    inviteWhatsappBtn.href = `https://wa.me/?text=${encodeURIComponent(mensaje)}`;
-    inviteWhatsappBtn.style.display = 'inline-block';
+  // Invitaciones personales (SEC-002A): el dueño escribe el nombre y el
+  // celular de cada persona; el servidor crea un enlace secreto solo de ella
+  // y devuelve el link de WhatsApp que abre el chat con ESE número, con el
+  // mensaje ya escrito. La persona entra con ese enlace sin crear cuenta, y
+  // sus aportes quedan atados a su invitación (no al nombre que escriba).
+  const inviteNombre = document.getElementById('inviteNombre');
+  const invitePhone = document.getElementById('invitePhone');
+  const inviteSendBtn = document.getElementById('inviteSendBtn');
+  const inviteMsg = document.getElementById('inviteMsg');
+  const inviteList = document.getElementById('inviteList');
+
+  function boton(texto, alClick) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'write-toggle';
+    b.textContent = texto;
+    b.addEventListener('click', alClick);
+    return b;
   }
+
+  function pintarInvitaciones(invitaciones) {
+    inviteList.textContent = '';
+    invitaciones.forEach((inv) => {
+      const li = document.createElement('li');
+      const quien = document.createElement('div');
+      quien.className = 'invite-quien';
+      quien.textContent = inv.nombre + ' · ' + inv.telefono;
+      const estado = document.createElement('div');
+      estado.className = 'invite-estado';
+      estado.textContent = inv.activa ? (inv.ultimoIngreso ? 'Ya entró con su enlace' : 'Todavía no ha entrado') : 'Acceso quitado';
+      const acciones = document.createElement('div');
+      acciones.className = 'invite-acciones';
+      if (inv.activa) {
+        const reenviar = document.createElement('a');
+        reenviar.className = 'write-toggle';
+        reenviar.href = inv.whatsapp;
+        reenviar.target = '_blank';
+        reenviar.rel = 'noopener';
+        reenviar.textContent = 'enviar de nuevo';
+        acciones.appendChild(reenviar);
+        acciones.appendChild(boton('quitar acceso', async () => {
+          if (!confirm('¿Quitarle el acceso a ' + inv.nombre + '? Deja de poder entrar con su enlace; lo que ya aportó se queda.')) return;
+          try { await fetch('/api/invitaciones/' + encodeURIComponent(inv.id) + '/revocar', { method: 'POST' }); } catch (e) {}
+          cargarInvitaciones();
+        }));
+      }
+      acciones.appendChild(boton(inv.activa ? 'enlace nuevo' : 'volver a invitar', async () => {
+        if (inv.activa && !confirm('¿Generar un enlace nuevo para ' + inv.nombre + '? El anterior deja de servir.')) return;
+        try {
+          const resp = await fetch('/api/invitaciones/' + encodeURIComponent(inv.id) + '/renovar', { method: 'POST' });
+          const data = await resp.json();
+          if (resp.ok) window.open(data.invitacion.whatsapp, '_blank', 'noopener');
+        } catch (e) {}
+        cargarInvitaciones();
+      }));
+      li.appendChild(quien);
+      li.appendChild(estado);
+      li.appendChild(acciones);
+      inviteList.appendChild(li);
+    });
+  }
+
+  async function cargarInvitaciones() {
+    try {
+      const resp = await fetch('/api/invitaciones');
+      if (!resp.ok) return;
+      pintarInvitaciones((await resp.json()).invitaciones || []);
+    } catch (e) {}
+  }
+
+  inviteSendBtn.addEventListener('click', async () => {
+    inviteMsg.textContent = '';
+    if (!inviteNombre.value.trim()) { inviteMsg.textContent = 'Escribe el nombre de la persona.'; inviteNombre.focus(); return; }
+    if (!invitePhone.value.trim()) { inviteMsg.textContent = 'Escribe su celular, con el código de país.'; invitePhone.focus(); return; }
+    inviteSendBtn.disabled = true;
+    try {
+      const resp = await fetch('/api/invitaciones', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre: inviteNombre.value, telefono: invitePhone.value }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) { inviteMsg.textContent = data.error || 'No se pudo crear la invitación.'; return; }
+      inviteNombre.value = '';
+      invitePhone.value = '';
+      // WhatsApp abre el chat con ese número y el mensaje ya escrito; solo
+      // falta tocar enviar. Si el navegador bloquea la ventana, queda el
+      // enlace "enviar de nuevo" en la lista.
+      const ventana = window.open(data.invitacion.whatsapp, '_blank', 'noopener');
+      inviteMsg.textContent = ventana ? 'Listo. En WhatsApp solo falta tocar enviar.' : 'Listo. Toca "enviar de nuevo" abajo para abrir WhatsApp.';
+      cargarInvitaciones();
+    } catch (e) {
+      inviteMsg.textContent = 'No se pudo conectar. Intenta de nuevo.';
+    } finally {
+      inviteSendBtn.disabled = false;
+    }
+  });
 
   inviteToggle.addEventListener('click', async () => {
     // getComputedStyle, no inviteRow.style.display: el oculto inicial viene
@@ -1792,16 +1893,15 @@
     }
     inviteRow.style.display = 'block';
     inviteToggle.setAttribute('aria-expanded', 'true');
+    cargarInvitaciones();
     if (inviteLoaded) return;
     try {
       const resp = await fetch('/api/invite-code');
       const data = await resp.json();
       inviteCode.textContent = resp.ok ? data.code : 'No se pudo obtener el código.';
       inviteLoaded = resp.ok;
-      actualizarLinkWhatsapp(resp.ok ? data.code : null);
     } catch (e) {
       inviteCode.textContent = 'No se pudo obtener el código.';
-      actualizarLinkWhatsapp(null);
     }
   });
   inviteCopyBtn.addEventListener('click', async () => {
@@ -1820,10 +1920,8 @@
       const resp = await fetch('/api/invite-code/regenerate', { method: 'POST' });
       const data = await resp.json();
       inviteCode.textContent = resp.ok ? data.code : 'No se pudo generar el código.';
-      actualizarLinkWhatsapp(resp.ok ? data.code : null);
     } catch (e) {
       inviteCode.textContent = 'No se pudo generar el código.';
-      actualizarLinkWhatsapp(null);
     } finally {
       inviteRegenBtn.disabled = false;
     }

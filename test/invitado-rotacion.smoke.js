@@ -27,6 +27,9 @@ process.env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || 'fake';
 const path = require('path');
 const http = require('http');
 const bcrypt = require(path.resolve(__dirname, '..', 'node_modules', 'bcryptjs'));
+const crypto = require('crypto');
+const { crearFakeInvitados } = require('./_fake-invitados');
+const fakeInvitados = crearFakeInvitados();
 
 const serverPath = path.resolve(__dirname, '..', 'server.js');
 
@@ -43,6 +46,8 @@ function fakeSql(strings, ...values) {
   const text = strings.join('?');
   if (text.includes('CREATE TABLE') || text.includes('ALTER TABLE') || text.includes('CREATE INDEX')) return Promise.resolve([]);
   if (text.includes('rate_limits')) return Promise.resolve([{ count: 1 }]);
+  const deInvitados = fakeInvitados.manejar(text, values);
+  if (deInvitados) return deInvitados;
   if (text.includes('SELECT id, username, password_hash, token_version FROM users WHERE username')) {
     const u = usersTable.find((x) => x.username === values[0]);
     return Promise.resolve(u ? [{ id: u.id, username: u.username, password_hash: u.password_hash, token_version: u.token_version }] : []);
@@ -67,7 +72,12 @@ function fakeSql(strings, ...values) {
     const u = usersTable.find((x) => x.id === values[0] && x.owner_user_id === null);
     return Promise.resolve(u ? [{ id: u.id, invite_code: u.invite_code }] : []);
   }
-  // /api/guest-code-info y /api/guest-start miran esto para encontrar al dueño por código.
+  // /api/guest-start (invitación personal) busca al dueño por id.
+  if (text.includes('SELECT id, name, username FROM users WHERE id') && text.includes('owner_user_id IS NULL')) {
+    const u = usersTable.find((x) => x.id === values[0] && x.owner_user_id === null);
+    return Promise.resolve(u ? [{ id: u.id, name: u.name, username: u.username }] : []);
+  }
+  // /api/guest-code-info busca al dueño por código.
   if (text.includes('SELECT id, name, username FROM users WHERE invite_code') && text.includes('owner_user_id IS NULL')) {
     const u = usersTable.find((x) => x.invite_code === values[0] && x.owner_user_id === null);
     return Promise.resolve(u ? [{ id: u.id, name: u.name, username: u.username }] : []);
@@ -124,33 +134,46 @@ async function main() {
   const server = app.listen(0);
   await new Promise((r) => server.once('listening', r));
 
-  // --- Invitado sin cuenta, entra con el código original ---
-  const guestStart = await request(server, { path: '/api/guest-start', method: 'POST', body: { codigo: 'CODIGO01', name: 'Invitado' } });
-  check('el invitado puede entrar con el código vigente', guestStart.status === 200);
+  // --- El dueño invita a una persona; entra con SU enlace personal ---
+  const dueñoCookie = await loginComo(server, 'dueño@example.com');
+  const invitar = await request(server, { path: '/api/invitaciones', method: 'POST', body: { nombre: 'Invitado', telefono: '+57 300 111 2233' }, headers: { Cookie: dueñoCookie } });
+  const invitacion = JSON.parse(invitar.body).invitacion;
+  const codigoPersonal = new URL(invitacion.enlace).searchParams.get('invitacion');
+  const guestStart = await request(server, { path: '/api/guest-start', method: 'POST', body: { invitacion: codigoPersonal } });
+  check('el invitado puede entrar con su enlace personal', guestStart.status === 200);
   const guestCookie = cookieDe(guestStart);
+
+  // Sesión de un invitado ANTERIOR a las invitaciones personales: firmada con
+  // el código familiar (sin guestId), tal como se emitía antes.
+  const b64 = Buffer.from(JSON.stringify({ guest: true, ownerId: 1, guestName: 'Viejo', code: 'CODIGO01', iat: Date.now() })).toString('base64url');
+  const cookieVieja = `bv_session=${b64}.${crypto.createHmac('sha256', process.env.SESSION_SECRET).update(b64).digest('base64url')}`;
 
   // Confirma que el acceso funciona ANTES de rotar (para no probar solo el
   // caso negativo — si esto fallara, el resto del test no probaría nada real).
   const antesDeRotar = await request(server, { path: '/api/collaboration-info?owner=1', method: 'GET', headers: { Cookie: guestCookie } });
   check('antes de rotar el código, el invitado accede normalmente', antesDeRotar.status === 200);
+  const viejaAntes = await request(server, { path: '/api/collaboration-info?owner=1', method: 'GET', headers: { Cookie: cookieVieja } });
+  check('antes de rotar el código, la sesión vieja también accede', viejaAntes.status === 200);
 
-  // --- El dueño rota el código ---
-  const dueñoCookie = await loginComo(server, 'dueño@example.com');
+  // --- El dueño rota el código familiar ---
   const rotar = await request(server, { path: '/api/invite-code/regenerate', method: 'POST', headers: { Cookie: dueñoCookie } });
   check('el dueño puede rotar su código', rotar.status === 200);
   const nuevoCodigo = JSON.parse(rotar.body).code;
   check('el código nuevo es distinto del viejo', nuevoCodigo !== 'CODIGO01');
 
-  // --- La sesión de invitado vieja tiene que caer ---
-  const despuesDeRotar = await request(server, { path: '/api/collaboration-info?owner=1', method: 'GET', headers: { Cookie: guestCookie } });
+  // --- La sesión vieja (por código familiar) tiene que caer ---
+  const despuesDeRotar = await request(server, { path: '/api/collaboration-info?owner=1', method: 'GET', headers: { Cookie: cookieVieja } });
   check('después de rotar, la sesión de invitado con el código viejo queda cortada (401) — antes: seguía funcionando 30 días más', despuesDeRotar.status === 401);
 
-  // --- Un invitado nuevo, con el código nuevo, sí puede entrar ---
-  const guestStart2 = await request(server, { path: '/api/guest-start', method: 'POST', body: { codigo: nuevoCodigo, name: 'Invitado Nuevo' } });
-  check('un invitado que entra con el código NUEVO sí funciona', guestStart2.status === 200);
-  const guestCookie2 = cookieDe(guestStart2);
-  const accesoNuevo = await request(server, { path: '/api/collaboration-info?owner=1', method: 'GET', headers: { Cookie: guestCookie2 } });
-  check('y ese invitado nuevo accede normalmente', accesoNuevo.status === 200);
+  // --- El invitado personal NO depende del código familiar ---
+  const personalDespues = await request(server, { path: '/api/collaboration-info?owner=1', method: 'GET', headers: { Cookie: guestCookie } });
+  check('rotar el código familiar no corta a quien entró con su enlace personal (se le quita con "quitar acceso")', personalDespues.status === 200);
+
+  // --- Quitar el acceso a esa persona sí la corta ---
+  const revocar = await request(server, { path: `/api/invitaciones/${invitacion.id}/revocar`, method: 'POST', headers: { Cookie: dueñoCookie } });
+  check('el dueño le quita el acceso a esa persona', revocar.status === 200);
+  const cortado = await request(server, { path: '/api/collaboration-info?owner=1', method: 'GET', headers: { Cookie: guestCookie } });
+  check('y su sesión cae en el siguiente pedido (401)', cortado.status === 401);
 
   // --- Control: una cuenta colaboradora YA registrada (no invitado sin
   // cuenta) NO se ve afectada por rotar el código — eso es a propósito. ---

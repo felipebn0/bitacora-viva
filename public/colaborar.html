@@ -358,13 +358,11 @@
     <h1>Los recuerdos de mis viejos</h1>
     <p class="sub pc-1015cafb">Te invitaron a colaborar con la bitácora de:</p>
     <p class="guest-owner-name" id="guestOwnerName"></p>
+    <p class="guest-owner-name" id="guestHola"></p>
     <p class="error" id="guestError" role="alert"></p>
-    <div class="login-field">
-      <label for="guestName">Tu nombre</label>
-      <input type="text" id="guestName" placeholder="¿Cómo te llamas?" autocomplete="given-name" maxlength="60">
-    </div>
+    <p class="sub pc-1015cafb" id="guestNotice"></p>
     <button id="guestStartBtn" type="button">Empezar</button>
-    <p class="sub pc-53425f7d">No hace falta crear cuenta ni clave — solo tu nombre.</p>
+    <p class="sub pc-53425f7d" id="guestSinCuenta">No hace falta crear cuenta ni clave — este enlace es solo tuyo.</p>
     <p class="sub pc-53425f7d">Al pulsar "Empezar" aceptas los <a class="pc-07135648" href="/terminos.html" target="_blank" rel="noopener">Términos</a> y la <a class="pc-07135648" href="/privacidad.html" target="_blank" rel="noopener">Política de Privacidad</a>: lo que aportes se guarda en la bitácora de quien te invitó.</p>
     <p class="sub pc-53425f7d">¿Ya tienes cuenta? <a class="pc-07135648" href="#" id="guestToLoginLink">Inicia sesión</a>.</p>
   </div>
@@ -500,7 +498,9 @@
   const loginScreen = document.getElementById('loginScreen');
   const guestScreen = document.getElementById('guestScreen');
   const guestOwnerName = document.getElementById('guestOwnerName');
-  const guestName = document.getElementById('guestName');
+  const guestHola = document.getElementById('guestHola');
+  const guestNotice = document.getElementById('guestNotice');
+  const guestSinCuenta = document.getElementById('guestSinCuenta');
   const guestStartBtn = document.getElementById('guestStartBtn');
   const guestError = document.getElementById('guestError');
   const hubScreen = document.getElementById('hubScreen');
@@ -531,6 +531,10 @@
   // Entrada de invitado sin cuenta — llega con ?codigo=XXXXXXXX (link de
   // WhatsApp compartido desde app.html, ver /api/guest-start).
   const codigoInvitado = new URLSearchParams(window.location.search).get('codigo');
+  // Enlace PERSONAL de invitado (SEC-002A): lo crea el dueño con el nombre y
+  // el celular de cada persona (ver /api/invitaciones) y es lo único que deja
+  // entrar sin cuenta.
+  const invitacionUrl = new URLSearchParams(window.location.search).get('invitacion');
   // BACKLOG #12: el narrador de un subperfil (llega SIN owner/codigo, ver
   // el botón "Colaborar" del nav de app.html) también es isGuest — pero no
   // tiene cuenta con la que sumarse como colaborador FIJO. unirseDesdeHub()
@@ -632,26 +636,12 @@
     hubSubmitBtn.disabled = true;
     hubError.textContent = '';
     try {
-      // BACKLOG #12: un invitado sin cuenta (ej. el narrador de un
-      // subperfil) no puede sumarse como colaborador FIJO —
-      // /api/join-collaboration necesita una cuenta real de verdad
-      // logueada. En vez de eso, arranca una sesión de invitado nueva para
-      // ESTE código (mismo mecanismo que ya usa la entrada por ?codigo=
-      // más abajo), reusando el nombre que ya había dado. Esto REEMPLAZA
-      // su sesión actual: mientras ayuda aquí, deja de tener activo su
-      // propio enlace hasta que vuelva a entrar con él.
+      // Un invitado sin cuenta (ej. el narrador de un subperfil) no puede
+      // sumarse con un código familiar: necesita el enlace personal que le
+      // mande el dueño de esa otra bitácora (o crear una cuenta).
       if (sesionEsGuest) {
-        const resp = await fetch('/api/guest-start', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ codigo: code, name: miGuestName || '' }),
-        });
-        const data = await resp.json().catch(() => ({}));
-        if (!resp.ok) {
-          hubError.textContent = data.error || 'No se pudo entrar con ese código.';
-          hubSubmitBtn.disabled = false;
-          return;
-        }
-        window.location.href = location.pathname;
+        hubError.textContent = 'Para colaborar con otra bitácora sin cuenta necesitas tu enlace personal — pídeselo a quien te invitó.';
+        hubSubmitBtn.disabled = false;
         return;
       }
       const resp = await fetch('/api/join-collaboration', {
@@ -674,7 +664,9 @@
   hubSubmitBtn.addEventListener('click', unirseDesdeHub);
   hubCode.addEventListener('keydown', (e) => { if (e.key === 'Enter') unirseDesdeHub(); });
 
-  async function showGuestEntry() {
+  // conCuenta: ya hay una cuenta con la sesión iniciada en este navegador;
+  // entrar con el enlace personal la cerraría, así que no se ofrece.
+  async function showGuestEntry({ conCuenta = false } = {}) {
     checkingScreen.style.display = 'none';
     appContent.style.display = 'none';
     loginScreen.style.display = 'none';
@@ -682,41 +674,59 @@
     guestScreen.style.display = 'flex';
     guestError.textContent = '';
     guestOwnerName.textContent = '';
+    guestHola.textContent = '';
+    guestNotice.textContent = '';
+    guestStartBtn.style.display = 'none';
+    guestSinCuenta.style.display = 'none';
     try {
+      if (invitacionUrl) {
+        const resp = await fetch('/api/invitacion-info?invitacion=' + encodeURIComponent(invitacionUrl));
+        const data = await resp.json();
+        if (!resp.ok) { guestError.textContent = data.error || 'Ese enlace ya no es válido.'; return; }
+        guestOwnerName.textContent = data.ownerName || '';
+        guestHola.textContent = 'Hola, ' + data.nombre;
+        if (conCuenta) {
+          guestNotice.textContent = 'Ya tienes una cuenta abierta en este navegador. Para entrar con este enlace personal, abre el enlace en una ventana privada o cierra sesión primero.';
+          return;
+        }
+        guestStartBtn.style.display = '';
+        guestSinCuenta.style.display = '';
+        guestStartBtn.focus();
+        return;
+      }
+      // Enlace familiar de antes (?codigo=): ya no deja entrar sin cuenta.
       const resp = await fetch('/api/guest-code-info?codigo=' + encodeURIComponent(codigoInvitado));
       const data = await resp.json();
       if (resp.ok) {
         guestOwnerName.textContent = data.ownerName;
+        guestNotice.textContent = 'Este enlace ya no sirve para entrar sin cuenta. Pídele a quien te invitó que te mande tu enlace personal por WhatsApp, o inicia sesión si ya tienes cuenta.';
       } else {
         guestError.textContent = data.error || 'Ese código no existe — revisa el link.';
       }
     } catch (e) {
       guestError.textContent = 'Hubo un problema para conectar.';
     }
-    guestName.focus();
   }
 
   async function doGuestStart() {
-    const nombre = guestName.value.trim();
-    if (!nombre) return;
+    if (!invitacionUrl) return;
     guestStartBtn.disabled = true;
     guestError.textContent = '';
     try {
       const resp = await fetch('/api/guest-start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ codigo: codigoInvitado, name: nombre }),
+        body: JSON.stringify({ invitacion: invitacionUrl }),
       });
       const data = await resp.json();
       if (!resp.ok) {
-        guestError.textContent = data.error || 'No se pudo entrar con ese código.';
+        guestError.textContent = data.error || 'No se pudo entrar con ese enlace.';
         guestStartBtn.disabled = false;
         return;
       }
-      // Sacar el ?codigo= ANTES de recargar — si no, la próxima carga
-      // volvía a ver el mismo código, con la sesión de invitado ya
-      // creada, y entraba en un loop de recargas sin fin (ver el bug
-      // reportado: "demasiados pedidos").
+      // Sacar el ?invitacion= ANTES de recargar — si no, la próxima carga
+      // volvía a ver el mismo enlace, con la sesión de invitado ya
+      // creada, y entraba en un loop de recargas sin fin.
       window.location.href = location.pathname;
     } catch (e) {
       guestError.textContent = 'Hubo un problema para conectar.';
@@ -724,7 +734,6 @@
     }
   }
   guestStartBtn.addEventListener('click', doGuestStart);
-  guestName.addEventListener('keydown', (e) => { if (e.key === 'Enter') doGuestStart(); });
 
   // "¿Ya tienes cuenta? Inicia sesión" desde la pantalla de invitado
   // (pedido de Felipe, 2026-09-10): cambia a la pantalla de login (que ya
@@ -929,13 +938,17 @@
         if (logoutRow) logoutRow.style.display = 'none';
       }
 
+      // Llegó con un enlace personal de invitado: si ya hay una cuenta con la
+      // sesión abierta no se la pisa; si es otro invitado, se ofrece cambiar.
+      if (invitacionUrl) { showGuestEntry({ conCuenta: !data.isGuest }); return; }
+
       // Llegó por el botón "Colaborar" de app.html (nav directa, sin
       // ?owner= ni ?codigo=) — antes esto rebotaba siempre a /app.html.
       // Si esta cuenta ya colabora con alguna historia, entramos derecho
       // ahí (la primera de la lista; si hay más de una, cargarMisColaboraciones
       // más abajo arma el selector para cambiar entre ellas) en vez de
       // hacerla volver a pedir el código cada vez.
-      if (!activeOwnerId && !codigoInvitado && !data.isCollaborator && !data.isGuest) {
+      if (!activeOwnerId && !codigoInvitado && !invitacionUrl && !data.isCollaborator && !data.isGuest) {
         try {
           const resp = await fetch('/api/my-collaborations');
           const historias = resp.ok ? (await resp.json()).historias || [] : [];
@@ -973,19 +986,15 @@
       // una cuenta real (dueña o colaboradora fija), se suma como
       // colaboradora de esta bitácora con el mismo mecanismo de
       // "colaborar con otra historia" — nunca la ignora.
+      if (codigoInvitado && data.isGuest) {
+        // Un invitado con sesión abierta que llega con un enlace familiar
+        // de otra bitácora: ya no se le crea una sesión nueva solo con el
+        // nombre — necesita su enlace personal.
+        showGuestEntry();
+        return;
+      }
       if (codigoInvitado) {
         try {
-          if (data.isGuest) {
-            const resp = await fetch('/api/guest-start', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ codigo: codigoInvitado, name: data.guestName || '' }),
-            });
-            if (!resp.ok) { showGuestEntry(); return; }
-            // Mismo motivo que en doGuestStart(): sacar el ?codigo= antes
-            // de recargar, si no queda en loop.
-            window.location.href = location.pathname;
-            return;
-          }
           const resp = await fetch('/api/join-collaboration', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: codigoInvitado }),
           });
@@ -1015,7 +1024,7 @@
       cargarMisColaboraciones(null, data.ownerName);
       iniciarAporte();
     })
-    .catch(() => { if (codigoInvitado) { showGuestEntry(); } else { showLogin(); } });
+    .catch(() => { if (codigoInvitado || invitacionUrl) { showGuestEntry(); } else { showLogin(); } });
 
   // --- Aportar una historia: charla turno por turno con la IA ---
   const aporteMsg = document.getElementById('aporteMsg');

@@ -843,6 +843,29 @@ function ensureSchema() {
       // aparecer (ni para el dueño ni para el colaborador).
       sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS is_private BOOLEAN NOT NULL DEFAULT false`,
       sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ`,
+      // Invitaciones personales (SEC-002A, 2026-10-08): cada persona que
+      // aporta sin cuenta entra con SU enlace (creado por el dueño con el
+      // nombre y el celular de esa persona) y queda identificada por
+      // invitados.id, no por el nombre que escribió — antes dos "Carlos"
+      // veían y podían tocar los aportes del otro. owner_id es users.id o
+      // bitacoras.id (comparten secuencia, nunca chocan). El celular es único
+      // por bitácora; revocar solo marca revocado_at (el id y sus aportes
+      // siguen siendo suyos si se vuelve a invitar).
+      sql`CREATE TABLE IF NOT EXISTS invitados (
+        id TEXT PRIMARY KEY,
+        owner_id INT NOT NULL,
+        owner_es_bitacora BOOLEAN NOT NULL DEFAULT false,
+        nombre TEXT NOT NULL,
+        telefono TEXT NOT NULL,
+        codigo TEXT NOT NULL,
+        creado_por INT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        ultimo_ingreso TIMESTAMPTZ,
+        revocado_at TIMESTAMPTZ
+      )`,
+      sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_invitados_owner_telefono ON invitados(owner_id, telefono)`,
+      sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_invitados_codigo ON invitados(codigo)`,
+      sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS guest_id TEXT`,
       // Item 12 (pedido de Felipe, 2026-09-08): A/B test de DÓNDE se
       // menciona una historia aportada al arrancar la próxima charla —
       // 'inicio' (como ya funcionaba) vs. 'medio' (se difiere unos turnos,
@@ -1612,14 +1635,22 @@ async function requireAuth(req, res, next) {
         ? await sql`SELECT id, invite_code FROM bitacoras WHERE id = ${session.ownerId}`
         : await sql`SELECT id, invite_code FROM users WHERE id = ${session.ownerId} AND owner_user_id IS NULL`;
       if (!rows.length) return res.status(401).json({ error: 'No autenticado.' });
-      // El código quedó firmado adentro del token en /api/guest-start — si
-      // el dueño lo rotó desde entonces (/api/invite-code/regenerate), esta
-      // sesión de invitado tiene que caer aquí, no seguir viva hasta que
-      // expire sola a los 30 días. Sesiones firmadas antes de este cambio
-      // no traen "code" (queda undefined) y por diseño también se cortan:
-      // es preferible pedirles que vuelvan a entrar con el código a dejar
-      // pasar una sesión vieja que no se puede verificar contra nada.
-      if (session.code !== rows[0].invite_code) return res.status(401).json({ error: 'Ese código ya no es válido — pídele uno nuevo a quien te invitó.' });
+      // Invitación personal (guestId): vale mientras esa invitación exista y
+      // no esté revocada. Las sesiones anteriores a este cambio no traen
+      // guestId y siguen validándose con el código familiar, como antes.
+      if (session.guestId) {
+        const inv = await sql`SELECT 1 FROM invitados WHERE id = ${session.guestId} AND owner_id = ${session.ownerId} AND revocado_at IS NULL`;
+        if (!inv.length) return res.status(401).json({ error: 'Tu invitación ya no está vigente — pídele a quien te invitó que te mande otra.' });
+      } else {
+        // El código quedó firmado adentro del token en /api/guest-start — si
+        // el dueño lo rotó desde entonces (/api/invite-code/regenerate), esta
+        // sesión de invitado tiene que caer aquí, no seguir viva hasta que
+        // expire sola a los 30 días. Sesiones firmadas antes de este cambio
+        // no traen "code" (queda undefined) y por diseño también se cortan:
+        // es preferible pedirles que vuelvan a entrar con el código a dejar
+        // pasar una sesión vieja que no se puede verificar contra nada.
+        if (session.code !== rows[0].invite_code) return res.status(401).json({ error: 'Ese código ya no es válido — pídele uno nuevo a quien te invitó.' });
+      }
     } catch (err) {
       console.error('No se pudo validar la sesión de invitado:', err);
       return res.status(401).json({ error: 'No se pudo validar la sesión, intenta de nuevo.' });
@@ -1632,6 +1663,7 @@ async function requireAuth(req, res, next) {
     req.bitacoraEsPropia = false;
     req.puedeNarrar = false;
     req.guestName = session.guestName || null;
+    req.guestId = session.guestId || null; // null = sesión anterior a las invitaciones personales
     // A quién le está aportando este invitado: una cuenta normal (users) o
     // un subperfil (bitacoras) — /api/me lo necesita para saber en cuál de
     // las dos buscar el nombre del "dueño" a mostrar.
@@ -2703,32 +2735,156 @@ app.get('/api/guest-code-info', rateLimit, async (req, res) => {
 // req.userId queda null en requireAuth para este tipo de sesión.
 app.post('/api/guest-start', rateLimit, async (req, res) => {
   try {
-    const cleanCode = String((req.body && req.body.codigo) || '').trim().toUpperCase();
-    const cleanName = capitalizarNombre(String((req.body && req.body.name) || '').trim().slice(0, 60));
-    if (!cleanCode) return res.status(400).json({ error: 'Falta el código.' });
-    if (!cleanName) return res.status(400).json({ error: 'Falta el nombre.' });
-
+    const invitacion = String((req.body && req.body.invitacion) || '').trim().slice(0, 64);
+    // Ya no se entra sin cuenta con el código familiar (solo con un nombre,
+    // dos personas con el mismo nombre se veían los aportes). Hace falta el
+    // enlace personal que crea el dueño con el nombre y el celular de cada
+    // invitado (ver POST /api/invitaciones).
+    if (!invitacion) {
+      return res.status(403).json({ error: 'Para entrar sin cuenta necesitas tu enlace personal — pídele a quien te invitó que te lo mande por WhatsApp.', necesitaInvitacion: true });
+    }
     await ensureSchema();
-    const owner = await buscarDuenoPorInviteCode(cleanCode);
-    if (!owner) return res.status(404).json({ error: 'Ese código no existe.' });
+    const rows = await sql`SELECT id, owner_id, owner_es_bitacora, nombre FROM invitados WHERE codigo = ${invitacion} AND revocado_at IS NULL`;
+    if (!rows.length) return res.status(404).json({ error: 'Ese enlace ya no es válido — pídele a quien te invitó que te mande uno nuevo.' });
+    const inv = rows[0];
+    const owner = inv.owner_es_bitacora
+      ? (await sql`SELECT id, nombre FROM bitacoras WHERE id = ${inv.owner_id} AND archived_at IS NULL`)[0]
+      : (await sql`SELECT id, name, username FROM users WHERE id = ${inv.owner_id} AND owner_user_id IS NULL`)[0];
+    if (!owner) return res.status(404).json({ error: 'Esa bitácora ya no está disponible.' });
+    await sql`UPDATE invitados SET ultimo_ingreso = now() WHERE id = ${inv.id}`;
 
-    // El código va DENTRO del token firmado (no solo se usa para encontrar
-    // al dueño y después olvidarse de él) para que rotar el código
-    // (/api/invite-code/regenerate) sí corte el acceso de quien ya entró
-    // como invitado con el código viejo — antes requireAuth solo chequeaba
-    // que la cuenta dueña siguiera existiendo, nunca que el código con el
-    // que se entró siguiera siendo el vigente, así que una sesión de
-    // invitado de hasta 30 días sobrevivía intacta a la rotación pensada
-    // justo para cortarle el acceso a quien tiene un código que se filtró.
-    // ownerEsBitacora viaja también firmado — requireAuth necesita saber
-    // en qué tabla revalidar "code" en cada request (users o bitacoras).
-    const token = signSession({ guest: true, ownerId: owner.id, ownerEsBitacora: owner.esBitacora, guestName: cleanName, code: cleanCode });
+    // El token lleva guestId (no el código): requireAuth revalida contra
+    // invitados en cada pedido, así que revocar la invitación corta la
+    // sesión de inmediato.
+    const guestName = capitalizarNombre(inv.nombre);
+    const token = signSession({ guest: true, ownerId: inv.owner_id, ownerEsBitacora: !!inv.owner_es_bitacora, guestName, guestId: inv.id });
     const secure = cookieEsSegura(req) ? '; Secure' : '';
     res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${token}; Max-Age=${SESSION_MAX_AGE}; Path=/; HttpOnly; SameSite=Lax${secure}`);
-    res.json({ ok: true, ownerName: capitalizarNombre(owner.nombre) });
+    res.json({ ok: true, ownerName: capitalizarNombre(owner.nombre || owner.name || owner.username), guestName });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'No se pudo entrar con ese código.' });
+    res.status(500).json({ error: 'No se pudo entrar con ese enlace.' });
+  }
+});
+
+// --- Invitaciones personales (SEC-002A) ---------------------------------
+// El dueño (o quien administra un subperfil) invita a UNA persona con su
+// nombre y su celular: el celular es único por bitácora y arma el enlace de
+// WhatsApp que abre el chat con esa persona. Cada invitación tiene su propio
+// enlace secreto, que se puede renovar o quitar sin afectar a los demás.
+const INVITACION_NOMBRE_MAX = 60;
+
+function nuevoCodigoInvitacion() {
+  return crypto.randomBytes(9).toString('base64url');
+}
+
+function datosDeInvitacion(req, inv, ownerNombre) {
+  const enlace = `${urlBase(req)}/colaborar.html?invitacion=${encodeURIComponent(inv.codigo)}`;
+  const nombre = capitalizarNombre(inv.nombre);
+  const mensaje = `Hola ${nombre}, te invito a sumar tus recuerdos a la bitácora de ${ownerNombre || 'nuestra familia'}. Entra con tu enlace personal, no hace falta crear cuenta: ${enlace}`;
+  return {
+    id: inv.id, nombre, telefono: inv.telefono, enlace,
+    whatsapp: `https://wa.me/${inv.telefono}?text=${encodeURIComponent(mensaje)}`,
+    activa: !inv.revocado_at,
+    ultimoIngreso: inv.ultimo_ingreso || null,
+  };
+}
+
+async function nombreDeLaBitacora(ownerId, esBitacora) {
+  const rows = esBitacora
+    ? await sql`SELECT nombre FROM bitacoras WHERE id = ${ownerId}`
+    : await sql`SELECT name, username FROM users WHERE id = ${ownerId}`;
+  const r = rows[0] || {};
+  return capitalizarNombre(r.nombre || r.name || r.username || '') || null;
+}
+
+app.post('/api/invitaciones', requireAuth, bloquearColaborador, bloquearInvitado, rateLimit, async (req, res) => {
+  try {
+    const ownerId = await resolveProfileUserId(req);
+    if (!ownerId || !(await puedeAdministrarBitacora(ownerId, req))) return res.status(403).json({ error: 'No tienes acceso a esa bitácora.' });
+    const nombre = capitalizarNombre(String((req.body && req.body.nombre) || '').trim().slice(0, INVITACION_NOMBRE_MAX));
+    if (!nombre) return res.status(400).json({ error: 'Falta el nombre de la persona.' });
+    const telefono = telefonoParaWhatsApp(req.body && req.body.telefono);
+    if (!telefono) return res.status(400).json({ error: 'El celular tiene que traer el código de país, ej. +57 300 123 4567.' });
+
+    await ensureSchema();
+    const esBitacora = ownerId !== req.userId;
+    const existente = (await sql`SELECT id FROM invitados WHERE owner_id = ${ownerId} AND telefono = ${telefono}`)[0];
+    let fila;
+    if (existente) {
+      // Mismo celular: es la misma persona. Se reactiva con enlace nuevo y
+      // conserva su id (y por lo tanto sus aportes).
+      fila = (await sql`UPDATE invitados SET nombre = ${nombre}, codigo = ${nuevoCodigoInvitacion()}, revocado_at = NULL WHERE id = ${existente.id} RETURNING id, nombre, telefono, codigo, ultimo_ingreso, revocado_at`)[0];
+    } else {
+      fila = (await sql`INSERT INTO invitados (id, owner_id, owner_es_bitacora, nombre, telefono, codigo, creado_por) VALUES (${crypto.randomBytes(12).toString('hex')}, ${ownerId}, ${esBitacora}, ${nombre}, ${telefono}, ${nuevoCodigoInvitacion()}, ${req.userId}) RETURNING id, nombre, telefono, codigo, ultimo_ingreso, revocado_at`)[0];
+    }
+    res.json({ ok: true, invitacion: datosDeInvitacion(req, fila, await nombreDeLaBitacora(ownerId, esBitacora)) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo crear la invitación.' });
+  }
+});
+
+app.get('/api/invitaciones', requireAuth, bloquearColaborador, bloquearInvitado, async (req, res) => {
+  try {
+    const ownerId = await resolveProfileUserId(req);
+    if (!ownerId || !(await puedeAdministrarBitacora(ownerId, req))) return res.status(403).json({ error: 'No tienes acceso a esa bitácora.' });
+    await ensureSchema();
+    const esBitacora = ownerId !== req.userId;
+    const filas = await sql`SELECT id, nombre, telefono, codigo, ultimo_ingreso, revocado_at FROM invitados WHERE owner_id = ${ownerId} ORDER BY created_at ASC`;
+    const ownerNombre = await nombreDeLaBitacora(ownerId, esBitacora);
+    res.json({ invitaciones: filas.map((f) => datosDeInvitacion(req, f, ownerNombre)) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudieron cargar las invitaciones.' });
+  }
+});
+
+// Quitar el acceso: corta la sesión de esa persona en su próximo pedido. Sus
+// aportes no se tocan.
+app.post('/api/invitaciones/:id/revocar', requireAuth, bloquearColaborador, bloquearInvitado, rateLimit, async (req, res) => {
+  try {
+    const ownerId = await resolveProfileUserId(req);
+    if (!ownerId || !(await puedeAdministrarBitacora(ownerId, req))) return res.status(403).json({ error: 'No tienes acceso a esa bitácora.' });
+    await ensureSchema();
+    const r = await sql`UPDATE invitados SET revocado_at = now() WHERE id = ${String(req.params.id)} AND owner_id = ${ownerId} RETURNING id`;
+    if (!r.length) return res.status(404).json({ error: 'No se encontró esa invitación.' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo quitar el acceso.' });
+  }
+});
+
+// Enlace nuevo para la misma persona (por si se filtró o lo perdió): el
+// anterior deja de servir.
+app.post('/api/invitaciones/:id/renovar', requireAuth, bloquearColaborador, bloquearInvitado, rateLimit, async (req, res) => {
+  try {
+    const ownerId = await resolveProfileUserId(req);
+    if (!ownerId || !(await puedeAdministrarBitacora(ownerId, req))) return res.status(403).json({ error: 'No tienes acceso a esa bitácora.' });
+    await ensureSchema();
+    const r = await sql`UPDATE invitados SET codigo = ${nuevoCodigoInvitacion()}, revocado_at = NULL WHERE id = ${String(req.params.id)} AND owner_id = ${ownerId} RETURNING id, nombre, telefono, codigo, ultimo_ingreso, revocado_at`;
+    if (!r.length) return res.status(404).json({ error: 'No se encontró esa invitación.' });
+    res.json({ ok: true, invitacion: datosDeInvitacion(req, r[0], await nombreDeLaBitacora(ownerId, ownerId !== req.userId)) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo renovar el enlace.' });
+  }
+});
+
+// Antes de entrar, colaborar.html muestra "Hola <nombre>, vas a colaborar con
+// la bitácora de <dueño>" — sin crear ninguna sesión todavía.
+app.get('/api/invitacion-info', rateLimit, async (req, res) => {
+  try {
+    const codigo = String(req.query.invitacion || '').trim().slice(0, 64);
+    if (!codigo) return res.status(400).json({ error: 'Falta el enlace.' });
+    await ensureSchema();
+    const rows = await sql`SELECT owner_id, owner_es_bitacora, nombre FROM invitados WHERE codigo = ${codigo} AND revocado_at IS NULL`;
+    if (!rows.length) return res.status(404).json({ error: 'Ese enlace ya no es válido — pídele a quien te invitó que te mande uno nuevo.' });
+    res.json({ nombre: capitalizarNombre(rows[0].nombre), ownerName: await nombreDeLaBitacora(rows[0].owner_id, !!rows[0].owner_es_bitacora) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo verificar el enlace.' });
   }
 });
 
@@ -5099,7 +5255,7 @@ app.post('/api/contribute-story', requireAuth, rateLimit, async (req, res) => {
     const cleanAudioUrl = urlHttpValida(typeof audioUrl === 'string' ? audioUrl.slice(0, 1000) : null);
 
     await ensureSchema();
-    await sql`INSERT INTO family_notes (user_id, contributor, parentesco, texto, audio_url, contributed_by) VALUES (${ownerId}, ${cleanContributor}, ${cleanParentesco}, ${text}, ${cleanAudioUrl}, ${req.userId})`;
+    await sql`INSERT INTO family_notes (user_id, contributor, parentesco, texto, audio_url, contributed_by, guest_id) VALUES (${ownerId}, ${cleanContributor}, ${cleanParentesco}, ${text}, ${cleanAudioUrl}, ${req.userId}, ${req.guestId || null})`;
     await marcarAportePendiente(ownerId, cleanContributor);
     res.json({ ok: true });
   } catch (err) {
@@ -5222,7 +5378,7 @@ function limpiarMediaAdjunta(mediaUrls) {
 // que esté completa. Devuelve el id de la fila (nuevo o el mismo que ya
 // tenía) para que el siguiente turno actualice esa misma fila en vez de
 // crear una nueva.
-async function guardarBorradorAporte(ownerId, draftId, historyHastaAhora, audioUrls, contributedByUserId, colaboradorNombre, protagonista, mediaUrls) {
+async function guardarBorradorAporte(ownerId, draftId, historyHastaAhora, audioUrls, contributedByUserId, colaboradorNombre, protagonista, mediaUrls, guestId) {
   try {
     const texto = historyHastaAhora
       .filter((m) => m.role === 'user' && !/^\(.*\)$/.test(m.content.trim()) && m.content.trim())
@@ -5245,10 +5401,13 @@ async function guardarBorradorAporte(ownerId, draftId, historyHastaAhora, audioU
 
     await ensureSchema();
     if (draftId) {
-      await sql`UPDATE family_notes SET texto = ${texfinal}, audio_urls = ${audioUrlsJson}, protagonista = ${cleanProtagonista}, media_urls = ${mediaUrlsJson} WHERE id = ${draftId} AND user_id = ${ownerId} AND en_progreso = true`;
-      return draftId;
+      // Solo quien escribió el borrador lo puede seguir editando (SEC-002C):
+      // el id lo manda el navegador, así que no se confía en él por sí solo.
+      const actualizado = await sql`UPDATE family_notes SET texto = ${texfinal}, audio_urls = ${audioUrlsJson}, protagonista = ${cleanProtagonista}, media_urls = ${mediaUrlsJson} WHERE id = ${draftId} AND user_id = ${ownerId} AND en_progreso = true AND contributed_by IS NOT DISTINCT FROM ${contributedByUserId} AND guest_id IS NOT DISTINCT FROM ${guestId || null} RETURNING id`;
+      if (actualizado.length) return draftId;
+      // No era suyo (o ya no existe): se guarda como un borrador nuevo.
     }
-    const rows = await sql`INSERT INTO family_notes (user_id, contributor, texto, audio_urls, contributed_by, protagonista, en_progreso, media_urls) VALUES (${ownerId}, ${cleanContributor}, ${texfinal}, ${audioUrlsJson}, ${contributedByUserId}, ${cleanProtagonista}, true, ${mediaUrlsJson}) RETURNING id`;
+    const rows = await sql`INSERT INTO family_notes (user_id, contributor, texto, audio_urls, contributed_by, protagonista, en_progreso, media_urls, guest_id) VALUES (${ownerId}, ${cleanContributor}, ${texfinal}, ${audioUrlsJson}, ${contributedByUserId}, ${cleanProtagonista}, true, ${mediaUrlsJson}, ${guestId || null}) RETURNING id`;
     return (rows[0] && rows[0].id) || draftId;
   } catch (err) {
     console.error('No se pudo guardar el borrador del aporte:', err);
@@ -5301,14 +5460,16 @@ async function marcarAportePendiente(ownerId, contributorName) {
 // persona (ver "protagonista" en /api/contribute-chat), el parentesco es
 // el de ESA persona con el dueño, que sí puede cambiar de una historia a
 // otra, así que ahí se sigue preguntando siempre.
-async function buscarParentescoConocido(ownerId, contributedByUserId, contributorNombre) {
-  const rows = contributedByUserId
+async function buscarParentescoConocido(ownerId, contributedByUserId, contributorNombre, guestId) {
+  const rows = guestId
+    ? await sql`SELECT parentesco FROM family_notes WHERE user_id = ${ownerId} AND guest_id = ${guestId} AND parentesco IS NOT NULL AND protagonista IS NULL ORDER BY created_at DESC LIMIT 1`
+    : contributedByUserId
     ? await sql`SELECT parentesco FROM family_notes WHERE user_id = ${ownerId} AND contributed_by = ${contributedByUserId} AND parentesco IS NOT NULL AND protagonista IS NULL ORDER BY created_at DESC LIMIT 1`
-    : await sql`SELECT parentesco FROM family_notes WHERE user_id = ${ownerId} AND contributed_by IS NULL AND contributor = ${contributorNombre} AND parentesco IS NOT NULL AND protagonista IS NULL ORDER BY created_at DESC LIMIT 1`;
+    : await sql`SELECT parentesco FROM family_notes WHERE user_id = ${ownerId} AND contributed_by IS NULL AND guest_id IS NULL AND contributor = ${contributorNombre} AND parentesco IS NOT NULL AND protagonista IS NULL ORDER BY created_at DESC LIMIT 1`;
   return (rows[0] && rows[0].parentesco) || null;
 }
 
-async function finalizarAporte(ownerId, draftId, fullHistory, audioUrls, contributedByUserId, colaboradorNombre, protagonista, mediaUrls, parentescoConocido) {
+async function finalizarAporte(ownerId, draftId, fullHistory, audioUrls, contributedByUserId, colaboradorNombre, protagonista, mediaUrls, parentescoConocido, guestId) {
   try {
     const transcript = fullHistory
       .filter((m) => !/^\(.*\)$/.test(m.content.trim())) // sin los avisos internos entre paréntesis
@@ -5347,14 +5508,14 @@ async function finalizarAporte(ownerId, draftId, fullHistory, audioUrls, contrib
 
     await ensureSchema();
     if (draftId) {
-      const actualizada = await sql`UPDATE family_notes SET contributor = ${cleanContributor}, parentesco = ${cleanParentesco}, texto = ${texto}, audio_urls = ${audioUrlsJson}, protagonista = ${cleanProtagonista}, en_progreso = false, media_urls = ${mediaUrlsJson} WHERE id = ${draftId} AND user_id = ${ownerId} RETURNING id`;
+      const actualizada = await sql`UPDATE family_notes SET contributor = ${cleanContributor}, parentesco = ${cleanParentesco}, texto = ${texto}, audio_urls = ${audioUrlsJson}, protagonista = ${cleanProtagonista}, en_progreso = false, media_urls = ${mediaUrlsJson} WHERE id = ${draftId} AND user_id = ${ownerId} AND contributed_by IS NOT DISTINCT FROM ${contributedByUserId} AND guest_id IS NOT DISTINCT FROM ${guestId || null} RETURNING id`;
       if (actualizada.length) {
         await marcarAportePendiente(ownerId, cleanContributor);
         return true;
       }
       // El borrador no existía (nunca se llegó a guardar, o algo raro pasó) — no perder el aporte.
     }
-    await sql`INSERT INTO family_notes (user_id, contributor, parentesco, texto, audio_urls, contributed_by, protagonista, media_urls) VALUES (${ownerId}, ${cleanContributor}, ${cleanParentesco}, ${texto}, ${audioUrlsJson}, ${contributedByUserId}, ${cleanProtagonista}, ${mediaUrlsJson})`;
+    await sql`INSERT INTO family_notes (user_id, contributor, parentesco, texto, audio_urls, contributed_by, protagonista, media_urls, guest_id) VALUES (${ownerId}, ${cleanContributor}, ${cleanParentesco}, ${texto}, ${audioUrlsJson}, ${contributedByUserId}, ${cleanProtagonista}, ${mediaUrlsJson}, ${guestId || null})`;
     await marcarAportePendiente(ownerId, cleanContributor);
     return true;
   } catch (err) {
@@ -5402,7 +5563,7 @@ app.post('/api/contribute-chat', requireAuth, rateLimit, async (req, res) => {
     // esOtroProtagonista (ahí el parentesco es de otra persona distinta).
     const parentescoConocido = esOtroProtagonista
       ? null
-      : await buscarParentescoConocido(ownerId, req.isGuest ? null : req.userId, colaboradorNombre);
+      : await buscarParentescoConocido(ownerId, req.isGuest ? null : req.userId, colaboradorNombre, req.guestId);
 
     let messages;
     if (!history.length) {
@@ -5440,12 +5601,12 @@ app.post('/api/contribute-chat', requireAuth, rateLimit, async (req, res) => {
 
     let saved = false;
     if (done) {
-      saved = await finalizarAporte(ownerId, draftId, messages.concat([{ role: 'assistant', content: text }]), audioUrls, req.userId, colaboradorNombre, protagonista, mediaUrls, parentescoConocido);
+      saved = await finalizarAporte(ownerId, draftId, messages.concat([{ role: 'assistant', content: text }]), audioUrls, req.userId, colaboradorNombre, protagonista, mediaUrls, parentescoConocido, req.guestId || null);
     } else if (history.length) {
       // Ya contó algo — lo guardamos ahora mismo, no hace falta esperar a
       // que termine toda la charla (y las preguntas de aclaración) para que
       // quede a salvo.
-      draftId = await guardarBorradorAporte(ownerId, draftId, messages, audioUrls, req.userId, colaboradorNombre, protagonista, mediaUrls);
+      draftId = await guardarBorradorAporte(ownerId, draftId, messages, audioUrls, req.userId, colaboradorNombre, protagonista, mediaUrls, req.guestId || null);
     }
 
     res.json({ message: text, done, saved, needsBasicInfo, draftId });
@@ -5511,8 +5672,10 @@ app.get('/api/contributions', requireAuth, async (req, res) => {
     // bitacoras.archived_at con los subperfiles.
     const notesRaw = esDueño
       ? await sql`SELECT id, contributor, parentesco, protagonista, texto, audio_url, audio_urls, media_urls, created_at, is_private FROM family_notes WHERE user_id = ${ownerId} AND archived_at IS NULL ORDER BY created_at DESC LIMIT 30`
+      : req.isGuest && req.guestId
+      ? await sql`SELECT id, contributor, parentesco, protagonista, texto, audio_url, audio_urls, media_urls, created_at, is_private FROM family_notes WHERE user_id = ${ownerId} AND contributed_by IS NULL AND guest_id = ${req.guestId} AND archived_at IS NULL ORDER BY created_at DESC LIMIT 30`
       : req.isGuest
-      ? await sql`SELECT id, contributor, parentesco, protagonista, texto, audio_url, audio_urls, media_urls, created_at, is_private FROM family_notes WHERE user_id = ${ownerId} AND contributed_by IS NULL AND contributor = ${req.guestName} AND archived_at IS NULL ORDER BY created_at DESC LIMIT 30`
+      ? await sql`SELECT id, contributor, parentesco, protagonista, texto, audio_url, audio_urls, media_urls, created_at, is_private FROM family_notes WHERE user_id = ${ownerId} AND contributed_by IS NULL AND guest_id IS NULL AND contributor = ${req.guestName} AND archived_at IS NULL ORDER BY created_at DESC LIMIT 30`
       : await sql`SELECT id, contributor, parentesco, protagonista, texto, audio_url, audio_urls, media_urls, created_at, is_private FROM family_notes WHERE user_id = ${ownerId} AND contributed_by = ${req.userId} AND archived_at IS NULL ORDER BY created_at DESC LIMIT 30`;
     const mediaRaw = esDueño
       ? await sql`SELECT type, url, caption, contributor, created_at FROM media WHERE user_id = ${ownerId} ORDER BY created_at DESC LIMIT 30`
@@ -5545,13 +5708,20 @@ app.get('/api/contributions', requireAuth, async (req, res) => {
 // más quien lo aportó, que lo sigue pudiendo hacer sobre lo suyo. Devuelve
 // la nota o null.
 async function aporteAdministrable(id, ownerId, req) {
-  const rows = await sql`SELECT id, user_id, contributed_by, contributor FROM family_notes WHERE id = ${id} AND archived_at IS NULL`;
+  const rows = await sql`SELECT id, user_id, contributed_by, contributor, guest_id FROM family_notes WHERE id = ${id} AND archived_at IS NULL`;
   const nota = rows[0];
   if (!nota || nota.user_id !== ownerId) return null;
   // El dueño (o quien administra ese subperfil) administra cualquier
   // aporte a esa bitácora.
   if (await puedeAdministrarBitacora(ownerId, req)) return nota;
-  if (req.isGuest) return (nota.contributed_by == null && nota.contributor === req.guestName) ? nota : null;
+  if (req.isGuest) {
+    if (nota.contributed_by != null) return null;
+    // Con invitación personal se compara el id (dos invitados con el mismo
+    // nombre ya no se ven). Solo las sesiones anteriores a las invitaciones
+    // (sin guestId) siguen comparando por nombre, y solo contra aportes viejos.
+    if (req.guestId) return nota.guest_id === req.guestId ? nota : null;
+    return (nota.guest_id == null && nota.contributor === req.guestName) ? nota : null;
+  }
   return nota.contributed_by === req.userId ? nota : null;
 }
 

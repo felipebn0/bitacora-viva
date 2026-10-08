@@ -172,3 +172,11 @@ Pendiente/fuera de alcance de esta vuelta (no adivinado, dejado explícito):
 **Costo (Felipe lo asumió, 2026-10-08):** se cobra por mensaje de plantilla según su categoría. Cifras de blogs, sin confirmar: ~US$0,005 por mensaje de utilidad y ~US$0,0125 a 0,016 si Meta la clasifica como marketing; con 1.000 recordatorios al mes serían unos US$5 a 16. Confirmar la tarifa de Colombia en el administrador de Meta antes de presupuestar.
 
 **Pendientes después:** un webhook para procesar las respuestas (hoy quien no quiere más avisos los apaga en su perfil), un botón con enlace mágico dentro de la plantilla, y revisar el texto de la Política de Privacidad con el abogado (ya nombra a Meta como proveedor).
+
+## 19. Seguridad: permisos de archivos entre colaboradores (SEC-002B) — pendiente
+
+**Qué es** (auditoría de Diego, 2026-10-08, confirmada en el código): `estaAutorizadoParaVerArchivo` (en `server.js`, lo usa `/api/media-file`) deja pasar a cualquier colaborador con cuenta, cuenta colaboradora fija o invitado de una familia a **todos los archivos de esa familia** (`audio/<id>/…`, `audio/aportes/<id>/…`, `media/<id>/…`), no solo a los suyos, incluidas las grabaciones personales del dueño y los aportes marcados privados. Hace falta conocer la ruta, pero varias son adivinables (fechas y `Date.now()`; solo las fotos y videos llevan un sufijo aleatorio).
+
+**Arreglo propuesto:** el dueño sigue viendo todo; un colaborador o invitado solo puede pedir los archivos que aparezcan en sus propios aportes (`family_notes.contributed_by` / `guest_id`), comprobado en la base de datos. No depende de R2.
+
+**Hecho el mismo día (ver README, "Invitados con enlace personal"):** SEC-002A (invitados con el mismo nombre) con invitaciones personales por celular, y SEC-002C (un `draftId` ajeno sobrescribía el aporte de otra persona).
