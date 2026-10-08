@@ -733,6 +733,7 @@
         <h2>Recordatorios por WhatsApp</h2>
         <p class="sub">Cada día a las 9:00 (hora Colombia) la bitácora arma la lista de a quién le toca un recordatorio y te la manda con un enlace por persona que abre WhatsApp con el mensaje ya escrito. Tú abres cada uno y le das a enviar. Quien tiene WhatsApp activo aquí no recibe el recordatorio por correo.</p>
         <div class="wa-config">
+          ${waChip(cfg.api, 'Envío automático (API de WhatsApp)')}
           ${waChip(cfg.callmebot, 'Aviso por WhatsApp (CallMeBot)')}
           ${waChip(!!cfg.digestEmail, 'Copia por correo' + (cfg.digestEmail ? ' → ' + cfg.digestEmail : ''))}
           ${waChip(cfg.cronSecret, 'Cron diario activo')}

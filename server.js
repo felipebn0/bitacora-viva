@@ -6581,6 +6581,89 @@ const WHATSAPP_DIGEST_EMAIL = process.env.WHATSAPP_DIGEST_EMAIL;
 // default que una cuenta).
 const FRECUENCIA_SUBPERFIL_DIAS = 14;
 
+// --- WhatsApp Business Platform (API oficial de Meta) -----------------
+// Envío AUTOMÁTICO del recordatorio con una plantilla aprobada por Meta (un
+// negocio que escribe primero solo puede usar plantillas). Se activa cuando
+// están WHATSAPP_TOKEN y WHATSAPP_PHONE_NUMBER_ID; si no, todo sigue como
+// antes (resumen para enviar a mano). Solo lo usa el cron diario: el botón
+// de prueba de /admin nunca escribe a los usuarios.
+const WHATSAPP_TOKEN = (process.env.WHATSAPP_TOKEN || '').trim();
+const WHATSAPP_PHONE_NUMBER_ID = (process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim();
+const WHATSAPP_TEMPLATE_NAME = (process.env.WHATSAPP_TEMPLATE_NAME || 'recordatorio_bitacora').trim();
+const WHATSAPP_TEMPLATE_LANG = (process.env.WHATSAPP_TEMPLATE_LANG || 'es_CO').trim();
+const WHATSAPP_API_VERSION = (process.env.WHATSAPP_API_VERSION || 'v21.0').trim();
+const WHATSAPP_API_ACTIVA = !!(WHATSAPP_TOKEN && WHATSAPP_PHONE_NUMBER_ID);
+const WHATSAPP_MAX_POR_CORRIDA = 200;
+
+// Meta pide el número completo, solo dígitos y con el código de país. Un
+// celular colombiano escrito sin código (10 dígitos, empieza por 3) se
+// completa con 57; cualquier otro número tiene que traer su código.
+function telefonoParaWhatsApp(phone) {
+  let digitos = String(phone || '').replace(/[^0-9]/g, '');
+  if (digitos.startsWith('00')) digitos = digitos.slice(2);
+  if (/^3\d{9}$/.test(digitos)) digitos = '57' + digitos;
+  return digitos.length >= 11 && digitos.length <= 15 ? digitos : null;
+}
+
+async function enviarPlantillaWhatsApp(phone, nombre) {
+  const to = telefonoParaWhatsApp(phone);
+  if (!to) return { ok: false, motivo: 'número sin código de país o inválido' };
+  try {
+    const resp = await fetch(`https://graph.facebook.com/${WHATSAPP_API_VERSION}/${encodeURIComponent(WHATSAPP_PHONE_NUMBER_ID)}/messages`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to,
+        type: 'template',
+        template: {
+          name: WHATSAPP_TEMPLATE_NAME,
+          language: { code: WHATSAPP_TEMPLATE_LANG },
+          components: [{ type: 'body', parameters: [{ type: 'text', text: String(nombre || 'de nuevo').slice(0, 60) }] }],
+        },
+      }),
+      signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+    });
+    const json = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      const e = json && json.error;
+      return { ok: false, motivo: `HTTP ${resp.status}${e ? ` (${e.code || ''}): ${String(e.message || '').slice(0, 140)}` : ''}` };
+    }
+    return { ok: true, mensajeId: (json.messages && json.messages[0] && json.messages[0].id) || null };
+  } catch (err) {
+    return { ok: false, motivo: String((err && err.message) || err).slice(0, 160) };
+  }
+}
+
+// Manda por la API a quien le toca. Registra en whatsapp_reminder_log solo lo
+// que Meta aceptó (así el siguiente aviso espera la frecuencia). Lo que falló
+// se devuelve en "fallidos" para que caiga en el resumen manual de siempre.
+async function enviarRecordatoriosPorApi(items) {
+  const fallidos = [];
+  const motivos = [];
+  let enviados = 0;
+  const lote = items.slice(0, WHATSAPP_MAX_POR_CORRIDA);
+  const sobrantes = items.slice(WHATSAPP_MAX_POR_CORRIDA); // mañana
+  for (let i = 0; i < lote.length; i += 5) {
+    await Promise.all(lote.slice(i, i + 5).map(async (p) => {
+      const r = await enviarPlantillaWhatsApp(p.phone, p.nombre);
+      if (r.ok) {
+        enviados++;
+        try {
+          await sql`INSERT INTO whatsapp_reminder_log (profile_id, tipo, enviado_ok, detalle) VALUES (${p.profileId}, 'api', true, ${String(r.mensajeId || '').slice(0, 480)})`;
+        } catch (err) {
+          console.error('No se pudo registrar el WhatsApp enviado:', err);
+        }
+      } else {
+        fallidos.push(p);
+        motivos.push(`${p.nombre}: ${r.motivo}`);
+      }
+    }));
+  }
+  if (motivos.length) console.error('[whatsapp-api] no se pudo enviar a:', motivos.join(' | '));
+  return { candidatos: items.length, enviados, fallidos, motivos: motivos.slice(0, 10), pendientesParaManana: sobrantes.length };
+}
+
 async function avisarPorWhatsApp(texto) {
   if (!CALLMEBOT_PHONE || !CALLMEBOT_APIKEY) return { ok: false, motivo: 'sin-config' };
   const num = String(CALLMEBOT_PHONE).replace(/[^0-9]/g, '');
@@ -6828,10 +6911,20 @@ app.get('/api/cron/reminders', async (req, res) => {
       }
     }
 
-    const whatsapp = await enviarResumenWhatsApp(paraWhatsApp);
+    // Con la API de Meta configurada, el recordatorio le llega directo a cada
+    // persona; lo que falle (y todo, si no hay API) va al resumen para enviar a mano.
+    let whatsappApi = null;
+    let paraResumenManual = paraWhatsApp;
+    if (WHATSAPP_API_ACTIVA && paraWhatsApp.length) {
+      const r = await enviarRecordatoriosPorApi(paraWhatsApp);
+      paraResumenManual = r.fallidos;
+      whatsappApi = { candidatos: r.candidatos, enviados: r.enviados, fallidos: r.fallidos.length, motivos: r.motivos, pendientesParaManana: r.pendientesParaManana };
+    }
+    const whatsapp = await enviarResumenWhatsApp(paraResumenManual);
     res.json({
       ok: true,
       correo: { candidatos: paraCorreo.length, enviados: correosEnviados, saltado: !RESEND_API_KEY },
+      whatsappApi,
       whatsapp,
     });
   } catch (err) {
@@ -6891,6 +6984,7 @@ app.get('/api/admin/whatsapp-reminders', requireAuth, requireAdmin, async (req, 
     const due = new Set(paraWhatsApp.map((p) => p.profileId));
     res.json({
       config: {
+        api: WHATSAPP_API_ACTIVA,
         callmebot: !!(CALLMEBOT_PHONE && CALLMEBOT_APIKEY),
         digestEmail: WHATSAPP_DIGEST_EMAIL || null,
         cronSecret: !!process.env.CRON_SECRET,

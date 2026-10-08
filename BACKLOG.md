@@ -158,3 +158,17 @@ Pendiente/fuera de alcance de esta vuelta (no adivinado, dejado explícito):
 **Para retomarlo:** definir si el audio se genera por capítulo o de la historia completa, dónde se guarda (Blob, como el resto del audio) y si es una función incluida o un add-on pago. Costo estimado de v3: tarifa estándar de ElevenLabs (más créditos por caracter que Flash) — recalcular sobre el largo real del libro antes de fijar precio.
 
 **Para retomarlo:** definir cómo se le avisa a la persona que tiene "un mensaje nuevo" (¿un ícono con notificación, como ya existe para Aportes/Árbol? ¿se reproduce dentro de la charla, como ya pasa con una foto pendiente?) y si esto necesita una tabla nueva o puede apoyarse en `family_notes`/`media` con un campo que distinga "mensaje corto" de "historia".
+
+## 18. Recordatorios por WhatsApp automáticos (API oficial de Meta) — código listo, falta la cuenta
+
+**Qué es** (pedido de Felipe, 2026-10-08): hoy el cron diario solo arma un resumen con enlaces `wa.me` y Felipe manda cada recordatorio a mano. Con la API oficial de WhatsApp Business el cron le escribe directo a cada persona con opt-in + teléfono, usando una plantilla aprobada por Meta.
+
+**Estado:** el código ya está (`enviarRecordatoriosPorApi` en `server.js`, `test/whatsapp-api.smoke.js`, sección "Envío automático" del README). Sin las variables `WHATSAPP_TOKEN` y `WHATSAPP_PHONE_NUMBER_ID` todo sigue como antes (resumen manual). Lo que falta no es código:
+
+1. Crear y verificar la cuenta de WhatsApp Business con El Rebusuque SAS, con un número dedicado.
+2. Crear y aprobar la plantilla `recordatorio_bitacora` (Español - Colombia, categoría Utilidad, una variable para el nombre; el texto sugerido está en el README).
+3. Sacar el token permanente de un usuario del sistema y pegar las variables en Vercel; probar con el propio número.
+
+**Costo (Felipe lo asumió, 2026-10-08):** se cobra por mensaje de plantilla según su categoría. Cifras de blogs, sin confirmar: ~US$0,005 por mensaje de utilidad y ~US$0,0125 a 0,016 si Meta la clasifica como marketing; con 1.000 recordatorios al mes serían unos US$5 a 16. Confirmar la tarifa de Colombia en el administrador de Meta antes de presupuestar.
+
+**Pendientes después:** un webhook para procesar las respuestas (hoy quien no quiere más avisos los apaga en su perfil), un botón con enlace mágico dentro de la plantilla, y revisar el texto de la Política de Privacidad con el abogado (ya nombra a Meta como proveedor).

@@ -207,7 +207,29 @@ Si no se configura ninguno de los tres, el cron sigue mandando los recordatorios
 
 **Cargar los números:** en `/admin.html`, sección "Recordatorios por WhatsApp", hay una tabla para escribir el teléfono de cada perfil (cuenta o subperfil) y marcar quién quiere el recordatorio por ese canal. Los usuarios también lo pueden poner ellos desde su perfil. Quien tiene WhatsApp activo **no** recibe el recordatorio por correo, para no avisar dos veces. Desde esa misma sección se puede ver a quién le toca hoy y disparar el resumen a mano (botón "Enviar el resumen ahora"). Para probar sin esperar los 14 días de inactividad, marca **"ignorar los días de espera"** — incluye a cualquier perfil con número + opt-in activo (respeta igual a quien haya apagado los recordatorios).
 
-Cuando el envío uno a uno canse (más usuarios), el paso siguiente es la API de WhatsApp de Meta (o un intermediario como Zernio) con plantillas aprobadas — ver `.claude/agents/whatsapp-admin.md` y `BACKLOG.md`.
+### Envío automático con la API oficial de WhatsApp (Meta)
+
+Con `WHATSAPP_TOKEN` y `WHATSAPP_PHONE_NUMBER_ID` configurados, el cron diario **le escribe directo a cada persona** con opt-in + teléfono, usando una plantilla aprobada por Meta. Lo que Meta rechaza (número inválido, sin WhatsApp, plantilla caída) cae en el resumen manual de arriba, y solo se registra en `whatsapp_reminder_log` lo que Meta aceptó (así cada persona espera su frecuencia). Máximo 200 por corrida. El botón de prueba de `/admin` nunca escribe a los usuarios, solo arma el resumen.
+
+| Variable | Para qué |
+|---|---|
+| `WHATSAPP_TOKEN` | Token permanente de un usuario del sistema de Meta Business (no el token temporal de 24 h del panel de pruebas). |
+| `WHATSAPP_PHONE_NUMBER_ID` | ID del número de WhatsApp Business (no es el teléfono: es el ID que muestra el panel de WhatsApp en Meta for Developers). |
+| `WHATSAPP_TEMPLATE_NAME` | Nombre de la plantilla aprobada. Por defecto `recordatorio_bitacora`. |
+| `WHATSAPP_TEMPLATE_LANG` | Idioma con el que se creó la plantilla. Por defecto `es_CO`. |
+| `WHATSAPP_API_VERSION` | Versión de la API de Graph. Por defecto `v21.0`. |
+
+**Pasos (una sola vez):**
+1. En Meta Business Suite: crear la cuenta de WhatsApp Business con El Rebusuque SAS y verificar la empresa.
+2. Registrar un número dedicado (que no esté en WhatsApp personal).
+3. Crear la plantilla `recordatorio_bitacora` (idioma Español - Colombia, categoría **Utilidad**; Meta puede reclasificarla como Marketing, que cuesta más). Cuerpo, con una sola variable:
+   `Hola {{1}}, ¿cómo vas? Hace unos días no grabas una historia en tu bitácora. Cuando tengas un ratico, entra y cuéntame algo, no tiene que ser largo. Si prefieres no recibir estos avisos, apágalos en tu perfil. Un abrazo.`
+   y esperar la aprobación.
+4. Crear un usuario del sistema con token permanente (permisos `whatsapp_business_messaging` y `whatsapp_business_management`) y pegar las variables en Vercel.
+5. En `/admin`, la sección de WhatsApp debe mostrar "Envío automático" en verde. Probar con tu propio número (opt-in + teléfono) y mirar el JSON del cron (`whatsappApi`).
+
+El número tiene que traer código de país; un celular colombiano de 10 dígitos que empieza por 3 se completa con 57. Todavía no se procesan las respuestas de la gente (no hay webhook): quien no quiere más avisos los apaga en su perfil.
+
 
 ## Botón físico
 
