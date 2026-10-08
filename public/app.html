@@ -2945,7 +2945,8 @@
   // iniciar sesión, y nada en el mensaje lo decía.
   function mensajeDeErrorDeTurno(err) {
     if (err && err.status === 401) return 'Tu sesión venció — actualiza la página para volver a iniciar sesión.';
-    if (err && err.status) return 'Hubo un problema en el servidor. Intenta de nuevo en un momento.';
+    if (err && err.status === 429) return 'Vas muy rápido para el servidor. Espera unos segundos e intenta de nuevo.';
+    if (err && err.status) return 'Hubo un problema en el servidor (código ' + err.status + '). Intenta de nuevo en un momento.';
     return 'No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.';
   }
 
@@ -3086,7 +3087,7 @@
         if (evento.t === 'frase') { huboFrase = true; adelantarVoz(evento.texto); }
         if (evento.t === 'fin') {
           // lo mismo que va a decir speak()/fetchNext con el resto del mensaje
-          dividirParaVoz(huboFrase ? evento.restante : evento.message).forEach(adelantarVoz);
+          (huboFrase ? [evento.restante] : dividirParaVoz(evento.message)).forEach(adelantarVoz);
         }
         esp.cola.push(evento);
         avisar();
@@ -3148,12 +3149,22 @@
         ofrecioPausa = true;
         esperandoRespuestaPausa = true; // para el PRÓXIMO turno, no este
       }
+      const pedirTurno = () => fetch('/api/next', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stream: true, history, lastAudioUrl, mode: sessionMode, ofrecerPausa, interpretarRespuestaPausa, mediaUrls, fotoRecienSubida: fotoRecienSubidaAAvisar ? { caption: fotoRecienSubidaAAvisar.caption } : null }),
+      });
       const abrirReal = async () => {
-        const resp = await fetch('/api/next', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ stream: true, history, lastAudioUrl, mode: sessionMode, ofrecerPausa, interpretarRespuestaPausa, mediaUrls, fotoRecienSubida: fotoRecienSubidaAAvisar ? { caption: fotoRecienSubidaAAvisar.caption } : null }),
-        });
+        let resp = await pedirTurno();
+        // Un tope de pedidos (429) o una falla momentánea del servidor (5xx)
+        // casi siempre se arreglan solos en unos segundos: se reintenta UNA
+        // vez antes de mostrarle un error a la persona.
+        if (!resp.ok && (resp.status === 429 || resp.status >= 500)) {
+          const espera = Math.min(4, parseInt(resp.headers.get('Retry-After'), 10) || 2) * 1000;
+          await new Promise((resolve) => setTimeout(resolve, espera));
+          if (mySession !== sessionId) return leerEventos(new Response('', { headers: { 'Content-Type': 'application/x-ndjson' } }));
+          resp = await pedirTurno();
+        }
         if (!resp.ok) {
           const err = new Error('server error');
           err.status = resp.status;
@@ -3227,7 +3238,7 @@
       mostrarMediaDelTurno(data.media);
       setState('speaking', 'Hablando…');
       if (hablaEnCurso) {
-        dividirParaVoz(data.restante).forEach((parte) => hablaEnCurso.agregar(parte));
+        hablaEnCurso.agregar(data.restante); // el resto va en un solo audio (menos cortes entre pedazos)
         hablaEnCurso.cerrar(logEntry, myTurn);
       } else {
         speak(data.message, alTerminarDeHablar, logEntry, myTurn);

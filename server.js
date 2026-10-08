@@ -359,6 +359,12 @@ const RATE_LIMIT_MAX = 30;
 // comparten IP — si compartieran los 30/minuto con transcribir/guardar/siguiente,
 // una charla ágil se toparía con el tope. Ver /api/speak.
 const RATE_LIMIT_MAX_VOZ = 120;
+// Lo mismo para los pedidos de cada turno de la charla (transcribir, siguiente,
+// guardar el turno, subir el audio): un solo turno ya son 4 o 5 pedidos, y la
+// respuesta especulativa suma 2 más cada vez que se descarta, así que con los
+// 30/minuto generales una charla ágil (o varias personas en la misma red del
+// celular) se topaba con el 429 y la app mostraba "problema en el servidor".
+const RATE_LIMIT_MAX_TURNO = 90;
 
 function crearRateLimit(prefijoClave, maximo) {
   return async function rateLimit(req, res, next) {
@@ -408,6 +414,7 @@ function crearRateLimit(prefijoClave, maximo) {
 }
 const rateLimit = crearRateLimit('', RATE_LIMIT_MAX);
 const rateLimitVoz = crearRateLimit('voz:', RATE_LIMIT_MAX_VOZ);
+const rateLimitTurno = crearRateLimit('turno:', RATE_LIMIT_MAX_TURNO);
 
 // Recibe los reportes de violación de CSP que manda el navegador solo,
 // disparados por la propia política (Content-Security-Policy-Report-Only,
@@ -4561,6 +4568,10 @@ const FRASE_ADELANTADA_MIN_CHARS = 10;
 // Una oración larga sin punto todavía se adelanta hasta su primera coma, si ya
 // van al menos tantos caracteres (así la voz arranca con la primera mitad).
 const CLAUSULA_ADELANTADA_MIN_CHARS = 35;
+// Como mucho esta cantidad de pedazos salen antes del final: cada pedazo es un
+// audio aparte y entre uno y otro se puede notar un corte o un clic (sobre todo
+// en el celular), así que el resto del mensaje va en un solo pedazo.
+const MAX_PEDAZOS_ADELANTADOS = 2;
 
 function partirOraciones(texto) {
   return String(texto || '').match(/[^.!?…]*[.!?…]+["”»)\]]*\s*|[^.!?…]+$/g) || [];
@@ -4571,6 +4582,7 @@ function crearEmisorDeFrases(emitir) {
   let corto = '';
   let detenido = false;
   let hablado = '';
+  let pedazos = 0;
   return {
     agregar(delta) {
       if (detenido) return;
@@ -4587,7 +4599,8 @@ function crearEmisorDeFrases(emitir) {
           corto = '';
           hablado = hablado ? hablado + ' ' + texto : texto;
           emitir(texto);
-          if (clausula.includes('¿')) { detenido = true; return; }
+          pedazos += 1;
+          if (clausula.includes('¿') || pedazos >= MAX_PEDAZOS_ADELANTADOS) { detenido = true; return; }
           continue;
         }
         buffer = buffer.slice(m[0].length);
@@ -4600,8 +4613,9 @@ function crearEmisorDeFrases(emitir) {
           hablado = hablado ? hablado + ' ' + corto : corto;
           emitir(corto);
           corto = '';
+          pedazos += 1;
         }
-        if (esPregunta) { detenido = true; return; }
+        if (esPregunta || pedazos >= MAX_PEDAZOS_ADELANTADOS) { detenido = true; return; }
       }
     },
     get hablado() { return hablado; },
@@ -4618,7 +4632,7 @@ function restanteSinLoHablado(texto, hablado) {
   return partirOraciones(t).slice(partirOraciones(h).length).join('').trim();
 }
 
-app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar, bloquearSiReadOnly, rateLimit, async (req, res) => {
+app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar, bloquearSiReadOnly, rateLimitTurno, async (req, res) => {
   try {
     const history = Array.isArray(req.body.history) ? req.body.history.slice(0, 60) : [];
     for (const m of history) {
@@ -4870,7 +4884,7 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
 
 // Confirma un turno que se generó de forma especulativa (ver "especulativo" en
 // /api/next): guarda la historia igual que lo habría hecho /api/next.
-app.post('/api/next/guardar', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar, bloquearSiReadOnly, rateLimitVoz, async (req, res) => {
+app.post('/api/next/guardar', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar, bloquearSiReadOnly, rateLimitTurno, async (req, res) => {
   try {
     const history = Array.isArray(req.body.history) ? req.body.history.slice(0, 60) : [];
     for (const m of history) {
@@ -4985,7 +4999,7 @@ async function speakWithAzure(text) {
 // plataforma, así que declarar aquí un límite mayor no cambiaba nada en
 // producción salvo dar un error menos claro. 4mb queda cómodo por debajo de
 // ese tope real.
-app.post('/api/transcribe', requireAuth, rateLimit, express.raw({ type: '*/*', limit: '4mb' }), async (req, res) => {
+app.post('/api/transcribe', requireAuth, rateLimitTurno, express.raw({ type: '*/*', limit: '4mb' }), async (req, res) => {
   try {
     if (!req.body || !req.body.length) return res.status(400).json({ error: 'Falta audio.' });
     if (!ELEVEN_KEY) {
@@ -5046,7 +5060,7 @@ app.post('/api/transcribe', requireAuth, rateLimit, express.raw({ type: '*/*', l
 // audio) y, cuando ambas terminaron, el cliente llama aquí para completarlo.
 // Solo completa una historia de ESTA bitácora, de los últimos 10 minutos, que
 // todavía no tiene audio, y solo con un archivo que es de esta misma bitácora.
-app.post('/api/story-log/audio', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar, rateLimit, async (req, res) => {
+app.post('/api/story-log/audio', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar, rateLimitTurno, async (req, res) => {
   try {
     const texto = typeof req.body.text === 'string' ? req.body.text.trim().slice(0, 4000) : '';
     const audioUrl = urlHttpValida(typeof req.body.audioUrl === 'string' ? req.body.audioUrl.slice(0, 1000) : null);
@@ -5209,7 +5223,7 @@ app.get('/api/media-file', requireAuth, async (req, res) => {
 // Mismo ajuste que en /api/transcribe: 4mb en vez de 20mb, para que sea
 // esta ruta la que rechace con un mensaje claro un audio muy largo, en vez
 // de que lo rechace la plataforma con un error genérico.
-app.post('/api/save-audio', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar, rateLimit, express.raw({ type: '*/*', limit: '4mb' }), async (req, res) => {
+app.post('/api/save-audio', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar, rateLimitTurno, express.raw({ type: '*/*', limit: '4mb' }), async (req, res) => {
   try {
     const { sessionId, index, role } = req.query;
     if (!sessionId || index === undefined || !role) {

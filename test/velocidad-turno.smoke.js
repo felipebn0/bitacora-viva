@@ -115,7 +115,13 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
   conteoRateLimit = 31;
   const voz31 = await llamar(server, 'POST', '/api/speak', { text: 'Hola.' }, cookie);
   ok(voz31.status === 200, '/api/speak: 31 pedidos en un minuto SÍ pasan (el tope de la voz es 120)');
-  const general31 = await enlazar({ text: 'x', audioUrl: AUDIO_PROPIO });
+  const turno31 = await enlazar({ text: 'x', audioUrl: AUDIO_PROPIO });
+  ok(turno31.status === 200, 'los pedidos del turno (aquí, enlazar el audio): 31 en un minuto SÍ pasan (su tope es 90)');
+  conteoRateLimit = 91;
+  const turno91 = await enlazar({ text: 'x', audioUrl: AUDIO_PROPIO });
+  ok(turno91.status === 429, 'los pedidos del turno tienen tope de 90/minuto (91 -> 429)');
+  conteoRateLimit = 31;
+  const general31 = await llamar(server, 'POST', '/api/save', { history: [] }, cookie);
   ok(general31.status === 429, 'el resto de rutas siguen con el tope de 30/minuto (31 -> 429)');
   conteoRateLimit = 121;
   const voz121 = await llamar(server, 'POST', '/api/speak', { text: 'Hola.' }, cookie);
@@ -201,6 +207,17 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
     h.agregar('Buena.'); h.agregar('Rota.'); h.agregar('Última.'); h.cerrar(null, null); await esperar(50);
     ok(a.sonaron.join('|') === 'Buena.' && a.sistema() === 'Rota. Última.', 'habla: si la voz falla, lo que falta se dice con la voz del sistema');
   }
+
+  // --- Tope de pedidos del turno y reintento (2026-10-08) ---
+  const srv = fs.readFileSync(path.resolve(__dirname, '..', 'server.js'), 'utf8');
+  for (const ruta of ["'/api/next'", "'/api/next/guardar'", "'/api/transcribe'", "'/api/save-audio'", "'/api/story-log/audio'"]) {
+    const linea = srv.split('\n').find((l) => l.startsWith('app.post(' + ruta + ','));
+    ok(!!linea && /rateLimitTurno/.test(linea) && !/[ ,]rateLimit[,)]/.test(linea), `server: ${ruta} usa el cupo propio del turno (no los 30/min generales)`);
+  }
+  ok(/const RATE_LIMIT_MAX_TURNO = 90;/.test(srv), 'server: el cupo del turno es de 90 por minuto');
+  ok(/resp\.status === 429 \|\| resp\.status >= 500/.test(app_) && /resp = await pedirTurno\(\)/.test(app_), 'app: un 429 o un 5xx se reintenta una vez antes de mostrar el error');
+  ok(/código ' \+ err\.status/.test(app_), 'app: el mensaje de error del servidor trae el código para poder diagnosticarlo');
+  ok(/hablaEnCurso\.agregar\(data\.restante\)/.test(app_), 'app: el resto del mensaje se dice en un solo audio');
 
   // --- Respuesta especulativa (2026-10-08) ---
   ok(/const ESPECULAR_MS = 900;/.test(app_) && /const SILENCE_MS = 2000;/.test(app_), 'app: se especula a los 900 ms de silencio y se cierra a los 2000 ms');

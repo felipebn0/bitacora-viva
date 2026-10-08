@@ -662,6 +662,16 @@ async function main() {
   const ev4b = lineas(stream4b);
   check('streaming: "Qué bello." sale antes y la pregunta queda para el final', ev4b.filter((e) => e.t === 'frase').map((e) => e.texto).join('|') === 'Qué bello.' && ev4b[ev4b.length - 1].restante === '¿Cómo era tu casa de niño?');
 
+  // Como mucho 2 pedazos antes del final (cada pedazo es un audio aparte: menos cortes en el celular).
+  resetAnthropicMock();
+  pushAnthropicResponse('Qué bonito eso. Me alegra mucho oírlo. Se nota que fue un día especial. Cuéntame cómo siguió todo, sin afán.');
+  const streamTope = await nextForUser(server, cookie, { history: historial, mode: 'historia', stream: true });
+  const evTope = lineas(streamTope);
+  const frasesTope = evTope.filter((e) => e.t === 'frase');
+  const finTope = evTope[evTope.length - 1];
+  check('streaming: nunca más de 2 pedazos adelantados', frasesTope.length === 2);
+  check('streaming: lo demás va junto en "restante" (un solo audio)', finTope.restante === 'Se nota que fue un día especial. Cuéntame cómo siguió todo, sin afán.' && junto(frasesTope.map((f) => f.texto).join(' ') + ' ' + finTope.restante) === junto(finTope.message));
+
   // Una sola oración larga: se adelanta hasta la primera coma (si ya van 35 letras).
   resetAnthropicMock();
   pushAnthropicResponse('Me parece muy bonito lo que cuentas de tu abuela, porque se nota cuánto la querías. ¿Cómo se llamaba?');
