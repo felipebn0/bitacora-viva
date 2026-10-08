@@ -186,6 +186,29 @@ require.cache[require.resolve('@anthropic-ai/sdk')] = {
           if (next && next.raw) return next.raw; // para simular content vacío/malformado
           return { content: [{ type: 'text', text: next }] };
         },
+        // Streaming: reparte el texto en pedacitos como lo haría el SDK real.
+        // { parcial: '...' } emite ese texto y luego falla (error a mitad de camino).
+        stream: (opts, requestOptions) => {
+          capturedCalls.push(Object.assign({}, opts, { __requestOptions: requestOptions, __stream: true }));
+          if (!responseQueue.length) {
+            throw new Error('FakeAnthropic: se llamó a messages.stream() sin respuesta programada (llamada #' + capturedCalls.length + ')');
+          }
+          const next = responseQueue.shift();
+          const manejadores = [];
+          return {
+            on(evento, cb) { if (evento === 'text') manejadores.push(cb); return this; },
+            async finalMessage() {
+              if (next && next.throw) throw next.throw;
+              const texto = typeof next === 'string' ? next : (next && next.parcial) || '';
+              for (let i = 0; i < texto.length; i += 7) {
+                manejadores.forEach((h) => h(texto.slice(i, i + 7)));
+                await new Promise((r) => setImmediate(r));
+              }
+              if (next && next.parcial) throw new Error('Anthropic se cortó a mitad (simulado)');
+              return { content: [{ type: 'text', text: texto }] };
+            },
+          };
+        },
       };
     }
   },
@@ -585,6 +608,68 @@ async function main() {
   pushAnthropicResponse('Uy, qué belleza. Cuéntame más de esa casa, ¿tenía patio?');
   const limpio = await nextForUser(server, cookie, { history: historial, mode: 'historia' });
   check('dialecto: texto ya colombiano -> una sola llamada, sin corrección', capturedCalls.length === 1 && JSON.parse(limpio.body).message.startsWith('Uy, qué belleza.'));
+
+  // --- 14) Streaming: las primeras oraciones salen antes del mensaje final ---
+  const lineas = (r) => r.body.split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  const junto = (t) => t.replace(/\s+/g, ' ').trim();
+
+  resetAnthropicMock();
+  pushAnthropicResponse('¡Qué bello recuerdo, Diego! Me imagino lo feliz que serías. ¿Cómo se llamaba tu perro?');
+  const stream1 = await nextForUser(server, cookie, { history: historial, mode: 'historia', stream: true });
+  const ev1 = lineas(stream1);
+  const frases1 = ev1.filter((e) => e.t === 'frase');
+  const fin1 = ev1[ev1.length - 1];
+  check('streaming: contesta como ndjson', stream1.status === 200 && String(stream1.headers['content-type']).includes('ndjson'));
+  check('streaming: usó messages.stream (no create)', capturedCalls.length === 1 && capturedCalls[0].__stream === true);
+  check('streaming: salen las dos primeras oraciones antes del final', frases1.length === 2 && frases1[0].texto === '¡Qué bello recuerdo, Diego!');
+  check('streaming: el último evento es "fin" con el mensaje completo', fin1.t === 'fin' && fin1.message === '¡Qué bello recuerdo, Diego! Me imagino lo feliz que serías. ¿Cómo se llamaba tu perro?' && fin1.done === false);
+  check('streaming: frases + restante = mensaje completo (nada repetido ni perdido)', junto(frases1.map((f) => f.texto).join(' ') + ' ' + fin1.restante) === junto(fin1.message) && fin1.restante === '¿Cómo se llamaba tu perro?');
+
+  // Nada después de la primera pregunta (la regla de "una sola pregunta" se decide con el mensaje entero).
+  resetAnthropicMock();
+  pushAnthropicResponse('Qué lindo eso, Diego, de verdad. ¿Y tu mamá qué decía? ¿Y tu papá? Cuéntame más.');
+  pushAnthropicResponse('Qué lindo eso, Diego, de verdad. ¿Y tu mamá qué decía?');
+  const stream2 = await nextForUser(server, cookie, { history: historial, mode: 'historia', stream: true });
+  const ev2 = lineas(stream2);
+  const frases2 = ev2.filter((e) => e.t === 'frase');
+  const fin2 = ev2[ev2.length - 1];
+  check('streaming: se detiene en la primera pregunta (no adelanta la segunda)', frases2.length === 2 && frases2[1].texto === '¿Y tu mamá qué decía?');
+  check('streaming: con 2 preguntas igual corre la segunda pasada y el final queda con una sola', capturedCalls.length === 2 && fin2.message === 'Qué lindo eso, Diego, de verdad. ¿Y tu mamá qué decía?' && fin2.restante === '');
+
+  // Voseo: no se adelanta nada (se corrige con el texto completo).
+  resetAnthropicMock();
+  pushAnthropicResponse('Contame más de eso, por favor. ¿Cómo era la casa?');
+  pushAnthropicResponse('Cuéntame más de eso, por favor. ¿Cómo era la casa?');
+  const stream3 = await nextForUser(server, cookie, { history: historial, mode: 'historia', stream: true });
+  const ev3 = lineas(stream3);
+  check('streaming: una oración con voseo NO se adelanta', !ev3.some((e) => e.t === 'frase'));
+  check('streaming: el final llega corregido y completo en "restante"', ev3[ev3.length - 1].message === 'Cuéntame más de eso, por favor. ¿Cómo era la casa?' && ev3[ev3.length - 1].restante === ev3[ev3.length - 1].message);
+
+  // Cierre con [FIN]: el marcador no se adelanta ni se dice.
+  resetAnthropicMock();
+  pushAnthropicResponse('Gracias por contarme todo esto, Diego. Fue un gusto. [FIN]');
+  const stream4 = await nextForUser(server, cookie, { history: historial, mode: 'historia', stream: true });
+  const ev4 = lineas(stream4);
+  const fin4 = ev4[ev4.length - 1];
+  check('streaming: [FIN] -> done=true, sin el marcador en el texto', fin4.done === true && !fin4.message.includes('[FIN]') && fin4.message === 'Gracias por contarme todo esto, Diego. Fue un gusto.');
+  check('streaming: lo que se adelantó no incluye el marcador', ev4.filter((e) => e.t === 'frase').every((e) => !e.texto.includes('[')) && fin4.restante === 'Fue un gusto.');
+
+  // Falla antes de empezar: un 500 normal en JSON. Falla ya empezada: evento "error".
+  resetAnthropicMock();
+  pushAnthropicResponse({ throw: new Error('Anthropic no respondió (simulado)') });
+  const stream5 = await nextForUser(server, cookie, { history: historial, mode: 'historia', stream: true });
+  check('streaming: falla antes de contestar -> 500 con JSON de error', stream5.status === 500 && JSON.parse(stream5.body).error === 'No se pudo generar la siguiente pregunta.');
+  resetAnthropicMock();
+  pushAnthropicResponse({ parcial: 'Qué bonito recuerdo, Diego, cuéntame. ¿Y luego qué pasó' });
+  const stream6 = await nextForUser(server, cookie, { history: historial, mode: 'historia', stream: true });
+  const ev6 = lineas(stream6);
+  check('streaming: falla a mitad -> manda la oración ya lista y luego un evento "error"', ev6[0].t === 'frase' && ev6[ev6.length - 1].t === 'error');
+
+  // Sin "stream": sigue contestando JSON como siempre.
+  resetAnthropicMock();
+  pushAnthropicResponse('Uy, qué belleza. Cuéntame más de esa casa, ¿tenía patio?');
+  const sinStream = await nextForUser(server, cookie, { history: historial, mode: 'historia' });
+  check('sin stream: JSON normal y messages.create', String(sinStream.headers['content-type']).includes('application/json') && capturedCalls[0].__stream !== true && JSON.parse(sinStream.body).message.startsWith('Uy, qué belleza.'));
 
   server.close();
   console.log = originalConsoleLog;

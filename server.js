@@ -4343,6 +4343,65 @@ async function asegurarEspanolColombiano(userId, texto) {
   return final;
 }
 
+// --- Respuesta en streaming de /api/next (pedido de Felipe, 2026-10-08) ---
+// Con { stream: true } la ruta contesta línea por línea (JSON por línea):
+//   {"t":"frase","texto":"...","media":...}  una o más oraciones ya listas para
+//        convertir en voz mientras Claude sigue escribiendo.
+//   {"t":"fin","message":...,"done":...,"pausado":...,"media":...,"restante":"..."}
+//        el mismo resultado de siempre, ya con todo el postproceso (una sola
+//        pregunta, español de Colombia). "restante" es lo que falta por decir
+//        después de lo que ya se mandó en "frase".
+//   {"t":"error"}  si algo falla cuando ya se empezó a contestar.
+// Solo se adelantan oraciones SEGURAS: sin marcadores [FIN]/[PAUSA], sin
+// voseo ni argentinismos (esas se corrigen con el texto completo) y nada
+// después de la primera pregunta (la regla de "una sola pregunta" se decide
+// con el mensaje entero).
+const FRASE_ADELANTADA_MIN_CHARS = 25;
+
+function partirOraciones(texto) {
+  return String(texto || '').match(/[^.!?…]*[.!?…]+["”»)\]]*\s*|[^.!?…]+$/g) || [];
+}
+
+function crearEmisorDeFrases(emitir) {
+  let buffer = '';
+  let corto = '';
+  let detenido = false;
+  let hablado = '';
+  return {
+    agregar(delta) {
+      if (detenido) return;
+      buffer += delta;
+      for (;;) {
+        const m = buffer.match(/^\s*([\s\S]*?[.!?…]+["”»)\]]*)\s+/);
+        if (!m) return;
+        buffer = buffer.slice(m[0].length);
+        const oracion = m[1].trim();
+        if (!oracion) continue;
+        if (oracion.includes('[') || detectarFueraDeColombia(oracion).length) { detenido = true; return; }
+        corto = corto ? corto + ' ' + oracion : oracion;
+        const esPregunta = oracion.includes('?');
+        if (corto.length >= FRASE_ADELANTADA_MIN_CHARS || esPregunta) {
+          hablado = hablado ? hablado + ' ' + corto : corto;
+          emitir(corto);
+          corto = '';
+        }
+        if (esPregunta) { detenido = true; return; }
+      }
+    },
+    get hablado() { return hablado; },
+  };
+}
+
+function restanteSinLoHablado(texto, hablado) {
+  const t = String(texto || '').replace(/\s+/g, ' ').trim();
+  const h = String(hablado || '').replace(/\s+/g, ' ').trim();
+  if (!h) return t;
+  if (t.startsWith(h)) return t.slice(h.length).trim();
+  // El postproceso cambió lo que ya se dijo: se descartan las mismas
+  // oraciones de adelante en vez de repetir todo el mensaje.
+  return partirOraciones(t).slice(partirOraciones(h).length).join('').trim();
+}
+
 app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar, bloquearSiReadOnly, rateLimit, async (req, res) => {
   try {
     const history = Array.isArray(req.body.history) ? req.body.history.slice(0, 60) : [];
@@ -4470,15 +4529,42 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
     // resto de los turnos de esa misma charla lo leen a una décima parte del
     // precio normal. "ephemeral" = vence solo a los 5 minutos de inactividad, que
     // es más que el tiempo típico entre turnos de una charla en curso.
-    const response = await anthropic.messages.create(
-      {
-        model: MODEL,
-        max_tokens: 300,
-        system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
-        messages,
-      },
-      { timeout: PROVIDER_TIMEOUT_MS }
-    );
+    const quiereStream = req.body.stream === true;
+    // La foto/video del familiar se muestra junto con la primera frase, no al final.
+    const mediaRespuesta = mediaPendiente
+      ? { url: mediaPendiente.url, type: mediaPendiente.type }
+      : (notaPendiente && notaPendiente.media)
+      ? { url: notaPendiente.media.url, type: notaPendiente.media.type }
+      : null;
+    const abrirStream = () => {
+      if (res.headersSent) return;
+      res.status(200);
+      res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.flushHeaders();
+    };
+    let emisor = null;
+    const paramsClaude = {
+      model: MODEL,
+      max_tokens: 300,
+      system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
+      messages,
+    };
+    let response;
+    if (quiereStream) {
+      let primeraFrase = true;
+      emisor = crearEmisorDeFrases((frase) => {
+        abrirStream();
+        if (primeraFrase) { medida.marca('primera-frase'); primeraFrase = false; }
+        res.write(JSON.stringify({ t: 'frase', texto: frase, media: mediaRespuesta }) + '\n');
+      });
+      const flujo = anthropic.messages.stream(paramsClaude, { timeout: PROVIDER_TIMEOUT_MS });
+      flujo.on('text', (delta) => emisor.agregar(delta));
+      response = await flujo.finalMessage();
+    } else {
+      response = await anthropic.messages.create(paramsClaude, { timeout: PROVIDER_TIMEOUT_MS });
+    }
     await logClaudeUsage(req.profileUserId, mode === 'arbol' ? 'arbol_charla' : 'charla', response);
     medida.marca('claude');
 
@@ -4566,16 +4652,21 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
     // se le manda la URL al cliente para que la muestre en pantalla
     // mientras habla — sin esto, la persona escuchaba que se le mencionaba
     // una foto que nunca llegaba a ver.
-    const media = mediaPendiente
-      ? { url: mediaPendiente.url, type: mediaPendiente.type }
-      : (notaPendiente && notaPendiente.media)
-      ? { url: notaPendiente.media.url, type: notaPendiente.media.type }
-      : null;
+    const media = mediaRespuesta;
     medida.marca('guardado');
     medida.cerrar(res);
+    if (quiereStream) {
+      abrirStream();
+      res.write(JSON.stringify({ t: 'fin', message: text, done, pausado, media, restante: restanteSinLoHablado(text, emisor && emisor.hablado) }) + '\n');
+      return res.end();
+    }
     res.json({ message: text, done, pausado, media });
   } catch (err) {
     console.error(err);
+    if (res.headersSent) {
+      res.write(JSON.stringify({ t: 'error' }) + '\n');
+      return res.end();
+    }
     res.status(500).json({ error: 'No se pudo generar la siguiente pregunta.' });
   }
 });

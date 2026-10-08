@@ -2481,32 +2481,76 @@
     });
   }
 
-  async function speak(text, onEnd, logEntry, index) {
-    const partes = dividirParaVoz(text);
-    const pedidos = partes.map((parte) => pedirVoz(parte)); // en paralelo
-    pedidos.forEach((pedido) => pedido.catch(() => {})); // una que falla mientras suena la otra no es un error "sin atender"
-    if (logEntry && index != null) {
-      // El audio completo (todas las partes juntas) se sube para poder
-      // escucharlo después, igual que antes: en paralelo con la reproducción.
-      Promise.all(pedidos)
-        .then((blobs) => uploadAudio(new Blob(blobs, { type: 'audio/mpeg' }), 'assistant', index, 'audio/mpeg'))
-        .then((file) => { if (file) logEntry.audioFile = file; })
-        .catch(() => {});
+  // La voz se arma por pedazos: speak() la usa con el mensaje ya completo, y
+  // fetchNext() con las oraciones que llegan mientras la IA todavía escribe
+  // (streaming de /api/next). Cada pedazo se pide a /api/speak apenas llega
+  // (en paralelo) y suenan en orden, uno detrás de otro.
+  function iniciarHabla(onEnd, sigueVigente) {
+    const pedidos = [];
+    const textos = [];
+    let cerrada = false;
+    let cancelada = false;
+    let despertar = null;
+    let cierre = null; // { logEntry, index } cuando ya no llegan más pedazos
+    function agregar(texto) {
+      const limpio = String(texto || '').trim();
+      if (!limpio || cancelada) return;
+      const pedido = pedirVoz(limpio);
+      pedido.catch(() => {}); // una que falla mientras suena otra no es un error "sin atender"
+      pedidos.push(pedido);
+      textos.push(limpio);
+      if (despertar) despertar();
     }
-    let ya = 0; // cuántas partes ya sonaron completas
-    try {
-      for (let i = 0; i < pedidos.length; i++) {
-        const blob = await pedidos[i];
-        await reproducirBlob(blob);
-        ya = i + 1;
+    function cerrar(logEntry, index) {
+      cerrada = true;
+      cierre = { logEntry, index };
+      if (despertar) despertar();
+    }
+    function cancelar() {
+      cancelada = true;
+      if (ttsAudioEl) { try { ttsAudioEl.pause(); } catch (e) {} }
+      if (despertar) despertar();
+    }
+    (async () => {
+      let ya = 0; // cuántos pedazos ya sonaron completos
+      try {
+        for (;;) {
+          if (cancelada || (sigueVigente && !sigueVigente())) return;
+          if (ya < pedidos.length) {
+            const blob = await pedidos[ya];
+            if (cancelada || (sigueVigente && !sigueVigente())) return;
+            await reproducirBlob(blob);
+            ya += 1;
+            continue;
+          }
+          if (cerrada) break;
+          await new Promise((resolve) => { despertar = resolve; });
+          despertar = null;
+        }
+      } catch (err) {
+        // la voz del sistema no se puede grabar: lo que falte se dice con ella y
+        // solo queda el texto para este turno
+        if (cancelada) return;
+        speakWithSystemVoice(textos.slice(ya).join(' '), onEnd);
+        return;
       }
-    } catch (err) {
-      // la voz del sistema no se puede grabar: lo que falte se dice con ella y
-      // solo queda el texto para este turno
-      speakWithSystemVoice(partes.slice(ya).join(' ') || text, onEnd);
-      return;
-    }
-    if (onEnd) onEnd();
+      if (cierre && cierre.logEntry && cierre.index != null) {
+        // El audio completo (todos los pedazos juntos) se sube para poder
+        // escucharlo después, igual que antes.
+        Promise.all(pedidos)
+          .then((blobs) => uploadAudio(new Blob(blobs, { type: 'audio/mpeg' }), 'assistant', cierre.index, 'audio/mpeg'))
+          .then((file) => { if (file) cierre.logEntry.audioFile = file; })
+          .catch(() => {});
+      }
+      if (onEnd) onEnd();
+    })();
+    return { agregar, cerrar, cancelar };
+  }
+
+  async function speak(text, onEnd, logEntry, index) {
+    const habla = iniciarHabla(onEnd);
+    dividirParaVoz(text).forEach((parte) => habla.agregar(parte));
+    habla.cerrar(logEntry, index);
   }
 
   // Detección de pausas por volumen (en vez del reconocimiento de voz del
@@ -2794,6 +2838,7 @@
     if (mySession !== sessionId) return;
     setState('thinking', 'Pensando…');
     orbLabel.innerHTML = '···';
+    let hablaEnCurso = null;
     try {
       const mediaUrls = mediaUrlsLocal;
       mediaUrlsLocal = []; // las fotos de este turno ya se van a mandar; el próximo empieza vacío
@@ -2820,7 +2865,7 @@
       const resp = await fetch('/api/next', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ history, lastAudioUrl, mode: sessionMode, ofrecerPausa, interpretarRespuestaPausa, mediaUrls, fotoRecienSubida: fotoRecienSubidaAAvisar ? { caption: fotoRecienSubidaAAvisar.caption } : null }),
+        body: JSON.stringify({ stream: true, history, lastAudioUrl, mode: sessionMode, ofrecerPausa, interpretarRespuestaPausa, mediaUrls, fotoRecienSubida: fotoRecienSubidaAAvisar ? { caption: fotoRecienSubidaAAvisar.caption } : null }),
       });
       if (mySession !== sessionId) return;
       if (!resp.ok) {
@@ -2828,21 +2873,13 @@
         err.status = resp.status;
         throw err;
       }
-      const data = await resp.json();
-      if (mySession !== sessionId) return;
-      turnIndex += 1;
-      const myTurn = turnIndex;
-      history.push({ role: 'assistant', content: data.message });
-      const logEntry = { role: 'assistant', content: data.message, timestamp: new Date().toISOString() };
-      sessionLog.push(logEntry);
-      // Si este turno es la reacción a una foto que la propia persona
-      // acaba de subir (ver fotoRecienSubidaAAvisar arriba), data.media
-      // viene vacío (eso es solo para fotos de un familiar) — se sigue
-      // mostrando la que ya se subió, para que no desaparezca justo cuando
-      // la IA está preguntando por ella.
-      mostrarMediaMomento(data.media || (fotoRecienSubidaAAvisar ? { url: fotoRecienSubidaAAvisar.url, type: fotoRecienSubidaAAvisar.type } : null));
-      setState('speaking', 'Hablando…');
-      speak(data.message, () => {
+      // La respuesta llega por pedazos (ver el comentario de streaming en
+      // /api/next): las primeras oraciones empiezan a sonar mientras la IA
+      // todavía escribe el resto. Un servidor sin streaming contesta con un
+      // JSON normal y se usa igual que antes.
+      let data = null;
+      const sigueVigente = () => mySession === sessionId;
+      const alTerminarDeHablar = () => {
         if (mySession !== sessionId) return;
         if (data.done) {
           finishSession();
@@ -2851,8 +2888,75 @@
         } else {
           listenForAnswer();
         }
-      }, logEntry, myTurn);
+      };
+      // Si este turno es la reacción a una foto que la propia persona
+      // acaba de subir (ver fotoRecienSubidaAAvisar arriba), el servidor
+      // no manda media (eso es solo para fotos de un familiar) — se sigue
+      // mostrando la que ya se subió, para que no desaparezca justo cuando
+      // la IA está preguntando por ella.
+      let mediaMostrada = false;
+      const mostrarMediaDelTurno = (media) => {
+        if (mediaMostrada) return;
+        mediaMostrada = true;
+        mostrarMediaMomento(media || (fotoRecienSubidaAAvisar ? { url: fotoRecienSubidaAAvisar.url, type: fotoRecienSubidaAAvisar.type } : null));
+      };
+      if (!(resp.headers.get('content-type') || '').includes('ndjson')) {
+        data = await resp.json();
+      } else {
+        const lector = resp.body.getReader();
+        const decodificador = new TextDecoder();
+        let pendiente = '';
+        const procesarLinea = (linea) => {
+          let evento = null;
+          try { evento = JSON.parse(linea); } catch (e) { return; }
+          if (evento.t === 'frase') {
+            if (!hablaEnCurso) {
+              hablaEnCurso = iniciarHabla(alTerminarDeHablar, sigueVigente);
+              mostrarMediaDelTurno(evento.media);
+              setState('speaking', 'Hablando…');
+            }
+            hablaEnCurso.agregar(evento.texto);
+          } else if (evento.t === 'fin') {
+            data = evento;
+          } else if (evento.t === 'error') {
+            throw new Error('stream-error');
+          }
+        };
+        for (;;) {
+          const { value, done } = await lector.read();
+          if (mySession !== sessionId) {
+            if (hablaEnCurso) hablaEnCurso.cancelar();
+            try { lector.cancel(); } catch (e) {}
+            return;
+          }
+          if (done) break;
+          pendiente += decodificador.decode(value, { stream: true });
+          let salto;
+          while ((salto = pendiente.indexOf('\n')) >= 0) {
+            const linea = pendiente.slice(0, salto).trim();
+            pendiente = pendiente.slice(salto + 1);
+            if (linea) procesarLinea(linea);
+          }
+        }
+        if (pendiente.trim()) procesarLinea(pendiente.trim());
+        if (!data) throw new Error('stream-incompleto');
+      }
+      if (mySession !== sessionId) return;
+      turnIndex += 1;
+      const myTurn = turnIndex;
+      history.push({ role: 'assistant', content: data.message });
+      const logEntry = { role: 'assistant', content: data.message, timestamp: new Date().toISOString() };
+      sessionLog.push(logEntry);
+      mostrarMediaDelTurno(data.media);
+      setState('speaking', 'Hablando…');
+      if (hablaEnCurso) {
+        dividirParaVoz(data.restante).forEach((parte) => hablaEnCurso.agregar(parte));
+        hablaEnCurso.cerrar(logEntry, myTurn);
+      } else {
+        speak(data.message, alTerminarDeHablar, logEntry, myTurn);
+      }
     } catch (err) {
+      if (hablaEnCurso) hablaEnCurso.cancelar();
       if (mySession !== sessionId) return;
       // Bug real reportado (auditoría UX 2026-09-09): con un 500 del
       // servidor o sin conexión, esto ponía state='idle' -- el MISMO

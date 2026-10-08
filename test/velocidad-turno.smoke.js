@@ -136,7 +136,7 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
   const colab = fs.readFileSync(path.resolve(__dirname, '..', 'public', 'colaborar.html'), 'utf8');
   for (const [nombre, h] of [['app.html', app_], ['colaborar.html', colab]]) {
     ok(!/audioBufferToWav|recortarSilencioDeCola|decodeAudioData/.test(h), `${nombre}: ya no decodifica ni recodifica el audio a WAV antes de transcribir`);
-    ok(/function dividirParaVoz/.test(h) && /partes\.map\(\(parte\) => pedirVoz\(parte\)\)/.test(h), `${nombre}: la voz se pide en partes, en paralelo`);
+    ok(/function dividirParaVoz/.test(h) && (/partes\.map\(\(parte\) => pedirVoz\(parte\)\)/.test(h) || /const pedido = pedirVoz\(limpio\)/.test(h)), `${nombre}: la voz se pide en partes, en paralelo`);
   }
   ok(!/await uploadAudio\(audioBlob, 'user'/.test(app_), 'app.html: la subida del audio de la persona ya NO bloquea la llamada a la IA');
   ok(/enlazarAudioConHistoria\(text\.trim\(\), file\)/.test(app_) && /\/api\/story-log\/audio/.test(app_), 'app.html: el audio se enlaza con la historia cuando terminan las dos cosas');
@@ -152,6 +152,55 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
   ok(largo.length === 2 && largo[0].endsWith('de gente.') && largo[1].startsWith('¿Y qué cocinaba'), 'voz: un texto de varias frases se parte en la primera frase y el resto');
   ok(dividir('Qué bonito. Cuéntame más. Y luego seguimos con otra cosa distinta si quieres, sin ningún apuro.').length === 2, 'voz: nunca más de dos pedazos');
   ok(dividir('Mmm. Sí. Claro, claro, cuéntame con calma todo lo que te acuerdes de esa época tan bonita, sin afán.').length === 1, 'voz: sin una frase completa de al menos 20 caracteres al inicio, va entera');
+
+  // --- Voz por pedazos (streaming de /api/next, 2026-10-08) ---
+  ok(/JSON\.stringify\(\{ stream: true, history/.test(app_), 'app: /api/next se pide con stream: true');
+  ok(/resp\.headers\.get\('content-type'\) \|\| ''\)\.includes\('ndjson'\)/.test(app_) && /data = await resp\.json\(\)/.test(app_), 'app: si el servidor no hace streaming, sigue funcionando con el JSON de siempre');
+  const h0 = app_.indexOf('function iniciarHabla');
+  const h1 = app_.indexOf('async function speak(');
+  ok(h0 !== -1 && h1 > h0, 'app: existe iniciarHabla');
+  const crear = new Function('pedirVoz', 'reproducirBlob', 'speakWithSystemVoice', 'uploadAudio', 'ttsAudioEl', 'Blob',
+    app_.slice(h0, h1) + '; return iniciarHabla;');
+  const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+  const armar = (opts = {}) => {
+    const sonaron = []; const subidas = []; let fin = 0; let sistema = null;
+    const iniciarHabla = crear(
+      async (t) => { await esperar(t.includes('lenta') ? 30 : 1); if (opts.falla === t) throw new Error('tts'); return t; },
+      async (b) => { await esperar(2); sonaron.push(b); },
+      (t) => { sistema = t; },
+      async (blob, quien, idx) => { subidas.push([quien, idx]); return 'archivo.mp3'; },
+      { pause() {} },
+      class { constructor(p) { this.p = p; } }
+    );
+    return { iniciarHabla, sonaron, subidas, fin: () => fin, sistema: () => sistema, onEnd: () => { fin++; } };
+  };
+  {
+    const a = armar(); const log = {};
+    const h = a.iniciarHabla(a.onEnd);
+    h.agregar('Primera frase lenta.'); h.agregar('Segunda.');
+    await esperar(5); h.agregar('Tercera.'); h.cerrar(log, 3);
+    await esperar(120);
+    ok(a.sonaron.join('|') === 'Primera frase lenta.|Segunda.|Tercera.', 'habla: suenan en orden aunque la voz de una tarde más que la siguiente');
+    ok(a.fin() === 1, 'habla: avisa una sola vez cuando termina todo');
+    ok(a.subidas.length === 1 && a.subidas[0][0] === 'assistant' && a.subidas[0][1] === 3 && log.audioFile === 'archivo.mp3', 'habla: sube el audio completo del turno al final');
+  }
+  {
+    const a = armar(); const h = a.iniciarHabla(a.onEnd);
+    h.agregar('Una.'); await esperar(20);
+    ok(a.fin() === 0, 'habla: si todavía llegan pedazos, no termina antes de tiempo');
+    h.agregar('Otra.'); h.cerrar(null, null); await esperar(30);
+    ok(a.sonaron.join('|') === 'Una.|Otra.' && a.fin() === 1, 'habla: un pedazo que llega tarde igual se dice y luego termina');
+  }
+  {
+    const a = armar(); let vigente = true; const h = a.iniciarHabla(a.onEnd, () => vigente);
+    h.agregar('Una.'); await esperar(20); vigente = false; h.agregar('No debe sonar.'); h.cerrar(null, null); await esperar(30);
+    ok(a.sonaron.join('|') === 'Una.' && a.fin() === 0, 'habla: si la sesión ya no está vigente (pausa/fin), no sigue hablando ni termina el turno');
+  }
+  {
+    const a = armar({ falla: 'Rota.' }); const h = a.iniciarHabla(a.onEnd);
+    h.agregar('Buena.'); h.agregar('Rota.'); h.agregar('Última.'); h.cerrar(null, null); await esperar(50);
+    ok(a.sonaron.join('|') === 'Buena.' && a.sistema() === 'Rota. Última.', 'habla: si la voz falla, lo que falta se dice con la voz del sistema');
+  }
 
   console.log(`\n${pasaron} pasaron, ${fallaron} fallaron`);
   process.exit(fallaron ? 1 : 0);

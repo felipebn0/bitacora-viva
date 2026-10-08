@@ -105,7 +105,7 @@ Con las 5 puestas y un Redeploy, las subidas nuevas van a R2. Si falta alguna, s
 
 ## Velocidad del turno (de que la persona calla a que la IA habla)
 
-Un turno son 5 pasos en fila: **silencio de espera** (`SILENCE_MS`, 2,2 s: tiene que pasar sin voz antes de dar la respuesta por terminada) → **transcribir** (`/api/transcribe`, ~1 s) → **la IA** (`/api/next`: lecturas a la base + Claude) → **la voz** (`/api/speak`) → reproducir. Qué se hizo para acortarlo (2026-10-08):
+Un turno son 5 pasos en fila: **silencio de espera** (`SILENCE_MS`, 2 s: tiene que pasar sin voz antes de dar la respuesta por terminada) → **transcribir** (`/api/transcribe`, ~1 s) → **la IA** (`/api/next`: lecturas a la base + Claude) → **la voz** (`/api/speak`) → reproducir. Qué se hizo para acortarlo (2026-10-08):
 
 1. **Transcribir sin recodificar.** Antes, cada turno decodificaba la grabación y la volvía a codificar como WAV sin comprimir (~10 veces más pesado) solo para recortar ~2 s de silencio (ahorro: ~$0,0001). Ahora se manda la grabación tal cual.
 2. **La subida del audio ya no bloquea a la IA.** Se sube en paralelo con `/api/next` (que guarda la historia sin audio) y, cuando las dos terminan, `POST /api/story-log/audio` enlaza el audio con la historia. En `colaborar.html`, la subida y la transcripción van en paralelo.
@@ -113,8 +113,9 @@ Un turno son 5 pasos en fila: **silencio de espera** (`SILENCE_MS`, 2,2 s: tiene
 4. **Lecturas en paralelo** en `/api/next` (resumen, contexto familiar) en vez de una tras otra.
 5. **Medición.** `/api/transcribe`, `/api/next` y `/api/speak` devuelven el header `Server-Timing` (F12, Network, el pedido, Timing) y dejan una línea `[latencia] ruta=… total=…ms db=… claude=…` en los logs de Vercel: así se ve dónde se va el tiempo de verdad.
 6. La voz del sistema de respaldo (cuando falla ElevenLabs) nunca prefiere una voz argentina.
+7. **Respuesta en streaming** (`/api/next` con `stream: true`, `app.html`). El servidor contesta una línea de JSON por evento: `frase` (oraciones ya listas), `fin` (el mensaje final con todo el postproceso y `restante`, lo que falta por decir) o `error`. El cliente (`iniciarHabla`) pide la voz de cada frase apenas llega y las reproduce en orden, mientras Claude sigue escribiendo. Solo se adelantan oraciones seguras: sin `[FIN]`/`[PAUSA]`, sin voseo ni argentinismos y nada después de la primera pregunta (la regla de "una sola pregunta" y la corrección de dialecto se deciden con el mensaje entero). Sin `stream`, la ruta contesta el JSON de siempre. `colaborar.html` (`/api/contribute-chat`) todavía no lo usa.
 
-Lo que más pesa y es decisión de producto: el **modelo de voz** (`ELEVENLABS_MODEL_ID`: Flash v2.5 genera ~1,2 s más rápido que v4 Turbo) y los **2,2 s de silencio** (bajarlo corta a quien piensa a mitad de frase; ver el comentario junto a `SILENCE_MS` en `app.html`). Tests: `test/velocidad-turno.smoke.js`.
+Lo que más pesa y es decisión de producto: el **modelo de voz** (`ELEVENLABS_MODEL_ID`: Flash v2.5 genera ~1,2 s más rápido que v4 Turbo) y los **2 s de silencio** (bajarlo más corta a quien piensa a mitad de frase; ver el comentario junto a `SILENCE_MS` en `app.html`). Tests: `test/velocidad-turno.smoke.js`.
 
 ## Consumo del árbol genealógico (cómo se mantiene bajo)
 
