@@ -48,6 +48,17 @@ const users = {
 };
 // D colabora con la historia de A.
 const collaborationsRows = [{ collaborator_user_id: 4, owner_user_id: 1 }];
+// SEC-002B: archivos de aportes. Con huella en la ruta (u<id de quien lo subió>)
+// y uno de antes de las huellas, que solo se reconoce porque aparece en sus aportes.
+const ARCHIVOS_DE_APORTES = {
+  'audio/aportes/1/u3/111.webm': Buffer.from('audio-de-la-colaboradora-fija'),
+  'audio/aportes/1/u4/222.webm': Buffer.from('audio-de-la-que-se-sumo'),
+  'audio/aportes/1/333.webm': Buffer.from('audio-viejo-de-la-fija'),
+  'media/1/u3/foto-1.jpg': Buffer.from('foto-de-la-fija'),
+};
+const notasDeColaboradores = [
+  { user_id: 1, contributed_by: 3, audio_url: null, audio_urls: JSON.stringify(['https://fake.public.blob.vercel-storage.com/audio/aportes/1/333.webm']), media_urls: null },
+];
 
 function fakeSql(strings, ...values) {
   const text = strings.join('?');
@@ -61,6 +72,12 @@ function fakeSql(strings, ...values) {
     const u = users[values[0]];
     return Promise.resolve(u ? [{ owner_user_id: u.owner_user_id, token_version: u.token_version }] : []);
   }
+  // aportes de un colaborador con cuenta (archivos de antes de las huellas)
+  if (text.includes('FROM family_notes WHERE user_id') && text.includes('contributed_by = ?')) {
+    const [ownerId, colaboradorId] = values;
+    return Promise.resolve(notasDeColaboradores.filter((n) => n.user_id === ownerId && n.contributed_by === colaboradorId));
+  }
+  if (text.includes('SELECT 1 FROM bitacoras WHERE id')) return Promise.resolve([]);
   if (text.includes('SELECT 1 FROM collaborations')) {
     const [collaboratorId, ownerId] = values;
     const hit = collaborationsRows.some((c) => c.collaborator_user_id === collaboratorId && c.owner_user_id === ownerId);
@@ -112,6 +129,9 @@ require.cache[require.resolve('@vercel/blob')] = {
     put: async () => ({ url: 'https://fake.public.blob.vercel-storage.com/x' }),
     del: async () => {},
     get: async (pathname, opts) => {
+      if (ARCHIVOS_DE_APORTES[pathname]) {
+        return { statusCode: 200, stream: streamDesdeBuffer(ARCHIVOS_DE_APORTES[pathname]), headers: new Headers(), blob: { contentType: 'audio/webm', size: ARCHIVOS_DE_APORTES[pathname].length } };
+      }
       if (pathname !== AUDIO_PATHNAME) return null; // ni el legado ni nada más "existe" para get()
       const rangeHeader = opts && opts.headers && opts.headers.Range;
       const { slice, range } = recortarPorRange(AUDIO_CONTENIDO, rangeHeader);
@@ -238,13 +258,33 @@ function check(nombre, cond) {
     const comoAjena = await request(server, { path: u(AUDIO_PATHNAME) }, cookieB);
     check('una cuenta sin relación con A NO puede ver su archivo -> 403', comoAjena.status === 403);
 
-    // --- Colaboradora fija de A: sí puede ---
+    // --- SEC-002B: los colaboradores YA NO ven las grabaciones personales del dueño ---
     const comoColabFija = await request(server, { path: u(AUDIO_PATHNAME) }, cookieColabFija);
-    check('la colaboradora fija de A sí puede ver su archivo -> 200', comoColabFija.status === 200);
-
-    // --- Cuenta que se sumó a colaborar con A (tabla collaborations): sí puede ---
+    check('la colaboradora fija de A NO puede ver las grabaciones personales de A -> 403', comoColabFija.status === 403);
     const comoColabSuma = await request(server, { path: u(AUDIO_PATHNAME) }, cookieColabSuma);
-    check('la cuenta que colabora con A (collaborations) sí puede ver su archivo -> 200', comoColabSuma.status === 200);
+    check('la cuenta que colabora con A (collaborations) tampoco -> 403', comoColabSuma.status === 403);
+
+    // --- …pero sí lo que ellas mismas subieron ---
+    const propioFija = await request(server, { path: u('audio/aportes/1/u3/111.webm') }, cookieColabFija);
+    check('la colaboradora fija ve el audio que ella subió (huella u3) -> 200', propioFija.status === 200 && propioFija.bodyBuffer.equals(ARCHIVOS_DE_APORTES['audio/aportes/1/u3/111.webm']));
+    const fotoFija = await request(server, { path: u('media/1/u3/foto-1.jpg') }, cookieColabFija);
+    check('…y su foto -> 200', fotoFija.status === 200);
+    const propioSuma = await request(server, { path: u('audio/aportes/1/u4/222.webm') }, cookieColabSuma);
+    check('la cuenta que se sumó ve el audio que ella subió (huella u4) -> 200', propioSuma.status === 200);
+    const ajenoDeFija = await request(server, { path: u('audio/aportes/1/u3/111.webm') }, cookieColabSuma);
+    check('una colaboradora NO puede ver el audio que subió otra colaboradora -> 403', ajenoDeFija.status === 403);
+    const ajenoDeSuma = await request(server, { path: u('audio/aportes/1/u4/222.webm') }, cookieColabFija);
+    check('…ni al revés -> 403', ajenoDeSuma.status === 403);
+    const viejoPropio = await request(server, { path: u('audio/aportes/1/333.webm') }, cookieColabFija);
+    check('un audio de antes de las huellas se ve si aparece en sus propios aportes -> 200', viejoPropio.status === 200);
+    const viejoAjeno = await request(server, { path: u('audio/aportes/1/333.webm') }, cookieColabSuma);
+    check('…y no si es de otra persona -> 403', viejoAjeno.status === 403);
+    const huellaFalsa = await request(server, { path: u('audio/aportes/1/u3/../u4/222.webm') }, cookieColabFija);
+    check('una ruta con ".." para colarse en la carpeta de otra persona -> 400', huellaFalsa.status === 400);
+    const ajenaFamilia = await request(server, { path: u('audio/aportes/1/u3/111.webm') }, cookieB);
+    check('una cuenta de otra familia no ve los aportes de A -> 403', ajenaFamilia.status === 403);
+    const duenaVeTodo = await Promise.all(['audio/aportes/1/u3/111.webm', 'audio/aportes/1/u4/222.webm', 'audio/aportes/1/333.webm', 'media/1/u3/foto-1.jpg'].map((r) => request(server, { path: u(r) }, cookieA)));
+    check('la dueña ve todos los aportes de su familia -> 200', duenaVeTodo.every((r) => r.status === 200));
 
     // --- Archivo "legado" (todavía público en Blob, get() no lo encuentra) ---
     const legado = await request(server, { path: u(LEGACY_URL) }, cookieA);

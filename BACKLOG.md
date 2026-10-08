@@ -173,10 +173,12 @@ Pendiente/fuera de alcance de esta vuelta (no adivinado, dejado explícito):
 
 **Pendientes después:** un webhook para procesar las respuestas (hoy quien no quiere más avisos los apaga en su perfil), un botón con enlace mágico dentro de la plantilla, y revisar el texto de la Política de Privacidad con el abogado (ya nombra a Meta como proveedor).
 
-## 19. Seguridad: permisos de archivos entre colaboradores (SEC-002B) — pendiente
+## 19. ~~Seguridad: permisos de archivos entre colaboradores (SEC-002B)~~ — hecho
 
 **Qué es** (auditoría de Diego, 2026-10-08, confirmada en el código): `estaAutorizadoParaVerArchivo` (en `server.js`, lo usa `/api/media-file`) deja pasar a cualquier colaborador con cuenta, cuenta colaboradora fija o invitado de una familia a **todos los archivos de esa familia** (`audio/<id>/…`, `audio/aportes/<id>/…`, `media/<id>/…`), no solo a los suyos, incluidas las grabaciones personales del dueño y los aportes marcados privados. Hace falta conocer la ruta, pero varias son adivinables (fechas y `Date.now()`; solo las fotos y videos llevan un sufijo aleatorio).
 
 **Arreglo propuesto:** el dueño sigue viendo todo; un colaborador o invitado solo puede pedir los archivos que aparezcan en sus propios aportes (`family_notes.contributed_by` / `guest_id`), comprobado en la base de datos. No depende de R2.
 
 **Hecho el mismo día (ver README, "Invitados con enlace personal"):** SEC-002A (invitados con el mismo nombre) con invitaciones personales por celular, y SEC-002C (un `draftId` ajeno sobrescribía el aporte de otra persona).
+
+**Hecho (2026-10-08):** las subidas de aportes llevan la huella de quien las hizo en la ruta y `estaAutorizadoParaVerArchivo` deja a un colaborador o invitado abrir solo lo suyo (por huella, o porque el archivo aparece en sus aportes si es de antes de las huellas); el dueño ve todo. Pruebas en `test/media-file.smoke.js` y `test/guest.smoke.js`.

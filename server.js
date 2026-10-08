@@ -2248,7 +2248,7 @@ function esUrlDeVercelBlob(valor) {
 // El relay hacia un store ajeno (mismo sufijo, distinto dueño) queda
 // acotado por: datosDelArchivoDeBlob solo acepta rutas audio/<id>/…,
 // audio/aportes/<id>/… y media/<id>/…; estaAutorizadoParaVerArchivo exige
-// ser dueño o colaborador de ese <id>; y /api/media-file fuerza un
+// ser dueño de ese <id>, o colaborador que subió ese archivo; y /api/media-file fuerza un
 // Content-Type de medios (nunca text/html) sobre lo que sirve — ver ahí.
 function esHostDeNuestroBlob(hostname) {
   if (typeof hostname !== 'string' || !hostname) return false;
@@ -5146,8 +5146,72 @@ function datosDelArchivoDeBlob(valorGuardado) {
   }
 }
 
-async function estaAutorizadoParaVerArchivo(req, ownerId) {
-  if (req.profileUserId === ownerId) return true; // dueño, o cuenta colaboradora fija de esa familia
+// Quién subió un archivo de aporte: va en la ruta (audio/aportes/<dueño>/<huella>/…
+// y media/<dueño>/<huella>/…) para poder decidir, sin consultar nada, que un
+// colaborador o invitado solo pueda abrir lo que subió él mismo. Cuenta con
+// sesión: u<id de la cuenta>. Invitado con enlace personal: g<id de la
+// invitación>. Invitado de antes de las invitaciones: l<huella del nombre>.
+function huellaDeSubida(req) {
+  if (req.isGuest) {
+    if (req.guestId) return 'g' + String(req.guestId).replace(/[^a-zA-Z0-9]/g, '').slice(0, 32);
+    return 'l' + crypto.createHash('sha1').update(String(req.guestName || '')).digest('hex').slice(0, 12);
+  }
+  return 'u' + req.userId;
+}
+
+// SEC-002B (auditoría de Diego, 2026-10-08): antes cualquier colaborador o
+// invitado de una familia podía abrir CUALQUIER archivo de esa familia si
+// conocía la ruta — incluidas las grabaciones personales del dueño y los
+// aportes de otros. Ahora:
+// - El dueño, quien administra el subperfil y el narrador de su propio
+//   enlace ven todo lo de su bitácora.
+// - Un colaborador (cuenta colaboradora, cuenta que se sumó con un código, o
+//   invitado) solo ve lo que subió él: lo que lleva su huella en la ruta, o lo
+//   que aparece en sus propios aportes (archivos de antes de las huellas).
+//   Un aporte privado de otra persona nunca le llega.
+async function estaAutorizadoParaVerArchivo(req, datos) {
+  const ownerId = datos.ownerId;
+  if (!req.isCollaborator && req.profileUserId === ownerId) return true;
+  if (!req.isGuest && await puedeAdministrarBitacora(ownerId, req)) return true;
+
+  // Desde aquí es un colaborador: tiene que pertenecer a esa familia.
+  const pertenece = req.isGuest
+    ? req.profileUserId === ownerId
+    : (req.profileUserId === ownerId || await esColaboradorDe(req, ownerId));
+  if (!pertenece) return false;
+
+  // Archivo con su huella en la ruta: audio/aportes/<dueño>/<huella>/<archivo>
+  // o media/<dueño>/<huella>/<archivo>.
+  const partes = datos.pathname.split('/');
+  const huella = partes[0] === 'audio' && partes[1] === 'aportes' && partes.length >= 5 ? partes[3]
+    : partes[0] === 'media' && partes.length >= 4 ? partes[2]
+    : null;
+  if (huella && huella === huellaDeSubida(req)) return true;
+
+  // Archivos de antes de las huellas: solo si aparecen en sus propios aportes.
+  await ensureSchema();
+  const notas = req.guestId
+    ? await sql`SELECT audio_url, audio_urls, media_urls FROM family_notes WHERE user_id = ${ownerId} AND contributed_by IS NULL AND guest_id = ${req.guestId} LIMIT 500`
+    : req.isGuest
+    ? await sql`SELECT audio_url, audio_urls, media_urls FROM family_notes WHERE user_id = ${ownerId} AND contributed_by IS NULL AND guest_id IS NULL AND contributor = ${req.guestName} LIMIT 500`
+    : await sql`SELECT audio_url, audio_urls, media_urls FROM family_notes WHERE user_id = ${ownerId} AND contributed_by = ${req.userId} LIMIT 500`;
+  const suyos = new Set();
+  const agregar = (valor) => {
+    const d = typeof valor === 'string' ? datosDelArchivoDeBlob(valor) : null;
+    if (d) suyos.add(d.pathname);
+  };
+  notas.forEach((n) => {
+    agregar(n.audio_url);
+    parseJsonArray(n.audio_urls).forEach(agregar);
+    parseJsonArray(n.media_urls).forEach((m) => agregar(m && m.url));
+  });
+  return suyos.has(datos.pathname);
+}
+
+// ¿Esta cuenta colabora con la bitácora de ownerId? (cuenta colaboradora
+// fija de esa familia, o una cuenta que se sumó con su código)
+async function esColaboradorDe(req, ownerId) {
+  if (req.isCollaborator && req.profileUserId === ownerId) return true;
   await ensureSchema();
   const collab = await sql`SELECT 1 FROM collaborations WHERE collaborator_user_id = ${req.userId} AND owner_user_id = ${ownerId}`;
   return collab.length > 0;
@@ -5188,7 +5252,7 @@ app.get('/api/media-file', requireAuth, async (req, res) => {
     const datos = valorGuardado && !valorGuardado.includes('..') ? datosDelArchivoDeBlob(valorGuardado) : null;
     if (!datos) return res.status(400).json({ error: 'Archivo inválido.' });
 
-    const autorizado = await estaAutorizadoParaVerArchivo(req, datos.ownerId);
+    const autorizado = await estaAutorizadoParaVerArchivo(req, datos);
     if (!autorizado) return res.status(403).json({ error: 'No tienes acceso a ese archivo.' });
 
     // Safari en iOS exige que el <audio>/<video> reciba soporte de rangos
@@ -5289,7 +5353,7 @@ app.post('/api/contribute-audio', requireAuth, rateLimit, express.raw({ type: '*
     if (!req.body || !req.body.length) return res.status(400).json({ error: 'Falta el audio.' });
     const real = await verificarArchivoReal(req.body, AUDIO_MIME_PERMITIDOS);
     if (!real) return res.status(400).json({ error: 'El archivo no parece ser un audio válido.' });
-    const filename = `audio/aportes/${ownerId}/${Date.now()}.${real.ext}`;
+    const filename = `audio/aportes/${ownerId}/${huellaDeSubida(req)}/${Date.now()}.${real.ext}`;
     const { url } = await almacenarArchivo(filename, req.body, real.mime);
     res.json({ ok: true, url });
   } catch (err) {
@@ -5642,7 +5706,7 @@ app.post('/api/contribute-media', requireAuth, rateLimit, express.raw({ type: '*
     if (!real) return res.status(400).json({ error: 'El archivo no parece ser una foto o un video válido.' });
     const type = real.mime.startsWith('video/') ? 'video' : 'foto';
 
-    const { url: blobUrl } = await almacenarArchivo(`media/${ownerId}/${type}-${Date.now()}.${real.ext}`, req.body, real.mime);
+    const { url: blobUrl } = await almacenarArchivo(`media/${ownerId}/${huellaDeSubida(req)}/${type}-${Date.now()}.${real.ext}`, req.body, real.mime);
 
     // Ya NO se inserta en la tabla "media" genérica aquí — este endpoint
     // hoy solo se llama desde "aportar una historia" (colaborar.html), y

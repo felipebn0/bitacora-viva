@@ -193,7 +193,7 @@ El consumo de Claude/voz solo queda registrado desde que se activó esta medici�
 
 Si se edita el `<script>`/`<style>` de `admin.html`, correr `node tools/actualizar-hashes-vercel.js` antes de commitear (mismo criterio que el resto de `public/`, ver `test/hashes-csp-vercel.smoke.js`).
 
-## Invitados con enlace personal (SEC-002A / SEC-002C)
+## Invitados con enlace personal (SEC-002A / SEC-002B / SEC-002C)
 
 Quien aporta historias **sin cuenta** entra con un enlace personal que crea el dueño (o quien administra el subperfil) desde "Invitar a mi círculo a colaborar": escribe el **nombre y el celular** de la persona, la app crea `/colaborar.html?invitacion=…` y abre WhatsApp con el chat de ese número y el mensaje ya escrito. El celular es único por bitácora (tabla `invitados`); el mismo celular es la misma persona.
 
@@ -202,7 +202,7 @@ Quien aporta historias **sin cuenta** entra con un enlace personal que crea el d
 - El código familiar ya **no** sirve para entrar sin cuenta (`POST /api/guest-start` pide `invitacion`); sigue sirviendo para registrarse con cuenta y para colaboradores con cuenta. Rotar el código familiar no corta a los invitados personales; quitar su acceso sí.
 - Las sesiones de invitado anteriores (firmadas con el código familiar, sin `guestId`) siguen funcionando hasta que expiren (30 días) o se rote el código familiar, y solo ven los aportes viejos sin `guest_id` de su mismo nombre.
 - Cerrar o actualizar un borrador de aporte (`/api/contribute-chat`, `draftId`) exige ser quien lo escribió (`contributed_by` / `guest_id`); un `draftId` ajeno no modifica nada y se guarda como aporte nuevo.
-- Pendiente (SEC-002B): `/api/media-file` todavía deja a cualquier colaborador o invitado de la familia pedir cualquier archivo de esa familia si conoce la ruta; ver `BACKLOG.md` #19.
+- **Archivos (SEC-002B):** `/api/media-file` ya no deja a un colaborador o invitado abrir cualquier archivo de la familia. El dueño (y quien administra el subperfil, y el narrador de su propio enlace) ve todo; un colaborador solo ve lo que subió él. Cada subida de aporte lleva la huella de quien la hizo en la ruta (`audio/aportes/<dueño>/<huella>/…`, `media/<dueño>/<huella>/…`; `u<id>` cuenta, `g<id>` invitación personal), y los archivos de antes de las huellas se reconocen solo si aparecen en sus propios aportes. Así un aporte privado de otra persona nunca le llega a nadie más que a su autor y al dueño.
 
 ## Recordatorios (correo + WhatsApp asistido)
 

@@ -29,6 +29,7 @@ const users = {
 };
 
 const fakeInvitados = crearFakeInvitados();
+const subidas = []; // rutas que /api/contribute-audio y /api/contribute-media mandaron a guardar
 // family_notes en memoria (solo lo que usan las rutas de aportes).
 const notas = [];
 let siguienteNotaId = 100;
@@ -131,7 +132,7 @@ require.cache[require.resolve('@neondatabase/serverless')] = {
 };
 require.cache[require.resolve('@vercel/blob')] = {
   id: require.resolve('@vercel/blob'), filename: require.resolve('@vercel/blob'), loaded: true,
-  exports: { put: async () => ({ url: 'https://fake.public.blob.vercel-storage.com/x' }), del: async () => {}, get: async () => null },
+  exports: { put: async (pathname) => { subidas.push(pathname); return { url: 'https://fake.public.blob.vercel-storage.com/' + pathname }; }, del: async () => {}, get: async () => null },
 };
 
 let capturedCalls = [];
@@ -179,6 +180,18 @@ function request(server, opts, cookie) {
     r.end();
   });
 }
+
+function subirBinario(server, pth, buffer, cookie) {
+  return new Promise((resolve, reject) => {
+    const host = `127.0.0.1:${server.address().port}`;
+    const r = http.request({ hostname: '127.0.0.1', port: server.address().port, path: pth, method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'Content-Length': buffer.length, Cookie: cookie, Origin: 'http://' + host } }, (res) => {
+      const chunks = []; res.on('data', (c) => chunks.push(c)); res.on('end', () => resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString() }));
+    });
+    r.on('error', reject); r.write(buffer); r.end();
+  });
+}
+
+const WAV_MINIMO = Buffer.concat([Buffer.from('RIFF'), Buffer.from([36, 0, 0, 0]), Buffer.from('WAVEfmt '), Buffer.from([16, 0, 0, 0, 1, 0, 1, 0, 0x40, 0x1f, 0, 0, 0x80, 0x3e, 0, 0, 2, 0, 16, 0]), Buffer.from('data'), Buffer.from([0, 0, 0, 0])]);
 
 async function guestStart(server, codigo, name) {
   const resp = await request(server, { path: '/api/guest-start', method: 'POST', body: { codigo, name } });
@@ -356,6 +369,32 @@ function cookieDeSesionVieja(payload) {
     const cookieReentra = reentra.headers['set-cookie'][0].split(';')[0];
     const veOtraVez = JSON.parse((await request(server, { path: '/api/contributions' }, cookieReentra)).body).notes;
     check('al reactivarlo con enlace nuevo recupera SUS aportes (mismo id)', reentra.status === 200 && veOtraVez.length === 1 && veOtraVez[0].texto.includes('terminó la historia'));
+
+    // --- SEC-002B: cada invitado solo abre los archivos que subió él ---
+    subidas.length = 0;
+    const subeCarlos1 = await subirBinario(server, '/api/contribute-audio', WAV_MINIMO, cookieCarlos1);
+    check('un invitado puede subir el audio de su aporte -> 200', subeCarlos1.status === 200);
+    const rutaCarlos1 = subidas[0];
+    check('la ruta del archivo lleva la huella de SU invitación (audio/aportes/<dueño>/g<id>/…)', new RegExp(`^audio/aportes/1/g${carlos1.id}/\\d+\\.wav$`).test(rutaCarlos1));
+    const subeCarlos2 = await subirBinario(server, '/api/contribute-audio', WAV_MINIMO, cookieCarlos2);
+    const rutaCarlos2 = subidas[1];
+    check('el otro Carlos sube con SU huella', rutaCarlos2.includes(`/g${carlos2.id}/`) && rutaCarlos1 !== rutaCarlos2);
+    const ver = (ruta, cookie) => request(server, { path: '/api/media-file?u=' + encodeURIComponent(ruta) }, cookie);
+    check('Carlos 1 abre el archivo que subió él (autorizado: el almacén de prueba no lo tiene -> 404)', (await ver(rutaCarlos1, cookieCarlos1)).status === 404);
+    check('Carlos 2 NO puede abrir el archivo de Carlos 1 -> 403', (await ver(rutaCarlos1, cookieCarlos2)).status === 403);
+    check('Carlos 1 NO puede abrir el de Carlos 2 -> 403', (await ver(rutaCarlos2, cookieCarlos1)).status === 403);
+    check('un invitado NO puede abrir las grabaciones personales del dueño -> 403', (await ver('audio/1/2026-10-08T10-00-00-000Z/user-0.webm', cookieCarlos2)).status === 403);
+    check('un invitado NO puede abrir los aportes viejos (sin huella) de otros -> 403', (await ver('audio/aportes/1/1700000000000.webm', cookieCarlos2)).status === 403);
+    check('un invitado NO puede abrir archivos de otra familia -> 403', (await ver('audio/aportes/2/g' + carlos1.id + '/1.wav', cookieCarlos1)).status === 403);
+    check('el dueño abre los dos (autorizado -> 404 del almacén de prueba)', (await ver(rutaCarlos1, cookieFelipe)).status === 404 && (await ver(rutaCarlos2, cookieFelipe)).status === 404);
+    const fotoSube = await subirBinario(server, '/api/contribute-media', Buffer.from('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBT/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAj/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AL+AB//Z', 'base64'), cookieCarlos1);
+    if (fotoSube.status === 200) {
+      const rutaFoto = subidas[subidas.length - 1];
+      check('la foto de un invitado también lleva su huella (media/<dueño>/g<id>/…)', new RegExp(`^media/1/g${carlos1.id}/foto-\\d+\\.jpg$`).test(rutaFoto));
+      check('…y el otro Carlos no la abre -> 403', (await ver(rutaFoto, cookieCarlos2)).status === 403);
+    }
+    // sesión vieja (por nombre): solo lo suyo
+    check('una sesión vieja tampoco abre archivos de las invitaciones nuevas -> 403', (await ver(rutaCarlos1, cookieVieja)).status === 403);
 
     // --- Las páginas usan el enlace personal ---
     const fs = require('fs');
