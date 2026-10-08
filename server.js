@@ -4343,6 +4343,51 @@ async function asegurarEspanolColombiano(userId, texto) {
   return final;
 }
 
+// Guarda en story_log lo último que dijo la persona (con su audio y fotos si ya
+// están). La usan /api/next (turno normal) y /api/next/guardar (turno que se
+// generó de forma especulativa y solo se guarda cuando se confirma).
+async function guardarHistoriaDelTurno(profileUserId, history, audioUrlCrudo, mediaUrlsCrudas) {
+  // Los mensajes "sintéticos" que le mandamos a Claude por dentro (avisos
+  // de que se presionó un botón, no algo que la persona realmente dijo)
+  // van siempre entre paréntesis — se excluyen del log de historias.
+  // El modo "armar árbol" no cuenta aquí: esas respuestas sirven para
+  // construir el árbol y quedan en la sesión (histórico completo), pero
+  // no son "historias destacadas" — son datos cortos de parentesco.
+  const ultimaRespuesta = [...history].reverse().find((m) => m.role === 'user' && !/^\(.*\)$/.test(m.content.trim()));
+  if (ultimaRespuesta && ultimaRespuesta.content.length >= HISTORIA_MIN_CHARS) {
+    const audioUrl = urlHttpValida(typeof audioUrlCrudo === 'string' ? audioUrlCrudo.slice(0, 1000) : null);
+    const mediaUrlsLimpias = limpiarMediaAdjunta(mediaUrlsCrudas);
+    const mediaUrlsJson = mediaUrlsLimpias.length ? JSON.stringify(mediaUrlsLimpias) : null;
+    const textoAGuardar = capitalizarInicio(ultimaRespuesta.content);
+    try {
+      // "history" trae TODOS los turnos de la sesión, así que si el
+      // cliente vuelve a llamar a /api/next sin haber sumado una
+      // respuesta nueva (ej. pausar y seguir varias veces seguidas
+      // mientras esta misma respuesta todavía era la última — ver el bug
+      // reportado de la historia repetida varias veces), "ultimaRespuesta"
+      // es exactamente la misma de la llamada anterior y se insertaba de
+      // nuevo como una fila aparte. Antes de insertar, nos fijamos si esta
+      // MISMA historia ya quedó guardada hace poco para esta cuenta — si
+      // sí, no la duplicamos; si esta vez sí llegó el audio (o la foto) y
+      // antes no, aprovechamos y se lo completamos a esa fila en vez de
+      // perderlo.
+      const previa = await sql`SELECT id, audio_url, media_urls FROM story_log WHERE user_id = ${profileUserId} AND texto = ${textoAGuardar} AND created_at > now() - interval '10 minutes' ORDER BY created_at DESC LIMIT 1`;
+      if (previa.length) {
+        if (audioUrl && !previa[0].audio_url) {
+          await sql`UPDATE story_log SET audio_url = ${audioUrl} WHERE id = ${previa[0].id}`;
+        }
+        if (mediaUrlsJson && !previa[0].media_urls) {
+          await sql`UPDATE story_log SET media_urls = ${mediaUrlsJson} WHERE id = ${previa[0].id}`;
+        }
+      } else {
+        await sql`INSERT INTO story_log (user_id, texto, audio_url, media_urls) VALUES (${profileUserId}, ${textoAGuardar}, ${audioUrl}, ${mediaUrlsJson})`;
+      }
+    } catch (err) {
+      console.error('No se pudo guardar en story_log:', err);
+    }
+  }
+}
+
 // --- Respuesta en streaming de /api/next (pedido de Felipe, 2026-10-08) ---
 // Con { stream: true } la ruta contesta línea por línea (JSON por línea):
 //   {"t":"frase","texto":"...","media":...}  una o más oraciones ya listas para
@@ -4356,7 +4401,10 @@ async function asegurarEspanolColombiano(userId, texto) {
 // voseo ni argentinismos (esas se corrigen con el texto completo) y nada
 // después de la primera pregunta (la regla de "una sola pregunta" se decide
 // con el mensaje entero).
-const FRASE_ADELANTADA_MIN_CHARS = 25;
+const FRASE_ADELANTADA_MIN_CHARS = 10;
+// Una oración larga sin punto todavía se adelanta hasta su primera coma, si ya
+// van al menos tantos caracteres (así la voz arranca con la primera mitad).
+const CLAUSULA_ADELANTADA_MIN_CHARS = 35;
 
 function partirOraciones(texto) {
   return String(texto || '').match(/[^.!?…]*[.!?…]+["”»)\]]*\s*|[^.!?…]+$/g) || [];
@@ -4373,7 +4421,19 @@ function crearEmisorDeFrases(emitir) {
       buffer += delta;
       for (;;) {
         const m = buffer.match(/^\s*([\s\S]*?[.!?…]+["”»)\]]*)\s+/);
-        if (!m) return;
+        if (!m) {
+          const c = buffer.match(new RegExp('^\\s*([^.!?…\\[\\]]{' + CLAUSULA_ADELANTADA_MIN_CHARS + ',}?[,;:])\\s+'));
+          if (!c) return;
+          const clausula = c[1].trim();
+          buffer = buffer.slice(c[0].length);
+          if (detectarFueraDeColombia(clausula).length) { detenido = true; return; }
+          const texto = corto ? corto + ' ' + clausula : clausula;
+          corto = '';
+          hablado = hablado ? hablado + ' ' + texto : texto;
+          emitir(texto);
+          if (clausula.includes('¿')) { detenido = true; return; }
+          continue;
+        }
         buffer = buffer.slice(m[0].length);
         const oracion = m[1].trim();
         if (!oracion) continue;
@@ -4449,6 +4509,20 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
     const mediaPendiente = mode === 'historia' && !esPrimeraVez && !history.length && !notaPendiente
       ? await loadPendingMedia(req.profileUserId)
       : null;
+    // Turno ESPECULATIVO: el cliente lo pide cuando la persona lleva un rato
+    // callada pero todavía no se da por terminada su respuesta, para que la IA
+    // ya vaya pensando. Se descarta si la persona sigue hablando, así que NO
+    // puede tener efectos (marcar notas como contadas, guardar la historia): eso
+    // lo hace /api/next/guardar si se confirma. Solo vale para un turno normal
+    // de conversación; si hay algo especial, el cliente sigue por el camino de siempre.
+    const especulativo = req.body.especulativo === true;
+    if (especulativo && (
+      mode !== 'historia' || esPrimeraVez || !history.length || notaPendiente || mediaPendiente
+      || req.body.ofrecerPausa || req.body.interpretarRespuestaPausa || req.body.fotoRecienSubida
+      || (Array.isArray(req.body.mediaUrls) && req.body.mediaUrls.length)
+    )) {
+      return res.json({ noEspeculable: true });
+    }
     const startPrompt = mode === 'arbol'
       ? '(La persona acaba de presionar el botón para armar el árbol genealógico. Saluda cálidamente a la persona por su nombre si lo sabes, cuéntale brevemente que hoy vas a preguntarle por su familia para armar el árbol, y arranca preguntando por la primera persona que falte — revisa la lista de "personas que ya se conocen" más abajo antes de preguntar, y si ya están sus papás, salta directo a hermanos, abuelos, tíos, pareja o hijos, lo que falte.)'
       : esPrimeraVez
@@ -4607,44 +4681,11 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
     text = await asegurarEspanolColombiano(req.profileUserId, text);
     medida.marca('postproceso');
 
-    // Los mensajes "sintéticos" que le mandamos a Claude por dentro (avisos
-    // de que se presionó un botón, no algo que la persona realmente dijo)
-    // van siempre entre paréntesis — se excluyen del log de historias.
-    // El modo "armar árbol" no cuenta aquí: esas respuestas sirven para
-    // construir el árbol y quedan en la sesión (histórico completo), pero
-    // no son "historias destacadas" — son datos cortos de parentesco.
-    const ultimaRespuesta = [...history].reverse().find((m) => m.role === 'user' && !/^\(.*\)$/.test(m.content.trim()));
-    if (mode === 'historia' && ultimaRespuesta && ultimaRespuesta.content.length >= HISTORIA_MIN_CHARS) {
-      const audioUrl = urlHttpValida(typeof req.body.lastAudioUrl === 'string' ? req.body.lastAudioUrl.slice(0, 1000) : null);
-      const mediaUrlsLimpias = limpiarMediaAdjunta(req.body.mediaUrls);
-      const mediaUrlsJson = mediaUrlsLimpias.length ? JSON.stringify(mediaUrlsLimpias) : null;
-      const textoAGuardar = capitalizarInicio(ultimaRespuesta.content);
-      try {
-        // "history" trae TODOS los turnos de la sesión, así que si el
-        // cliente vuelve a llamar a /api/next sin haber sumado una
-        // respuesta nueva (ej. pausar y seguir varias veces seguidas
-        // mientras esta misma respuesta todavía era la última — ver el bug
-        // reportado de la historia repetida varias veces), "ultimaRespuesta"
-        // es exactamente la misma de la llamada anterior y se insertaba de
-        // nuevo como una fila aparte. Antes de insertar, nos fijamos si esta
-        // MISMA historia ya quedó guardada hace poco para esta cuenta — si
-        // sí, no la duplicamos; si esta vez sí llegó el audio (o la foto) y
-        // antes no, aprovechamos y se lo completamos a esa fila en vez de
-        // perderlo.
-        const previa = await sql`SELECT id, audio_url, media_urls FROM story_log WHERE user_id = ${req.profileUserId} AND texto = ${textoAGuardar} AND created_at > now() - interval '10 minutes' ORDER BY created_at DESC LIMIT 1`;
-        if (previa.length) {
-          if (audioUrl && !previa[0].audio_url) {
-            await sql`UPDATE story_log SET audio_url = ${audioUrl} WHERE id = ${previa[0].id}`;
-          }
-          if (mediaUrlsJson && !previa[0].media_urls) {
-            await sql`UPDATE story_log SET media_urls = ${mediaUrlsJson} WHERE id = ${previa[0].id}`;
-          }
-        } else {
-          await sql`INSERT INTO story_log (user_id, texto, audio_url, media_urls) VALUES (${req.profileUserId}, ${textoAGuardar}, ${audioUrl}, ${mediaUrlsJson})`;
-        }
-      } catch (err) {
-        console.error('No se pudo guardar en story_log:', err);
-      }
+    // Los mensajes "sintéticos" (avisos de botones, entre paréntesis) y el modo árbol no
+    // se guardan como historias (ver guardarHistoriaDelTurno). Un turno especulativo
+    // tampoco: se guarda recién cuando el cliente lo confirma (/api/next/guardar).
+    if (mode === 'historia' && !especulativo) {
+      await guardarHistoriaDelTurno(req.profileUserId, history, req.body.lastAudioUrl, req.body.mediaUrls);
     }
 
     // Si este turno fue la introducción de una foto/video pendiente (sola,
@@ -4668,6 +4709,25 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
       return res.end();
     }
     res.status(500).json({ error: 'No se pudo generar la siguiente pregunta.' });
+  }
+});
+
+// Confirma un turno que se generó de forma especulativa (ver "especulativo" en
+// /api/next): guarda la historia igual que lo habría hecho /api/next.
+app.post('/api/next/guardar', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar, bloquearSiReadOnly, rateLimitVoz, async (req, res) => {
+  try {
+    const history = Array.isArray(req.body.history) ? req.body.history.slice(0, 60) : [];
+    for (const m of history) {
+      if (!m || (m.role !== 'user' && m.role !== 'assistant') || typeof m.content !== 'string') {
+        return res.status(400).json({ error: 'Historial inválido.' });
+      }
+      if (m.content.length > 4000) m.content = m.content.slice(0, 4000);
+    }
+    await guardarHistoriaDelTurno(req.profileUserId, history, req.body.lastAudioUrl, req.body.mediaUrls);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo guardar el turno.' });
   }
 });
 

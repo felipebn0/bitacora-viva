@@ -202,6 +202,78 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
     ok(a.sonaron.join('|') === 'Buena.' && a.sistema() === 'Rota. Última.', 'habla: si la voz falla, lo que falta se dice con la voz del sistema');
   }
 
+  // --- Respuesta especulativa (2026-10-08) ---
+  ok(/const ESPECULAR_MS = 900;/.test(app_) && /const SILENCE_MS = 2000;/.test(app_), 'app: se especula a los 900 ms de silencio y se cierra a los 2000 ms');
+  ok(/if \(especulacion && especulacion\.loudAt !== lastLoudTime\) cancelarEspeculacion\(\);/.test(app_), 'app: si la persona vuelve a hablar, la especulación se descarta');
+  ok(/const esp = especulacion && !especulacion\.cancelada && especulacion\.loudAt === lastLoudTime/.test(app_), 'app: al cerrar el turno solo se aprovecha si no volvió a hablar');
+  ok(/if \(!esp && !interpretarRespuestaPausa/.test(app_), 'app: un turno especulado nunca ofrece la pausa (no se especula si le toca)');
+  const e0 = app_.indexOf('async function* leerEventos');
+  const e1 = app_.indexOf('async function fetchNext(');
+  ok(e0 !== -1 && e1 > e0, 'app: existe el bloque de especulación');
+  const montar = new Function('estado', 'fetch', 'transcribeAudio', 'adelantarVoz', 'dividirParaVoz', 'vozAdelantada', 'Blob', 'AbortController',
+    `let { sessionMode, history, esperandoRespuestaPausa, mediaUrlsLocal, fotoRecienSubida, subidaFotoEnCurso, ofrecioPausa, sessionStartTime, OFRECER_PAUSA_MS,
+       mediaRecorder, audioChunks, lastRecordingMimeType, recordingStartedAt, lastLoudTime } = estado;\n` +
+    app_.slice(e0, e1) + `\nreturn { iniciar: iniciarEspeculacion, cancelar: cancelarEspeculacion, actual: () => especulacion, fuenteEspeculada, puedeEspecular, contador: () => especulacionesEsteTurno };`);
+  const ndjson = (eventos) => new Response(eventos.map((e) => JSON.stringify(e)).join('\n') + '\n', { headers: { 'Content-Type': 'application/x-ndjson' } });
+  const armarEsp = (over = {}) => {
+    const llamadas = []; const adelantadas = new Map();
+    const estado = Object.assign({
+      sessionMode: 'historia', history: [{ role: 'assistant', content: '¿Cómo era tu casa?' }], esperandoRespuestaPausa: false, mediaUrlsLocal: [], fotoRecienSubida: null,
+      subidaFotoEnCurso: null, ofrecioPausa: false, sessionStartTime: Date.now(), OFRECER_PAUSA_MS: 15 * 60 * 1000,
+      mediaRecorder: { state: 'recording', addEventListener(_, cb) { this.cb = cb; }, removeEventListener() {}, requestData() { setTimeout(() => this.cb(), 1); } },
+      audioChunks: [new Uint8Array(1500)], lastRecordingMimeType: 'audio/webm', recordingStartedAt: Date.now() - 4000, lastLoudTime: 1234,
+    }, over.estado || {});
+    const api = montar(estado,
+      async (url, opts) => { llamadas.push({ url, body: JSON.parse(opts.body) }); return over.respuesta ? over.respuesta() : ndjson([{ t: 'frase', texto: 'Qué bello.' }, { t: 'fin', message: 'Qué bello. ¿Cómo era?', restante: '¿Cómo era?', done: false, pausado: false }]); },
+      async () => (over.texto === undefined ? 'Era una casa grande con patio.' : over.texto),
+      (t) => adelantadas.set(t, true),
+      (t) => [String(t || '')],
+      adelantadas, Blob, AbortController);
+    return { api, llamadas, adelantadas };
+  };
+  const recoger = async (fuente) => { const out = []; for await (const e of fuente) out.push(e); return out; };
+  {
+    const { api, llamadas, adelantadas } = armarEsp();
+    ok(api.puedeEspecular() === true, 'especular: una charla normal sí puede especularse');
+    api.iniciar();
+    const esp = api.actual();
+    ok(!!esp && esp.loudAt === 1234 && api.contador() === 1, 'especular: guarda cuándo fue la última voz y cuenta el intento');
+    ok((await esp.textoPromise) === 'Era una casa grande con patio.', 'especular: transcribe lo grabado hasta ahora (sin detener la grabación)');
+    await esp.tarea;
+    ok(llamadas.length === 1 && llamadas[0].url === '/api/next' && llamadas[0].body.especulativo === true && llamadas[0].body.stream === true, 'especular: pide /api/next con especulativo:true');
+    ok(llamadas[0].body.history.length === 2 && llamadas[0].body.history[1].content === 'Era una casa grande con patio.', 'especular: la respuesta se pide con lo que dijo ya agregado al historial');
+    ok(adelantadas.has('Qué bello.') && adelantadas.has('¿Cómo era?'), 'especular: la voz de cada frase y del resto se pide por adelantado');
+    let abrioReal = false;
+    const eventos = await recoger(api.fuenteEspeculada(esp, async () => { abrioReal = true; return (async function* () {})(); }));
+    ok(eventos.map((e) => e.t).join(',') === 'frase,fin' && !abrioReal, 'adoptar: entrega los eventos ya guardados, en orden, sin pedir nada más');
+  }
+  {
+    const { api, llamadas } = armarEsp({ respuesta: () => new Response(JSON.stringify({ noEspeculable: true }), { headers: { 'Content-Type': 'application/json' } }) });
+    api.iniciar(); const esp = api.actual(); await esp.tarea;
+    let abrioReal = false;
+    const eventos = await recoger(api.fuenteEspeculada(esp, async () => { abrioReal = true; return (async function* () { yield { t: 'fin', message: 'Real.' }; })(); }));
+    ok(esp.noEspeculable && abrioReal && eventos.length === 1 && eventos[0].message === 'Real.', 'adoptar: si el servidor dijo "no se puede especular", pide el turno de verdad');
+  }
+  {
+    const { api, llamadas } = armarEsp({ texto: '' });
+    api.iniciar(); const esp = api.actual(); await esp.tarea;
+    ok(esp.noEspeculable && llamadas.length === 0, 'especular: si no se entendió nada, no se llama a la IA');
+  }
+  {
+    const { api, adelantadas } = armarEsp();
+    api.iniciar(); const esp = api.actual(); await esp.tarea;
+    api.cancelar();
+    ok(esp.cancelada && api.actual() === null && adelantadas.size === 0, 'cancelar: marca el intento como descartado y borra la voz adelantada');
+  }
+  {
+    const { api } = armarEsp({ estado: { history: [] } });
+    ok(api.puedeEspecular() === false, 'especular: no en el primer turno (prueba de micrófono)');
+    ok(armarEsp({ estado: { esperandoRespuestaPausa: true } }).api.puedeEspecular() === false, 'especular: no cuando se espera la respuesta a la oferta de pausa');
+    ok(armarEsp({ estado: { mediaUrlsLocal: ['x'] } }).api.puedeEspecular() === false, 'especular: no con fotos pendientes de enviar');
+    ok(armarEsp({ estado: { sessionStartTime: Date.now() - 16 * 60 * 1000 } }).api.puedeEspecular() === false, 'especular: no cuando toca ofrecer la pausa');
+    ok(armarEsp({ estado: { sessionMode: 'arbol' } }).api.puedeEspecular() === false, 'especular: no en el modo árbol');
+  }
+
   console.log(`\n${pasaron} pasaron, ${fallaron} fallaron`);
   process.exit(fallaron ? 1 : 0);
 })();

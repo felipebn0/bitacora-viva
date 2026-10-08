@@ -652,7 +652,54 @@ async function main() {
   const ev4 = lineas(stream4);
   const fin4 = ev4[ev4.length - 1];
   check('streaming: [FIN] -> done=true, sin el marcador en el texto', fin4.done === true && !fin4.message.includes('[FIN]') && fin4.message === 'Gracias por contarme todo esto, Diego. Fue un gusto.');
-  check('streaming: lo que se adelantó no incluye el marcador', ev4.filter((e) => e.t === 'frase').every((e) => !e.texto.includes('[')) && fin4.restante === 'Fue un gusto.');
+  check('streaming: lo que se adelantó no incluye el marcador', ev4.filter((e) => e.t === 'frase').every((e) => !e.texto.includes('[')) && fin4.restante === '');
+  check('streaming: una oración corta (>=10 letras) también se adelanta', ev4.filter((e) => e.t === 'frase').map((e) => e.texto).join(' ') === 'Gracias por contarme todo esto, Diego. Fue un gusto.');
+
+  // Reacción corta + pregunta (el caso más común): la reacción sale antes, la pregunta va en el final.
+  resetAnthropicMock();
+  pushAnthropicResponse('Qué bello. ¿Cómo era tu casa de niño?');
+  const stream4b = await nextForUser(server, cookie, { history: historial, mode: 'historia', stream: true });
+  const ev4b = lineas(stream4b);
+  check('streaming: "Qué bello." sale antes y la pregunta queda para el final', ev4b.filter((e) => e.t === 'frase').map((e) => e.texto).join('|') === 'Qué bello.' && ev4b[ev4b.length - 1].restante === '¿Cómo era tu casa de niño?');
+
+  // Una sola oración larga: se adelanta hasta la primera coma (si ya van 35 letras).
+  resetAnthropicMock();
+  pushAnthropicResponse('Me parece muy bonito lo que cuentas de tu abuela, porque se nota cuánto la querías. ¿Cómo se llamaba?');
+  const stream4c = await nextForUser(server, cookie, { history: historial, mode: 'historia', stream: true });
+  const ev4c = lineas(stream4c);
+  const frases4c = ev4c.filter((e) => e.t === 'frase').map((e) => e.texto);
+  check('streaming: una oración larga se adelanta hasta la coma', frases4c[0] === 'Me parece muy bonito lo que cuentas de tu abuela,' && frases4c[1] === 'porque se nota cuánto la querías.');
+  check('streaming: con cortes en coma igual frases + restante = mensaje', junto(frases4c.join(' ') + ' ' + ev4c[ev4c.length - 1].restante) === junto(ev4c[ev4c.length - 1].message));
+  resetAnthropicMock();
+  pushAnthropicResponse('Uy, qué cosa tan linda de recordar, contame un poco más de eso. ¿Cómo era?');
+  pushAnthropicResponse('Uy, qué cosa tan linda de recordar, cuéntame un poco más de eso. ¿Cómo era?');
+  const stream4d = await nextForUser(server, cookie, { history: historial, mode: 'historia', stream: true });
+  check('streaming: una cláusula con voseo tampoco se adelanta', !lineas(stream4d).some((e) => e.t === 'frase' && /contame/.test(e.texto)));
+
+  // --- Turno ESPECULATIVO: genera igual, pero sin efectos (no guarda la historia) ---
+  const historialEspec = [...historial, { role: 'assistant', content: '¿Y qué más recuerdas?' }, { role: 'user', content: respuestaLarga }];
+  resetAnthropicMock();
+  storyLogInserts = []; storyLogRows = []; storyLogUpdates = [];
+  pushAnthropicResponse('Qué recuerdo tan lindo, gracias por contarlo. ¿Y después qué pasó?');
+  const espec = await nextForUser(server, cookie, { history: historialEspec, mode: 'historia', stream: true, especulativo: true });
+  check('especulativo: contesta el turno completo', espec.status === 200 && lineas(espec).some((e) => e.t === 'fin' && e.message.startsWith('Qué recuerdo tan lindo')));
+  check('especulativo: NO guarda la historia en story_log', storyLogInserts.length === 0);
+  const guardar = await request(server, { path: '/api/next/guardar', method: 'POST', body: { history: historialEspec, lastAudioUrl: null } }, cookie);
+  check('guardar: confirmar el turno guarda la historia', guardar.status === 200 && storyLogInserts.length === 1 && storyLogInserts[0].texto.length >= 180);
+  await request(server, { path: '/api/next/guardar', method: 'POST', body: { history: historialEspec, lastAudioUrl: null } }, cookie);
+  check('guardar: confirmar dos veces no duplica la fila', storyLogInserts.length === 1);
+  const guardarMalo = await request(server, { path: '/api/next/guardar', method: 'POST', body: { history: [{ role: 'robot', content: 'x' }] } }, cookie);
+  check('guardar: historial inválido -> 400', guardarMalo.status === 400);
+  const guardarSinSesion = await request(server, { path: '/api/next/guardar', method: 'POST', body: { history: historialEspec } });
+  check('guardar: sin sesión -> 401', guardarSinSesion.status === 401);
+
+  resetAnthropicMock();
+  const esp1 = await nextForUser(server, cookie, { history: [], mode: 'historia', stream: true, especulativo: true });
+  check('especulativo: la primera vez (sin historial) no se especula y ni llama a Claude', JSON.parse(esp1.body).noEspeculable === true && capturedCalls.length === 0);
+  const esp2 = await nextForUser(server, cookie, { history: historialEspec, mode: 'historia', stream: true, especulativo: true, ofrecerPausa: true });
+  check('especulativo: si hay oferta de pausa, no se especula', JSON.parse(esp2.body).noEspeculable === true && capturedCalls.length === 0);
+  const esp3 = await nextForUser(server, cookie, { history: historialEspec, mode: 'arbol', stream: true, especulativo: true });
+  check('especulativo: el modo árbol no se especula', JSON.parse(esp3.body).noEspeculable === true && capturedCalls.length === 0);
 
   // Falla antes de empezar: un 500 normal en JSON. Falla ya empezada: evento "error".
   resetAnthropicMock();

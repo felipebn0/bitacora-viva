@@ -2461,6 +2461,12 @@
   }
 
   async function pedirVoz(texto) {
+    const adelantada = vozAdelantada.get(texto);
+    if (adelantada) { vozAdelantada.delete(texto); return adelantada; }
+    return pedirVozAlServidor(texto);
+  }
+
+  async function pedirVozAlServidor(texto) {
     const resp = await fetch('/api/speak', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2468,6 +2474,18 @@
     });
     if (!resp.ok) throw new Error('tts-unavailable');
     return resp.blob();
+  }
+
+  // Voz pedida por adelantado (mientras se especula la respuesta, ver
+  // iniciarEspeculacion): si el turno se confirma, pedirVoz() la encuentra
+  // lista; si se descarta, vozAdelantada se vacía y no pasa nada.
+  const vozAdelantada = new Map();
+  function adelantarVoz(texto) {
+    const limpio = String(texto || '').trim();
+    if (!limpio || vozAdelantada.has(limpio)) return;
+    const pedido = pedirVozAlServidor(limpio);
+    pedido.catch(() => {});
+    vozAdelantada.set(limpio, pedido);
   }
 
   function reproducirBlob(blob) {
@@ -2574,6 +2592,12 @@
   // Felipe al ver que la IA tardaba en contestar): 200ms menos de espera
   // en cada turno.
   const SILENCE_MS = 2000; // pausa tolerada antes de dar la respuesta por terminada
+  // A los ESPECULAR_MS de silencio (ya habiendo hablado) se empieza a transcribir y
+  // a generar la respuesta por adelantado; a los SILENCE_MS, si no volvió a
+  // hablar, esa respuesta ya está casi lista. Si habla de nuevo, se descarta
+  // (cuesta una transcripción y una respuesta de más, no cambia lo que oye).
+  const ESPECULAR_MS = 900;
+  const MAX_ESPECULACIONES_POR_TURNO = 2;
   // Subido de 0.02: con ruido de fondo (ventilador, TV, eco del cuarto) el
   // volumen ambiente solía superar 0.02 seguido, así que lastLoudTime nunca
   // dejaba de renovarse y SILENCE_MS de arriba no llegaba a cumplirse nunca
@@ -2599,6 +2623,7 @@
   let vadRafId = null;
   let vadActive = false;
   let lastLoudTime = 0;
+  let huboVoz = false; // ya se oyó voz en este turno (sin esto, el silencio inicial no cuenta)
 
   let vadSource = null;
   function startVoiceActivityDetection() {
@@ -2631,6 +2656,7 @@
 
     const data = new Uint8Array(analyser.frequencyBinCount);
     lastLoudTime = Date.now();
+    huboVoz = false;
     vadActive = true;
 
     function tick() {
@@ -2642,7 +2668,17 @@
         sumSquares += v * v;
       }
       const rms = Math.sqrt(sumSquares / data.length);
-      if (rms > VAD_THRESHOLD) lastLoudTime = Date.now();
+      if (rms > VAD_THRESHOLD) { lastLoudTime = Date.now(); huboVoz = true; }
+
+      // Respuesta especulativa: si la persona ya dijo algo y lleva ESPECULAR_MS
+      // callada, la IA empieza a pensar sin esperar a que se cumpla SILENCE_MS.
+      // Si vuelve a hablar, se descarta; si no, ya va adelantada.
+      if (especulacion && especulacion.loudAt !== lastLoudTime) cancelarEspeculacion();
+      if (!especulacion && huboVoz && especulacionesEsteTurno < MAX_ESPECULACIONES_POR_TURNO
+          && Date.now() - lastLoudTime > ESPECULAR_MS && recordingStartedAt && Date.now() - recordingStartedAt > 1500
+          && puedeEspecular()) {
+        iniciarEspeculacion();
+      }
 
       const silencioLargo = Date.now() - lastLoudTime > SILENCE_MS;
       const turnoDemasiadoLargo = recordingStartedAt && (Date.now() - recordingStartedAt > MAX_TURN_MS);
@@ -2720,6 +2756,7 @@
   let finalizandoTurno = false;
 
   function reintentarOEscribir() {
+    cancelarEspeculacion();
     finalizacionesVacias++;
     writeRow.classList.add('visible');
     if (finalizacionesVacias >= MAX_VACIOS) {
@@ -2761,6 +2798,10 @@
 
   async function finalizeSpokenAnswerInterno() {
     if (fallbackRecognition) { try { fallbackRecognition.stop(); } catch (e) {} }
+    // Una respuesta especulativa solo vale si la persona no volvió a hablar
+    // desde que se pidió (si lo hizo, el tick del detector ya la canceló).
+    const esp = especulacion && !especulacion.cancelada && especulacion.loudAt === lastLoudTime ? especulacion : null;
+    especulacion = null;
     const audioBlob = await stopRecordingAudio();
     // history.length===0 = la prueba de micrófono (primer turno de la
     // sesión) — ahí una respuesta corta ("Felipe", un saludo) es esperada
@@ -2768,10 +2809,20 @@
     // turno en adelante.
     const demasiadoCorta = history.length > 0 && lastRecordingDurationMs < MIN_RESPUESTA_MS;
     if (!audioBlob || audioBlob.size < 800 || demasiadoCorta) {
+      if (esp) { especulacion = esp; cancelarEspeculacion(); }
       reintentarOEscribir();
       return;
     }
     setState('thinking', 'Transcribiendo…');
+    if (esp) {
+      const textoEsp = ((await esp.textoPromise) || '').trim();
+      if (textoEsp && !esp.cancelada) {
+        finalizacionesVacias = 0;
+        handleAnswer(textoEsp, audioBlob, { especulacion: esp });
+        return;
+      }
+      especulacion = esp; cancelarEspeculacion(); // no sirvió: sigue el camino de siempre
+    }
     // Se manda la grabación tal cual salió del micrófono (comprimida, ~10 KB por
     // segundo). Antes se recortaba el silencio de cola decodificando y
     // recodificando el audio como WAV sin comprimir (~10 veces más pesado, y
@@ -2829,7 +2880,140 @@
     mediaMomento.hidden = false;
   }
 
-  async function fetchNext() {
+  // Lee la respuesta de /api/next como una secuencia de eventos: el
+  // streaming (una línea de JSON por evento) o, si el servidor contesta un
+  // JSON normal, un único evento "fin".
+  async function* leerEventos(resp) {
+    if (!(resp.headers.get('content-type') || '').includes('ndjson')) {
+      yield Object.assign({ t: 'fin' }, await resp.json());
+      return;
+    }
+    const lector = resp.body.getReader();
+    const decodificador = new TextDecoder();
+    let pendiente = '';
+    try {
+      for (;;) {
+        const { value, done } = await lector.read();
+        if (done) break;
+        pendiente += decodificador.decode(value, { stream: true });
+        let salto;
+        while ((salto = pendiente.indexOf('\n')) >= 0) {
+          const linea = pendiente.slice(0, salto).trim();
+          pendiente = pendiente.slice(salto + 1);
+          let evento = null;
+          if (linea) { try { evento = JSON.parse(linea); } catch (e) {} }
+          if (evento) yield evento;
+        }
+      }
+      if (pendiente.trim()) {
+        let evento = null;
+        try { evento = JSON.parse(pendiente.trim()); } catch (e) {}
+        if (evento) yield evento;
+      }
+    } finally {
+      try { lector.cancel(); } catch (e) {}
+    }
+  }
+
+  // --- Respuesta especulativa (pedido de Felipe, 2026-10-08) ---
+  // Cuando la persona lleva ESPECULAR_MS callada, se transcribe lo que dijo
+  // hasta ahí y se le pide la respuesta a la IA (con especulativo:true, que no
+  // guarda nada), y se va pidiendo también la voz. Si la persona vuelve a hablar,
+  // todo se descarta. Si se cumple SILENCE_MS sin que hable, el turno usa esa
+  // respuesta, que ya va adelantada: ver finalizeSpokenAnswerInterno y fetchNext.
+  let especulacion = null;
+  let especulacionesEsteTurno = 0;
+
+  function puedeEspecular() {
+    return sessionMode === 'historia' && history.length > 0 && !esperandoRespuestaPausa
+      && mediaUrlsLocal.length === 0 && !fotoRecienSubida && !subidaFotoEnCurso
+      && !(!ofrecioPausa && sessionStartTime && (Date.now() - sessionStartTime) >= OFRECER_PAUSA_MS);
+  }
+
+  // Lo grabado hasta ahora, sin detener la grabación.
+  function instantaneaDelAudio() {
+    return new Promise((resolve) => {
+      if (!mediaRecorder || mediaRecorder.state !== 'recording') { resolve(null); return; }
+      let resuelto = false;
+      const terminar = () => {
+        if (resuelto) return;
+        resuelto = true;
+        mediaRecorder.removeEventListener('dataavailable', terminar);
+        resolve(audioChunks.length ? new Blob(audioChunks.slice(), { type: lastRecordingMimeType || 'audio/webm' }) : null);
+      };
+      mediaRecorder.addEventListener('dataavailable', terminar);
+      try { mediaRecorder.requestData(); } catch (e) { terminar(); return; }
+      setTimeout(terminar, 1000);
+    });
+  }
+
+  function cancelarEspeculacion() {
+    const esp = especulacion;
+    especulacion = null;
+    if (!esp) return;
+    esp.cancelada = true;
+    try { esp.controller.abort(); } catch (e) {}
+    if (esp.despertar) esp.despertar();
+    vozAdelantada.clear();
+  }
+
+  function iniciarEspeculacion() {
+    const esp = {
+      loudAt: lastLoudTime, cancelada: false, noEspeculable: false, texto: '',
+      cola: [], fin: false, error: null, despertar: null, controller: new AbortController(),
+    };
+    especulacion = esp;
+    especulacionesEsteTurno += 1;
+    const avisar = () => { if (esp.despertar) esp.despertar(); };
+    esp.textoPromise = (async () => {
+      const blob = await instantaneaDelAudio();
+      if (esp.cancelada || !blob || blob.size < 800) return '';
+      return transcribeAudio(blob, recordingStartedAt ? Date.now() - recordingStartedAt : 0);
+    })();
+    esp.tarea = (async () => {
+      const texto = (await esp.textoPromise || '').trim();
+      if (esp.cancelada || !texto) { esp.noEspeculable = true; return; }
+      esp.texto = texto;
+      const resp = await fetch('/api/next', {
+        method: 'POST',
+        signal: esp.controller.signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stream: true, especulativo: true, history: [...history, { role: 'user', content: texto }], mode: 'historia' }),
+      });
+      if (!resp.ok) { esp.noEspeculable = true; return; }
+      let huboFrase = false;
+      for await (const evento of leerEventos(resp)) {
+        if (esp.cancelada) return;
+        if (evento.noEspeculable) { esp.noEspeculable = true; return; }
+        if (evento.t === 'frase') { huboFrase = true; adelantarVoz(evento.texto); }
+        if (evento.t === 'fin') {
+          // lo mismo que va a decir speak()/fetchNext con el resto del mensaje
+          dividirParaVoz(huboFrase ? evento.restante : evento.message).forEach(adelantarVoz);
+        }
+        esp.cola.push(evento);
+        avisar();
+      }
+    })().catch((e) => { if (!esp.cancelada) esp.noEspeculable = true; }).finally(() => { esp.fin = true; avisar(); });
+    esp.fuente = async function* () {
+      let i = 0;
+      for (;;) {
+        if (i < esp.cola.length) { yield esp.cola[i++]; continue; }
+        if (esp.fin) return;
+        await new Promise((resolve) => { esp.despertar = resolve; });
+        esp.despertar = null;
+      }
+    };
+  }
+
+  // Eventos de una especulación adoptada; si el servidor dijo que ese turno
+  // no se podía especular (o falló antes de contestar), pide el turno de verdad.
+  async function* fuenteEspeculada(esp, abrirReal) {
+    let entregados = 0;
+    for await (const evento of esp.fuente()) { entregados += 1; yield evento; }
+    if (!entregados && esp.noEspeculable) yield* await abrirReal();
+  }
+
+  async function fetchNext(espOfrecida) {
     const mySession = sessionId;
     // Ver el comentario junto a subidaFotoEnCurso: si hay una foto
     // subiéndose todavía, esperamos a que termine antes de armar este
@@ -2844,6 +3028,10 @@
       mediaUrlsLocal = []; // las fotos de este turno ya se van a mandar; el próximo empieza vacío
       const fotoRecienSubidaAAvisar = fotoRecienSubida;
       fotoRecienSubida = null; // se avisa una sola vez; el próximo turno ya no lo repite
+      // La respuesta especulativa se pidió sin fotos ni avisos; si en el medio
+      // se sumó una foto, no sirve y se pide el turno de verdad.
+      const esp = espOfrecida && !mediaUrls.length && !fotoRecienSubidaAAvisar ? espOfrecida : null;
+      if (espOfrecida && !esp) { espOfrecida.cancelada = true; try { espOfrecida.controller.abort(); } catch (e) {} }
       const lastEntry = sessionLog.length ? sessionLog[sessionLog.length - 1] : null;
       const lastAudioUrl = lastEntry && lastEntry.role === 'user' ? lastEntry.audioFile || null : null;
       // Si el turno anterior ofreció la pausa, este turno tiene que avisarle
@@ -2857,23 +3045,35 @@
       // de pausar en vez de dejar que la sesión siga sin límite — una sola
       // vez por sesión, no en cada turno.
       let ofrecerPausa = false;
-      if (!interpretarRespuestaPausa && sessionMode === 'historia' && !ofrecioPausa && sessionStartTime && (Date.now() - sessionStartTime) >= OFRECER_PAUSA_MS) {
+      if (!esp && !interpretarRespuestaPausa && sessionMode === 'historia' && !ofrecioPausa && sessionStartTime && (Date.now() - sessionStartTime) >= OFRECER_PAUSA_MS) {
         ofrecerPausa = true;
         ofrecioPausa = true;
         esperandoRespuestaPausa = true; // para el PRÓXIMO turno, no este
       }
-      const resp = await fetch('/api/next', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stream: true, history, lastAudioUrl, mode: sessionMode, ofrecerPausa, interpretarRespuestaPausa, mediaUrls, fotoRecienSubida: fotoRecienSubidaAAvisar ? { caption: fotoRecienSubidaAAvisar.caption } : null }),
-      });
-      if (mySession !== sessionId) return;
-      if (!resp.ok) {
-        const err = new Error('server error');
-        err.status = resp.status;
-        throw err;
-      }
-      // La respuesta llega por pedazos (ver el comentario de streaming en
+      const abrirReal = async () => {
+        const resp = await fetch('/api/next', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stream: true, history, lastAudioUrl, mode: sessionMode, ofrecerPausa, interpretarRespuestaPausa, mediaUrls, fotoRecienSubida: fotoRecienSubidaAAvisar ? { caption: fotoRecienSubidaAAvisar.caption } : null }),
+        });
+        if (!resp.ok) {
+          const err = new Error('server error');
+          err.status = resp.status;
+          throw err;
+        }
+        return leerEventos(resp);
+      };
+      // Una respuesta especulativa no guarda la historia (por si se descartaba):
+      // ya se confirmó, así que se guarda ahora, en paralelo con lo demás. Si
+      // hubo que pedir el turno de verdad, /api/next también la guarda y no se duplica.
+      const guardado = esp
+        ? fetch('/api/next/guardar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ history, lastAudioUrl, mediaUrls }),
+          }).catch(() => {})
+        : null;
+      // La respuesta llega por eventos (ver el comentario de streaming en
       // /api/next): las primeras oraciones empiezan a sonar mientras la IA
       // todavía escribe el resto. Un servidor sin streaming contesta con un
       // JSON normal y se usa igual que antes.
@@ -2900,47 +3100,26 @@
         mediaMostrada = true;
         mostrarMediaMomento(media || (fotoRecienSubidaAAvisar ? { url: fotoRecienSubidaAAvisar.url, type: fotoRecienSubidaAAvisar.type } : null));
       };
-      if (!(resp.headers.get('content-type') || '').includes('ndjson')) {
-        data = await resp.json();
-      } else {
-        const lector = resp.body.getReader();
-        const decodificador = new TextDecoder();
-        let pendiente = '';
-        const procesarLinea = (linea) => {
-          let evento = null;
-          try { evento = JSON.parse(linea); } catch (e) { return; }
-          if (evento.t === 'frase') {
-            if (!hablaEnCurso) {
-              hablaEnCurso = iniciarHabla(alTerminarDeHablar, sigueVigente);
-              mostrarMediaDelTurno(evento.media);
-              setState('speaking', 'Hablando…');
-            }
-            hablaEnCurso.agregar(evento.texto);
-          } else if (evento.t === 'fin') {
-            data = evento;
-          } else if (evento.t === 'error') {
-            throw new Error('stream-error');
-          }
-        };
-        for (;;) {
-          const { value, done } = await lector.read();
-          if (mySession !== sessionId) {
-            if (hablaEnCurso) hablaEnCurso.cancelar();
-            try { lector.cancel(); } catch (e) {}
-            return;
-          }
-          if (done) break;
-          pendiente += decodificador.decode(value, { stream: true });
-          let salto;
-          while ((salto = pendiente.indexOf('\n')) >= 0) {
-            const linea = pendiente.slice(0, salto).trim();
-            pendiente = pendiente.slice(salto + 1);
-            if (linea) procesarLinea(linea);
-          }
+      const fuente = esp ? fuenteEspeculada(esp, abrirReal) : await abrirReal();
+      for await (const evento of fuente) {
+        if (mySession !== sessionId) {
+          if (hablaEnCurso) hablaEnCurso.cancelar();
+          return;
         }
-        if (pendiente.trim()) procesarLinea(pendiente.trim());
-        if (!data) throw new Error('stream-incompleto');
+        if (evento.t === 'frase') {
+          if (!hablaEnCurso) {
+            hablaEnCurso = iniciarHabla(alTerminarDeHablar, sigueVigente);
+            mostrarMediaDelTurno(evento.media);
+            setState('speaking', 'Hablando…');
+          }
+          hablaEnCurso.agregar(evento.texto);
+        } else if (evento.t === 'fin') {
+          data = evento;
+        } else if (evento.t === 'error') {
+          throw new Error('stream-error');
+        }
       }
+      if (!data) throw new Error('stream-incompleto');
       if (mySession !== sessionId) return;
       turnIndex += 1;
       const myTurn = turnIndex;
@@ -2955,6 +3134,7 @@
       } else {
         speak(data.message, alTerminarDeHablar, logEntry, myTurn);
       }
+      if (guardado) await guardado; // handleAnswer enlaza el audio con esa historia cuando esto termina
     } catch (err) {
       if (hablaEnCurso) hablaEnCurso.cancelar();
       if (mySession !== sessionId) return;
@@ -2978,6 +3158,7 @@
   }
 
   async function endConversation() {
+    cancelarEspeculacion();
     stopVoiceActivityDetection();
     if (fallbackRecognition) { try { fallbackRecognition.abort(); } catch (e) {} }
     sessionId += 1; // invalida cualquier respuesta pendiente de este turno
@@ -2996,6 +3177,7 @@
   }
 
   async function pauseConversation() {
+    cancelarEspeculacion();
     const estadoAlPausar = state;
     pausedFromState = estadoAlPausar;
     releaseWakeLock();
@@ -3089,6 +3271,8 @@
   }
 
   async function listenForAnswer() {
+    cancelarEspeculacion();
+    especulacionesEsteTurno = 0;
     setState('listening', 'Escuchando…');
     orbLabel.innerHTML = 'Escuchando<br>…';
     if (!window.MediaRecorder || !navigator.mediaDevices) {
@@ -3117,7 +3301,7 @@
   // para no gastar un llamado a la IA que quizás se descarta si nunca
   // vuelve, y para que sea resumeConversation() (con pausedFromState =
   // 'thinking') quien pida la pregunta nueva solo cuando de verdad vuelve.
-  async function handleAnswer(text, audioBlob, { seguir = true } = {}) {
+  async function handleAnswer(text, audioBlob, { seguir = true, especulacion: esp = null } = {}) {
     if (!text || !text.trim()) return;
     finalizacionesVacias = 0; // hubo una respuesta de verdad: se reinicia el contador de intentos vacíos
     if (audioBlob === undefined && mediaRecorder && mediaRecorder.state !== 'inactive') {
@@ -3151,7 +3335,7 @@
       // logEntry/history.
     }
     if (seguir) {
-      const siguiente = fetchNext();
+      const siguiente = fetchNext(esp);
       if (subidaDelAudio) {
         Promise.all([subidaDelAudio, siguiente])
           .then(([file]) => { if (file) enlazarAudioConHistoria(text.trim(), file); })
