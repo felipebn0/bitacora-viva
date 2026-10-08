@@ -2586,14 +2586,37 @@
     vozAdelantada.set(limpio, pedido);
   }
 
-  function reproducirBlob(blob) {
+  // recortarFinMs: milisegundos de la cola que NO se reproducen (solo se usa en
+  // el último pedazo de una respuesta). Algunos audios de voz terminan con un
+  // poco de estática después de la última palabra, y en el celular se oía justo
+  // al final de lo que dice la IA.
+  const RECORTE_FIN_VOZ_MS = 120;
+  function reproducirBlob(blob, recortarFinMs = 0) {
     return new Promise((resolve, reject) => {
       const url = URL.createObjectURL(blob);
       if (!ttsAudioEl) ttsAudioEl = new Audio();
+      let terminado = false;
+      let vigia = null;
+      const terminar = (cuando) => {
+        if (terminado) return;
+        terminado = true;
+        if (vigia) clearInterval(vigia);
+        URL.revokeObjectURL(url);
+        cuando();
+      };
       ttsAudioEl.src = url;
-      ttsAudioEl.onended = () => { URL.revokeObjectURL(url); resolve(); };
-      ttsAudioEl.onerror = () => { URL.revokeObjectURL(url); reject(new Error('audio')); };
-      ttsAudioEl.play().catch((e) => { URL.revokeObjectURL(url); reject(e); });
+      ttsAudioEl.onended = () => terminar(resolve);
+      ttsAudioEl.onerror = () => terminar(() => reject(new Error('audio')));
+      ttsAudioEl.play().then(() => {
+        if (recortarFinMs <= 0 || terminado) return;
+        vigia = setInterval(() => {
+          const duracion = ttsAudioEl.duration;
+          if (Number.isFinite(duracion) && duracion > 1 && ttsAudioEl.currentTime >= duracion - recortarFinMs / 1000) {
+            try { ttsAudioEl.pause(); } catch (e) {}
+            terminar(resolve);
+          }
+        }, 25);
+      }).catch((e) => terminar(() => reject(e)));
     });
   }
 
@@ -2635,7 +2658,8 @@
           if (ya < pedidos.length) {
             const blob = await pedidos[ya];
             if (cancelada || (sigueVigente && !sigueVigente())) return;
-            await reproducirBlob(blob);
+            const esUltimo = cerrada && ya === pedidos.length - 1;
+            await reproducirBlob(blob, esUltimo ? RECORTE_FIN_VOZ_MS : 0);
             ya += 1;
             continue;
           }

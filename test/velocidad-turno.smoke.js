@@ -166,7 +166,7 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
   const h1 = app_.indexOf('async function speak(');
   ok(h0 !== -1 && h1 > h0, 'app: existe iniciarHabla');
   const crear = new Function('pedirVoz', 'reproducirBlob', 'speakWithSystemVoice', 'uploadAudio', 'ttsAudioEl', 'Blob',
-    app_.slice(h0, h1) + '; return iniciarHabla;');
+    'const RECORTE_FIN_VOZ_MS = 120;\n' + app_.slice(h0, h1) + '; return iniciarHabla;');
   const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
   const armar = (opts = {}) => {
     const sonaron = []; const subidas = []; let fin = 0; let sistema = null;
@@ -218,6 +218,35 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
   ok(/resp\.status === 429 \|\| resp\.status >= 500/.test(app_) && /resp = await pedirTurno\(\)/.test(app_), 'app: un 429 o un 5xx se reintenta una vez antes de mostrar el error');
   ok(/código ' \+ err\.status/.test(app_), 'app: el mensaje de error del servidor trae el código para poder diagnosticarlo');
   ok(/hablaEnCurso\.agregar\(data\.restante\)/.test(app_), 'app: el resto del mensaje se dice en un solo audio');
+
+  // --- Recorte de la cola del último audio (estática al final, celular) ---
+  ok(/const RECORTE_FIN_VOZ_MS = 120;/.test(app_) && /reproducirBlob\(blob, esUltimo \? RECORTE_FIN_VOZ_MS : 0\)/.test(app_), 'app: solo el último pedazo de la respuesta se reproduce sin su cola');
+  {
+    const r0 = app_.indexOf('function reproducirBlob');
+    const r1 = app_.indexOf('function iniciarHabla');
+    const montarReproductor = new Function('ttsAudioEl', 'URL', 'Audio', `let ttsAudioEl_ = ttsAudioEl; ${app_.slice(r0, r1).replace(/ttsAudioEl/g, 'ttsAudioEl_')}; return reproducirBlob;`);
+    const audioFalso = (duracion) => {
+      const a = { duration: duracion, currentTime: 0, pausado: false, src: '', play() { return Promise.resolve(); }, pause() { this.pausado = true; } };
+      return a;
+    };
+    const urlFalsa = { createObjectURL: () => 'blob:x', revokeObjectURL: () => {} };
+    // sin recorte: termina solo cuando el audio dispara "ended"
+    let a = audioFalso(3); let rep = montarReproductor(a, urlFalsa, function () {});
+    let terminoSolo = false; rep({}).then(() => { terminoSolo = true; });
+    await esperar(60); ok(!terminoSolo, 'reproducir sin recorte: espera al final real del audio');
+    a.onended(); await esperar(5); ok(terminoSolo, 'reproducir sin recorte: termina con "ended"');
+    // con recorte: termina 120 ms antes del final y detiene el audio
+    a = audioFalso(3); rep = montarReproductor(a, urlFalsa, function () {});
+    let recortado = false; rep({}, 120).then(() => { recortado = true; });
+    await esperar(60); ok(!recortado, 'reproducir con recorte: sigue mientras falta más de 120 ms');
+    a.currentTime = 2.9; await esperar(60);
+    ok(recortado && a.pausado === true, 'reproducir con recorte: a 120 ms del final detiene el audio y termina');
+    // duración desconocida: no recorta (termina con "ended")
+    a = audioFalso(Infinity); rep = montarReproductor(a, urlFalsa, function () {});
+    let sinDuracion = false; rep({}, 120).then(() => { sinDuracion = true; });
+    a.currentTime = 99; await esperar(60); ok(!sinDuracion, 'reproducir con recorte: si el navegador no sabe la duración, no recorta');
+    a.onended(); await esperar(5); ok(sinDuracion, '…y termina con "ended"');
+  }
 
   // --- Respuesta especulativa (2026-10-08) ---
   ok(/const ESPECULAR_MS = 900;/.test(app_) && /const SILENCE_MS = 2000;/.test(app_), 'app: se especula a los 900 ms de silencio y se cierra a los 2000 ms');
