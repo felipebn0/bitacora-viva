@@ -1355,7 +1355,9 @@ function claudeCostUsd(usage) {
 // única diferencia entre planes es cuánto viene incluido gratis, no la
 // tarifa marginal). Confirmado contra la propia cuenta de Felipe
 // (elevenlabs.io/app/subscription/api): Flash/Turbo (el modelo de TTS que
-// usa speakWithElevenLabs) = $0.05 por 1000 caracteres; Scribe v1 (el
+// usa speakWithElevenLabs) = $0.05 por 1000 caracteres [ACTUALIZADO el
+// 2026-10-08, ver elevenTtsRatePer1kChars: ahora $0.04, y v4 Turbo tiene una
+// promoción de $0.011 hasta el 12 de octubre]; Scribe v1 (el
 // modelo de STT que usa /api/transcribe) = $0.22 por HORA. Reemplaza el
 // intento anterior de esta misma corrección (una tarifa por "crédito",
 // con 330 créditos/minuto de conversión) — ese modelo es el de
@@ -1363,8 +1365,18 @@ function claudeCostUsd(usage) {
 // para esta app aunque ya intentaba arreglar el error original.
 // Un solo lugar para cada tarifa (usado aquí y en /api/admin/recalculate-eleven-costs
 // más abajo) para que no puedan quedar desalineadas entre sí.
-function elevenTtsRatePer1kChars() {
-  return Number(process.env.ELEVENLABS_PRICE_PER_1K_CHARS || 0.05);
+// Tarifa de voz (TTS) por 1.000 caracteres, confirmada por Felipe el
+// 2026-10-08: $0.04 (Flash v2.5 y v4 Turbo; los modelos grandes v3/v4 cuestan
+// $0.08). Eleven v4 Turbo tiene una promoción de lanzamiento de $0.011 hasta el
+// 12 de octubre de 2026: mientras dure, y solo si ese es el modelo en uso, el
+// costo que se registra de cada pedido usa la tarifa de promo. Si se define
+// ELEVENLABS_PRICE_PER_1K_CHARS en Vercel, esa manda sobre todo lo demás.
+const ELEVEN_TTS_TARIFA_NORMAL = 0.04;
+const ELEVEN_V4_TURBO_PROMO = { tarifa: 0.011, hasta: Date.parse('2026-10-13T00:00:00-05:00') };
+function elevenTtsRatePer1kChars({ conPromo = true } = {}) {
+  if (process.env.ELEVENLABS_PRICE_PER_1K_CHARS) return Number(process.env.ELEVENLABS_PRICE_PER_1K_CHARS);
+  if (conPromo && ELEVEN_MODEL_ID === 'eleven_v4_turbo' && Date.now() < ELEVEN_V4_TURBO_PROMO.hasta) return ELEVEN_V4_TURBO_PROMO.tarifa;
+  return ELEVEN_TTS_TARIFA_NORMAL;
 }
 function elevenSttRatePerHour() {
   return Number(process.env.ELEVENLABS_PRICE_PER_HOUR_STT || 0.22);
@@ -7949,7 +7961,7 @@ app.get('/api/admin/usage', requireAuth, requireAdmin, async (req, res) => {
       pricing: {
         anthropicInputPer1M: Number(process.env.ANTHROPIC_INPUT_PRICE_PER_1M || 1),
         anthropicOutputPer1M: Number(process.env.ANTHROPIC_OUTPUT_PRICE_PER_1M || 5),
-        elevenTtsPer1kChars: Number(process.env.ELEVENLABS_PRICE_PER_1K_CHARS || 0.05),
+        elevenTtsPer1kChars: elevenTtsRatePer1kChars(),
         elevenSttPerHour: Number(process.env.ELEVENLABS_PRICE_PER_HOUR_STT || 0.22),
         alertThresholdUsd: alertThreshold,
       },
@@ -7977,7 +7989,9 @@ app.get('/api/admin/usage', requireAuth, requireAdmin, async (req, res) => {
 app.post('/api/admin/recalculate-eleven-costs', requireAuth, requireAdmin, async (req, res) => {
   try {
     await ensureSchema();
-    const ttsRate = elevenTtsRatePer1kChars();
+    // Sin promoción: este endpoint pone UNA tarifa a todo el historial, y la
+    // promo de v4 Turbo solo vale para unos días.
+    const ttsRate = elevenTtsRatePer1kChars({ conPromo: false });
     const sttRate = elevenSttRatePerHour();
     const ttsResult = await sql`
       UPDATE usage_events SET cost_usd = (characters::numeric / 1000) * ${ttsRate}
