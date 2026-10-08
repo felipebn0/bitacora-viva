@@ -83,7 +83,7 @@ require.cache[require.resolve('@anthropic-ai/sdk')] = {
       return {
         create: async (opts) => {
           capturedCalls.push(opts);
-          return { content: [{ type: 'text', text: 'Hola, contame con confianza.' }] };
+          return { content: [{ type: 'text', text: 'Hola, cuéntame con confianza.' }] };
         },
       };
     }

@@ -103,6 +103,16 @@ Si se definen estas 5 variables de entorno, la app usa R2 para todo lo nuevo (lo
 
 Con las 5 puestas y un Redeploy, las subidas nuevas van a R2. Si falta alguna, sigue todo por Vercel Blob como antes. No hay que migrar los archivos viejos.
 
+## Español de Colombia, 100%
+
+Todo lo que la app *dice o escribe* va en español de Colombia con tuteo: nunca voseo ("tenés", "contame", "vos"), ni argentinismos ("che", "acá", "re lindo", "auto"), ni "vosotros". Está garantizado en tres capas:
+
+1. **Regla explícita en cada prompt.** `REGLA_ESPANOL_COLOMBIANO` (en `server.js`) se suma a los 9 system prompts de Claude (charla, árbol, aportes, resumen, capítulos, clasificación, extracción) y a los dos correctores. Para cambiar la regla se edita en un solo lugar.
+2. **Corrección automática.** Lo que la IA le dice a la persona en la charla (`/api/next`) y en los aportes (`/api/contribute-chat`) pasa por `asegurarEspanolColombiano`: si el detector (`detectarFueraDeColombia`) encuentra algo, se pide una reescritura mínima y, si esa falla, se reemplaza de forma determinista. Cada activación deja una línea `[dialecto]` en los logs de Vercel.
+3. **Tests.** `test/espanol-colombiano.smoke.js` falla si algún prompt queda sin la regla o si una página trae voseo; `test/next.smoke.js` prueba la corrección en vivo.
+
+**Lo que NO se toca:** lo que dice la persona (su transcripción y sus citas) se conserva tal cual. En Colombia el voseo es real en varias regiones (Antioquia, Valle, Eje Cafetero…): quien dice "vos" no está hablando argentino. La transcripción la hace ElevenLabs (`scribe_v1`, `language_code: spa`) y es literal.
+
 ## Privacidad de los archivos (audios, fotos, videos)
 
 La landing promete que los archivos son privados y que no existe un enlace público. Para que sea verdad hacen falta **dos pasos que no se pueden hacer desde el código**:

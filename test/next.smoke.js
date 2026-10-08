@@ -266,7 +266,7 @@ async function main() {
   // --- 1) Primera vez: bienvenida ------------------------------------------
   resetAnthropicMock();
   user.resumenTexto = '';
-  pushAnthropicResponse('¡Hola Diego! Qué lindo tenerte por acá. Vamos a ir armando juntas tu historia de vida, de a poco. Para empezar, decime cualquier cosa, tu nombre o un saludo, para confirmar que el micrófono te escucha bien.');
+  pushAnthropicResponse('¡Hola Diego! Qué lindo tenerte por aquí. Vamos a ir armando juntas tu historia de vida, de a poco. Para empezar, dime cualquier cosa, tu nombre o un saludo, para confirmar que el micrófono te escucha bien.');
   const primera = await nextForUser(server, cookie, { history: [], mode: 'historia' });
   check('primera vez -> 200', primera.status === 200);
   const primeraBody = JSON.parse(primera.body);
@@ -308,7 +308,7 @@ async function main() {
 
   // --- 5) Interpretación de respuesta de pausa (la persona elige pausar) -----
   resetAnthropicMock();
-  pushAnthropicResponse('Dale, nos vemos pronto entonces. Ya quedó todo guardado. [PAUSA]');
+  pushAnthropicResponse('Listo, nos vemos pronto entonces. Ya quedó todo guardado. [PAUSA]');
   const interpretaPausa = await nextForUser(server, cookie, {
     history: [...historial, { role: 'assistant', content: '¿Quieres seguir o pausamos?' }, { role: 'user', content: 'Prefiero pausar por ahora.' }],
     mode: 'historia',
@@ -392,7 +392,7 @@ async function main() {
   const respuestaLarga = 'x'.repeat(200); // >= HISTORIA_MIN_CHARS (180)
   const fotoPrimeraVez = { url: 'https://fake.blob.vercel-storage.com/media/1/foto-2.jpg', type: 'foto', caption: 'Un momento' };
   await nextForUser(server, cookie, {
-    history: [...historial, { role: 'assistant', content: '¿Y qué más recordás?' }, { role: 'user', content: respuestaLarga }],
+    history: [...historial, { role: 'assistant', content: '¿Y qué más recuerdas?' }, { role: 'user', content: respuestaLarga }],
     mode: 'historia',
     mediaUrls: [fotoPrimeraVez],
   });
@@ -402,9 +402,9 @@ async function main() {
   // Contraprueba: una respuesta corta NO se guarda en story_log.
   resetAnthropicMock();
   storyLogInserts = [];
-  pushAnthropicResponse('Contame más.');
+  pushAnthropicResponse('Cuéntame más.');
   await nextForUser(server, cookie, {
-    history: [...historial, { role: 'assistant', content: '¿Y qué más recordás?' }, { role: 'user', content: 'Poquita cosa.' }],
+    history: [...historial, { role: 'assistant', content: '¿Y qué más recuerdas?' }, { role: 'user', content: 'Poquita cosa.' }],
     mode: 'historia',
   });
   check('respuesta corta: NO se guarda en story_log', storyLogInserts.length === 0);
@@ -417,7 +417,7 @@ async function main() {
   storyLogRows = [];
   storyLogUpdates = [];
   storyLogMediaUpdates = [];
-  const historialConRespuestaLarga = [...historial, { role: 'assistant', content: '¿Y qué más recordás?' }, { role: 'user', content: respuestaLarga }];
+  const historialConRespuestaLarga = [...historial, { role: 'assistant', content: '¿Y qué más recuerdas?' }, { role: 'user', content: respuestaLarga }];
   pushAnthropicResponse('Qué recuerdo tan lindo, gracias por contarlo.');
   await nextForUser(server, cookie, { history: historialConRespuestaLarga, mode: 'historia', lastAudioUrl: null });
   pushAnthropicResponse('Qué recuerdo tan lindo, gracias por contarlo.');
@@ -544,6 +544,45 @@ async function main() {
   const respuestaVacia = await nextForUser(server, cookie, { history: historial, mode: 'historia' });
   check('respuesta de Anthropic vacía -> 500 controlado (no 200, no cuelga)', respuestaVacia.status === 500);
   check('respuesta de Anthropic vacía: mensaje de error genérico, no un stack trace', JSON.parse(respuestaVacia.body).error === 'No se pudo generar la siguiente pregunta.');
+
+  // --- 13) Español de Colombia: nada de voseo ni argentinismos al usuario -------
+  // El modelo a veces se cuela con voseo aunque el prompt lo prohíba; el
+  // detector lo agarra y se pide una reescritura mínima (o, si falla, se
+  // reemplaza de forma determinista).
+  resetAnthropicMock();
+  capturedLogs.length = 0;
+  pushAnthropicResponse('Qué lindo recuerdo, contame más. ¿Y dónde vivías vos en esa época?');
+  pushAnthropicResponse('Qué lindo recuerdo, cuéntame más. ¿Y dónde vivías tú en esa época?');
+  const conVoseo = await nextForUser(server, cookie, { history: historial, mode: 'historia' });
+  const conVoseoBody = JSON.parse(conVoseo.body);
+  check('dialecto: voseo -> dispara una corrección (2 llamadas a Anthropic)', capturedCalls.length === 2);
+  check('dialecto: la corrección lleva la regla explícita de español de Colombia', String(capturedCalls[1].system).includes('IDIOMA — OBLIGATORIO'));
+  check('dialecto: el mensaje final es el corregido (sin voseo)', conVoseoBody.message === 'Qué lindo recuerdo, cuéntame más. ¿Y dónde vivías tú en esa época?');
+  check('dialecto: queda logueado reescritura-ok', capturedLogs.some((l) => l.includes('[dialecto]') && l.includes('resultado=reescritura-ok')));
+  check('dialecto: el system de la charla lleva la regla de español de Colombia', capturedCalls[0].system[0].text.includes('IDIOMA — OBLIGATORIO'));
+
+  // Si la reescritura del modelo sigue trayendo voseo, se cae al reemplazo determinista.
+  resetAnthropicMock();
+  capturedLogs.length = 0;
+  pushAnthropicResponse('Mirá, acá tenés que contarme más. ¿Cómo eran los domingos?');
+  pushAnthropicResponse('Mirá, acá tenés que contarme más. ¿Cómo eran los domingos?'); // "corrección" que no corrigió nada
+  const sigueConVoseo = await nextForUser(server, cookie, { history: historial, mode: 'historia' });
+  check('dialecto: si la reescritura no arregla, igual no llega voseo (fallback determinista)', JSON.parse(sigueConVoseo.body).message === 'Mira, aquí tienes que contarme más. ¿Cómo eran los domingos?');
+  check('dialecto: queda logueado como fallback determinista', capturedLogs.some((l) => l.includes('[dialecto]') && l.includes('fallback-deterministico')));
+
+  // Si falla la llamada de corrección, el pedido sigue en 200 y sin voseo.
+  resetAnthropicMock();
+  pushAnthropicResponse('Contame de tu infancia.');
+  pushAnthropicResponse({ throw: new Error('Anthropic no respondió (simulado)') });
+  const fallaCorreccion = await nextForUser(server, cookie, { history: historial, mode: 'historia' });
+  check('dialecto: si falla la corrección -> 200 igual', fallaCorreccion.status === 200);
+  check('dialecto: si falla la corrección -> el mensaje sale corregido de forma determinista', JSON.parse(fallaCorreccion.body).message === 'Cuéntame de tu infancia.');
+
+  // Texto ya colombiano: cero llamadas extra (no agrega latencia ni costo).
+  resetAnthropicMock();
+  pushAnthropicResponse('Uy, qué belleza. Cuéntame más de esa casa, ¿tenía patio?');
+  const limpio = await nextForUser(server, cookie, { history: historial, mode: 'historia' });
+  check('dialecto: texto ya colombiano -> una sola llamada, sin corrección', capturedCalls.length === 1 && JSON.parse(limpio.body).message.startsWith('Uy, qué belleza.'));
 
   server.close();
   console.log = originalConsoleLog;
