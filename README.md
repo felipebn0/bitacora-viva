@@ -103,6 +103,28 @@ Si se definen estas 5 variables de entorno, la app usa R2 para todo lo nuevo (lo
 
 Con las 5 puestas y un Redeploy, las subidas nuevas van a R2. Si falta alguna, sigue todo por Vercel Blob como antes. No hay que migrar los archivos viejos.
 
+## Consumo del árbol genealógico (cómo se mantiene bajo)
+
+El árbol se actualiza solo en cada guardado de charla (`/api/save`, función `updateFamilyTree` en `server.js`) con una llamada a Claude. Para que cueste poco:
+
+1. **Solo se procesa lo nuevo.** `sessions.arbol_procesado` guarda cuántos mensajes de esa sesión ya pasaron por el árbol; un guardado repetido (pausa, avance parcial, cierre) manda solo lo que falta. Si la llamada falla, no se marca como procesado y se reintenta en el siguiente guardado.
+2. **Se salta la llamada** si lo nuevo no tiene pistas de familia ni de hitos (`hayPistasDeFamiliaOHitos`: parentescos, nombres propios, años, "nací", "me casé"…). Queda la línea `[arbol-consumo] … salto=sin-pistas` en los logs.
+3. **Entrada compacta:** lo ya conocido viaja como líneas `id | nombre | parentesco | detalles | padres` (no JSON) y de la entrevistadora solo se manda el final de cada pregunta.
+4. **Claude devuelve solo los CAMBIOS** (personas/eventos nuevos o modificados, con su `id`, más `quitar_personas`/`quitar_eventos`), no la lista completa — la salida es lo más caro y antes crecía con el tamaño de la familia. `aplicarCambiosDelArbol` los junta con lo que ya había; los ids son el número de línea (no el nombre: dos personas pueden llamarse igual) y si Claude repite a alguien conocido sin id se actualiza esa misma fila en vez de duplicarla.
+5. **Si no cambió nada, no se reescribe la base** (`[arbol-consumo] … sin-cambios`).
+6. Tope de salida de 3.000 tokens (antes 8.000) y regla de idioma corta para esta llamada.
+
+Con una familia de ~30 personas y 20 hitos, y una sesión guardada 3 veces, la estimación pasa de ~$0,058 a ~$0,016 por sesión (~72 % menos). El consumo real se ve en `/admin.html` (tipo `arbol`). Tests: `test/arbol-consumo.smoke.js`.
+
+El **resumen de memoria** (`updateMemorySummary`, tipo `resumen` en el panel) usa la misma idea y el mismo test:
+
+- Solo procesa lo nuevo de cada sesión (`sessions.resumen_procesado`).
+- Si lo que dijo la persona en lo nuevo son menos de 120 caracteres, **espera**: no llama a Claude y no lo marca como procesado, así que se junta con el siguiente guardado (nada se pierde).
+- Claude devuelve **solo las viñetas nuevas** (o `SIN_CAMBIOS`) y se agregan al final del resumen (tope de salida 300 tokens, antes 700). Solo cuando el resumen pasa de ~2.800 caracteres se hace la reescritura completa de antes (máx. 400 palabras) para consolidarlo — el resumen viaja en cada turno de la charla, así que tiene que seguir siendo corto.
+- Líneas de log: `[resumen-consumo] … modo=delta|completo|sin-cambios` y `salto=pocos`.
+
+Estimación para una charla de 30 intercambios guardada 3 veces: resumen ~$0,021 → ~$0,0095 (~55 % menos); árbol + resumen juntos, de ~$0,079 a ~$0,026 por charla (~68 % menos). Son estimaciones con un caso modelado: el consumo real se ve en `/admin.html`.
+
 ## Español de Colombia, 100%
 
 Todo lo que la app *dice o escribe* va en español de Colombia con tuteo: nunca voseo ("tenés", "contame", "vos"), ni argentinismos ("che", "acá", "re lindo", "auto"), ni "vosotros". Está garantizado en tres capas:

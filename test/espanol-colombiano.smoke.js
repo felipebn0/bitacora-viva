@@ -18,10 +18,17 @@ ok(llamadas >= 9, `hay ${llamadas} llamadas a anthropic.messages.create en serve
 // Los 9 prompts "grandes" se arman con la regla de datos no confiables; la de
 // idioma tiene que ir siempre pegada al lado.
 const conDatos = [...server.matchAll(/\+ REGLA_DATOS_NO_CONFIABLES/g)].length;
-const conAmbas = [...server.matchAll(/\+ REGLA_DATOS_NO_CONFIABLES \+ REGLA_ESPANOL_COLOMBIANO/g)].length;
+const conAmbas = [...server.matchAll(/\+ REGLA_DATOS_NO_CONFIABLES \+ REGLA_ESPANOL_COLOMBIANO(?:_CORTA)?\b/g)].length;
 ok(conDatos >= 9 && conDatos === conAmbas, `los ${conDatos} system prompts con datos no confiables llevan también REGLA_ESPANOL_COLOMBIANO (${conAmbas})`);
 ok(/system: 'Vas a recibir un mensaje de una entrevistadora cálida[^\n]*\+ REGLA_ESPANOL_COLOMBIANO,/.test(server), 'el corrector de "una sola pregunta" lleva la regla');
 ok(/system: 'Vas a recibir un mensaje de una entrevistadora colombiana[^\n]*\+ REGLA_ESPANOL_COLOMBIANO,/.test(server), 'el corrector de dialecto lleva la regla');
+
+// El árbol (se llama en cada save) usa una versión corta, también explícita.
+const corta = server.slice(server.indexOf('const REGLA_ESPANOL_COLOMBIANO_CORTA'), server.indexOf('// Formas que NO son español de Colombia'));
+for (const frag of ['español de Colombia, 100%', 'nunca voseo ni argentinismos', 'vos', 'tenés', 'conserva sus palabras exactamente']) {
+  ok(corta.includes(frag), `la regla corta del árbol incluye "${frag}"`);
+}
+ok(/REGLA_DATOS_NO_CONFIABLES \+ REGLA_ESPANOL_COLOMBIANO_CORTA,\s*\n\s*messages: \[\{ role: 'user', content: prompt \}\],\s*\n\s*\}\);\s*\n\s*await logClaudeUsage\(userId, 'arbol'/.test(server), 'la llamada del árbol lleva la regla corta');
 
 // La regla en sí es explícita: nombra el voseo y los argentinismos, el tuteo
 // y que lo dicho por la persona se conserva.
