@@ -19,6 +19,7 @@ Más simple que Azure: solo mail y contraseña, sin tarjeta para el nivel gratis
 6. Pega en `.env`:
    - `ELEVENLABS_API_KEY` → tu API key
    - `ELEVENLABS_VOICE_ID` → el Voice ID que copiaste
+   - `ELEVENLABS_VOICE_ID_MASCULINA` (opcional) → la segunda voz, para quien elija "Masculina" en Opciones avanzadas > Voz. Si no la pones, usa `57D8YIbQSuE3REDPO6Vm`. La elección se guarda por bitácora (`users.voz` / `bitacoras.voz`), `POST /api/voz`; `/api/speak` recibe `voz` con cada audio. Con voz masculina la IA también habla de sí misma en masculino ("entrevistador"). `/api/admin/voz-debug` prueba las dos voces.
 7. Reiniciá el servidor.
 
 Si el uso diario supera el nivel gratis, el plan Starter son $5 USD/mes (30.000 caracteres) — igual muy barato para este uso.

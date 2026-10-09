@@ -39,6 +39,7 @@ const user = {
   owner_user_id: null, // null = cuenta dueña, no colaboradora
   fecha_nacimiento: null,
   tratamiento: 'masculino',
+  voz: 'masculina',
   resumenTexto: '', // memoria de charlas anteriores (loadMemorySummary)
   pendingFamilyNote: null, // { id, contributor, parentesco, texto } | null
   pendingMedia: null, // { id, type, caption, contributor } | null
@@ -101,8 +102,8 @@ function fakeSql(strings, ...values) {
     return Promise.resolve([]);
   }
   // leerPerfilBitacora (BACKLOG #12): para la bitácora propia lee "users".
-  if (text.includes('SELECT name AS nombre, fecha_nacimiento, created_at, tratamiento FROM users WHERE id')) {
-    if (values[0] === user.id) return Promise.resolve([{ nombre: user.username, fecha_nacimiento: user.fecha_nacimiento, created_at: null, tratamiento: user.tratamiento }]);
+  if (text.includes('SELECT name AS nombre, fecha_nacimiento, created_at, tratamiento, voz FROM users WHERE id')) {
+    if (values[0] === user.id) return Promise.resolve([{ nombre: user.username, fecha_nacimiento: user.fecha_nacimiento, created_at: null, tratamiento: user.tratamiento, voz: user.voz }]);
     return Promise.resolve([]);
   }
 
@@ -314,6 +315,7 @@ async function main() {
   check('turno normal: un solo llamado (una sola pregunta, no dispara segunda pasada)', capturedCalls.length === 1);
   check('turno normal: mensaje tal cual (sin marcadores)', !normalBody.message.includes('[FIN]') && !normalBody.message.includes('[PAUSA]'));
   check('turno normal: el system lleva el trato elegido (masculino), no asume mujer', capturedCalls[0].system[0].text.includes('TRATO DE LA PERSONA') && capturedCalls[0].system[0].text.includes('MASCULINO'));
+  check('turno normal: con voz masculina la IA habla de sí misma en masculino (entrevistador)', capturedCalls[0].system[0].text.includes('TU VOZ Y TU GÉNERO') && capturedCalls[0].system[0].text.includes('entrevistador (hombre)'));
   check('turno normal: el system va con cache_control ephemeral (prompt caching)', capturedCalls[0].system[0].cache_control && capturedCalls[0].system[0].cache_control.type === 'ephemeral');
 
   // --- 3) Cierre con [FIN] ---------------------------------------------------

@@ -772,6 +772,9 @@ function ensureSchema() {
       // loadFamilyContext más abajo.
       sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS fecha_nacimiento DATE`,
       sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS tratamiento TEXT`,
+      // Voz de la entrevistadora que eligió la persona: 'femenina' (por defecto) o
+      // 'masculina'. También en bitacoras (cada subperfil la suya).
+      sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS voz TEXT`,
 
       // sessions/resumen ya existían de una versión sin cuentas — se agrega
       // user_id de forma aditiva (nunca se borra nada existente).
@@ -1056,6 +1059,7 @@ function ensureSchema() {
       )`,
       sql`CREATE INDEX IF NOT EXISTS idx_bitacoras_admin ON bitacoras(admin_user_id)`,
       sql`ALTER TABLE bitacoras ADD COLUMN IF NOT EXISTS tratamiento TEXT`,
+      sql`ALTER TABLE bitacoras ADD COLUMN IF NOT EXISTS voz TEXT`,
       // Contraparte de users.tree_pending_names/aportes_pending_names (las
       // campanitas de aviso) para un subperfil, que no tiene fila en "users"
       // donde vivir esas columnas — ver leerNombresPendientesArbol más abajo.
@@ -1871,8 +1875,8 @@ async function resolveProfileUserId(req) {
 // que hoy asumía que ambas cosas eran lo mismo (loadFamilyContext, /api/export).
 async function leerPerfilBitacora(profileUserId, esPropia) {
   const rows = esPropia
-    ? await sql`SELECT name AS nombre, fecha_nacimiento, created_at, tratamiento FROM users WHERE id = ${profileUserId}`
-    : await sql`SELECT nombre, fecha_nacimiento, created_at, contexto_onboarding, tratamiento FROM bitacoras WHERE id = ${profileUserId}`;
+    ? await sql`SELECT name AS nombre, fecha_nacimiento, created_at, tratamiento, voz FROM users WHERE id = ${profileUserId}`
+    : await sql`SELECT nombre, fecha_nacimiento, created_at, contexto_onboarding, tratamiento, voz FROM bitacoras WHERE id = ${profileUserId}`;
   return rows[0] || null;
 }
 
@@ -1892,6 +1896,21 @@ function instruccionTratamiento(tratamiento) {
     return `\n\nTRATO DE LA PERSONA: esta persona pidió que se le trate en FEMENINO. Usa siempre género femenino al dirigirte a esta persona y al hablar de esta persona (bienvenida, contenta, cansada, querida, "ella"); nunca masculino.`;
   }
   return `\n\nTRATO DE LA PERSONA: todavía no sabes si esta persona prefiere trato masculino o femenino. No lo asumas por el nombre ni por la voz: evita palabras que marquen género (nada de "bienvenido/a", "contento/a", "querido/a") y usa formas neutras ("qué alegría tenerte aquí", "me da gusto escucharte"). Si la propia persona se refiere a sí en masculino o femenino, a partir de ahí háblale así.`;
+}
+
+// Voz de la entrevistadora (la elige cada persona en Opciones avanzadas > Voz).
+// 'femenina' es el valor de siempre; 'masculina' usa otra voz de ElevenLabs y la
+// IA pasa a hablar de sí misma en masculino para que el texto cuadre con la voz.
+function vozValida(valor) {
+  const v = String(valor || '').trim().toLowerCase();
+  return v === 'masculina' || v === 'femenina' ? v : null;
+}
+
+function instruccionEntrevistador(voz) {
+  if (vozValida(voz) === 'masculina') {
+    return `\n\nTU VOZ Y TU GÉNERO: esta persona eligió que le hables con voz MASCULINA, así que eres un entrevistador (hombre). Cuando hables de ti en primera persona usa género masculino ("encantado", "agradecido", "contento", "el entrevistador"); nunca femenino. Donde estas instrucciones dicen "entrevistadora" o hablan de ti en femenino, léelo y dilo en masculino.`;
+  }
+  return `\n\nTU VOZ Y TU GÉNERO: hablas con voz FEMENINA, eres una entrevistadora (mujer). Cuando hables de ti en primera persona usa género femenino ("encantada", "agradecida", "contenta").`;
 }
 
 // Contraparte de users.tree_pending_names para un subperfil — mismo trío
@@ -3668,7 +3687,7 @@ async function loadFamilyContext(profileUserId, esPropia) {
   const notes = await sql`SELECT contributor, parentesco, texto FROM family_notes WHERE user_id = ${profileUserId} AND en_progreso = false ORDER BY created_at DESC LIMIT 20`;
   const perfil = await leerPerfilBitacora(profileUserId, esPropia);
 
-  let text = instruccionTratamiento(tratamientoValido(perfil && perfil.tratamiento));
+  let text = instruccionTratamiento(tratamientoValido(perfil && perfil.tratamiento)) + instruccionEntrevistador(perfil && perfil.voz);
   const fechaNacimiento = fechaComoInputDate(perfil && perfil.fecha_nacimiento);
   if (fechaNacimiento) {
     // Dato de contexto, no una instrucción de qué preguntar — así la
@@ -4755,7 +4774,7 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
 
     let system;
     if (mode === 'arbol') {
-      system = ARBOL_SYSTEM_PROMPT + instruccionTratamiento(tratamientoValido(familiaCtx && familiaCtx.tratamiento)) + conocidosArbol;
+      system = ARBOL_SYSTEM_PROMPT + instruccionTratamiento(tratamientoValido(familiaCtx && familiaCtx.tratamiento)) + instruccionEntrevistador(familiaCtx && familiaCtx.voz) + conocidosArbol;
     } else {
       const familia = familiaCtx;
       system =
@@ -4917,6 +4936,12 @@ const PROVIDER_TIMEOUT_MS = 20000;
 // URL sin un error claro (ya pasó con las claves de R2 y de Anthropic).
 const ELEVEN_KEY = (process.env.ELEVENLABS_API_KEY || '').trim();
 const ELEVEN_VOICE_ID = (process.env.ELEVENLABS_VOICE_ID || '').trim();
+// Segunda voz (masculina). El ID no es un secreto; se puede cambiar sin tocar
+// código con ELEVENLABS_VOICE_ID_MASCULINA en Vercel.
+const ELEVEN_VOICE_ID_MASCULINA = (process.env.ELEVENLABS_VOICE_ID_MASCULINA || '57D8YIbQSuE3REDPO6Vm').trim();
+function elevenVoiceIdPara(voz) {
+  return vozValida(voz) === 'masculina' ? ELEVEN_VOICE_ID_MASCULINA : ELEVEN_VOICE_ID;
+}
 // Modelo de voz. v4 Turbo (decidido por Felipe el 2026-10-08): más expresivo
 // que Flash, mismo precio de lista ($0,04 / 1.000 caracteres) pero ~3x más
 // lento (~1,8 s vs ~0,6 s por frase). Se puede cambiar sin tocar código con
@@ -4927,6 +4952,7 @@ const ELEVEN_MODEL_RESPALDO = 'eleven_flash_v2_5';
 const AZURE_KEY = process.env.AZURE_SPEECH_KEY;
 const AZURE_REGION = process.env.AZURE_SPEECH_REGION;
 const AZURE_VOICE_NAME = 'es-CO-SalomeNeural';
+const AZURE_VOICE_NAME_MASCULINA = 'es-CO-GonzaloNeural';
 
 function escapeSsml(text) {
   return text
@@ -4935,9 +4961,9 @@ function escapeSsml(text) {
     .replace(/>/g, '&gt;');
 }
 
-async function pedirVozAElevenLabs(text, modelId) {
+async function pedirVozAElevenLabs(text, modelId, voiceId = ELEVEN_VOICE_ID) {
   const resp = await fetch(
-    `https://api.elevenlabs.io/v1/text-to-speech/${ELEVEN_VOICE_ID}`,
+    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
     {
       method: 'POST',
       headers: {
@@ -4965,18 +4991,19 @@ async function pedirVozAElevenLabs(text, modelId) {
 // Si el modelo elegido falla (por ejemplo un modelo nuevo con un problema
 // del lado de ElevenLabs), se reintenta UNA vez con Flash v2.5 en vez de
 // dejar que la charla caiga a la voz robótica del sistema.
-async function speakWithElevenLabs(text) {
+async function speakWithElevenLabs(text, voiceId = ELEVEN_VOICE_ID) {
   try {
-    return await pedirVozAElevenLabs(text, ELEVEN_MODEL_ID);
+    return await pedirVozAElevenLabs(text, ELEVEN_MODEL_ID, voiceId);
   } catch (err) {
     if (ELEVEN_MODEL_ID === ELEVEN_MODEL_RESPALDO) throw err;
     console.error(`ElevenLabs falló con ${ELEVEN_MODEL_ID}, se reintenta con ${ELEVEN_MODEL_RESPALDO}:`, err.message);
-    return await pedirVozAElevenLabs(text, ELEVEN_MODEL_RESPALDO);
+    return await pedirVozAElevenLabs(text, ELEVEN_MODEL_RESPALDO, voiceId);
   }
 }
 
-async function speakWithAzure(text) {
-  const ssml = `<speak version="1.0" xml:lang="es-CO"><voice name="${AZURE_VOICE_NAME}">${escapeSsml(text)}</voice></speak>`;
+async function speakWithAzure(text, voz) {
+  const nombreVoz = vozValida(voz) === 'masculina' ? AZURE_VOICE_NAME_MASCULINA : AZURE_VOICE_NAME;
+  const ssml = `<speak version="1.0" xml:lang="es-CO"><voice name="${nombreVoz}">${escapeSsml(text)}</voice></speak>`;
   const resp = await fetch(
     `https://${AZURE_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`,
     {
@@ -5084,6 +5111,36 @@ app.post('/api/story-log/audio', requireAuth, bloquearColaborador, bloquearSiNoP
   }
 });
 
+// Voz de la entrevistadora de la bitácora activa (la propia, un subperfil, o la
+// del enlace de narrador). El cliente la guarda en memoria y la manda con cada
+// pedido a /api/speak para no gastar una consulta a la base por cada audio.
+app.get('/api/voz', requireAuth, async (req, res) => {
+  try {
+    await ensureSchema();
+    const perfil = await leerPerfilBitacora(req.profileUserId, req.bitacoraEsPropia);
+    res.json({ voz: vozValida(perfil && perfil.voz) || 'femenina' });
+  } catch (err) {
+    console.error(err);
+    res.json({ voz: 'femenina' });
+  }
+});
+
+app.post('/api/voz', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
+  try {
+    const voz = vozValida(req.body && req.body.voz);
+    if (!voz) return res.status(400).json({ error: 'Elige voz femenina o masculina.' });
+    await ensureSchema();
+    const r = req.bitacoraEsPropia
+      ? await sql`UPDATE users SET voz = ${voz} WHERE id = ${req.profileUserId} RETURNING id`
+      : await sql`UPDATE bitacoras SET voz = ${voz} WHERE id = ${req.profileUserId} RETURNING id`;
+    if (!r.length) return res.status(404).json({ error: 'No se encontró la bitácora.' });
+    res.json({ ok: true, voz });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo guardar la voz.' });
+  }
+});
+
 app.post('/api/speak', requireAuth, rateLimitVoz, async (req, res) => {
   try {
     let text = (req.body.text || '').trim();
@@ -5093,11 +5150,11 @@ app.post('/api/speak', requireAuth, rateLimitVoz, async (req, res) => {
     const medida = medirTurno('speak');
     let buffer;
     if (ELEVEN_KEY && ELEVEN_VOICE_ID) {
-      buffer = await speakWithElevenLabs(text);
+      buffer = await speakWithElevenLabs(text, elevenVoiceIdPara(req.body.voz));
       medida.marca('tts');
       await logUsage(req.profileUserId, { service: 'elevenlabs', kind: 'tts', characters: text.length, costUsd: elevenTtsCostUsd(text.length) });
     } else if (AZURE_KEY && AZURE_REGION) {
-      buffer = await speakWithAzure(text);
+      buffer = await speakWithAzure(text, req.body.voz);
       // Azure no tiene tarifa configurada aquí (suele usarse en el nivel
       // gratis F0) — se registra el consumo en caracteres igual, sin costo.
       await logUsage(req.profileUserId, { service: 'azure', kind: 'tts', characters: text.length });
@@ -8311,18 +8368,21 @@ app.get('/api/admin/voz-debug', requireAuth, requireAdmin, rateLimit, async (req
       llaveElevenLabsPuesta: !!ELEVEN_KEY,
       voiceIdPuesto: !!ELEVEN_VOICE_ID,
       voiceIdTerminaEn: ELEVEN_VOICE_ID ? ELEVEN_VOICE_ID.slice(-4) : null,
+      voiceIdMasculinaTerminaEn: ELEVEN_VOICE_ID_MASCULINA ? ELEVEN_VOICE_ID_MASCULINA.slice(-4) : null,
       modelo: ELEVEN_MODEL_ID,
       modeloDeRespaldo: ELEVEN_MODEL_RESPALDO,
       pruebas: [],
     };
     if (ELEVEN_KEY && ELEVEN_VOICE_ID) {
-      for (const modelo of [...new Set([ELEVEN_MODEL_ID, ELEVEN_MODEL_RESPALDO])]) {
-        const t0 = Date.now();
-        try {
-          const audio = await pedirVozAElevenLabs('Hola.', modelo);
-          out.pruebas.push({ modelo, ok: true, ms: Date.now() - t0, bytes: audio.length });
-        } catch (err) {
-          out.pruebas.push({ modelo, ok: false, ms: Date.now() - t0, error: String((err && err.message) || err).slice(0, 500) });
+      for (const [voz, voiceId] of [['femenina', ELEVEN_VOICE_ID], ['masculina', ELEVEN_VOICE_ID_MASCULINA]]) {
+        for (const modelo of [...new Set([ELEVEN_MODEL_ID, ELEVEN_MODEL_RESPALDO])]) {
+          const t0 = Date.now();
+          try {
+            const audio = await pedirVozAElevenLabs('Hola.', modelo, voiceId);
+            out.pruebas.push({ voz, modelo, ok: true, ms: Date.now() - t0, bytes: audio.length });
+          } catch (err) {
+            out.pruebas.push({ voz, modelo, ok: false, ms: Date.now() - t0, error: String((err && err.message) || err).slice(0, 500) });
+          }
         }
       }
     }

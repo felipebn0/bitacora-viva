@@ -897,8 +897,12 @@
          <div class="um-section-body um-nested-group" id="umSecAvanzadas" hidden>
            <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecVoz">Voz <span class="um-chevron" aria-hidden="true">›</span></button>
            <div class="um-section-body" id="umSecVoz" hidden>
-             <select id="voiceSelect" aria-label="Elegir voz"></select>
-             <p class="um-hint">Elige qué voz usa la entrevistadora para hablarte.</p>
+             <select id="vozGeneroSelect" aria-label="Voz de la entrevistadora">
+               <option value="femenina">Femenina</option>
+               <option value="masculina">Masculina</option>
+             </select>
+             <p class="um-hint">Elige si la entrevistadora te habla con voz femenina o masculina.</p>
+             <p class="um-msg" id="vozGeneroMsg" role="status" aria-live="polite" aria-atomic="true"></p>
            </div>
 
            <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecFuente">Tamaño de letra <span class="um-chevron" aria-hidden="true">›</span></button>
@@ -2184,6 +2188,7 @@
       if (data.isCollaborator) { window.location.href = '/colaborar.html'; return; }
       showApp(data.username, data.name, data.email, data.fechaNacimiento, data.isAdmin, data.tratamiento);
       aplicarSesionSubperfil(data);
+      cargarVozElegida();
     })
     .catch(() => {
       if (codigoNarradorUrl) {
@@ -2210,7 +2215,10 @@
   const writeRow = document.getElementById('writeRow');
   const writeInput = document.getElementById('writeInput');
   const writeSend = document.getElementById('writeSend');
-  const voiceSelect = document.getElementById('voiceSelect');
+  const vozGeneroSelect = document.getElementById('vozGeneroSelect');
+  const vozGeneroMsg = document.getElementById('vozGeneroMsg');
+  // Voz elegida por la persona ('femenina' o 'masculina'); se manda con cada pedido de voz.
+  let vozElegida = 'femenina';
   const endBtn = document.getElementById('endBtn');
   const treeModeBtn = document.getElementById('treeModeBtn');
   const subirFotoBtn = document.getElementById('subirFotoBtn');
@@ -2425,17 +2433,10 @@
     if (/^es-(es|419|us|mx)$/i.test(v.lang)) score += 1;
     if (/^es-(ar|uy)$/i.test(v.lang) || /argentin|uruguay/.test(n)) score -= 5; // la app es 100% colombiana: nunca una voz rioplatense
     if (v.localService === false) score += 1;
+    const esDeHombre = /jorge|juan|diego|carlos|pablo|miguel|enrique|andr[eé]s|gonzalo|alonso|male|hombre/.test(n);
+    if (vozElegida === 'masculina' && esDeHombre) score += 6;
+    if (vozElegida !== 'masculina' && esDeHombre) score -= 3;
     return score;
-  }
-
-  function populateVoiceSelect() {
-    voiceSelect.innerHTML = '';
-    voices.forEach((v) => {
-      const opt = document.createElement('option');
-      opt.value = v.name;
-      opt.textContent = v.name + ' (' + v.lang + ')';
-      voiceSelect.appendChild(opt);
-    });
   }
 
   function loadVoices() {
@@ -2443,16 +2444,40 @@
     voices = all.filter((v) => v.lang && v.lang.toLowerCase().startsWith('es'));
     if (!voices.length) voices = all;
     if (!voices.length) return;
-    populateVoiceSelect();
-    const savedName = localStorage.getItem('bitacoraVoiceName');
-    const saved = savedName && voices.find((v) => v.name === savedName);
-    selectedVoice = saved || [...voices].sort((a, b) => scoreVoice(b) - scoreVoice(a))[0];
-    voiceSelect.value = selectedVoice.name;
+    // La voz del navegador solo se usa de respaldo cuando falla la voz buena; se
+    // elige sola, la más natural y de acuerdo con voz femenina o masculina.
+    selectedVoice = [...voices].sort((a, b) => scoreVoice(b) - scoreVoice(a))[0];
   }
 
-  voiceSelect.addEventListener('change', () => {
-    selectedVoice = voices.find((v) => v.name === voiceSelect.value) || null;
-    if (selectedVoice) localStorage.setItem('bitacoraVoiceName', selectedVoice.name);
+  // Voz de la entrevistadora: se guarda en la cuenta (de la bitácora activa), no en el navegador.
+  async function cargarVozElegida() {
+    try {
+      const resp = await fetch('/api/voz');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      vozElegida = data.voz === 'masculina' ? 'masculina' : 'femenina';
+      vozGeneroSelect.value = vozElegida;
+      if ('speechSynthesis' in window) loadVoices();
+    } catch (e) {}
+  }
+  vozGeneroSelect.addEventListener('change', async () => {
+    const nueva = vozGeneroSelect.value === 'masculina' ? 'masculina' : 'femenina';
+    vozGeneroMsg.className = 'um-msg';
+    vozGeneroMsg.textContent = '';
+    try {
+      const resp = await fetch('/api/voz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ voz: nueva }) });
+      if (!resp.ok) throw new Error('voz');
+      vozElegida = nueva;
+      // lo pedido por adelantado y la respuesta especulativa eran con la otra voz
+      vozAdelantada.clear();
+      cancelarEspeculacion();
+      if ('speechSynthesis' in window) loadVoices();
+      vozGeneroMsg.textContent = 'Listo: la próxima vez te hablará con voz ' + nueva + '.';
+    } catch (e) {
+      vozGeneroSelect.value = vozElegida;
+      vozGeneroMsg.className = 'um-msg um-error';
+      vozGeneroMsg.textContent = 'No se pudo guardar la voz. Intenta de nuevo.';
+    }
   });
 
   if ('speechSynthesis' in window) {
@@ -2577,7 +2602,7 @@
     const resp = await fetch('/api/speak', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: texto }),
+      body: JSON.stringify({ text: texto, voz: vozElegida }),
     });
     if (!resp.ok) throw new Error('tts-unavailable');
     return resp.blob();

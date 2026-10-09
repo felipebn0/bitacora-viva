@@ -75,7 +75,7 @@ function fakeSql(strings, ...values) {
   }
   // Perfil de la bitácora activa (leerPerfilBitacora, BACKLOG #12): para la
   // bitácora propia, el nombre/fecha/created_at salen de "users".
-  if (text.includes('SELECT name AS nombre, fecha_nacimiento, created_at, tratamiento FROM users WHERE id')) {
+  if (text.includes('SELECT name AS nombre, fecha_nacimiento, created_at, tratamiento, voz FROM users WHERE id')) {
     const u = users[values[0]];
     return Promise.resolve(u ? [{ nombre: u.name, fecha_nacimiento: u.fecha_nacimiento, created_at: u.created_at }] : []);
   }

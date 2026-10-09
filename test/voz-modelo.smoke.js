@@ -129,7 +129,7 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
   fallan = new Set(['eleven_v4_turbo']);
   const d1 = await pedirJson(server, cookie, '/api/admin/voz-debug');
   ok(d1.status === 200 && d1.json.proveedorQueSeUsa === 'elevenlabs' && d1.json.modelo === 'eleven_v4_turbo', 'voz-debug: dice qué proveedor y modelo se usan');
-  ok(d1.json.pruebas.length === 2 && d1.json.pruebas[0].ok === false && /500/.test(d1.json.pruebas[0].error) && d1.json.pruebas[1].ok === true, 'voz-debug: prueba los dos modelos y devuelve el error exacto del que falla');
+  ok(d1.json.pruebas.length === 4 && d1.json.pruebas[0].voz === 'femenina' && d1.json.pruebas[0].ok === false && /500/.test(d1.json.pruebas[0].error) && d1.json.pruebas[1].ok === true && d1.json.pruebas[2].voz === 'masculina' && d1.json.pruebas[3].ok === true, 'voz-debug: prueba los dos modelos con cada voz (femenina y masculina) y devuelve el error exacto del que falla');
   ok(!JSON.stringify(d1.json).includes('clave-de-prueba') && d1.json.voiceIdTerminaEn === 'z123', 'voz-debug: nunca devuelve la llave; solo las últimas 4 letras del voice ID');
 
   server.close();
