@@ -247,6 +247,27 @@ app.get('/', async (req, res, next) => {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Redirección del link viejo al nuevo (la app pasó a llamarse Eco). Las
+// páginas estáticas se sirven directo desde Vercel sin pasar por Express, así
+// que vercel.json manda a esta ruta todo lo que llegue por el dominio antiguo
+// (con la ruta en ?ruta=) y aquí se arma la redirección permanente a
+// DOMINIO_NUEVO conservando la ruta y todos los parámetros (?codigo=,
+// ?invitacion=, el token del enlace mágico de un correo viejo...). Sin
+// DOMINIO_NUEVO no hace nada. Las sesiones (cookies) no pasan de un dominio a
+// otro: la gente tendrá que volver a iniciar sesión en el nuevo.
+const DOMINIO_NUEVO = (process.env.DOMINIO_NUEVO || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+app.get('/api/redirigir-dominio', (req, res) => {
+  if (!DOMINIO_NUEVO) return res.status(404).json({ error: 'No hay dominio nuevo configurado.' });
+  const { ruta, ...resto } = req.query;
+  const destinoRuta = '/' + String(typeof ruta === 'string' ? ruta : '').replace(/^\/+/, '');
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(resto)) {
+    for (const valor of [].concat(v)) params.append(k, String(valor));
+  }
+  const query = params.toString();
+  res.redirect(308, `https://${DOMINIO_NUEVO}${destinoRuta}${query ? '?' + query : ''}`);
+});
+
 // Manifest dinámico (Web App Manifest) — para que el link permanente de un
 // subperfil (BACKLOG #12, ?codigo= en app.html) se pueda "agregar a la
 // pantalla de inicio" del celular con un ícono y un nombre propios, y
@@ -264,14 +285,15 @@ app.get('/api/manifest.json', (req, res) => {
   const nombre = typeof req.query.nombre === 'string' ? req.query.nombre.replace(/[^\p{L}\p{N} ]/gu, '').slice(0, 60) : '';
   res.set('Content-Type', 'application/manifest+json');
   res.json({
-    name: nombre ? `Los recuerdos de ${nombre}` : 'Los recuerdos de mis viejos',
-    short_name: nombre || 'Mis recuerdos',
+    name: nombre ? `Eco de ${nombre}` : 'Eco',
+    short_name: nombre || 'Eco',
     start_url: codigo ? `/app.html?codigo=${codigo}` : '/app.html',
     display: 'standalone',
-    background_color: '#FBF6EA',
-    theme_color: '#5B6B45',
+    background_color: '#F6EEDC', // crema de Eco
+    theme_color: '#4F5D3A', // musgo de Eco
     icons: [
       { src: '/images/favicon-192.png', sizes: '192x192', type: 'image/png' },
+      { src: '/images/favicon-512.png', sizes: '512x512', type: 'image/png' },
     ],
   });
 });
@@ -2807,7 +2829,7 @@ function nuevoCodigoInvitacion() {
 function datosDeInvitacion(req, inv, ownerNombre) {
   const enlace = `${urlBase(req)}/colaborar.html?invitacion=${encodeURIComponent(inv.codigo)}`;
   const nombre = capitalizarNombre(inv.nombre);
-  const mensaje = `Hola ${nombre}, te invito a sumar tus recuerdos a la bitácora de ${ownerNombre || 'nuestra familia'}. Entra con tu enlace personal, no hace falta crear cuenta: ${enlace}`;
+  const mensaje = `Hola ${nombre}, te invito a sumar tus recuerdos a la bitácora de ${ownerNombre || 'nuestra familia'} en Eco. Entra con tu enlace personal, no hace falta crear cuenta: ${enlace}`;
   return {
     id: inv.id, nombre, telefono: inv.telefono, enlace,
     whatsapp: `https://wa.me/${inv.telefono}?text=${encodeURIComponent(mensaje)}`,
@@ -6853,7 +6875,7 @@ app.post('/api/save', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
 // producción de verdad con esto (credenciales propias, sandbox, etc).
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const RESEND_FROM = process.env.RESEND_FROM || 'Los recuerdos de mis viejos <onboarding@resend.dev>';
+const RESEND_FROM = process.env.RESEND_FROM || 'Eco <onboarding@resend.dev>';
 
 async function enviarCorreo({ to, subject, html }) {
   if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY no está configurada.');
@@ -7736,7 +7758,7 @@ app.post('/api/billing/checkout', requireAuth, bloquearColaborador, bloquearInvi
         headers: { 'merchant-key': WAVA_MERCHANT_KEY, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount: monto,
-          description: `${plan.nombre} (${periodo === 'monthly' ? 'mensual' : 'anual'}) — Los recuerdos de mis viejos`,
+          description: `${plan.nombre} (${periodo === 'monthly' ? 'mensual' : 'anual'}) — Eco`,
           currency: 'COP',
           order_key: orderKey,
           redirect_link: `${base}/app.html?pago=ok`,
@@ -7831,7 +7853,7 @@ app.post('/api/billing/gift-checkout', requireAuth, bloquearInvitado, rateLimit,
       headers: { 'merchant-key': WAVA_MERCHANT_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         amount: monto,
-        description: `${plan.nombre} — Los recuerdos de mis viejos`,
+        description: `${plan.nombre} — Eco`,
         currency: 'COP',
         order_key: orderKey,
         redirect_link: `${base}/app.html?regalo=ok`,
@@ -8091,7 +8113,7 @@ app.get('/api/cron/billing', async (req, res) => {
           ? await fetch(`${WAVA_API_BASE}/links`, {
               method: 'POST',
               headers: { 'merchant-key': WAVA_MERCHANT_KEY, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ amount: monto, description: `Renovación ${plan.nombre} — Los recuerdos de mis viejos`, currency: 'COP', order_key: orderKey, redirect_link: `${base}/app.html?pago=ok` }),
+              body: JSON.stringify({ amount: monto, description: `Renovación ${plan.nombre} — Eco`, currency: 'COP', order_key: orderKey, redirect_link: `${base}/app.html?pago=ok` }),
               signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
             })
           : null;
@@ -8775,7 +8797,7 @@ if (process.env.TEST_FORZAR_ERROR_NO_CAPTURADO === '1') {
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
   server = app.listen(PORT, () => {
-    console.log(`Los recuerdos de mis viejos corriendo en http://localhost:${PORT}`);
+    console.log(`Eco corriendo en http://localhost:${PORT}`);
   });
 }
 

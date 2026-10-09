@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Los recuerdos de mis viejos</title>
+<title>Eco</title>
 <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/images/favicon-192.png">
-<link rel="apple-touch-icon" href="/images/favicon-192.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
 <!-- BACKLOG #12: para que el enlace permanente de un subperfil se pueda
      "agregar a la pantalla de inicio" con ícono y nombre propios (en vez de
      abrir siempre como una pestaña más del navegador) — apple-mobile-web-
@@ -18,7 +18,7 @@
      nunca use un enlace de subperfil. -->
 <link rel="manifest" href="/api/manifest.json" id="appManifestLink">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Los recuerdos de mis viejos" id="appleTitleMeta">
+<meta name="apple-mobile-web-app-title" content="Eco" id="appleTitleMeta">
 <!-- Fuentes autoalojadas (ronda 2 del camino a CSP en enforce, 2026-09-06):
      antes venían de fonts.googleapis.com/fonts.gstatic.com, lo que además
      de la violación de CSP (font-src 'self') mandaba la IP de cada visita
@@ -739,7 +739,7 @@
       <span id="loginFontSizeValue">100%</span>
       <button type="button" id="loginFontIncBtn" aria-label="Agrandar la letra">A+</button>
     </div>
-    <h1>Los recuerdos de mis viejos</h1>
+    <h1>Eco</h1>
     <p class="sub">Inicia sesión para entrar a tu bitácora.</p>
     <div class="login-field">
       <label for="loginUser">Correo o usuario</label>
@@ -767,7 +767,7 @@
        #guestScreen en colaborar.html, pero esto narra SU PROPIA bitácora
        (ver /api/narrador-start), no un aporte a la de otro. -->
   <div class="login" id="narradorScreen">
-    <h1 id="narradorBitacoraLine">Los recuerdos de mis viejos</h1>
+    <h1 id="narradorBitacoraLine">Eco</h1>
     <p class="sub" id="narradorSubLine">Vas a contar tus historias aquí.</p>
     <div class="login-field">
       <label for="narradorPin" id="narradorPinLabel">Tu clave de 4 números</label>
@@ -792,8 +792,8 @@
    <header>
    <a class="skip-link" href="#main-content">Saltar al contenido</a>
    <div class="greeting-bar">
-     <img class="brand-logo" src="/images/logo-icon.png" alt="Los recuerdos de mis viejos">
-     <h1 class="greeting-text"><span class="brand-tag">Los recuerdos de mis viejos</span>Hola, <span class="greeting-name" id="greetingName"></span></h1>
+     <img class="brand-logo" src="/images/logo-icon.png" alt="Eco">
+     <h1 class="greeting-text"><span class="brand-tag">Eco</span>Hola, <span class="greeting-name" id="greetingName"></span></h1>
      <div class="user-menu">
        <div class="icon-nav-item">
          <button class="icon-btn" id="userMenuBtn" type="button" title="Mi cuenta" aria-label="Mi cuenta" aria-expanded="false" aria-controls="userMenuPanel">👤</button>
@@ -949,7 +949,7 @@
 
            <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecPlan">Plan <span class="um-chevron" aria-hidden="true">›</span></button>
            <div class="um-section-body" id="umSecPlan" hidden>
-             <p class="um-msg">Los recuerdos de mis viejos es <strong>gratis durante el lanzamiento</strong>. Si algún día cambia, te avisamos con al menos 30 días de anticipación y nunca te cobramos sin que lo aceptes. Siempre vas a poder descargar lo que ya guardaste.</p>
+             <p class="um-msg">Eco es <strong>gratis durante el lanzamiento</strong>. Si algún día cambia, te avisamos con al menos 30 días de anticipación y nunca te cobramos sin que lo aceptes. Siempre vas a poder descargar lo que ya guardaste.</p>
              <!-- Cobro (Wava) apagado mientras se lanza gratis — ver BACKLOG #11.
                   Se deja en el HTML, oculto, porque el JS de más abajo todavía
                   lo referencia y se reactiva quitando este "hidden". -->
@@ -2051,7 +2051,7 @@
     if (codigo) params.set('codigo', codigo);
     if (nombre) params.set('nombre', nombre);
     manifestLink.href = `/api/manifest.json?${params.toString()}`;
-    appleTitleMeta.setAttribute('content', nombre ? `Los recuerdos de ${nombre}` : 'Los recuerdos de mis viejos');
+    appleTitleMeta.setAttribute('content', nombre ? `Eco de ${nombre}` : 'Eco');
     agregarInicioBtn.dataset.modoNarrador = 'true';
     // Si ya se está usando instalada (agregada antes), no hace falta
     // ofrecer nada de esto de nuevo.

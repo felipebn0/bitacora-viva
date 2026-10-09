@@ -1,4 +1,4 @@
-# Los recuerdos de mis viejos
+# Eco
 
 Compañero de charlas por voz para registrar la historia de vida de tu papá.
 
@@ -193,6 +193,14 @@ La cuenta tiene que existir primero. Una vez marcada, al loguearse le va a apare
 El consumo de Claude/voz solo queda registrado desde que se activó esta medición (no hay forma de reconstruir tokens de charlas viejas); el tamaño en la base de datos, en cambio, se calcula sobre los datos tal como están hoy, así que sí incluye lo histórico.
 
 Si se edita el `<script>`/`<style>` de `admin.html`, correr `node tools/actualizar-hashes-vercel.js` antes de commitear (mismo criterio que el resto de `public/`, ver `test/hashes-csp-vercel.smoke.js`).
+
+## Marca: Eco
+
+La app se llama **Eco** (manual de marca de octubre 2026). Slogan principal: "Lo que cuentas, se queda." Colores: musgo `#4F5D3A`, crema `#F6EEDC`, dorado `#D9A441` (acento sobre musgo), ocre `#B7791F` (acento sobre crema), musgo oscuro `#3B4429`, arena `#EADFC4`, tierra `#5B5A44`. Tipografías del manual: Fraunces SemiBold (títulos) y Lora Medium (texto); la app todavía usa las suyas.
+
+**Logo:** tres anillos de árbol concéntricos (radios 28, 50 y 72 en una grilla de 200, trazo de 12 con puntas redondeadas, abertura del 28% girada 12° hacia afuera en cada anillo) y un punto central dorado de radio 13. Los archivos están en `public/images/eco/` (SVG: ícono, ícono invertido, ícono mínimo para menos de 16 px, símbolo, horizontal, y sus versiones clara y de una sola tinta) y en `public/images/` (PNG: `favicon-16/32/192/512`, `apple-touch-icon`, `logo-icon`, `logo-full`). La palabra "Eco" va convertida a trazos. Todo se regenera con `node tools/generar-logos-eco.js` (la geometría está en ese archivo). No estirar, recolorear, ponerle sombras ni ondas de sonido; tamaño mínimo: 16 px el símbolo, 120 px el horizontal.
+
+**Link viejo -> link nuevo.** Las páginas estáticas las sirve Vercel sin pasar por Express, así que para que quien tiene el link viejo (`bitacora-viva.vercel.app`) entre al nuevo hacen falta dos cosas: (1) en Vercel, la variable `DOMINIO_NUEVO` (ej. `eco.co`); (2) en `vercel.json`, al principio de `routes`: `{ "src": "/(.*)", "has": [{ "type": "host", "value": "bitacora-viva.vercel.app" }], "dest": "/api/redirigir-dominio?ruta=$1" }`. Esa ruta responde una redirección permanente (308) al dominio nuevo conservando la ruta y los parámetros (`?invitacion=`, `?codigo=`, el token de un enlace mágico viejo). No agregar la regla de `vercel.json` antes de tener el dominio nuevo y la variable puesta: sin ellas el sitio viejo dejaría de abrir. Las sesiones no pasan de un dominio a otro: quien ya había entrado tendrá que iniciar sesión de nuevo.
 
 ## Invitados con enlace personal (SEC-002A / SEC-002B / SEC-002C)
 
