@@ -2188,7 +2188,9 @@
       if (data.isCollaborator) { window.location.href = '/colaborar.html'; return; }
       showApp(data.username, data.name, data.email, data.fechaNacimiento, data.isAdmin, data.tratamiento);
       aplicarSesionSubperfil(data);
-      cargarVozElegida();
+      // cargarVozElegida vive en el otro bloque <script>; si algo falla ahí, nunca
+      // debe tumbar el ingreso (este .catch devolvería a la pantalla de login).
+      try { if (window.cargarVozElegida) window.cargarVozElegida(); } catch (e) {}
     })
     .catch(() => {
       if (codigoNarradorUrl) {
@@ -2450,6 +2452,8 @@
   }
 
   // Voz de la entrevistadora: se guarda en la cuenta (de la bitácora activa), no en el navegador.
+  // window.: la llama el otro bloque <script> (el del ingreso), que no ve este ámbito.
+  window.cargarVozElegida = cargarVozElegida;
   async function cargarVozElegida() {
     try {
       const resp = await fetch('/api/voz');
