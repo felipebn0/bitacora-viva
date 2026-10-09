@@ -401,6 +401,10 @@ function cookieDeSesionVieja(payload) {
     const appHtml = fs.readFileSync(path.resolve(__dirname, '..', 'public', 'app.html'), 'utf8');
     const colabHtml = fs.readFileSync(path.resolve(__dirname, '..', 'public', 'colaborar.html'), 'utf8');
     check('app.html pide nombre y celular para invitar', /id="inviteNombre"/.test(appHtml) && /id="invitePhone"/.test(appHtml) && /fetch\('\/api\/invitaciones'/.test(appHtml));
+    check('app.html: la sección de invitar se recuerda abierta (sessionStorage) y se abre sola al volver', /sessionStorage\.setItem\('invitarAbierto', '1'\)/.test(appHtml) && /sessionStorage\.removeItem\('invitarAbierto'\)/.test(appHtml) && /getItem\('invitarAbierto'\) === '1'/.test(appHtml));
+    const colabnesHtml = fs.readFileSync(path.resolve(__dirname, '..', 'public', 'colaboraciones.html'), 'utf8');
+    check('colaboraciones.html: "Invitar familiares" despliega el formulario ahí mismo, sin mandar a la pantalla principal', /id="invitarToggle"/.test(colabnesHtml) && /id="invitarPanel"/.test(colabnesHtml) && !/class="empty-cta" href="\/app\.html#inviteToggle"/.test(colabnesHtml));
+    check('colaboraciones.html: invita a la bitácora elegida (owner) y recuerda que quedó abierto', /conOwnerInv\('\/api\/invitaciones'\)/.test(colabnesHtml) && /owner: ownerSeleccionado/.test(colabnesHtml) && /colabInvitarAbierto/.test(colabnesHtml));
     check('colaborar.html entra con ?invitacion= y ya no manda solo el nombre', /get\('invitacion'\)/.test(colabHtml) && /body: JSON\.stringify\(\{ invitacion: invitacionUrl \}\)/.test(colabHtml) && !/guest-start[\s\S]{0,200}name: nombre/.test(colabHtml));
 
     // --- Cerrar sesión de invitado (mismo /api/logout que una cuenta real) ---

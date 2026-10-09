@@ -49,6 +49,22 @@
     border-bottom: 1px solid var(--gold-deep); display: inline-flex; align-items: center;
     min-height: 44px; padding: 10px 4px; margin-top: -6px;
   }
+  button.empty-cta { background: none; border: none; border-bottom: 1px solid var(--gold-deep); cursor: pointer; font-family: var(--font-body); }
+  /* Invitar a una persona (nombre + celular) ahí mismo, debajo del botón. */
+  #invitarPanel { margin: 8px 0 0; padding: 4px 0 0; max-width: 420px; }
+  #invitarPanel[hidden] { display: none; }
+  #invitarPanel label { display: block; font-size: 0.85rem; color: var(--ink-soft); margin: 10px 0 4px; }
+  #invitarPanel input { width: 100%; box-sizing: border-box; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 12px; font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink); min-height: 44px; }
+  #invitarPanel .invite-send { display: block; width: 100%; margin-top: 12px; border: none; background: var(--gold-deep); color: #FBF6EA; border-radius: 10px; min-height: 44px; font-weight: 700; font-family: var(--font-body); font-size: 1rem; cursor: pointer; }
+  #invitarPanel .invite-send:disabled { opacity: 0.6; cursor: default; }
+  #invitarPanel .sub a { color: var(--gold-deep); }
+  .invite-msg { font-size: 0.85rem; color: var(--ink-soft); margin: 8px 0 0; min-height: 1.2em; }
+  .invite-list { list-style: none; margin: 10px 0 0; padding: 0; }
+  .invite-list li { border-top: 1px solid #E7DFCC; padding: 8px 0; font-size: 0.9rem; }
+  .invite-list .invite-quien { font-weight: 700; }
+  .invite-list .invite-estado { color: var(--ink-soft); font-size: 0.8rem; }
+  .invite-list .invite-acciones { display: flex; flex-wrap: wrap; gap: 0 14px; margin-top: 2px; }
+  .invite-list .invite-acciones a, .invite-list .invite-acciones button { background: none; border: none; color: var(--gold-deep); text-decoration: underline; cursor: pointer; font-family: var(--font-body); font-size: 0.85rem; min-height: 44px; padding: 0; display: inline-flex; align-items: center; }
   /* Antes, si la carga fallaba, la única salida era recargar la página
      entera a mano. */
   .retry-btn {
@@ -173,6 +189,20 @@
            colaboradores.", y la lista se explora aparte, a su ritmo. -->
         <p id="colaboradoresStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
         <div id="colaboradoresLista"><p class="empty">Cargando…</p></div>
+        <!-- Invitar a una persona (SEC-002A): el formulario se despliega aquí
+             mismo, debajo del botón, sin mandar a nadie a la pantalla principal. -->
+        <button class="empty-cta" id="invitarToggle" type="button" aria-expanded="false" aria-controls="invitarPanel">Invitar familiares →</button>
+        <div id="invitarPanel" hidden>
+          <p class="sub">Escribe el nombre y el celular de la persona: le llega SU enlace personal por WhatsApp y entra a sumar historias sin crear cuenta. Cada enlace es de una sola persona y lo puedes quitar cuando quieras.</p>
+          <label for="inviteNombre">Nombre</label>
+          <input type="text" id="inviteNombre" maxlength="60" placeholder="Ej: Tía Marta" autocomplete="off">
+          <label for="invitePhone">Celular con WhatsApp</label>
+          <input type="tel" id="invitePhone" placeholder="+57 300 123 4567" autocomplete="off">
+          <button class="invite-send" id="inviteSendBtn" type="button">📲 Invitar por WhatsApp</button>
+          <p class="invite-msg" id="inviteMsg" role="status" aria-live="polite"></p>
+          <ul class="invite-list" id="inviteList"></ul>
+          <p class="sub">¿Va a crear una cuenta? Comparte el código familiar desde <a href="/app.html#inviteToggle">la pantalla principal</a>.</p>
+        </div>
       </section>
 
       <section id="aportesSection">
@@ -412,8 +442,8 @@
     const colaboradores = resultado.colaboradores;
     if (!colaboradores.length) {
       colaboradoresStatus.textContent = 'Todavía nadie ha colaborado.';
-      colaboradoresLista.innerHTML = '<p class="empty">Todavía nadie ha colaborado.</p><a class="empty-cta" href="/app.html#inviteToggle">Invitar familiares →</a>';
-      return true; // vacío — ver pintarAportes(), evita repetir el mismo CTA dos veces
+      colaboradoresLista.innerHTML = '<p class="empty">Todavía nadie ha colaborado.</p>';
+      return true; // vacío — ver pintarAportes()
     }
     colaboradoresStatus.textContent = colaboradores.length === 1 ? 'Se cargó 1 colaborador.' : `Se cargaron ${colaboradores.length} colaboradores.`;
     const grid = document.createElement('div');
@@ -488,13 +518,9 @@
         aportesLista.appendChild(p);
         return;
       }
-      // Si arriba (colaboradores) también está vacío, esa sección ya
-      // muestra "Invitar familiares →" — repetirlo aquí es el mismo CTA
-      // dos veces en la misma pantalla, sin agregar nada nuevo.
+      // "Invitar familiares →" vive en la sección de arriba (siempre visible).
       aportesStatus.textContent = 'Todavía no hay historias aportadas por tu círculo.';
-      aportesLista.innerHTML = colaboradoresVacios
-        ? '<p class="empty">Todavía no hay historias aportadas por tu círculo.</p>'
-        : '<p class="empty">Todavía no hay historias aportadas por tu círculo.</p><a class="empty-cta" href="/app.html#inviteToggle">Invitar familiares →</a>';
+      aportesLista.innerHTML = '<p class="empty">Todavía no hay historias aportadas por tu círculo.</p>';
       return;
     }
     aportesStatus.textContent = notes.length === 1 ? 'Se cargó 1 aporte.' : `Se cargaron ${notes.length} aportes.`;
@@ -580,7 +606,115 @@
   const recibidosSelectRow = document.getElementById('recibidosSelectRow');
   let idActivoSesion = null; // el que arranca elegido -- solo ese dispara mark-seen
 
+  // --- Invitar a una persona, ahí mismo ---
+  // La bitácora a la que se invita es la que está elegida arriba (la propia o
+  // un subperfil que administras).
+  let ownerSeleccionado = null;
+  const invitarToggle = document.getElementById('invitarToggle');
+  const invitarPanel = document.getElementById('invitarPanel');
+  const inviteNombre = document.getElementById('inviteNombre');
+  const invitePhone = document.getElementById('invitePhone');
+  const inviteSendBtn = document.getElementById('inviteSendBtn');
+  const inviteMsg = document.getElementById('inviteMsg');
+  const inviteList = document.getElementById('inviteList');
+  const conOwnerInv = (path) => (ownerSeleccionado ? path + '?owner=' + encodeURIComponent(ownerSeleccionado) : path);
+
+  function accion(texto, alClick) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = texto;
+    b.addEventListener('click', alClick);
+    return b;
+  }
+
+  function pintarInvitaciones(invitaciones) {
+    inviteList.textContent = '';
+    invitaciones.forEach((inv) => {
+      const li = document.createElement('li');
+      const quien = document.createElement('div');
+      quien.className = 'invite-quien';
+      quien.textContent = inv.nombre + ' · ' + inv.telefono;
+      const estado = document.createElement('div');
+      estado.className = 'invite-estado';
+      estado.textContent = inv.activa ? (inv.ultimoIngreso ? 'Ya entró con su enlace' : 'Todavía no ha entrado') : 'Acceso quitado';
+      const acciones = document.createElement('div');
+      acciones.className = 'invite-acciones';
+      if (inv.activa) {
+        const reenviar = document.createElement('a');
+        reenviar.href = inv.whatsapp;
+        reenviar.target = '_blank';
+        reenviar.rel = 'noopener';
+        reenviar.textContent = 'enviar de nuevo';
+        acciones.appendChild(reenviar);
+        acciones.appendChild(accion('quitar acceso', async () => {
+          if (!confirm('¿Quitarle el acceso a ' + inv.nombre + '? Deja de poder entrar con su enlace; lo que ya aportó se queda.')) return;
+          try { await fetch(conOwnerInv('/api/invitaciones/' + encodeURIComponent(inv.id) + '/revocar'), { method: 'POST' }); } catch (e) {}
+          cargarInvitaciones();
+        }));
+      }
+      acciones.appendChild(accion(inv.activa ? 'enlace nuevo' : 'volver a invitar', async () => {
+        if (inv.activa && !confirm('¿Generar un enlace nuevo para ' + inv.nombre + '? El anterior deja de servir.')) return;
+        try {
+          const resp = await fetch(conOwnerInv('/api/invitaciones/' + encodeURIComponent(inv.id) + '/renovar'), { method: 'POST' });
+          const data = await resp.json();
+          if (resp.ok) window.open(data.invitacion.whatsapp, '_blank', 'noopener');
+        } catch (e) {}
+        cargarInvitaciones();
+      }));
+      li.appendChild(quien);
+      li.appendChild(estado);
+      li.appendChild(acciones);
+      inviteList.appendChild(li);
+    });
+  }
+
+  async function cargarInvitaciones() {
+    try {
+      const resp = await fetch(conOwnerInv('/api/invitaciones'));
+      if (!resp.ok) return;
+      pintarInvitaciones((await resp.json()).invitaciones || []);
+    } catch (e) {}
+  }
+
+  function abrirInvitar(abrir) {
+    invitarPanel.hidden = !abrir;
+    invitarToggle.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+    try { if (abrir) sessionStorage.setItem('colabInvitarAbierto', '1'); else sessionStorage.removeItem('colabInvitarAbierto'); } catch (e) {}
+    if (abrir) { cargarInvitaciones(); inviteNombre.focus({ preventScroll: true }); }
+  }
+  invitarToggle.addEventListener('click', () => abrirInvitar(invitarPanel.hidden));
+
+  inviteSendBtn.addEventListener('click', async () => {
+    inviteMsg.textContent = '';
+    if (!inviteNombre.value.trim()) { inviteMsg.textContent = 'Escribe el nombre de la persona.'; inviteNombre.focus(); return; }
+    if (!invitePhone.value.trim()) { inviteMsg.textContent = 'Escribe su celular, con el código de país.'; invitePhone.focus(); return; }
+    inviteSendBtn.disabled = true;
+    try {
+      const resp = await fetch('/api/invitaciones', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre: inviteNombre.value, telefono: invitePhone.value, owner: ownerSeleccionado || undefined }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) { inviteMsg.textContent = data.error || 'No se pudo crear la invitación.'; return; }
+      inviteNombre.value = '';
+      invitePhone.value = '';
+      // WhatsApp abre el chat con ese número y el mensaje ya escrito; solo
+      // falta tocar enviar. Si el navegador bloquea la ventana, queda el
+      // enlace "enviar de nuevo" en la lista.
+      const ventana = window.open(data.invitacion.whatsapp, '_blank', 'noopener');
+      inviteMsg.textContent = ventana ? 'Listo. En WhatsApp solo falta tocar enviar.' : 'Listo. Toca "enviar de nuevo" abajo para abrir WhatsApp.';
+      cargarInvitaciones();
+    } catch (e) {
+      inviteMsg.textContent = 'No se pudo conectar. Intenta de nuevo.';
+    } finally {
+      inviteSendBtn.disabled = false;
+    }
+  });
+
   async function cargarTodo(ownerId, marcarVistos) {
+    ownerSeleccionado = ownerId || null;
+    if (!invitarPanel.hidden) cargarInvitaciones(); // cambió de bitácora: sus invitaciones
     colaboradoresLista.innerHTML = '<p class="empty">Cargando…</p>';
     aportesLista.innerHTML = '<p class="empty">Cargando…</p>';
     const [colabResultado, aportesResultado] = await Promise.all([pedirColaboradores(ownerId), pedirAportes(ownerId)]);
@@ -617,6 +751,11 @@
       }
     } catch (e) {}
     cargarTodo(idActivoSesion, true);
+    // Si había dejado abierta la sección de invitar (por ejemplo, al volver de
+    // WhatsApp), se vuelve a abrir debajo del botón.
+    let quedoAbierta = false;
+    try { quedoAbierta = sessionStorage.getItem('colabInvitarAbierto') === '1'; } catch (e) {}
+    if (quedoAbierta) abrirInvitar(true);
   }
   recibidosSelect.addEventListener('change', () => cargarTodo(Number(recibidosSelect.value), Number(recibidosSelect.value) === idActivoSesion));
 

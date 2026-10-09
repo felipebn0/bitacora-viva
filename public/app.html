@@ -1202,12 +1202,15 @@
     umProfileBirthdate.value = fechaNacimiento || '';
     umProfileTratamiento.value = tratamiento || '';
     ajustarCamposDePerfil();
-    if (location.hash === '#inviteToggle') {
+    let invitarQuedoAbierto = false;
+    try { invitarQuedoAbierto = sessionStorage.getItem('invitarAbierto') === '1'; } catch (e) {}
+    if (location.hash === '#inviteToggle' || invitarQuedoAbierto) {
       // Llegó aquí con un enlace directo a "invitar familiares" (por ejemplo
       // desde el estado vacío de Aportes) — abrimos el código de una en vez
       // de dejar que tenga que encontrarlo y tocarlo de nuevo.
       requestAnimationFrame(() => {
-        inviteToggle.scrollIntoView({ block: 'center' });
+        // 'start': el botón queda arriba y la sección abierta justo debajo.
+        inviteToggle.scrollIntoView({ block: 'start' });
         inviteToggle.click();
       });
       history.replaceState(null, '', location.pathname + location.search);
@@ -1872,6 +1875,7 @@
       const ventana = window.open(data.invitacion.whatsapp, '_blank', 'noopener');
       inviteMsg.textContent = ventana ? 'Listo. En WhatsApp solo falta tocar enviar.' : 'Listo. Toca "enviar de nuevo" abajo para abrir WhatsApp.';
       cargarInvitaciones();
+      inviteMsg.scrollIntoView({ block: 'nearest' });
     } catch (e) {
       inviteMsg.textContent = 'No se pudo conectar. Intenta de nuevo.';
     } finally {
@@ -1889,10 +1893,15 @@
     if (visible) {
       inviteRow.style.display = 'none';
       inviteToggle.setAttribute('aria-expanded', 'false');
+      try { sessionStorage.removeItem('invitarAbierto'); } catch (e) {}
       return;
     }
     inviteRow.style.display = 'block';
     inviteToggle.setAttribute('aria-expanded', 'true');
+    // Se recuerda que la sección está abierta: al volver de WhatsApp (o si el
+    // navegador recarga la página) queda abierta debajo del botón, no se
+    // regresa a la pantalla principal con todo cerrado.
+    try { sessionStorage.setItem('invitarAbierto', '1'); } catch (e) {}
     cargarInvitaciones();
     if (inviteLoaded) return;
     try {
