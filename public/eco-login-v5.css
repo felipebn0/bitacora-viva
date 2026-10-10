@@ -1,0 +1,13 @@
+/* Login V5: one centered form, no split-screen illustration. Preserve original auth JS. */
+#loginScreen{width:min(530px,calc(100% - 28px))!important;max-width:530px!important;min-height:0!important;margin:clamp(18px,4vh,42px) auto!important;flex-direction:column!important;gap:0!important;border:1px solid #dadaca!important;border-radius:27px!important;background:#fffdf6!important;box-shadow:0 16px 54px rgba(41,61,48,.11)!important;overflow:hidden}
+#loginScreen .eco-login-story{display:none!important}
+#loginScreen .eco-login-form{padding:clamp(24px,5vw,44px)!important;width:100%!important;flex:initial!important;gap:14px!important}
+#loginScreen .eco-login-brand{margin:0 auto 4px!important}
+#loginScreen .eco-login-logo{width:53px!important;height:53px!important}
+#loginScreen h1{font-size:clamp(1.75rem,4vw,2.3rem)!important;white-space:normal;text-wrap:balance;color:#293d30}
+#loginScreen p.sub{font-size:.92rem!important;color:#63705f}
+#loginScreen .login-fontsize-row{margin:0 0 4px!important}
+#loginScreen #loginBtn{background:#4d6542!important;color:white!important;border-radius:12px!important}
+#loginScreen #loginBtn:hover{background:#293d30!important}
+#loginScreen .login-field input{background:#fff!important}
+@media(max-width:600px){#loginScreen{width:min(490px,calc(100% - 24px))!important;border-radius:22px!important;margin:15px auto!important}#loginScreen .eco-login-form{padding:23px 19px 27px!important}}
