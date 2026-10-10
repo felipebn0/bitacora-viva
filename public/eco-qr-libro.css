@@ -1,5 +1,12 @@
-#ecoBookQrFoot{break-inside:avoid;page-break-inside:avoid;border-top:1px solid #cbd2c3;display:flex;align-items:center;gap:18px;margin-top:32px;padding:18px 0;font-family:Georgia,serif;color:#293d30}
-#ecoBookQrFoot img{width:125px;height:125px;flex:none;background:white}
-#ecoBookQrFoot p{line-height:1.5;font-size:12px;margin:8px 0}
-@media(max-width:520px){#ecoBookQrFoot{gap:10px}#ecoBookQrFoot img{width:100px;height:100px}}
-@media print{#ecoBookQrFoot{display:flex!important;visibility:visible!important}#ecoBookQrFoot img{display:block!important}}
+/* ECO QR voces v2 · visible en Mi libro */
+.eco-qr-launch{display:inline-flex;align-items:center;justify-content:center;min-height:45px;margin:7px 0 7px 10px;padding:10px 18px;border:1px solid #4d6542;border-radius:13px;color:#293d30;background:#edf0e5;font:700 15px 'Atkinson Hyperlegible',sans-serif;cursor:pointer}
+.eco-qr-launch:hover{background:#dfe8d7}
+.eco-qr-create{min-height:40px;border-radius:10px;background:#4d6542;color:white;border:0;padding:9px 14px;font-weight:700;cursor:pointer}
+.eco-qr-create:disabled{opacity:.6;cursor:wait}
+.eco-qr-status{color:#4d6542;font-size:.9rem;line-height:1.4;margin:8px 0}
+.eco-book-qr-foot{display:flex;align-items:center;gap:14px;border-top:1px solid #ddd;margin-top:20px;padding-top:14px;break-inside:avoid}
+.eco-book-qr-foot img{display:block;flex:none;width:125px;height:125px;background:white}
+.eco-book-qr-foot p{margin:5px 0;font-size:.8em}
+.eco-book-qr-foot a{color:#4d6542;overflow-wrap:anywhere;font-size:.75em}
+@media(max-width:640px){.eco-qr-launch{margin:7px 0;width:100%}.eco-book-qr-foot{gap:8px}.eco-book-qr-foot img{width:100px;height:100px}}
+@media print{.eco-qr-launch,.eco-qr-create,.eco-qr-status{display:none!important}.eco-book-qr-foot a{display:none!important}.eco-book-qr-foot{display:flex!important}}
