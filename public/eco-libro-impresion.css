@@ -1,0 +1,29 @@
+/* ECO · Fase 4 · mismo lenguaje visual que Árbol y Mi libro */
+.eco-print4-settings{display:none;background:#fffdf6;border:1px solid #dadaca;color:#302d25;border-radius:17px;padding:16px;max-width:670px;margin:14px auto;font-family:"Atkinson Hyperlegible",sans-serif}
+.eco-print4-settings.eco-print4-visible{display:grid;gap:12px}
+.eco-print4-header{display:flex;justify-content:space-between;gap:10px;align-items:center}
+.eco-print4-header strong{font:700 20px "Source Serif 4",Georgia,serif;color:#293d30}
+.eco-print4-header button{border:0;background:none;font-size:23px;cursor:pointer}
+.eco-print4-settings label{display:grid;gap:6px;font-weight:700}
+.eco-print4-settings select{padding:10px;border-radius:10px;border:1px solid #dadaca;font:inherit;background:white}
+.eco-print4-help{font-size:13px;line-height:1.5;color:#777568;margin:0}
+#ecoPrint4Checks{background:#edf0e5;border-radius:10px;padding:11px;font-size:13px;color:#293d30}
+.eco-print4-primary{border-radius:12px;border:1px solid #4d6542;background:#4d6542;color:white;padding:13px;font-weight:700;cursor:pointer}
+@media print{
+ html,body{background:white!important;overflow:visible!important}
+ .eco-print4-settings{display:none!important}
+ .eco-editorial-overlay,.eco-editorial-overlay[hidden]{display:block!important;position:static!important;overflow:visible!important;background:white!important;padding:0!important;margin:0!important}
+ .eco-editorial-shell{display:block!important;position:static!important;overflow:visible!important;height:auto!important;max-height:none!important;max-width:none!important;width:100%!important;margin:0!important;padding:0!important;border:0!important;box-shadow:none!important}
+ .eco-editorial-top,.eco-editorial-sidebar,.eco-editorial-warning,.eco-editorial-topbuttons{display:none!important}
+ .eco-editorial-layout{display:block!important;width:100%!important;margin:0!important;padding:0!important}
+ .eco-editorial-preview{display:block!important;width:100%!important;margin:0!important;padding:0!important;border:0!important;background:white!important;overflow:visible!important}
+ #ecoEditorialBook{display:block!important;max-width:none!important;width:100%!important;margin:0!important;padding:0!important}
+ #ecoEditorialBook>.eco-editorial-page{width:100%!important;max-width:none!important;min-height:0!important;height:auto!important;box-shadow:none!important;border:0!important;border-radius:0!important;margin:0!important;padding:18mm 15mm 19mm!important;background:white!important;color:#302d25!important;break-before:page;page-break-before:always;break-inside:auto!important;box-sizing:border-box!important}
+ #ecoEditorialBook>.eco-editorial-page:first-child{break-before:auto;page-break-before:auto}
+ #ecoEditorialBook h1,#ecoEditorialBook h2{break-after:avoid;page-break-after:avoid;orphans:3;widows:3}
+ #ecoEditorialBook p{orphans:3;widows:3;overflow-wrap:break-word}
+ #ecoEditorialBook figure,#ecoEditorialBook .eco-editorial-qr{break-inside:avoid;page-break-inside:avoid}
+ #ecoEditorialBook img{max-width:100%!important;height:auto!important}
+ #ecoEditorialBook .eco-editorial-qr img{width:31mm!important;height:31mm!important}
+ #ecoEditorialBook .eco-editorial-page.eco-editorial-cover{display:flex!important;flex-direction:column;justify-content:center;align-items:center;text-align:center}
+}
