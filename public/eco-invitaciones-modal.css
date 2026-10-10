@@ -1,0 +1,57 @@
+/* ECO · Invitaciones como diálogo: usa el formulario actual, sin alterar las llamadas API. */
+.eco-invite-overlay[hidden],.eco-invite-choices[hidden],.eco-invite-detail[hidden],
+.eco-invite-dialog [hidden]{display:none!important}
+.eco-invite-overlay{
+ position:fixed;inset:0;z-index:12000;display:flex;align-items:center;justify-content:center;
+ padding:18px;background:rgba(22,34,26,.58);box-sizing:border-box;
+}
+body.eco-invite-open{overflow:hidden}
+.eco-invite-dialog{
+ width:min(100%,540px);max-height:min(90dvh,780px);overflow-y:auto;
+ background:#fffdf6;color:#293d30;box-shadow:0 26px 85px #121d1780;
+ border-radius:24px;border:1px solid #e2ddce;padding:25px;
+ font-family:"Atkinson Hyperlegible",system-ui,sans-serif;
+}
+.eco-invite-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px}
+.eco-invite-heading h2{font:700 clamp(1.5rem,3vw,2rem)/1.15 "Source Serif 4",Georgia,serif;margin:0 0 6px}
+.eco-invite-heading p{color:#777568;font-size:.94rem;margin:0}
+.eco-invite-close{border:1px solid #dadaca;background:#f7f4eb;color:#293d30;width:44px;height:44px;
+ border-radius:50%;font-size:1.7rem;line-height:1;cursor:pointer;flex-shrink:0}
+.eco-invite-choices{display:grid;gap:11px}
+.eco-invite-choice{font:inherit;color:#293d30;cursor:pointer;min-height:93px;text-align:left;
+ display:grid;grid-template-columns:45px minmax(0,1fr) 14px;align-items:center;gap:13px;
+ border:1px solid #dadaca;background:#fffdfa;border-radius:18px;padding:15px}
+.eco-invite-choice:hover,.eco-invite-choice:focus-visible{background:#edf0e5;border-color:#9caf94}
+.eco-invite-choice strong{display:block;font-size:1rem;margin-bottom:4px}
+.eco-invite-choice small{display:block;color:#777568;font-size:.83rem;line-height:1.4}
+.eco-invite-choice-icon{width:44px;height:44px;display:grid;place-items:center;background:#edf0e5;
+ border-radius:14px;font-size:1.4rem;font-weight:700;color:#4d6542}
+.eco-invite-back{display:inline-flex;align-items:center;min-height:44px;margin-bottom:10px;border:0;
+ background:transparent;color:#4d6542;font:700 .88rem inherit;cursor:pointer;padding:7px 0}
+.eco-invite-detail h3{font:700 1.45rem "Source Serif 4",Georgia,serif;margin:0 0 14px}
+.eco-invite-detail #inviteRow{display:block!important;width:100%;margin:0!important}
+.eco-invite-detail .invite-personal{max-width:none;width:100%;text-align:left}
+.eco-invite-detail .invite-personal .sub{max-width:none!important;margin:0 0 14px!important;
+ font-size:.9rem;color:#777568;line-height:1.45}
+.eco-invite-detail .invite-personal label{color:#293d30;font-weight:700}
+.eco-invite-detail .invite-personal input{border:1px solid #dadaca;border-radius:12px;background:white;
+ font-size:16px;min-height:46px;padding:10px 13px;max-width:100%}
+.eco-invite-detail .invite-personal .invite-send{background:#4d6542;color:#fff;border-radius:13px;
+ min-height:48px;font:700 1rem "Atkinson Hyperlegible",system-ui,sans-serif}
+.eco-invite-detail .eco-invite-code{text-align:center}
+.eco-invite-detail .eco-invite-code .sub{max-width:none!important;font-size:.9rem!important;
+ line-height:1.5;color:#777568;margin:0 0 14px!important}
+.eco-invite-detail #inviteCode{font:700 clamp(1.5rem,5vw,2rem) "Source Serif 4",Georgia,serif!important;
+ color:#293d30;letter-spacing:.08em;overflow-wrap:anywhere;
+ background:#edf0e5;padding:16px 10px;border-radius:13px;margin:8px 0 14px!important}
+.eco-invite-detail .eco-invite-code .write-toggle{display:inline-flex;
+ min-height:44px;padding:9px 12px;border:1px solid #dadaca;border-radius:12px;
+ text-decoration:none;color:#293d30;font-size:.92rem;font-weight:700;margin:3px}
+.eco-invite-detail .eco-invite-code .write-toggle:hover{background:#edf0e5}
+.eco-invite-overlay :focus-visible{outline:3px solid #9b6734;outline-offset:3px}
+@media(max-width:650px){
+ .eco-invite-overlay{align-items:flex-end;padding:0}
+ .eco-invite-dialog{width:100%;max-height:90dvh;border-radius:24px 24px 0 0;
+ padding:22px 18px calc(22px + env(safe-area-inset-bottom))}
+ .eco-invite-choice{min-height:88px;padding:13px}
+}
