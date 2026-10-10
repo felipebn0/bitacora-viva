@@ -1659,7 +1659,7 @@
     await subida;
     if (!texto) return false;
     historyLocal.push({ role: 'user', content: texto });
-    agregarBurbuja('q', texto);
+    // ECO-COLAB-CORRECCION-1: STT interno; no mostrar transcripción de grabación.
     await enviarTurno();
     return true;
   }

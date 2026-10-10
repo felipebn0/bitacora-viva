@@ -371,6 +371,20 @@
         div.appendChild(audio);
       }
     });
+    // ECO-COLAB-CORRECCION-1: fotos/videos también para quien hizo el aporte.
+    const mediaAdjunta = Array.isArray(it.media_urls) ? it.media_urls : [];
+    if (mediaAdjunta.length) {
+      const grid = document.createElement('div'); grid.className = 'media-adjunta';
+      mediaAdjunta.forEach((m) => {
+        if (!m || typeof m.url !== 'string' || !/^https?:\/\//.test(m.url)) return;
+        const src = '/api/media-file?u=' + encodeURIComponent(m.url);
+        const el = m.type === 'video' ? document.createElement('video') : document.createElement('img');
+        if (m.type === 'video') { el.controls = true; el.preload = 'none'; el.src = src; }
+        else { el.loading = 'lazy'; el.src = src; el.alt = m.caption || 'Foto de la historia'; }
+        grid.appendChild(el);
+      });
+      if (grid.childElementCount) div.appendChild(grid);
+    }
     container.appendChild(div);
   }
 
