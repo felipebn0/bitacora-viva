@@ -1,0 +1,61 @@
+/* ECO · botón de grabar equivalente a Inicio; colaboraciones mantiene su lógica de audio. */
+:root{--eco-collab-deep:#293d30;--eco-collab-green:#4d6542}
+body{background:#f7f4eb;color:#302d25}
+#appContent .aportes{background:#fffdf6;border-color:#dadaca;border-radius:23px;max-width:540px}
+#appContent .owner-name,#appContent .guest-owner-name{color:#4d6542}
+#appContent .orb-zone{gap:12px;padding:14px 0 5px}
+#appContent .orb-zone .orb{
+ --eco-orb-size:clamp(160px,46vw,220px);
+ width:var(--eco-orb-size);height:var(--eco-orb-size);
+ display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3%;
+ border-radius:50%;background:#4f5d3a;color:#fffdf6;
+ box-shadow:0 10px 26px -10px rgba(79,93,58,.55);
+ font-family:"Atkinson Hyperlegible",system-ui,sans-serif;font-size:1rem;
+ transition:background-color .5s ease,box-shadow .5s ease;
+}
+#appContent .orb-zone .orb::before{border-color:rgba(79,93,58,.33)}
+#appContent .orb-zone .orb[data-state="listening"]{background:#4f5d3a}
+#appContent .orb-zone .orb[data-state="thinking"],#appContent .orb-zone .orb[data-state="speaking"]{background:#1a1a1a;box-shadow:0 10px 26px -10px #0009}
+#appContent .orb-zone .orb[data-state="thinking"]::before,#appContent .orb-zone .orb[data-state="speaking"]::before{animation:none;opacity:.25;border-color:#1a1a1a}
+#appContent .orb-zone .orb:disabled{opacity:1;cursor:wait}
+#appContent .orb-zone .orb-logo{width:58%;height:auto;flex:none;display:block;overflow:visible;pointer-events:none}
+#appContent .orb-zone #ecoColabOrbLabel{font-size:clamp(.82rem,2.7vw,1.04rem);line-height:1.15;text-align:center;pointer-events:none}
+#appContent .orb-zone .orb-logo .ring{fill:none;stroke:#f6eedc;stroke-width:12;stroke-linecap:round;stroke-dasharray:72 28;transition:stroke-dasharray .5s ease}
+#appContent .orb-zone .orb-logo .wave-c{fill:none;stroke:#f6eedc;stroke-width:6;stroke-linecap:round;stroke-dasharray:72 28}
+#appContent .orb-zone .orb-logo .w1 .wave-c{stroke:#d9a441}
+#appContent .orb-zone .orb-logo .dot,#appContent .orb-zone .orb-logo .drop-fill{fill:#d9a441}
+#appContent .orb-zone .orb-logo .dot,#appContent .orb-zone .orb-logo .rg,#appContent .orb-zone .orb-logo .wave-g,#appContent .orb-zone .orb-logo .drop{transform-box:fill-box;transform-origin:center}
+#appContent .orb-zone .orb-logo .wave-g,#appContent .orb-zone .orb-logo .drop{opacity:0}
+#appContent .orb-zone .orb[data-state="thinking"] .ring,#appContent .orb-zone .orb[data-state="speaking"] .ring{stroke-dasharray:100 0}
+@keyframes eco-c-drop{0%{transform:translateY(-150px) scaleY(1.25);opacity:0}8%{opacity:1}99%{opacity:1}100%{transform:translateY(0) scaleY(1.1);opacity:0}}
+@keyframes eco-c-dotland{0%{opacity:0;transform:scale(1.7,.4)}1%{opacity:1}40%{transform:scale(.82,1.3)}70%{transform:scale(1.1,.92)}100%{opacity:1;transform:scale(1)}}
+@keyframes eco-c-wave{0%{transform:scale(.08);opacity:0}8%{opacity:.6}100%{transform:scale(1.55);opacity:0}}
+@keyframes eco-c-soft{0%{transform:scale(.3);opacity:0}10%{opacity:.3}100%{transform:scale(1.5);opacity:0}}
+@keyframes eco-c-ringdraw{0%{stroke-dasharray:.01 100;opacity:0}12%{opacity:1}100%{stroke-dasharray:72 28;opacity:1}}
+@keyframes eco-c-ringbloom{from{transform:scale(.35) rotate(-70deg)}to{transform:scale(1) rotate(0)}}
+@keyframes eco-c-ringkick{0%,28%{transform:scale(1)}40%{transform:scale(1.08)}56%,100%{transform:scale(1)}}
+@keyframes eco-c-beat{0%{transform:scale(1)}7%{transform:scale(1.32)}22%,100%{transform:scale(1)}}
+#appContent .orb[data-state="idle"] .w4{animation:eco-c-soft 5s ease-out 1s infinite both}
+#appContent .orb[data-state="listening"] .drop{animation:eco-c-drop .56s cubic-bezier(.55,.05,.9,.5) .14s both}
+#appContent .orb[data-state="listening"] .dot{animation:eco-c-dotland .49s ease-out .7s both,eco-c-beat 2.4s ease-in-out 1.7s infinite}
+#appContent .orb[data-state="listening"] .w1{animation:eco-c-wave .77s ease-out .7s both,eco-c-wave 2.4s ease-out 2s infinite}
+#appContent .orb[data-state="listening"] .w2{animation:eco-c-wave .77s ease-out .83s both,eco-c-wave 2.4s ease-out 3.2s infinite}
+#appContent .orb[data-state="listening"] .w3{animation:eco-c-wave .77s ease-out .95s both}
+#appContent .orb[data-state="listening"] .r1{animation:eco-c-ringbloom .63s ease-out .77s both,eco-c-ringkick 2.4s ease-in-out 2s infinite}
+#appContent .orb[data-state="listening"] .r2{animation:eco-c-ringbloom .63s ease-out .91s both,eco-c-ringkick 2.4s ease-in-out 2.15s infinite}
+#appContent .orb[data-state="listening"] .r3{animation:eco-c-ringbloom .63s ease-out 1.05s both,eco-c-ringkick 2.4s ease-in-out 2.3s infinite}
+#appContent .orb[data-state="listening"] .r1 .ring{animation:eco-c-ringdraw .63s ease-out .77s both}
+#appContent .orb[data-state="listening"] .r2 .ring{animation:eco-c-ringdraw .63s ease-out .91s both}
+#appContent .orb[data-state="listening"] .r3 .ring{animation:eco-c-ringdraw .63s ease-out 1.05s both}
+#appContent .orb-zone .write-toggle{color:#4d6542;border-color:#dadaca}
+#appContent .aportes h2{font-family:"Source Serif 4",Georgia,serif;color:#293d30}
+#appContent a.volver{color:#4d6542;border-bottom-color:#4d6542}
+#appContent .collab-switch-list a.active{background:#4d6542;border-color:#4d6542}
+@media(max-width:400px){
+ #appContent .aportes{padding:18px 15px}
+ #appContent .orb-zone .orb{--eco-orb-size:clamp(154px,51vw,190px)}
+}
+@media(prefers-reduced-motion:reduce){
+ #appContent .orb-zone .orb-logo *,#appContent .orb-zone .orb::before{animation:none!important;transition:none!important}
+ #appContent .orb-zone .orb-logo .rg{opacity:1}
+}
