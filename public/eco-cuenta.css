@@ -1,0 +1,46 @@
+/* ECO Cuenta — capa de interfaz; mantiene las rutas y formularios originales. */
+#userMenuPanel[data-eco-organizado="1"] {
+  width:min(440px,calc(100vw - 32px));
+  max-width:calc(100vw - 24px);
+  max-height:min(720px,calc(100dvh - 105px));
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  border-radius:22px;
+  padding:18px;
+  background:#fffaf1;
+  border:1px solid #e5ddcc;
+  box-shadow:0 22px 65px rgba(35,42,24,.20);
+  z-index:1000;
+  text-align:left;
+}
+#userMenuPanel .eco-cuenta-legacy {display:none!important}
+#userMenuPanel .eco-cuenta-secciones {display:grid;gap:9px;margin:12px 0}
+#userMenuPanel .eco-cuenta-grupo {background:#fffdf7;border:1px solid #e4dfd1;border-radius:15px;overflow:hidden}
+#userMenuPanel .eco-cuenta-cabecera {display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;min-height:68px;padding:13px 14px;border:0;text-align:left;background:transparent;color:#26392c;cursor:pointer;font-family:inherit;font-size:1rem}
+#userMenuPanel .eco-cuenta-cabecera:hover,#userMenuPanel .eco-cuenta-cabecera:focus-visible {background:#f5f2e9}
+#userMenuPanel .eco-cuenta-heading {display:flex;align-items:center;gap:12px;min-width:0}
+#userMenuPanel .eco-cuenta-icono {display:grid;place-items:center;flex:none;width:36px;height:36px;border-radius:11px;background:#eaf0e2;color:#445e40;font-size:1.2rem}
+#userMenuPanel .eco-cuenta-heading strong {display:block;font-size:.96rem;line-height:1.25}
+#userMenuPanel .eco-cuenta-heading small {display:block;color:#716e64;font-size:.76rem;margin-top:3px;line-height:1.3}
+#userMenuPanel .eco-cuenta-chevron {transition:transform .18s ease;font-size:1.25rem;color:#65705d}
+#userMenuPanel .eco-cuenta-cabecera[aria-expanded="true"] .eco-cuenta-chevron{transform:rotate(180deg)}
+#userMenuPanel .eco-cuenta-contenido {padding:8px 13px 16px;border-top:1px solid #e8e5da;min-width:0}
+#userMenuPanel .eco-cuenta-contenido[hidden] {display:none!important}
+#userMenuPanel .eco-cuenta-contenido .um-section-toggle{max-width:100%;box-sizing:border-box}
+#userMenuPanel .eco-cuenta-contenido .um-section-body {max-width:100%;box-sizing:border-box}
+#userMenuPanel .eco-cuenta-contenido input,#userMenuPanel .eco-cuenta-contenido select,#userMenuPanel .eco-cuenta-contenido textarea{max-width:100%;box-sizing:border-box}
+#userMenuPanel .eco-cuenta-contenido .um-nested-group {margin-top:12px}
+#userMenuPanel .eco-cuenta-contenido .um-section-toggle-warn {color:#9d4437}
+#userMenuPanel .eco-cuenta-contenido .danger-zone {border-top:1px solid #e9c9bf}
+#userMenuPanel .eco-cuenta-admin:empty {display:none}
+#userMenuPanel #umLogoutBtn {width:100%;min-height:44px;margin-top:6px;border-top:1px solid #e5ddcc}
+@media(max-width:600px){
+  #userMenuPanel[data-eco-organizado="1"] {position:fixed!important;top:auto!important;right:0!important;bottom:0!important;left:0!important;width:100%!important;max-width:none!important;max-height:min(86dvh,780px)!important;margin:0!important;border-radius:24px 24px 0 0!important;padding:18px 18px calc(20px + env(safe-area-inset-bottom))!important;box-shadow:0 -15px 60px rgba(31,38,21,.24)}
+  #userMenuPanel .eco-cuenta-cabecera{min-height:70px}
+}
+@media(prefers-reduced-motion:reduce){#userMenuPanel .eco-cuenta-chevron{transition:none}}
+
+/* Los grupos antiguos y las secciones cerradas permanecen ocultos. */
+#userMenuPanel .eco-cuenta-contenido [hidden] {display:none!important;}
+#userMenuPanel .eco-cuenta-contenido .um-section-body[hidden] {display:none!important;}
+#userMenuPanel[data-eco-organizado="1"] {box-sizing:border-box;}
