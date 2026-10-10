@@ -1,0 +1,52 @@
+/* ECO Landing V2 · solo portada, respeta formulario y comportamientos existentes */
+:root{
+ --bg:#f7f4eb; --bg-alt:#edf0e5; --surface:#fffdf6; --surface-2:#f4f4e9;
+ --ink:#302d25; --ink-2:#5d655b; --ink-3:#586352;
+ --hairline:#dadaca; --hairline-soft:#e5e6d9;
+ --accent:#4d6542; --accent-press:#293d30;
+ --accent-tint:rgba(77,101,66,.11); --accent-2:#4d6542;
+ --accent-2-press:#293d30; --accent-2-tint:rgba(77,101,66,.11);
+ --on-accent:#fffdf6; --nav-bg:rgba(247,244,235,.91);
+ --shadow-card:0 1px 2px rgba(41,61,48,.04),0 12px 34px rgba(41,61,48,.09);
+}
+body{background:var(--bg);color:var(--ink)}
+h1 em{color:#4d6542}
+.eco2-story{position:relative;padding:clamp(62px,9vw,116px) 0;background:#f0f1e9;border-block:1px solid #dadaca}
+.eco2-kicker{display:inline-block;font-size:.76rem;letter-spacing:.16em;text-transform:uppercase;color:#4d6542;font-weight:700;margin-bottom:14px}
+.eco2-heading{max-width:720px;margin:0 auto 15px;text-align:center;color:#293d30}
+.eco2-lead{max-width:665px;margin:0 auto 32px;text-align:center;color:#516150}
+.eco2-grid{display:grid;grid-template-columns:1.1fr .9fr;align-items:stretch;gap:24px}
+.eco2-tree{background:#fffdf6;border:1px solid #d8dece;border-radius:24px;padding:24px;box-shadow:var(--shadow-card);overflow:hidden;min-width:0}
+.eco2-topline{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-bottom:22px;color:#293d30;font-size:.92rem}
+.eco2-topline strong{font-family:var(--serif);font-size:1.3rem}
+.eco2-pill{font-size:.74rem;color:#4d6542;background:#edf0e5;padding:5px 10px;border-radius:999px;white-space:nowrap}
+.eco2-generation{display:flex;justify-content:center;gap:10px}
+.eco2-person{background:white;border:1px solid #cdd7c5;border-radius:13px;padding:11px 12px;min-width:0;flex:0 1 185px;display:flex;align-items:center;gap:9px;box-shadow:0 2px 9px rgba(41,61,48,.035)}
+.eco2-person .eco2-avatar{flex:0 0 34px;width:34px;height:34px;display:grid;place-items:center;border-radius:50%;background:#e2e9dc;color:#293d30;font:700 .9rem var(--serif)}
+.eco2-person b{display:block;font-size:.87rem;line-height:1.2;color:#293d30}
+.eco2-person small{font-size:.73rem;color:#5d655b}
+.eco2-person.me{background:#edf0e5;border-color:#4d6542;max-width:225px}
+.eco2-stem{width:1px;height:28px;background:#9bae97;margin:0 auto}
+.eco2-children{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
+.eco2-children span{border:1px solid #d5ddce;border-radius:999px;padding:6px 14px;color:#586c50;font-size:.77rem;background:#f7f8f2}
+.eco2-note{margin:19px 0 0;text-align:center;font-size:.77rem;color:#73796c}
+.eco2-steps{display:flex;flex-direction:column;justify-content:center;gap:16px}
+.eco2-step{background:#fffdf6;border:1px solid #dadaca;padding:20px 22px;border-radius:19px;box-shadow:0 5px 18px rgba(41,61,48,.035)}
+.eco2-number{display:inline-block;font-size:.72rem;letter-spacing:.1em;color:#4d6542;font-weight:700;margin-bottom:6px}
+.eco2-step h3{color:#293d30;font-size:1.2rem;margin:0 0 7px}
+.eco2-step p{color:#586352;font-size:.9rem;line-height:1.55;margin:0}
+.eco2-next{display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap;margin-top:30px}
+.eco2-next p{margin:0;font-size:.84rem;color:#60705b}
+.eco2-next .btn{max-width:100%}
+.eco2-chapter{background:#fffdf6;padding:clamp(55px,8vw,90px) 0;border-bottom:1px solid #dadaca}
+.eco2-chapter-grid{display:grid;grid-template-columns:1fr 1fr;gap:clamp(20px,5vw,55px);align-items:center}
+.eco2-chapter h2{color:#293d30;margin:0 0 18px}
+.eco2-chapter p{color:#556152;max-width:530px;line-height:1.65}
+.eco2-book{padding:26px;background:#edf0e5;border-radius:26px;min-height:300px;display:grid;place-items:center}
+.eco2-paper{width:min(100%,345px);min-height:267px;padding:26px 28px;background:#fffdf6;border:1px solid #dadaca;border-radius:3px 15px 15px 3px;box-shadow:-9px 10px 0 #d7dfd2,0 15px 35px rgba(41,61,48,.12)}
+.eco2-paper small{font-size:.69rem;letter-spacing:.13em;color:#6d7968;text-transform:uppercase}
+.eco2-paper strong{display:block;font:600 1.9rem/1.13 var(--serif);color:#293d30;margin:18px 0}
+.eco2-paper p{font:italic 1rem/1.65 var(--serif);color:#52604f;margin:0}
+.eco2-book-caption{text-align:center;font-size:.72rem;color:#6e7969;margin-top:15px}
+@media(max-width:760px){.eco2-grid,.eco2-chapter-grid{grid-template-columns:1fr}.eco2-steps{gap:11px}.eco2-story{padding:56px 0}.eco2-chapter-grid>.eco2-book{order:-1}}
+@media(max-width:420px){.eco2-tree{padding:16px 10px}.eco2-person{padding:8px;gap:5px}.eco2-person .eco2-avatar{flex-basis:29px;width:29px;height:29px}.eco2-person b{font-size:.78rem}.eco2-person small{font-size:.67rem}.eco2-topline{padding-inline:8px}.eco2-pill{font-size:.65rem}}
