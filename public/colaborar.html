@@ -1659,7 +1659,7 @@
     await subida;
     if (!texto) return false;
     historyLocal.push({ role: 'user', content: texto });
-    // ECO-COLAB-CORRECCION-1: STT interno; no mostrar transcripción de grabación.
+    // ECO-COLAB-V2: el reconocimiento se conserva internamente; no se muestra transcripción de voz.
     await enviarTurno();
     return true;
   }

@@ -371,19 +371,20 @@
         div.appendChild(audio);
       }
     });
-    // ECO-COLAB-CORRECCION-1: fotos/videos también para quien hizo el aporte.
-    const mediaAdjunta = Array.isArray(it.media_urls) ? it.media_urls : [];
-    if (mediaAdjunta.length) {
-      const grid = document.createElement('div'); grid.className = 'media-adjunta';
-      mediaAdjunta.forEach((m) => {
+    // ECO-COLAB-V2: mostrar los archivos asociados también en los aportes enviados.
+    const adjuntos = Array.isArray(it.media_urls) ? it.media_urls : [];
+    if (adjuntos.length) {
+      const galeria = document.createElement('div');
+      galeria.className = 'media-adjunta';
+      adjuntos.forEach((m) => {
         if (!m || typeof m.url !== 'string' || !/^https?:\/\//.test(m.url)) return;
         const src = '/api/media-file?u=' + encodeURIComponent(m.url);
         const el = m.type === 'video' ? document.createElement('video') : document.createElement('img');
         if (m.type === 'video') { el.controls = true; el.preload = 'none'; el.src = src; }
         else { el.loading = 'lazy'; el.src = src; el.alt = m.caption || 'Foto de la historia'; }
-        grid.appendChild(el);
+        galeria.appendChild(el);
       });
-      if (grid.childElementCount) div.appendChild(grid);
+      if (galeria.childElementCount) div.appendChild(galeria);
     }
     container.appendChild(div);
   }
