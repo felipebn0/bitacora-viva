@@ -5247,6 +5247,8 @@ app.delete('/api/chapters/:id', requireAuth, bloquearColaborador, rateLimit, asy
   }
 });
 
+require('./tree-v4-routes')(app, { sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit });
+
 app.get('/api/tree', requireAuth, bloquearColaborador, async (req, res) => {
   try {
     await ensureSchema();
