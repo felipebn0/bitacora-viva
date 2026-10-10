@@ -6641,6 +6641,69 @@ app.post('/api/tree/family-review/natural',requireAuth,bloquearColaborador,rateL
  }catch(err){console.error('family-review-natural',err);res.status(500).json({error:'No fue posible revisar los relatos naturales.'})}
 });
 
+// ECO V4: confirmación de propuestas interpretadas; requiere evidencia original y aceptación explícita.
+app.post('/api/tree/family-review/natural/confirm',requireAuth,bloquearColaborador,rateLimit,async(req,res)=>{
+ try{
+  if(req.isGuest)return res.status(403).json({error:'Solo el propietario puede confirmar vínculos.'});
+  const {childId,parentId,evidence,accepted,expectedParents}=req.body||{};
+  if(accepted!==true||!Number.isSafeInteger(childId)||!Number.isSafeInteger(parentId)||childId<=0||parentId<=0||childId===parentId||
+     typeof evidence!=='string'||evidence.length<18||evidence.length>450||!Array.isArray(expectedParents)||expectedParents.length>2||
+     expectedParents.some(n=>typeof n!=='string'||n.length>120))
+   return res.status(400).json({error:'La confirmación debe incluir la evidencia y el estado original de los vínculos.'});
+  await ensureSchema();
+  const norm=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
+  const members=await sql`SELECT id,nombre,relacion,padres FROM family_members WHERE user_id=${req.profileUserId} AND id IN (${childId},${parentId})`;
+  if(members.length!==2)return res.status(404).json({error:'No se encontraron las dos personas en esta bitácora.'});
+  const child=members.find(p=>Number(p.id)===childId),parent=members.find(p=>Number(p.id)===parentId);
+  if(!child||!parent)return res.status(404).json({error:'Familiares inválidos.'});
+  const all=await sql`SELECT nombre FROM family_members WHERE user_id=${req.profileUserId}`;
+  if(all.filter(p=>norm(p.nombre)===norm(child.nombre)).length!==1||
+     all.filter(p=>norm(p.nombre)===norm(parent.nombre)).length!==1)
+   return res.status(409).json({error:'Hay nombres repetidos. Identifica las personas manualmente antes de confirmar.'});
+  let previous;
+  try{previous=typeof child.padres==='string'?JSON.parse(child.padres||'[]'):(child.padres||[])}catch{return res.status(409).json({error:'Lista de progenitores inválida.'})}
+  if(!Array.isArray(previous)||previous.some(x=>typeof x!=='string'))
+   return res.status(409).json({error:'Datos familiares inconsistentes.'});
+  if(JSON.stringify(previous)!==JSON.stringify(expectedParents))
+   return res.status(409).json({error:'Los padres cambiaron desde la revisión. Analiza de nuevo.'});
+  if(previous.some(x=>norm(x)===norm(parent.nombre)))return res.json({ok:true,unchanged:true});
+  if(previous.length>=2)return res.status(409).json({error:'Esta persona ya tiene dos progenitores registrados.'});
+  // No aceptar "evidence" de la petición sin comprobar el texto guardado, en mensajes de usuario.
+  const sessions=await sql`SELECT intercambios FROM sessions WHERE user_id=${req.profileUserId} ORDER BY fecha DESC LIMIT 30`;
+  let verified=false;
+  for(const session of sessions){
+   let arr=session.intercambios;
+   if(typeof arr==='string'){try{arr=JSON.parse(arr)}catch{continue}}
+   if(!Array.isArray(arr))continue;
+   for(const msg of arr){
+    if(msg?.role!=='user'||typeof msg.content!=='string')continue;
+    const pieces=msg.content.split(/[\n.!?]+/).map(x=>x.trim());
+    if(pieces.some(piece=>piece===evidence)){verified=true;break}
+   }
+   if(verified)break;
+  }
+  if(!verified)return res.status(409).json({error:'El fragmento citado ya no se encuentra en los recuerdos guardados.'});
+  const line=norm(evidence);
+  if(!line.includes(norm(child.nombre))||!line.includes(norm(parent.nombre))||
+     !/(hij|padre|madre|pap[aá]|mam[aá]|herman|abuel|t[ií][oa]|progenitor)/i.test(line))
+   return res.status(409).json({error:'La evidencia no identifica inequívocamente a ambos familiares. Revisa el vínculo manualmente.'});
+  // Rechazar ciclos obvios: un padre no puede ser su propio descendiente.
+  const links=await sql`SELECT nombre,padres FROM family_members WHERE user_id=${req.profileUserId}`;
+  const map=new Map();
+  for(const item of links){let pp;try{pp=typeof item.padres==='string'?JSON.parse(item.padres||'[]'):(item.padres||[])}catch{pp=[]}
+   map.set(norm(item.nombre),Array.isArray(pp)?pp.map(norm):[])}
+  const stack=[norm(parent.nombre)],seen=new Set();
+  while(stack.length){const n=stack.pop();if(n===norm(child.nombre))return res.status(409).json({error:'Ese vínculo crearía un ciclo familiar.'});
+   if(seen.has(n))continue;seen.add(n);for(const p of map.get(n)||[])stack.push(p)}
+  const updated=JSON.stringify([...previous,parent.nombre]);
+  // Optimistic concurrency: update only if the exact parent list still matches.
+  const expectedRaw=child.padres;
+  const outcome=await sql`UPDATE family_members SET padres=${updated} WHERE id=${childId} AND user_id=${req.profileUserId} AND padres IS NOT DISTINCT FROM ${expectedRaw} RETURNING id`;
+  if(outcome.length!==1)return res.status(409).json({error:'Otro cambio ocurrió mientras confirmabas. Vuelve a revisar.'});
+  res.json({ok:true});
+ }catch(err){console.error('confirmación familiar V4',err);res.status(500).json({error:'No se pudo confirmar el parentesco.'})}
+});
+
 app.get('/api/tree', requireAuth, bloquearColaborador, async (req, res) => {
   try {
     await ensureSchema();

@@ -17,7 +17,15 @@ function render(){const out=$('ecoFamilyV3Results');if(!out)return;out.replaceCh
  const actions=el('div',null,'eco-fam-actions');const yes=el('button','Confirmar vínculo','eco-fam-confirm');const no=el('button','No corresponde','eco-fam-reject');yes.type=no.type='button';
  yes.onclick=async()=>{if(busy)return;if(!confirm(`¿Confirmas que ${p.parent} es padre o madre de ${p.child}?\n\nECO agregará este vínculo al árbol.`))return;setBusy(true);yes.disabled=true;no.disabled=true;
  try{if(p.source==='literal')await api('/api/tree/family-review/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({childId:p.childId,parentId:p.parentId})});
- else {throw Error('Esta propuesta interpretada por IA no tiene aún una ruta de confirmación con evidencia verificada. Puedes revisar la relación en Editar familiar, sin guardarla desde aquí.');}
+ else {const tree=await api('/api/tree');
+ const child=(tree.people||[]).find(x=>Number(x.id)===Number(p.childId));
+ const parent=(tree.people||[]).find(x=>Number(x.id)===Number(p.parentId));
+ if(!child||!parent||norm(child.nombre)!==norm(p.child)||norm(parent.nombre)!==norm(p.parent))
+  throw Error('La identidad del familiar cambió. Vuelve a analizar.');
+ await api('/api/tree/family-review/natural/confirm',{method:'POST',
+ headers:{'Content-Type':'application/json'},body:JSON.stringify({
+ childId:Number(p.childId),parentId:Number(p.parentId),evidence:p.evidence,
+ expectedParents:parents(child),accepted:true})});}
  candidates=candidates.filter(x=>key(x)!==key(p));render();note('Vínculo confirmado y guardado. Recarga el árbol para ver la conexión.');}
  catch(e){note('No se guardó: '+e.message);yes.disabled=false;no.disabled=false}finally{setBusy(false)}};
  no.onclick=()=>{dismissed.add(key(p));render();note('Propuesta descartada en esta revisión. No se modificó el árbol.')};actions.append(yes,no);card.append(actions);out.append(card)}
