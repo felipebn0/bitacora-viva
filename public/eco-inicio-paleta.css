@@ -1,0 +1,16 @@
+/* ECO · Inicio con la misma paleta que Árbol, Mi libro y Colaboraciones.
+   Solo colores. No modifica medidas, posición, comportamiento ni el orbe. */
+:root {
+  --bg: #f7f4eb;
+  --ink: #302d25;
+  --ink-soft: #777568;
+  --moss: #4d6542;
+  --bubble-user: #edf0e5;
+  --ring: rgba(77,101,66,.30);
+}
+body { background-color: #f7f4eb; color: #302d25; }
+/* Superficies que antes tenían el beige del diseño original. */
+.device, .login, .invite-personal, .invite-box {
+  background-color: #fffdf6;
+}
+/* No aplicar reglas al #orb ni a sus hijos: preservar las animaciones y colores por estado. */
