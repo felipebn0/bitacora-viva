@@ -85,7 +85,7 @@
 
   .login {
     width: min(340px, 100%);
-    background: #FBF6EA;
+    background: var(--eco-surface,#fffdf6);
     border-radius: 28px;
     box-shadow: 0 30px 60px -25px rgba(0,0,0,0.35);
     padding: 32px;
@@ -100,21 +100,21 @@
   .login-field { display: flex; flex-direction: column; gap: 5px; }
   .login-field label { font-size: 0.85rem; font-weight: 700; color: var(--ink-soft); }
   .login input {
-    border: 1px solid #E7DFCC; border-radius: 10px; padding: 12px 14px;
+    border: 1px solid var(--eco-edge,#dadaca); border-radius: 10px; padding: 12px 14px;
     font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink);
     width: 100%; box-sizing: border-box;
   }
   .login-pass-row { display: flex; gap: 8px; }
   .login-pass-row input { flex: 1; min-width: 0; }
   .login button {
-    border: none; background: var(--gold-deep); color: #FBF6EA; border-radius: 10px;
+    border: none; background: var(--gold-deep); color: var(--eco-surface,#fffdf6); border-radius: 10px;
     padding: 12px; font-weight: 700; font-size: 1rem; cursor: pointer; font-family: var(--font-body);
   }
   .login button:disabled { opacity: 0.6; cursor: default; }
   /* Va DESPUÉS de ".login button" a propósito, para pisar ese estilo (mismo
      ancho/alto que "Entrar") con uno más chico — igual que en app.html. */
   .login-pass-row button {
-    border: 1px solid #E7DFCC; background: #fff; color: var(--ink); border-radius: 10px;
+    border: 1px solid var(--eco-edge,#dadaca); background: #fff; color: var(--ink); border-radius: 10px;
     padding: 0 14px; font-weight: 700; font-size: 0.85rem; cursor: pointer;
     font-family: var(--font-body); min-height: 44px; min-width: 44px; flex: 0 0 auto;
   }
@@ -151,7 +151,7 @@
      sería redundante. */
   .sticky-context {
     position: fixed; top: 0; left: 0; right: 0; z-index: 40;
-    background: var(--bg); border-bottom: 1px solid #E7DFCC;
+    background: var(--bg); border-bottom: 1px solid var(--eco-edge,#dadaca);
     padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
     text-align: center; font-size: 0.92rem; color: var(--ink-soft);
     transform: translateY(-100%); transition: transform .22s ease;
@@ -177,20 +177,20 @@
      algo que se usa para saltar entre las bitácoras a las que se colabora. */
   .collab-switch-list a {
     display: inline-flex; align-items: center; padding: 6px 14px; border-radius: 20px; font-size: 0.85rem;
-    text-decoration: none; color: var(--ink); background: #FBF6EA; border: 1px solid #E7DFCC;
+    text-decoration: none; color: var(--ink); background: var(--eco-surface,#fffdf6); border: 1px solid var(--eco-edge,#dadaca);
     min-height: 44px; box-sizing: border-box;
   }
-  .collab-switch-list a.active { background: var(--gold-deep); color: #FBF6EA; border-color: var(--gold-deep); font-weight: 700; }
+  .collab-switch-list a.active { background: var(--gold-deep); color: var(--eco-surface,#fffdf6); border-color: var(--gold-deep); font-weight: 700; }
   /* Dropdown en vez de burbujas cuando hay muchas colaboraciones (item 17,
      pedido de Felipe 2026-09-08) -- con pocas, las burbujas de arriba se ven
      bien; con muchas se desordenan y un selector es más claro. */
-  .collab-switch-select { width: 100%; max-width: 320px; margin: 0 auto; display: block; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 12px; font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink); }
+  .collab-switch-select { width: 100%; max-width: 320px; margin: 0 auto; display: block; border: 1px solid var(--eco-edge,#dadaca); border-radius: 10px; padding: 9px 12px; font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink); }
 
   .aportes {
     width: min(440px, 100%);
     margin: 0 auto 20px;
-    background: #FBF6EA;
-    border: 1px solid #E7DFCC;
+    background: var(--eco-surface,#fffdf6);
+    border: 1px solid var(--eco-edge,#dadaca);
     border-radius: 20px;
     padding: 22px 24px;
     display: flex;
@@ -206,7 +206,7 @@
   .aporte-bubble.a { align-self: flex-start; color: var(--ink); }
   .aporte-bubble.thinking { align-self: flex-start; color: var(--ink-soft); font-style: italic; }
 
-  .aportes hr { border: none; border-top: 1px solid #E7DFCC; margin: 4px 0; }
+  .aportes hr { border: none; border-top: 1px solid var(--eco-edge,#dadaca); margin: 4px 0; }
   .aportes .msg { font-size: 0.85rem; min-height: 1.2em; color: var(--moss); }
   .aportes .msg.error { color: #a33; }
   .aportes .lista { display: flex; flex-direction: column; gap: 10px; }
@@ -234,8 +234,8 @@
     width: 128px; height: 128px; border-radius: 50%; border: none; cursor: pointer;
     position: relative; display: grid; place-items: center;
     background: radial-gradient(circle at 35% 30%, var(--gold), var(--gold-deep));
-    color: #FBF6EA; font-family: var(--font-body); font-weight: 700; font-size: 0.92rem;
-    box-shadow: 0 10px 26px -10px rgba(168,106,38,0.55);
+    color: var(--eco-surface,#fffdf6); font-family: var(--font-body); font-weight: 700; font-size: 0.92rem;
+    box-shadow: 0 10px 26px -10px rgba(37,55,42,0.34);
     align-self: center;
   }
   .orb-zone .orb:disabled { opacity: 0.6; cursor: default; }
@@ -257,7 +257,7 @@
   }
 
   .otra-historia-btn {
-    border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px;
+    border: none; background: var(--moss); color: var(--eco-surface,#fffdf6); border-radius: 10px;
     padding: 10px 16px; font-weight: 700; cursor: pointer; font-family: var(--font-body);
     align-self: center; display: none;
   }
@@ -265,7 +265,7 @@
   .logout-row { text-align: center; margin-top: 8px; }
   /* "Borrar mi cuenta" es la única acción irreversible aquí — antes se veía
      como un link subrayado más, sin distinguirse de "cerrar sesión". */
-  .danger-zone { margin-top: 18px; padding-top: 14px; border-top: 1px solid #E7DFCC; }
+  .danger-zone { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--eco-edge,#dadaca); }
   /* min-height/min-width:44px: subir audio (35px), escribir (18px), cerrar
      sesión (20px) y borrar cuenta (21px) quedaban por debajo de la zona de
      toque mínima recomendada — mismo arreglo que en app.html. */
@@ -281,8 +281,8 @@
   /* font-size:1rem: sin esto, este campo (respuesta escrita durante el
      aporte, y "confirma tu clave" al borrar la cuenta, que reusa esta
      misma clase) disparaba el zoom automático de iOS Safari al tocarlo. */
-  .write-row input { flex: 1; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 12px; font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink); }
-  .write-row button { border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px; padding: 0 14px; font-weight: 700; cursor: pointer; }
+  .write-row input { flex: 1; border: 1px solid var(--eco-edge,#dadaca); border-radius: 10px; padding: 9px 12px; font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink); }
+  .write-row button { border: none; background: var(--moss); color: var(--eco-surface,#fffdf6); border-radius: 10px; padding: 0 14px; font-weight: 700; cursor: pointer; }
 
     /* Extraído de atributos style="" inline -- ronda 4 del camino a CSP en enforce (2026-09-06).
        Nombradas por hash del valor (mismo valor => misma clase). Cada declaración lleva

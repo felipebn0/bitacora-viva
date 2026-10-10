@@ -5788,7 +5788,9 @@ app.post('/api/contribute-chat', requireAuth, rateLimit, async (req, res) => {
     });
     await logClaudeUsage(ownerId, 'aporte_charla', response);
 
-    let text = response.content[0].text.trim();
+    const _block = response.content && response.content[0];
+    if (!_block || _block.type !== 'text') throw new Error('Respuesta inesperada del modelo.');
+    let text = _block.text.trim();
     const done = text.includes('[FIN]');
     const needsBasicInfo = !done && text.includes('[FALTA_DATO]');
     text = text.replace('[FIN]', '').replace('[FALTA_DATO]', '').trim();

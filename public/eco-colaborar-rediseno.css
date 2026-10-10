@@ -61,19 +61,6 @@
   margin-top: 12px;
   margin-bottom: 14px;
 }
-#appContent #ownTopbar a.volver {
-  display: inline-flex;
-  min-height: 48px;
-  padding: 10px 18px;
-  border: 1px solid #e3dece;
-  border-bottom: 2px solid #4d6542;
-  border-radius: 12px;
-  background: #fffdf6;
-  color: #293d30;
-  font-weight: 700;
-  text-decoration: none;
-  box-shadow: 0 6px 12px rgba(41,61,48,.06);
-}
 #appContent > header {
   text-align: left;
   margin-top: 0;
