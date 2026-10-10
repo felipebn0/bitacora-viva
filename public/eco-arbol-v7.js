@@ -39,7 +39,12 @@ async function reload(){const [r,s]=await Promise.all([fetch('/api/tree',{creden
 function organize(){if(!people.length)return;const mp=parentMap(),depth=new Map(people.map(p=>[String(p.id),0]));for(let i=0;i<people.length;i++){let change=false;for(const p of people)for(const parent of mp.get(String(p.id))||[]){const d=Math.min(10,(depth.get(String(parent.id))||0)+1);if(d>(depth.get(String(p.id))||0)){depth.set(String(p.id),d);change=true}}if(!change)break}
 const groups=new Map();people.forEach(p=>{const lv=depth.get(String(p.id))||0;if(!groups.has(lv))groups.set(lv,[]);groups.get(lv).push(p)});const fresh={};let prev=new Map();for(const level of [...groups.keys()].sort((a,b)=>a-b)){let arr=groups.get(level);arr.sort((a,b)=>{const pa=mp.get(String(a.id))||[],pb=mp.get(String(b.id))||[];const wa=pa.length?Math.min(...pa.map(p=>prev.get(String(p.id))??1000)):1000;const wb=pb.length?Math.min(...pb.map(p=>prev.get(String(p.id))??1000)):1000;return wa-wb||String(a.nombre).localeCompare(String(b.nombre),'es')});arr.forEach((p,i)=>{fresh[p.id]={x:40+i*228,y:55+level*165};prev.set(String(p.id),i)})}
 if(!confirm('¿Organizar todas las tarjetas por generaciones?\n\nSe reemplazarán las posiciones manuales. Las personas, fotos y vínculos no se modificarán.'))return;
-const newState={...state,positions:fresh};fetch('/api/tree/v4-state',{method:'PUT',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({state:newState})}).then(async r=>{if(!r.ok)throw Error((await r.json().catch(()=>({}))).error||'No se pudo guardar');location.reload()}).catch(e=>alert(e.message));
+const newState={...state,positions:fresh};
+fetch('/api/tree/v4-state',{credentials:'same-origin',cache:'no-store'})
+.then(async r=>{if(!r.ok)throw Error('No se pudo consultar la versión actual.');return r.json()})
+.then(j=>{if(JSON.stringify(j.state||{})!==JSON.stringify(state||{}))throw Error('El árbol cambió desde que abriste esta página. No se reorganizó; actualiza y revisa los cambios.');
+ return fetch('/api/tree/v4-state',{method:'PUT',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({state:newState,revision:j.revision})})})
+.then(async r=>{if(!r.ok)throw Error((await r.json().catch(()=>({}))).error||'No se pudo guardar');location.reload()}).catch(e=>alert(e.message));
 }
 function setup(){const toolbar=document.querySelector('.toolbar'),stage=$('stage');if(!toolbar||!stage)return;
 for(const id of ['treeBtn','listBtn'])$(id)?.classList.add('eco7-hidden-control');$('resetPlaces')?.classList.add('eco7-hidden-control');

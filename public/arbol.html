@@ -88,9 +88,39 @@
 const $=id=>document.getElementById(id);let people=[],byId=new Map(),selected=null,positions={},links=[],hiddenPeople=[],photos={},zoom=1,all=false,view='tree',storeKey='',drag=null,screenWidth=1500,screenHeight=950,showHidden=false;
 const norm=s=>String(s||'').trim().normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();const getParents=p=>Array.isArray(p.padres)?p.padres:(typeof p.padres==='string'?(()=>{try{return JSON.parse(p.padres)}catch{return []}})():[]);const person=id=>byId.get(Number(id));const linkId=l=>`${l.a}:${l.b}:${l.type}:${l.label||''}`;
 function getStored(){try{const a=JSON.parse(localStorage.getItem(storeKey)||'{}');positions=a.positions||{};links=Array.isArray(a.links)?a.links:[];hiddenPeople=Array.isArray(a.hiddenPeople)?a.hiddenPeople:[];photos=a.photos||{}}catch{positions={};links=[];hiddenPeople=[];photos={}}}
-let saveTimer=null, loadingState=false;
-async function fetchCloudState(){const r=await fetch('/api/tree/v4-state',{credentials:'same-origin',cache:'no-store'});if(!r.ok)throw Error('La sincronización no está disponible.');const j=await r.json();if(j.state){positions=j.state.positions||{};links=j.state.links||[];hiddenPeople=j.state.hiddenPeople||[];photos=j.state.photos||{}}}
-let ecoPendingSave=false;window.addEventListener('beforeunload',e=>{if(ecoPendingSave){e.preventDefault();e.returnValue=''}});function saveStored(){if(loadingState)return;ecoPendingSave=true;clearTimeout(saveTimer);saveTimer=setTimeout(async()=>{try{const r=await fetch('/api/tree/v4-state',{method:'PUT',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({state:{positions,links,hiddenPeople,photos}})});if(!r.ok){const j=await r.json().catch(()=>({}));throw Error(j.error||'No se guardó')}ecoPendingSave=false;showNotice('Cambios guardados en tu cuenta.')}catch(err){ecoPendingSave=true;showNotice('No se guardó en la nube: '+err.message)}},650)}
+let saveTimer=null, loadingState=false, cloudRevision=0, saveBusy=false, saveSeq=0, savedSeq=0, saveConflict=false;
+async function fetchCloudState(){const r=await fetch('/api/tree/v4-state',{credentials:'same-origin',cache:'no-store'});if(!r.ok)throw Error('La sincronización no está disponible.');const j=await r.json();cloudRevision=Number.isSafeInteger(j.revision)?j.revision:0;if(j.state){positions=j.state.positions||{};links=j.state.links||[];hiddenPeople=j.state.hiddenPeople||[];photos=j.state.photos||{}}}
+let ecoPendingSave=false;
+window.addEventListener('beforeunload',e=>{if(ecoPendingSave){e.preventDefault();e.returnValue=''}});
+function saveStored(){
+ if(loadingState)return;
+ saveSeq++;ecoPendingSave=true;
+ showNotice('Guardando cambios…');
+ clearTimeout(saveTimer);
+ if(saveConflict){showNotice('Conflicto: hubo cambios en otro dispositivo. No se sobrescribieron. Conserva esta pestaña y revisa antes de actualizar.');return}
+ saveTimer=setTimeout(flushTreeSave,650);
+}
+async function flushTreeSave(){
+ if(saveBusy||saveConflict||savedSeq===saveSeq)return;
+ saveBusy=true;
+ const batch=saveSeq;
+ const snapshot={positions:JSON.parse(JSON.stringify(positions)),links:JSON.parse(JSON.stringify(links)),hiddenPeople:[...hiddenPeople],photos:{...photos}};
+ try{
+  const r=await fetch('/api/tree/v4-state',{method:'PUT',credentials:'same-origin',
+   headers:{'Content-Type':'application/json'},body:JSON.stringify({state:snapshot,revision:cloudRevision})});
+  const j=await r.json().catch(()=>({}));
+  if(r.status===409||r.status===428){saveConflict=true;throw Error(j.error||'Hay cambios más recientes en otro dispositivo.')}
+  if(!r.ok)throw Error(j.error||'No se pudo guardar.');
+  if(!Number.isSafeInteger(j.revision))throw Error('No se recibió la nueva versión del árbol.');
+  cloudRevision=j.revision;savedSeq=batch;
+  if(savedSeq===saveSeq){ecoPendingSave=false;showNotice('Todos los cambios guardados.');}
+  else showNotice('Guardando los cambios más recientes…');
+ }catch(err){ecoPendingSave=true;showNotice('No se guardó: '+err.message+' Conserva esta pestaña.');}
+ finally{
+  saveBusy=false;
+  if(!saveConflict&&savedSeq!==saveSeq&&savedSeq>0){clearTimeout(saveTimer);saveTimer=setTimeout(flushTreeSave,250);}
+ }
+}
 function showNotice(s){$('modeHint').textContent=s}
 function naturalLinks(){const byName=new Map(people.map(p=>[norm(p.nombre),p]));const out=[];for(const p of people)for(const n of getParents(p)){const par=byName.get(norm(n));if(par&&par.id!==p.id&&!out.some(x=>x.a===par.id&&x.b===p.id&&x.type==='parent'))out.push({a:par.id,b:p.id,type:'parent',label:'Padre/madre'})}return out}
 function combined(){const base=naturalLinks();return [...base,...links.filter(l=>person(l.a)&&person(l.b)&&!base.some(x=>x.a===l.a&&x.b===l.b&&x.type===l.type))]}

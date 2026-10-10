@@ -27,13 +27,15 @@ module.exports = function registerTreeV4(app, { sql, ensureSchema, requireAuth, 
     if (JSON.stringify(result).length>900000) throw Error('El árbol supera el tamaño permitido. Reduce el tamaño de algunas fotografías.');
     return result;
   }
-  async function table(){await ensureSchema();await sql`CREATE TABLE IF NOT EXISTS tree_v4_state (profile_user_id INTEGER PRIMARY KEY, state JSONB NOT NULL DEFAULT '{}'::jsonb, updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`}
+  async function table(){await ensureSchema();await sql`CREATE TABLE IF NOT EXISTS tree_v4_state (profile_user_id INTEGER PRIMARY KEY, state JSONB NOT NULL DEFAULT '{}'::jsonb, updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`;await sql`ALTER TABLE tree_v4_state ADD COLUMN IF NOT EXISTS revision INTEGER NOT NULL DEFAULT 0`}
   app.get('/api/tree/v4-state', ...protect, async(req,res)=>{
-    try {await table(); const rows=await sql`SELECT state FROM tree_v4_state WHERE profile_user_id=${req.profileUserId}`;res.setHeader('Cache-Control','no-store');res.json({state:rows[0]?.state||null});}
+    try {await table(); const rows=await sql`SELECT state,revision FROM tree_v4_state WHERE profile_user_id=${req.profileUserId}`;res.setHeader('Cache-Control','no-store');res.json({state:rows[0]?.state||null,revision:rows[0]?.revision||0});}
     catch(err){console.error(err);res.status(500).json({error:'No se pudo obtener el diseño del árbol.'})}
   });
   app.put('/api/tree/v4-state', ...protect, editor, rateLimit, async(req,res)=>{
     try {
+      const expected=req.body?.revision;
+      if(!Number.isSafeInteger(expected)||expected<0)return res.status(428).json({error:'Falta la versión del árbol. Actualiza la página antes de guardar.'});
       const state=cleanState(req.body?.state);
       await table();
       const ids=[...new Set([...Object.keys(state.positions),...Object.keys(state.photos),...state.hiddenPeople,...state.links.flatMap(l=>[l.a,l.b])].map(Number))];
@@ -41,8 +43,15 @@ module.exports = function registerTreeV4(app, { sql, ensureSchema, requireAuth, 
       const allowed=new Set(owned.map(x=>Number(x.id)));
       if(ids.some(id=>!allowed.has(id)))return res.status(403).json({error:'No puedes modificar familiares ajenos a tu bitácora.'});
       const serialized=JSON.stringify(state);
-      await sql`INSERT INTO tree_v4_state(profile_user_id,state,updated_at) VALUES(${req.profileUserId},${serialized}::jsonb,now()) ON CONFLICT(profile_user_id) DO UPDATE SET state=EXCLUDED.state,updated_at=now()`;
-      res.json({ok:true});
+      const updated=await sql`
+        INSERT INTO tree_v4_state(profile_user_id,state,revision,updated_at)
+        VALUES(${req.profileUserId},${serialized}::jsonb,1,now())
+        ON CONFLICT(profile_user_id) DO UPDATE
+          SET state=EXCLUDED.state,revision=tree_v4_state.revision+1,updated_at=now()
+        WHERE tree_v4_state.revision=${expected}
+        RETURNING revision`;
+      if(updated.length!==1)return res.status(409).json({error:'El árbol cambió en otra pestaña o dispositivo. Tus cambios no se sobrescribieron. Conserva esta pestaña y revisa antes de recargar.'});
+      res.json({ok:true,revision:updated[0].revision});
     } catch(err){if(err.message?.includes('Datos incorrectos')||err.message?.includes('tamaño permitido'))return res.status(400).json({error:err.message});console.error(err);res.status(500).json({error:'No se pudo guardar el árbol.'})}
   });
   app.post('/api/tree/person', ...protect, editor, rateLimit, async(req,res)=>{
