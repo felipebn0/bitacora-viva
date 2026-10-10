@@ -12,13 +12,14 @@
      de la violación de CSP (font-src 'self') mandaba la IP de cada visita
      a un tercero. Ver public/fonts/fonts.css para el detalle. -->
 <link rel="stylesheet" href="/fonts/fonts.css">
+<link rel="stylesheet" href="/eco-interior.css?v=1">
 <script src="/font-size.js"></script>
 <style>
   :root {
-    --bg: #F5EFE2;
-    --ink: #2B241C;
-    --ink-soft: #706551;
-    --gold-deep: #8F5A20;
+    --bg: var(--eco-bg, #f7f4eb);
+    --ink: var(--eco-ink, #302d25);
+    --ink-soft: var(--eco-muted, #777568);
+    --gold-deep: var(--eco-green, #4d6542);
     --font-display: "Source Serif 4", Georgia, serif;
     --font-body: "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif;
   }
