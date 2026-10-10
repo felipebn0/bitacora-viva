@@ -1,13 +1,29 @@
-/* ECO · Estudio integrado - fase de prueba. No modifica API ni historias originales. */
+/* ECO · Estudio integrado v2 – sincroniza con servidor (CAS); localStorage como respaldo. */
 (()=>{'use strict';
 const KEY='eco-editorial-borrador-v1';
 let chapters=[],state={},activeId='',dialog,book,form,list,status,mode='cover',previousFocus=null;
+let version=0,saveTimer=null,saving=false,dirty=false,serverReady=false;
 const byId=id=>document.getElementById(id);
 const node=(tag,cls,value)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(value!==undefined)e.textContent=value;return e};
 const plain=t=>String(t||'');
 function fresh(){return {title:'Mi historia familiar',subtitle:'Recuerdos para las próximas generaciones',dedication:'',order:[],edits:{}}}
 function read(){try{const x=JSON.parse(localStorage.getItem(KEY)||'null');if(x&&typeof x==='object'){return {...fresh(),...x,edits:typeof x.edits==='object'&&x.edits?x.edits:{},order:Array.isArray(x.order)?x.order:[]}}}catch{}return fresh()}
-function persist(){try{localStorage.setItem(KEY,JSON.stringify(state));status.textContent='Borrador guardado en este navegador. No está sincronizado con tu cuenta.'}catch{status.textContent='No se pudo guardar en este navegador. Exporta tu borrador antes de salir.'}}
+function persist(){
+  try{localStorage.setItem(KEY,JSON.stringify(state));}catch{}
+  if(serverReady){dirty=true;clearTimeout(saveTimer);saveTimer=setTimeout(flush,750);if(status)status.textContent='Guardando…';}
+  else if(status)status.textContent='Borrador guardado en este navegador. No está sincronizado con tu cuenta.';}
+async function flush(){
+  if(!dirty||!serverReady)return;
+  if(saving){saveTimer=setTimeout(flush,500);return;}
+  saving=true;dirty=false;
+  try{
+    const r=await fetch('/api/book-editor/draft',{method:'PUT',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({version,draft:state})});
+    if(r.ok){const d=await r.json();version=d.version||version;if(status)status.textContent='Borrador guardado en tu cuenta.';}
+    else if(r.status===409){
+      try{const rd=await r.json();if(rd.draft&&typeof rd.draft==='object'){state={...fresh(),...rd.draft,edits:typeof rd.draft.edits==='object'&&rd.draft.edits?rd.draft.edits:{},order:Array.isArray(rd.draft.order)?rd.draft.order:[]};version=rd.version||version;try{localStorage.setItem(KEY,JSON.stringify(state))}catch{}if(book)drawBook();if(status)status.textContent='Borrador actualizado desde otro dispositivo.';}}catch{}
+    }else{dirty=true;if(status)status.textContent='No se pudo guardar en el servidor. Tu borrador sigue en este navegador.';}
+  }catch{dirty=true;if(status)status.textContent='Sin conexión. El borrador sigue en este navegador.';}
+  saving=false;}
 function saveField(k,v){state[k]=v;persist();drawBook()}
 function getOrder(){const ids=chapters.map(c=>String(c.id));return [...state.order.filter(x=>ids.includes(String(x))).map(String),...ids.filter(x=>!state.order.includes(x))]}
 function ordered(){return getOrder().map(id=>chapters.find(c=>String(c.id)===id)).filter(Boolean)}
@@ -17,7 +33,7 @@ function init(){const orig=byId('ecoStudioLaunch');if(!orig||byId('ecoEditorialO
 }
 function create(){if(dialog)return;
  dialog=node('div','eco-editorial-overlay');dialog.id='ecoEditorialDialog';dialog.hidden=true;
- dialog.innerHTML=`<div class="eco-editorial-shell" role="dialog" aria-modal="true" aria-labelledby="ecoEditorialTitle"><div class="eco-editorial-top"><div><small>ECO · ESTUDIO EDITORIAL</small><h2 id="ecoEditorialTitle">Diseña tu libro</h2></div><div class="eco-editorial-topbuttons"><button id="ecoEditorialExport" type="button">Exportar borrador</button><button id="ecoEditorialPrint" type="button" class="eco-primary">Vista para imprimir</button><button id="ecoEditorialClose" type="button" aria-label="Cerrar estudio">Cerrar ×</button></div></div><p class="eco-editorial-warning">Versión de prueba: los textos y la portada se guardan solo en este navegador. Las historias originales no se modifican. No borres los datos del navegador antes de exportar tu borrador.</p><div class="eco-editorial-layout"><aside class="eco-editorial-sidebar"><nav aria-label="Secciones del libro"><button type="button" data-view="cover" class="selected">01 · Portada y dedicatoria</button><button type="button" data-view="index">02 · Índice y orden</button><button type="button" data-view="chapter">03 · Editar un capítulo</button><button type="button" data-view="preview">04 · Vista del libro completo</button></nav><div id="ecoEditorialForm"></div><p id="ecoEditorialStatus" role="status" aria-live="polite"></p></aside><section class="eco-editorial-preview" aria-label="Vista previa"><div id="ecoEditorialBook" class="eco-editorial-pages"></div></section></div></div>`;
+ dialog.innerHTML=`<div class="eco-editorial-shell" role="dialog" aria-modal="true" aria-labelledby="ecoEditorialTitle"><div class="eco-editorial-top"><div><small>ECO · ESTUDIO EDITORIAL</small><h2 id="ecoEditorialTitle">Diseña tu libro</h2></div><div class="eco-editorial-topbuttons"><button id="ecoEditorialExport" type="button">Exportar borrador</button><button id="ecoEditorialPrint" type="button" class="eco-primary">Vista para imprimir</button><button id="ecoEditorialClose" type="button" aria-label="Cerrar estudio">Cerrar ×</button></div></div><p class="eco-editorial-warning">Versión de prueba: las historias originales no se modifican. Los cambios se sincronizan con tu cuenta.</p><div class="eco-editorial-layout"><aside class="eco-editorial-sidebar"><nav aria-label="Secciones del libro"><button type="button" data-view="cover" class="selected">01 · Portada y dedicatoria</button><button type="button" data-view="index">02 · Índice y orden</button><button type="button" data-view="chapter">03 · Editar un capítulo</button><button type="button" data-view="preview">04 · Vista del libro completo</button></nav><div id="ecoEditorialForm"></div><p id="ecoEditorialStatus" role="status" aria-live="polite"></p></aside><section class="eco-editorial-preview" aria-label="Vista previa"><div id="ecoEditorialBook" class="eco-editorial-pages"></div></section></div></div>`;
  document.body.appendChild(dialog);book=byId('ecoEditorialBook');form=byId('ecoEditorialForm');status=byId('ecoEditorialStatus');
  dialog.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{mode=b.dataset.view;choose()}));
  byId('ecoEditorialClose').addEventListener('click',close);byId('ecoEditorialPrint').addEventListener('click',()=>{mode='preview';choose();window.setTimeout(()=>window.print(),100)});
@@ -25,10 +41,35 @@ function create(){if(dialog)return;
  dialog.addEventListener('click',e=>{if(e.target===dialog)close()});dialog.addEventListener('keydown',e=>{if(e.key==='Escape')close();if(e.key==='Tab')trap(e)});
 }
 function trap(e){const nodes=[...dialog.querySelectorAll('button:not([disabled]),input:not([disabled]),textarea:not([disabled]),select:not([disabled])')].filter(el=>el.getClientRects().length);if(!nodes.length)return;if(e.shiftKey&&document.activeElement===nodes[0]){e.preventDefault();nodes.at(-1).focus()}else if(!e.shiftKey&&document.activeElement===nodes.at(-1)){e.preventDefault();nodes[0].focus()}}
-async function open(){create();previousFocus=document.activeElement;dialog.hidden=false;document.body.classList.add('eco-editorial-open-body');state=read();status.textContent='Cargando capítulos…';
- try{const r=await fetch('/api/chapters',{credentials:'same-origin'});if(!r.ok)throw Error(r.status===401?'Inicia sesión para acceder a tus capítulos.':'No se pudieron cargar los capítulos.');const data=await r.json();chapters=Array.isArray(data.chapters)?data.chapters:[];activeId=String(ordered()[0]?.id||'');status.textContent='Borrador local; no sincronizado entre dispositivos.'}catch(e){chapters=[];status.textContent=e.message}
- mode='cover';choose();byId('ecoEditorialClose').focus()}
-function close(){dialog.hidden=true;document.body.classList.remove('eco-editorial-open-body');(previousFocus?.isConnected?previousFocus:byId('ecoEditorialOpen'))?.focus()}
+async function open(){
+ create();previousFocus=document.activeElement;dialog.hidden=false;document.body.classList.add('eco-editorial-open-body');
+ state=read();version=0;serverReady=false;dirty=false;
+ status.textContent='Cargando…';
+ try{
+  const [chapR,draftR]=await Promise.all([
+   fetch('/api/chapters',{credentials:'same-origin'}),
+   fetch('/api/book-editor/draft',{credentials:'same-origin'})
+  ]);
+  if(!chapR.ok)throw Error(chapR.status===401?'Inicia sesión para acceder a tus capítulos.':'No se pudieron cargar los capítulos.');
+  const chapData=await chapR.json();chapters=Array.isArray(chapData.chapters)?chapData.chapters:[];
+  activeId=String(ordered()[0]?.id||'');
+  if(draftR.ok){
+   const dd=await draftR.json();
+   if(dd.draft&&typeof dd.draft==='object'){
+    state={...fresh(),...dd.draft,edits:typeof dd.draft.edits==='object'&&dd.draft.edits?dd.draft.edits:{},order:Array.isArray(dd.draft.order)?dd.draft.order:[]};
+    try{localStorage.setItem(KEY,JSON.stringify(state))}catch{}
+   }
+   version=dd.version||0;serverReady=true;
+   status.textContent='Borrador cargado desde tu cuenta.';
+  }else{
+   serverReady=false;status.textContent='Borrador local; no sincronizado entre dispositivos.';
+  }
+ }catch(e){chapters=[];serverReady=false;status.textContent=e.message;}
+ mode='cover';choose();byId('ecoEditorialClose').focus();}
+function close(){
+ flush();
+ dialog.hidden=true;document.body.classList.remove('eco-editorial-open-body');
+ (previousFocus?.isConnected?previousFocus:byId('ecoEditorialOpen'))?.focus();}
 function field(label,val,fn,multi=false){const wrap=node('label','eco-editorial-field');wrap.appendChild(node('span','',label));const input=node(multi?'textarea':'input');if(multi)input.rows=6;input.value=val;input.addEventListener('input',()=>fn(input.value));wrap.appendChild(input);return wrap}
 function choose(){dialog.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('selected',b.dataset.view===mode));form.replaceChildren();
  if(mode==='cover'){form.append(field('Título de tu libro',state.title,v=>saveField('title',v)),field('Subtítulo',state.subtitle,v=>saveField('subtitle',v)),field('Dedicatoria',state.dedication,v=>saveField('dedication',v),true));}
@@ -43,6 +84,9 @@ function drawBook(){book.replaceChildren();const cover=page();cover.classList.ad
  if(state.dedication?.trim()){const d=page();d.append(node('small','','DEDICATORIA'),node('p','eco-editorial-dedication',state.dedication));book.appendChild(d)}
  const index=page();index.appendChild(node('h2','','Contenido'));ordered().forEach((c,i)=>index.appendChild(node('p','eco-editorial-indexrow',`${String(i+1).padStart(2,'0')}   ${entry(c).title??c.title??'Capítulo'}`)));if(!chapters.length)index.appendChild(node('p','','Los capítulos aparecerán aquí cuando los generes.'));book.appendChild(index);
  ordered().forEach((c,i)=>{const p=page();p.append(node('small','',`CAPÍTULO ${String(i+1).padStart(2,'0')}`),node('h2','',entry(c).title??c.title??'Capítulo'));const txt=entry(c).text??c.generated_text??'';String(txt).split(/\n\s*\n/).filter(Boolean).forEach(part=>p.appendChild(node('p','eco-editorial-paragraph',part)));book.appendChild(p)})}
-function exportDraft(){const exportObject={format:'eco-editorial-borrador-v1',saved_at:new Date().toISOString(),book:state,chapters:chapters.map(c=>({id:c.id,original_title:c.title}))};const blob=new Blob([JSON.stringify(exportObject,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=node('a');a.href=url;a.download='ECO-mi-libro-borrador.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);status.textContent='Borrador exportado. Guárdalo como copia de seguridad.'}
+function exportDraft(){
+ flush();
+ const exportObject={format:'eco-editorial-borrador-v1',saved_at:new Date().toISOString(),book:state,chapters:chapters.map(c=>({id:c.id,original_title:c.title}))};const blob=new Blob([JSON.stringify(exportObject,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=node('a');a.href=url;a.download='ECO-mi-libro-borrador.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);status.textContent='Borrador exportado. Guárdalo como copia de seguridad.';}
+window.addEventListener('pagehide',()=>{flush();});
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
