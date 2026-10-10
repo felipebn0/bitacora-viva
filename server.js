@@ -5217,6 +5217,11 @@ function datosDelArchivoDeBlob(valorGuardado) {
     const partes = pathname.split('/');
     let ownerId = null;
     if (partes[0] === 'audio' && partes[1] === 'aportes') ownerId = parseInt(partes[2], 10) || null;
+    else if (
+      partes[0] === 'media' &&
+      partes[1] === 'libros' &&
+      partes.length >= 4
+    ) ownerId = parseInt(partes[2], 10) || null;
     else if (partes[0] === 'audio' || partes[0] === 'media') ownerId = parseInt(partes[1], 10) || null;
     if (!ownerId) return null;
     return { pathname, ownerId };

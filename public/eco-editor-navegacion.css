@@ -1,0 +1,13 @@
+/* Vista del capítulo más cercana a los controles; regreso sencillo en móvil. */
+@media(min-width:851px){
+ .eco-editorial-layout{height:calc(100dvh - 138px);min-height:470px;overflow:hidden}
+ .eco-editorial-sidebar{overflow:auto;min-height:0}
+ .eco-editorial-preview{overflow:auto;min-height:0;scroll-behavior:smooth;position:relative}
+}
+.eco-book-return-controls{display:none;background:#edf0e5;color:#293d30;border:1px solid #dadaca;border-radius:11px;padding:10px 14px;min-height:44px;font:700 14px 'Atkinson Hyperlegible',sans-serif;cursor:pointer;}
+@media(max-width:850px){
+ .eco-book-return-controls{display:block;margin:0 0 14px}
+ .eco-editorial-page{scroll-margin-top:12px}
+ #ecoEditorialForm{scroll-margin-top:12px}
+}
+@media print{.eco-book-return-controls{display:none!important}.eco-editorial-layout{height:auto!important;overflow:visible!important}.eco-editorial-preview{overflow:visible!important}}
