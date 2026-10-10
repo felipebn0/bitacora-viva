@@ -1,0 +1,31 @@
+/* ECO · capítulos editoriales. Se añade después de eco-libro.css. */
+#lista{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,315px),1fr));gap:18px;align-items:start}
+#lista>.empty{grid-column:1/-1}
+#lista .chapter{height:100%;display:flex;flex-direction:column;gap:0;padding:27px 27px 24px!important;border:1px solid #e6e0d2;border-radius:22px!important;background:#fffdf6!important;box-shadow:0 8px 25px #302d250b}
+#lista .chapter h2{font-size:clamp(1.45rem,2.4vw,1.85rem);line-height:1.2;margin:8px 0 12px;color:#293d30}
+#lista .chapter .theme{color:#688058}
+#lista .chapter .eco-chapter-excerpt{color:#615f56;line-height:1.65;font-size:.96rem;flex:1;margin:0 0 16px}
+#lista .chapter .text[hidden],#lista .chapter audio[hidden]{display:none!important}
+#lista .chapter .meta{margin:0 0 16px;line-height:1.45;font-size:.81rem}
+#lista .eco-read-btn{display:inline-flex;align-items:center;justify-content:center;border:1px solid #4d6542;background:#4d6542;color:white;font:700 .95rem "Atkinson Hyperlegible",system-ui,sans-serif;padding:11px 17px;border-radius:13px;min-height:46px;width:max-content;max-width:100%;cursor:pointer}
+#lista .eco-read-btn:hover{background:#344c35}
+.eco-reader-overlay[hidden]{display:none!important}
+.eco-reader-overlay{position:fixed;inset:0;z-index:15000;background:rgba(30,42,30,.64);padding:clamp(0px,3vw,26px);display:flex;align-items:center;justify-content:center;box-sizing:border-box}
+body.eco-reader-open{overflow:hidden}
+.eco-reader{width:min(100%,1000px);height:min(100%,900px);max-height:100dvh;overflow:auto;overscroll-behavior:contain;background:#f7f4eb;box-shadow:0 30px 90px #0005;border-radius:24px}
+.eco-reader-toolbar{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px clamp(16px,4vw,34px);background:#f7f4ebed;backdrop-filter:blur(12px);border-bottom:1px solid #e5dece}
+.eco-reader-toolbar button{background:#fffdf6;color:#293d30;border:1px solid #dadaca;border-radius:12px;padding:9px 13px;font:700 .92rem "Atkinson Hyperlegible",system-ui,sans-serif;min-height:44px;cursor:pointer}
+.eco-reader-fonts{display:flex;gap:7px}
+.eco-reader-page{max-width:740px;margin:0 auto;padding:clamp(25px,7vw,70px) clamp(20px,7vw,70px) 58px}
+.eco-reader-kicker{text-transform:uppercase;letter-spacing:.13em;color:#58744d;font-weight:700;font-size:.81rem;text-align:center}
+.eco-reader-page h2{text-align:center;font:700 clamp(2rem,5vw,3.1rem)/1.15 "Source Serif 4",Georgia,serif;color:#293d30;margin:14px 0}
+.eco-reader-meta{text-align:center;color:#817b70;font-size:.82rem;margin:0 0 42px}
+.eco-reader-text{white-space:pre-wrap;overflow-wrap:anywhere;font-family:"Source Serif 4",Georgia,serif;font-size:19px;line-height:1.85;color:#302d25;max-width:68ch;margin:auto}
+.eco-reader-audios{margin-top:44px;border-top:1px solid #dadaca;padding-top:22px}
+.eco-reader-audios:empty{display:none}
+.eco-reader-audios h3{font:700 1.2rem "Source Serif 4",Georgia,serif;color:#293d30}
+.eco-reader-audios audio{width:100%;display:block;margin:10px 0 16px}
+.eco-reader-end{text-align:center;font-size:1.4rem;color:#9b8156;margin:35px 0 0}
+.eco-reader-overlay :focus-visible{outline:3px solid #986736;outline-offset:3px}
+@media(max-width:650px){#lista{grid-template-columns:1fr;gap:12px}#lista .chapter{padding:21px!important}.eco-reader-overlay{padding:0;align-items:stretch}.eco-reader{width:100%;height:100dvh;max-height:100dvh;border-radius:0}.eco-reader-page{padding:27px 21px 45px}.eco-reader-meta{margin-bottom:27px}.eco-reader-toolbar{padding:10px 14px}}
+@media(prefers-reduced-motion:reduce){.eco-reader *{scroll-behavior:auto!important}}
