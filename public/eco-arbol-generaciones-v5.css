@@ -1,0 +1,5 @@
+.eco-generations{border-color:#4d6542!important;background:#edf0e5!important;color:#293d30!important}
+.eco-generations:hover{background:#dbe5d4!important}
+.eco-generation-note{font:13px/1.5 "Atkinson Hyperlegible",sans-serif;color:#777568;margin:8px 3px 15px}
+@media(max-width:650px){.toolbar .eco-generations{flex:1 1 100%;text-align:center}}
+

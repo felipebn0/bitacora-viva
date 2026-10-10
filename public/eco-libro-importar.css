@@ -1,0 +1,3 @@
+.eco-import-status{font:500 13px/1.5 "Atkinson Hyperlegible",sans-serif;color:#293d30;padding:5px 16px;background:#edf0e5}
+.eco-import-status:empty{display:none}
+#ecoEditorialImport:disabled{opacity:.6;cursor:wait}

@@ -1,0 +1,37 @@
+/* ECO: corrección de hoja en blanco al imprimir el Estudio Editorial.
+   Cargado al FINAL de todos los estilos de libro, incluido fase 4. */
+@media print{
+ @page{margin:0}
+ html,body{width:auto!important;height:auto!important;min-height:0!important;overflow:visible!important;
+  display:block!important;position:static!important;visibility:visible!important;background:white!important}
+ body{margin:0!important;padding:0!important}
+ body>*:not(#ecoEditorialDialog){display:none!important}
+ body>#ecoEditorialDialog{display:block!important;position:static!important;inset:auto!important;width:100%!important;
+  height:auto!important;max-height:none!important;overflow:visible!important;visibility:visible!important;
+  margin:0!important;padding:0!important;background:white!important;opacity:1!important;transform:none!important}
+ #ecoEditorialDialog>.eco-editorial-shell{display:block!important;height:auto!important;min-height:0!important;
+  max-height:none!important;width:100%!important;max-width:none!important;overflow:visible!important;
+  position:static!important;visibility:visible!important;margin:0!important;padding:0!important}
+ #ecoEditorialDialog .eco-editorial-layout{display:block!important;grid-template-columns:none!important;
+  height:auto!important;min-height:0!important;overflow:visible!important}
+ #ecoEditorialDialog .eco-editorial-preview{display:block!important;visibility:visible!important;position:static!important;
+  background:white!important;overflow:visible!important;height:auto!important;min-height:0!important;
+  width:100%!important;margin:0!important;padding:0!important}
+ #ecoEditorialDialog #ecoEditorialBook{display:block!important;visibility:visible!important;height:auto!important;
+  overflow:visible!important;width:100%!important;margin:0!important;padding:0!important}
+ #ecoEditorialDialog #ecoEditorialBook>.eco-editorial-page{
+  display:block!important;visibility:visible!important;opacity:1!important;transform:none!important;
+  box-shadow:none!important;background:white!important;color:#302d25!important;
+  box-sizing:border-box!important;margin:0!important;min-height:0!important;height:auto!important;
+  width:100%!important;max-width:none!important;padding:18mm 15mm!important;overflow:visible!important;
+  break-before:page!important;page-break-before:always!important;break-after:auto!important;page-break-after:auto!important;
+ }
+ #ecoEditorialDialog #ecoEditorialBook>.eco-editorial-page:first-child{break-before:auto!important;page-break-before:auto!important}
+ #ecoEditorialDialog #ecoEditorialBook>.eco-editorial-cover{display:flex!important;flex-direction:column!important;
+  align-items:center!important;justify-content:center!important;text-align:center!important;min-height:180mm!important}
+ #ecoEditorialDialog .eco-editorial-top,#ecoEditorialDialog .eco-editorial-topbuttons,
+ #ecoEditorialDialog .eco-editorial-warning,#ecoEditorialDialog .eco-editorial-sidebar,
+ #ecoEditorialDialog .eco-print4-settings{display:none!important}
+ #ecoEditorialDialog img{max-width:100%!important;object-fit:contain!important}
+ #ecoEditorialDialog figure,#ecoEditorialDialog .eco-editorial-qr{break-inside:avoid!important;page-break-inside:avoid!important}
+}
