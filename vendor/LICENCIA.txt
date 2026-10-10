@@ -1,0 +1,3 @@
+QR Code for JavaScript Copyright (c) 2009 Kazuhiko Arase.
+Licensed under MIT: https://opensource.org/licenses/MIT
+The vendored implementation was obtained from qrcode-terminal's QRCode vendor sources.

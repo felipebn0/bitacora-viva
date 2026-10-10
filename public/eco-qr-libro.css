@@ -1,0 +1,5 @@
+#ecoBookQrFoot{break-inside:avoid;page-break-inside:avoid;border-top:1px solid #cbd2c3;display:flex;align-items:center;gap:18px;margin-top:32px;padding:18px 0;font-family:Georgia,serif;color:#293d30}
+#ecoBookQrFoot img{width:125px;height:125px;flex:none;background:white}
+#ecoBookQrFoot p{line-height:1.5;font-size:12px;margin:8px 0}
+@media(max-width:520px){#ecoBookQrFoot{gap:10px}#ecoBookQrFoot img{width:100px;height:100px}}
+@media print{#ecoBookQrFoot{display:flex!important;visibility:visible!important}#ecoBookQrFoot img{display:block!important}}
