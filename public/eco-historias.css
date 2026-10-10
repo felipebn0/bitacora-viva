@@ -1,0 +1,40 @@
+/* ECO Historias · sistema visual del Arbol familiar.
+   Se carga al final del head de historias.html. */
+:root{
+ --eco-story-bg:#f7f4eb;--eco-story-cream:#fffdf6;
+ --eco-story-green:#4d6542;--eco-story-deep:#293d30;
+ --eco-story-pale:#edf0e5;--eco-story-ink:#302d25;
+ --eco-story-muted:#777568;--eco-story-line:#dadaca;
+}
+body{background:var(--eco-story-bg);color:var(--eco-story-ink);padding:24px clamp(14px,2.5vw,42px) 80px;font:16px/1.5 "Atkinson Hyperlegible",system-ui,sans-serif}
+body>header,body>.unir-barra,body>main.wrap{width:100%;max-width:1700px;margin-left:auto;margin-right:auto}
+body>header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px 24px;flex-wrap:wrap;margin-bottom:24px}
+body>header .eco-story-heading{min-width:0;flex:1 1 300px}
+body>header h1{font:700 clamp(33px,4.5vw,51px)/1.04 "Source Serif 4",Georgia,serif;color:var(--eco-story-ink);margin:0 0 9px}
+body>header p{color:var(--eco-story-muted);font-size:1rem;max-width:75ch;margin:0;line-height:1.5}
+body>header .volver{display:inline-flex;min-height:30px;align-items:center;color:var(--eco-story-deep);font-weight:700;font-size:14px;border:0;text-decoration:none;padding:0;margin:0 0 12px}
+body>header .volver:hover{text-decoration:underline}
+body>.unir-barra{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:0 auto 23px}
+body>.unir-barra .unir-btn,body>.unir-barra .unir-confirmar-btn,body>main.wrap .retry-btn,body>main.wrap .empty-cta{
+ display:inline-flex;justify-content:center;align-items:center;min-height:44px;padding:10px 15px;
+ border-radius:13px;border:1px solid var(--eco-story-line);background:var(--eco-story-cream);
+ color:var(--eco-story-deep);font:700 .94rem "Atkinson Hyperlegible",system-ui,sans-serif;
+ text-decoration:none;cursor:pointer;margin:0;
+}
+body>.unir-barra .unir-btn:hover,body>main.wrap .retry-btn:hover,body>main.wrap .empty-cta:hover{background:var(--eco-story-pale)}
+body>.unir-barra .unir-confirmar-btn{background:var(--eco-story-green);border-color:var(--eco-story-green);color:white}
+body>.unir-barra .unir-confirmar-btn:disabled{opacity:.55;cursor:not-allowed}
+body>.unir-barra .unir-hint{flex-basis:100%;color:var(--eco-story-muted);font-size:.88rem;margin:0}
+body [hidden]{display:none!important}
+body>main.wrap #storyLogLista{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:14px;align-items:start}
+body>main.wrap .item{display:flex;min-width:0;gap:12px;padding:21px;background:var(--eco-story-cream);border:1px solid #e7e2d4;border-radius:20px;box-shadow:0 8px 20px #463d2510;margin:0;color:var(--eco-story-ink);line-height:1.6}
+body>main.wrap .item .item-body{min-width:0;overflow-wrap:anywhere}
+body>main.wrap .item strong{color:var(--eco-story-green)}
+body>main.wrap .item input[type=checkbox]{accent-color:var(--eco-story-green);width:22px;height:22px;flex-shrink:0}
+body>main.wrap .item audio{display:block;width:100%;max-width:100%;min-width:0}
+body>main.wrap .item .media-adjunta img,body>main.wrap .item .media-adjunta video{max-width:min(100%,220px);height:auto;object-fit:contain;border-radius:12px}
+body>main.wrap .empty{grid-column:1/-1;padding:24px;background:var(--eco-story-cream);border:1px dashed var(--eco-story-line);border-radius:17px;font-style:normal;color:var(--eco-story-muted)}
+body>main.wrap .empty-cta{justify-self:start}
+body :focus-visible{outline:3px solid #9b6734;outline-offset:3px}
+@media(max-width:680px){body{padding:14px 12px calc(72px + env(safe-area-inset-bottom))}body>header{align-items:flex-start;gap:10px;margin-bottom:17px}body>header h1{font-size:34px}body>header p{font-size:.9rem}body>.unir-barra{gap:7px;margin-bottom:15px}body>.unir-barra .unir-btn,body>.unir-barra .unir-confirmar-btn{font-size:.86rem;padding:9px 12px}body>main.wrap #storyLogLista{grid-template-columns:1fr}body>main.wrap .item{padding:15px;border-radius:17px}}
+@media(max-width:380px){body>.unir-barra .unir-btn,body>.unir-barra .unir-confirmar-btn{flex:1 1 auto}}
