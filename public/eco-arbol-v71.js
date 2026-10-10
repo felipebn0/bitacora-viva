@@ -22,28 +22,13 @@ function selectCard(btn){
 }
 function assignCardIds(){
  const root=$('eco7Root');if(!root)return;
- // Tree V7 cards are rendered from people; use exact name, disambiguate via
- // relation only if needed, and never silently select a wrong namesake.
- const natives=[...document.querySelectorAll('#nodes .person[data-id]')];
- const nameMap=new Map();
- for(const n of natives){
-  const name=n.querySelector('.name')?.textContent?.trim();
-  const relation=n.querySelector('.relation')?.textContent?.trim();
-  if(!name)continue;
-  const key=name+'\x00'+(relation||'');
-  nameMap.set(key,[...(nameMap.get(key)||[]),n.dataset.id]);
- }
  root.querySelectorAll('.eco7-person').forEach(btn=>{
-  const name=btn.querySelector('.eco7-words strong')?.textContent?.trim();
-  const relation=btn.querySelector('.eco7-words small')?.textContent?.trim();
-  let ids=nameMap.get(name+'\x00'+(relation||''))||[];
-  // "Persona principal" is an override of the relationship text.
-  if(!ids.length&&relation==='Persona principal')ids=natives.filter(n=>n.querySelector('.name')?.textContent?.trim()===name).map(n=>n.dataset.id);
-  if(ids.length===1)btn.dataset.ecoPersonId=ids[0];
-  else {delete btn.dataset.ecoPersonId;btn.title='Nombre ambiguo: abre Árbol completo para seleccionar la persona correcta.'}
-  const selected=btn.dataset.ecoPersonId===selectedId;
-  btn.classList.toggle('eco71-selected',selected);
-  btn.setAttribute('aria-pressed',String(selected));
+  const id=btn.dataset.ecoPersonId;
+  const native=id&&document.querySelector('#nodes .person[data-id="'+CSS.escape(id)+'"]');
+  btn.disabled=!native;
+  btn.title=native?'Ver información del familiar':'Familiar no disponible en el árbol';
+  btn.classList.toggle('eco71-selected',Boolean(id&&id===selectedId));
+  btn.setAttribute('aria-pressed',String(Boolean(id&&id===selectedId)));
  });
 }
 function init(){

@@ -17,11 +17,7 @@ function render(){const out=$('ecoFamilyV3Results');if(!out)return;out.replaceCh
  const actions=el('div',null,'eco-fam-actions');const yes=el('button','Confirmar vínculo','eco-fam-confirm');const no=el('button','No corresponde','eco-fam-reject');yes.type=no.type='button';
  yes.onclick=async()=>{if(busy)return;if(!confirm(`¿Confirmas que ${p.parent} es padre o madre de ${p.child}?\n\nECO agregará este vínculo al árbol.`))return;setBusy(true);yes.disabled=true;no.disabled=true;
  try{if(p.source==='literal')await api('/api/tree/family-review/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({childId:p.childId,parentId:p.parentId})});
- else {const tree=await api('/api/tree');const child=(tree.people||[]).find(x=>Number(x.id)===Number(p.childId));const parent=(tree.people||[]).find(x=>Number(x.id)===Number(p.parentId));if(!child||!parent||norm(child.nombre)!==norm(p.child)||norm(parent.nombre)!==norm(p.parent))throw Error('Los familiares cambiaron. Revisa de nuevo antes de confirmar.');
- const old=parents(child);if(old.some(x=>norm(x)===norm(parent.nombre))){note('El vínculo ya estaba guardado.');}
- else {if(old.length>=2)throw Error('Este familiar ya tiene dos progenitores registrados. Edita sus relaciones manualmente.');
- // Source is displayed to the human; these AI-derived suggestions require explicit consent. Existing edit route records version history.
- await api('/api/tree/person/'+encodeURIComponent(child.id),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({nombre:child.nombre,relacion:child.relacion,padres:[...old,parent.nombre]})});}}
+ else {throw Error('Esta propuesta interpretada por IA no tiene aún una ruta de confirmación con evidencia verificada. Puedes revisar la relación en Editar familiar, sin guardarla desde aquí.');}
  candidates=candidates.filter(x=>key(x)!==key(p));render();note('Vínculo confirmado y guardado. Recarga el árbol para ver la conexión.');}
  catch(e){note('No se guardó: '+e.message);yes.disabled=false;no.disabled=false}finally{setBusy(false)}};
  no.onclick=()=>{dismissed.add(key(p));render();note('Propuesta descartada en esta revisión. No se modificó el árbol.')};actions.append(yes,no);card.append(actions);out.append(card)}
