@@ -1,108 +1,45 @@
-/* ECO · Estudio del libro — maquetación para impresión/PDF */
-.eco-studio-launch{
-  display:inline-flex;align-items:center;justify-content:center;
-  background:#4d6542;color:#fff;border:none;border-radius:10px;
-  font:700 .9rem "Atkinson Hyperlegible",system-ui,sans-serif;
-  padding:9px 18px;min-height:44px;cursor:pointer;margin-top:10px;
-}
-.eco-studio-launch:hover{background:#3a4e31}
-.eco-studio-overlay{
-  display:none;position:fixed;inset:0;z-index:17000;
-  background:#1a1a14;overflow:hidden;
-}
-.eco-studio-overlay.eco-studio-abierto{display:flex;flex-direction:column}
-.eco-studio-topbar{
-  display:flex;align-items:center;gap:12px;padding:10px 20px;
-  background:#252520;flex-shrink:0;flex-wrap:wrap;
-}
-.eco-studio-topbar-title{
-  font:700 1rem "Source Serif 4",Georgia,serif;color:#f0e8d4;margin:0;flex:1;
-}
-.eco-studio-close,.eco-studio-print{
-  border:none;border-radius:8px;cursor:pointer;
-  font:700 .88rem "Atkinson Hyperlegible",system-ui,sans-serif;
-  min-height:40px;padding:8px 16px;
-}
-.eco-studio-close{background:#3a3a32;color:#c8bfa8}
-.eco-studio-close:hover{background:#4a4a40}
-.eco-studio-print{background:#4d6542;color:#fff}
-.eco-studio-print:hover{background:#3a4e31}
-.eco-studio{
-  display:grid;grid-template-columns:300px 1fr;flex:1;min-height:0;overflow:hidden;
-}
-.eco-studio-controls{
-  background:#1e1e18;border-right:1px solid #2e2e26;overflow-y:auto;
-  padding:16px;display:flex;flex-direction:column;gap:16px;
-}
-.eco-studio-controls h2{
-  font:700 .85rem "Atkinson Hyperlegible",system-ui,sans-serif;
-  color:#a09880;margin:0;text-transform:uppercase;letter-spacing:.06em;
-}
-.eco-studio-chapter-sel{
-  background:#2a2a22;color:#d4c8a8;border:1px solid #3a3a30;border-radius:8px;
-  font:.88rem "Atkinson Hyperlegible",system-ui,sans-serif;
-  padding:8px 10px;width:100%;
-}
-.eco-studio-fotos-list{display:flex;flex-direction:column;gap:10px}
-.eco-studio-foto-ctrl{
-  background:#252520;border:1px solid #3a3a30;border-radius:10px;
-  padding:10px;display:flex;gap:10px;align-items:flex-start;
-}
-.eco-studio-foto-thumb{
-  width:56px;height:56px;object-fit:cover;border-radius:6px;flex-shrink:0;
-  background:#3a3a30;
-}
-.eco-studio-foto-info{flex:1;min-width:0}
-.eco-studio-foto-caption{
-  font:.8rem "Atkinson Hyperlegible",system-ui,sans-serif;
-  color:#c0b898;margin:0 0 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-}
-.eco-studio-foto-pos{
-  display:flex;gap:6px;flex-wrap:wrap;
-}
-.eco-studio-foto-pos label{
-  font:.78rem "Atkinson Hyperlegible",system-ui,sans-serif;color:#a09880;
-  display:flex;align-items:center;gap:4px;cursor:pointer;
-}
-.eco-studio-foto-pos input[type=radio]{accent-color:#7a9e6a}
-.eco-studio-foto-pos select{
-  background:#1e1e18;color:#d4c8a8;border:1px solid #3a3a30;border-radius:5px;
-  font:.78rem "Atkinson Hyperlegible",system-ui,sans-serif;padding:3px 6px;
-}
-/* Preview area */
-.eco-studio-preview{background:#8a8272;overflow-y:auto;display:flex;align-items:flex-start;justify-content:center;padding:32px 24px}
-.eco-studio-paper{
-  background:#fff;width:210mm;min-height:297mm;
-  padding:20mm 18mm;box-shadow:0 6px 40px rgba(0,0,0,.4);
-  font:400 11pt "Source Serif 4",Georgia,serif;color:#111;
-  box-sizing:border-box;
-}
-.eco-studio-paper h1{font-size:22pt;margin:0 0 4mm;line-height:1.2}
-.eco-studio-paper .eco-paper-meta{font-size:9pt;color:#666;margin:0 0 10mm}
-.eco-studio-paper .eco-paper-body{font-size:11pt;line-height:1.65;white-space:pre-wrap;word-break:break-word}
-.eco-studio-paper .eco-paper-foto{margin:6mm 0}
-.eco-studio-paper .eco-paper-foto img{max-width:100%;height:auto;display:block;border-radius:4px}
-.eco-studio-paper .eco-paper-foto figcaption{font:italic 9pt "Source Serif 4",Georgia,serif;color:#555;margin-top:2mm;text-align:center}
-.eco-studio-paper .eco-paper-foto-full{width:100%}
-.eco-studio-paper .eco-paper-foto-half{float:right;width:46%;margin:0 0 6mm 6mm}
-.eco-studio-paper .eco-paper-foto-half.eco-paper-foto-izq{float:left;margin:0 6mm 6mm 0}
-.eco-studio-paper::after{content:"";display:table;clear:both}
-/* Estado vacío */
-.eco-studio-empty{color:#a09880;font:.88rem "Atkinson Hyperlegible",system-ui,sans-serif;margin:0}
-@media(max-width:800px){
-  .eco-studio{grid-template-columns:1fr}
-  .eco-studio-controls{max-height:240px;border-right:none;border-bottom:1px solid #2e2e26}
-  .eco-studio-paper{width:100%;min-height:unset}
-}
+/* ECO — Estudio editorial v2. Reemplaza el CSS anterior completo. */
+.eco-studio-launch{background:#4d6542;color:#fff;border:1px solid #4d6542;border-radius:13px;min-height:46px;padding:11px 19px;font:700 .95rem 'Atkinson Hyperlegible',sans-serif;cursor:pointer}
+.eco-studio-overlay{display:none;position:fixed;inset:0;background:#f7f4eb;z-index:15000;overflow:auto;color:#302d25;font-family:'Atkinson Hyperlegible',sans-serif}
+.eco-studio-overlay.eco-studio-abierto{display:block}
+body.eco-studio-active{overflow:hidden}
+.eco-studio-topbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px clamp(14px,3vw,34px);background:#f7f4eb;border-bottom:1px solid #dadaca;color:#293d30;flex-wrap:wrap}
+.eco-studio-top-actions{display:flex;gap:8px;flex-wrap:wrap}
+.eco-studio-topbar button,.eco-studio-foto-info button{background:#fffdf6;color:#293d30;border:1px solid #dadaca;padding:10px 15px;border-radius:10px;font:700 .9rem 'Atkinson Hyperlegible',sans-serif;min-height:44px;cursor:pointer}
+#ecoStudioPrint{background:#4d6542;color:white;border-color:#4d6542}
+.eco-studio{display:grid;grid-template-columns:minmax(270px,350px) minmax(0,1fr);max-width:1450px;margin:0 auto;min-height:calc(100dvh - 76px)}
+.eco-studio-controls{background:#fffdf6;border-right:1px solid #dadaca;padding:25px 20px;display:flex;flex-direction:column;align-items:stretch;gap:12px;min-width:0}
+.eco-studio-controls>label:first-child,.eco-studio-controls h2{font-weight:700;color:#293d30;font-size:1rem;margin:6px 0 0}
+.eco-studio-controls select,.eco-studio-foto-info input,.eco-studio-foto-info select{width:100%;min-height:42px;min-width:0;border:1px solid #dadaca;border-radius:10px;padding:8px 10px;background:#fff;color:#302d25;font-size:15px}
+.eco-studio-notice{font-size:.82rem;line-height:1.5;color:#786d5c;background:#f7f4eb;padding:13px;border-radius:11px;margin:2px 0}
+.eco-studio-upload{border-radius:12px;background:#edf0e5;color:#293d30;border:1px dashed #7f9878;padding:13px;text-align:center;cursor:pointer;font-weight:700;font-size:.9rem}
+#ecoStudioUpload{max-width:100%;font-size:.78rem}
+#ecoStudioMsg{font-size:.8rem;line-height:1.4;color:#59734a;min-height:0;margin:0}
+.eco-studio-foto-ctrl{border:1px solid #dadaca;border-radius:14px;padding:12px;display:grid;grid-template-columns:76px minmax(0,1fr);gap:12px;margin:5px 0 10px}
+.eco-studio-foto-thumb{width:76px;height:88px;object-fit:cover;border-radius:8px;background:#edf0e5}
+.eco-studio-foto-info{display:grid;gap:8px;min-width:0}
+.eco-studio-foto-info button{font-size:.8rem;padding:6px 10px;min-height:35px}
+.eco-studio-preview{min-width:0;background:#e9e5dc;padding:clamp(12px,3vw,32px);overflow:auto}
+.eco-studio-paper{background:#fffdf6;color:#302d25;width:min(100%,210mm);min-height:297mm;margin:0 auto;padding:22mm 20mm;box-sizing:border-box;box-shadow:0 8px 35px #0002;font-family:'Source Serif 4',Georgia,serif}
+.eco-paper-brand{text-align:center;font:700 9pt 'Atkinson Hyperlegible',sans-serif;color:#4d6542;letter-spacing:.15em;margin-bottom:9mm}
+.eco-studio-paper h1{text-align:center;color:#293d30;font:700 25pt/1.2 'Source Serif 4',Georgia,serif;margin:0 0 5mm}
+.eco-paper-theme{text-align:center;color:#58744d;font-size:11pt;margin:0 0 13mm}
+.eco-paper-paragraph{font-size:12pt;line-height:1.75;text-align:left;white-space:pre-wrap;overflow-wrap:anywhere;margin:0 0 5mm;orphans:3;widows:3}
+.eco-paper-foto{margin:7mm auto;text-align:center;break-inside:avoid;page-break-inside:avoid;clear:both}
+.eco-paper-foto img{display:block;max-width:100%;height:auto;max-height:175mm;object-fit:contain;margin:0 auto}
+.eco-paper-foto figcaption{font:italic 9pt/1.5 'Source Serif 4',Georgia,serif;color:#777568;margin-top:2mm}
+.eco-paper-small{width:36%}.eco-paper-medium{width:65%}.eco-paper-full{width:100%}
+.eco-paper-end{text-align:center;color:#8b6345;margin-top:13mm}
+@media(max-width:800px){.eco-studio{display:block}.eco-studio-controls{border-right:0;border-bottom:1px solid #dadaca}.eco-studio-preview{padding:12px}.eco-studio-paper{min-height:0;padding:24px 19px}.eco-studio-paper h1{font-size:25px}.eco-paper-paragraph{font-size:17px}.eco-studio-topbar{position:relative}}
 @media print{
-  *:not(.eco-studio-paper):not(.eco-studio-paper *){display:none!important}
-  .eco-studio-overlay,.eco-studio-overlay *{all:unset}
-  .eco-studio-paper{
-    display:block!important;width:100%!important;box-shadow:none!important;
-    padding:15mm 18mm!important;font-size:11pt!important;
-    page-break-inside:avoid;
-  }
-  .eco-studio-paper .eco-paper-foto-half{float:right;width:46%}
-  .eco-studio-paper .eco-paper-foto-half.eco-paper-izq{float:left}
-  @page{size:A4;margin:0}
+ @page{size:A4;margin:14mm}
+ html,body{overflow:visible!important;height:auto!important;min-height:0!important;background:#fff!important;margin:0!important;padding:0!important}
+ body>*:not(#ecoStudioOverlay){display:none!important}
+ #ecoStudioOverlay{position:static!important;display:block!important;overflow:visible!important;background:#fff!important;width:auto!important;height:auto!important;margin:0!important;padding:0!important}
+ #ecoStudioOverlay .eco-studio-topbar,#ecoStudioOverlay .eco-studio-controls{display:none!important}
+ #ecoStudioOverlay .eco-studio{display:block!important;min-height:0!important;width:auto!important;margin:0!important;padding:0!important}
+ #ecoStudioOverlay .eco-studio-preview{display:block!important;overflow:visible!important;background:#fff!important;padding:0!important;margin:0!important}
+ #ecoStudioPaper{display:block!important;width:100%!important;max-width:none!important;min-height:0!important;margin:0!important;padding:0!important;box-shadow:none!important;background:#fff!important;color:#222!important}
+ .eco-paper-paragraph{font-size:11pt!important;line-height:1.6!important}
+ .eco-paper-foto img{max-height:170mm!important}
 }

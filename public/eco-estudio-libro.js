@@ -1,191 +1,99 @@
-/* ECO · Estudio del libro — maquetación de fotos para impresión/PDF. Solo lectura. */
+/* ECO Estudio Editorial v2 — revisión correctiva para la rama pruebas.
+   Las imágenes nuevas viven temporalmente en esta pestaña y NO se envían al servidor.
+   Se conserva el borrador de ubicación de fotos existentes en localStorage. */
 (()=>{
- 'use strict';
- const DRAFT_KEY='eco-book-studio-draft-v1';
- function init(){
-   const header=document.querySelector('body > header');
-   if(!header||document.getElementById('ecoStudioLaunch'))return;
-   const btn=document.createElement('button');
-   btn.id='ecoStudioLaunch';btn.className='eco-studio-launch';btn.type='button';
-   btn.textContent='Diseñar libro PDF';
-   header.appendChild(btn);
-   btn.addEventListener('click',abrirEstudio);
- }
- let overlay=null,paper=null,chapterSel=null,fotosListEl=null;
- let chapters=[],stories=[],placements={};
- function buildOverlay(){
-   if(overlay)return;
-   overlay=document.createElement('div');
-   overlay.id='ecoStudioOverlay';overlay.className='eco-studio-overlay';
-   overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');
-   overlay.setAttribute('aria-label','Estudio del libro');
-   overlay.innerHTML=`
-<div class="eco-studio-topbar">
-  <p class="eco-studio-topbar-title">Estudio del libro</p>
-  <button class="eco-studio-print" id="ecoStudioPrint" type="button">Exportar PDF / Imprimir</button>
-  <button class="eco-studio-close" id="ecoStudioClose" type="button">Cerrar</button>
-</div>
-<div class="eco-studio">
-  <div class="eco-studio-controls">
-    <h2>Capítulo</h2>
-    <select class="eco-studio-chapter-sel" id="ecoStudioChapterSel"><option value="">Cargando…</option></select>
-    <h2>Fotografías</h2>
-    <div class="eco-studio-fotos-list" id="ecoStudioFotosList"><p class="eco-studio-empty">Elige un capítulo.</p></div>
-  </div>
-  <div class="eco-studio-preview">
-    <article class="eco-studio-paper" id="ecoStudioPaper"><p class="eco-studio-empty">Elige un capítulo para ver la vista previa.</p></article>
-  </div>
-</div>`;
-   document.body.appendChild(overlay);
-   paper=overlay.querySelector('#ecoStudioPaper');
-   chapterSel=overlay.querySelector('#ecoStudioChapterSel');
-   fotosListEl=overlay.querySelector('#ecoStudioFotosList');
-   overlay.querySelector('#ecoStudioClose').addEventListener('click',cerrar);
-   overlay.querySelector('#ecoStudioPrint').addEventListener('click',()=>window.print());
-   overlay.addEventListener('keydown',e=>{if(e.key==='Escape')cerrar();});
-   chapterSel.addEventListener('change',()=>renderChapter(chapterSel.value));
- }
- const mediaSrc=u=>'/api/media-file?u='+encodeURIComponent(u);
- async function fetchData(){
-   if(chapters.length&&stories.length)return;
-   const[cr,sr]=await Promise.all([
-     fetch('/api/chapters',{credentials:'same-origin'}),
-     fetch('/api/story-log',{credentials:'same-origin'})
-   ]);
-   if(!cr.ok||!sr.ok)throw new Error('No se pudieron cargar los datos.');
-   const[cd,sd]=await Promise.all([cr.json(),sr.json()]);
-   chapters=Array.isArray(cd.chapters)?cd.chapters:[];
-   stories=Array.isArray(sd.stories)?sd.stories:[];
- }
- let lastFocus=null;
- async function abrirEstudio(){
-   lastFocus=document.activeElement;
-   buildOverlay();
-   overlay.classList.add('eco-studio-abierto');
-   overlay.querySelector('#ecoStudioClose').focus();
-   try{
-     await fetchData();
-     chapterSel.innerHTML='<option value="">— elige un capítulo —</option>';
-     chapters.forEach(c=>{
-       const opt=document.createElement('option');
-       opt.value=c.id??c.title;opt.textContent=c.title||'(sin título)';
-       chapterSel.appendChild(opt);
-     });
-   }catch(_){
-     chapterSel.innerHTML='<option value="">No se pudieron cargar los capítulos.</option>';
-   }
- }
- function cerrar(){
-   if(!overlay)return;
-   overlay.classList.remove('eco-studio-abierto');
-   lastFocus?.focus();
- }
- function loadDraft(chapId){
-   try{return JSON.parse(localStorage.getItem(DRAFT_KEY+':'+chapId)||'{}');}catch(_){return{};}
- }
- function saveDraft(chapId){
-   try{localStorage.setItem(DRAFT_KEY+':'+chapId,JSON.stringify(placements));}catch(_){}
- }
- function renderChapter(chapId){
-   paper.innerHTML='';fotosListEl.innerHTML='';
-   if(!chapId){
-     paper.innerHTML='<p class="eco-studio-empty">Elige un capítulo para ver la vista previa.</p>';
-     fotosListEl.innerHTML='<p class="eco-studio-empty">Elige un capítulo.</p>';
-     return;
-   }
-   const chap=chapters.find(c=>(c.id??c.title)===chapId||(c.id??c.title)==Number(chapId));
-   if(!chap){paper.innerHTML='<p class="eco-studio-empty">Capítulo no encontrado.</p>';return;}
-   placements=loadDraft(chapId);
-   const ids=new Set((chap.story_ids||[]).map(Number));
-   const images=[];
-   for(const s of stories){
-     if(!ids.has(Number(s.id)))continue;
-     if(!Array.isArray(s.media_urls))continue;
-     for(const m of s.media_urls){
-       if(m&&m.type!=='video'&&typeof m.url==='string'&&/^https:\/\/[^ ]+/i.test(m.url)
-          &&!images.some(x=>x.url===m.url))images.push(m);
-     }
-   }
-   buildControls(chap,chapId,images);
-   renderPreview(chap,images);
- }
- function buildControls(chap,chapId,images){
-   fotosListEl.innerHTML='';
-   if(!images.length){
-     fotosListEl.innerHTML='<p class="eco-studio-empty">Este capítulo no tiene fotografías.</p>';
-     return;
-   }
-   images.forEach((m,i)=>{
-     const id='eco-foto-'+i;
-     const cur=placements[m.url]||{pos:'ocultar',size:'media'};
-     const wrap=document.createElement('div');wrap.className='eco-studio-foto-ctrl';
-     const thumb=document.createElement('img');
-     thumb.className='eco-studio-foto-thumb';thumb.loading='lazy';
-     thumb.src=mediaSrc(m.url);thumb.alt=m.caption||'Foto';
-     const info=document.createElement('div');info.className='eco-studio-foto-info';
-     const cap=document.createElement('p');cap.className='eco-studio-foto-caption';
-     cap.textContent=m.caption||'(sin descripción)';
-     const posDiv=document.createElement('div');posDiv.className='eco-studio-foto-pos';
-     const posSelect=document.createElement('select');posSelect.innerHTML=`
-<option value="ocultar"${cur.pos==='ocultar'?' selected':''}>Ocultar</option>
-<option value="inicio"${cur.pos==='inicio'?' selected':''}>Al inicio</option>
-<option value="inline"${cur.pos==='inline'?' selected':''}>Con el texto</option>
-<option value="fin"${cur.pos==='fin'?' selected':''}>Al final</option>`;
-     const sizeSelect=document.createElement('select');sizeSelect.innerHTML=`
-<option value="media"${cur.size==='media'?' selected':''}>Mitad</option>
-<option value="completa"${cur.size==='completa'?' selected':''}>Completa</option>`;
-     const update=()=>{
-       placements[m.url]={pos:posSelect.value,size:sizeSelect.value};
-       saveDraft(chapId);renderPreview(chap,images);
-     };
-     posSelect.addEventListener('change',update);sizeSelect.addEventListener('change',update);
-     const posLabel=document.createElement('label');posLabel.textContent='Posición ';posLabel.appendChild(posSelect);
-     const sizeLabel=document.createElement('label');sizeLabel.textContent='Tamaño ';sizeLabel.appendChild(sizeSelect);
-     posDiv.appendChild(posLabel);posDiv.appendChild(sizeLabel);
-     info.appendChild(cap);info.appendChild(posDiv);
-     wrap.appendChild(thumb);wrap.appendChild(info);
-     fotosListEl.appendChild(wrap);
-   });
- }
- function makeFotoEl(m){
-   const pl=placements[m.url]||{pos:'ocultar',size:'media'};
-   if(pl.pos==='ocultar')return null;
-   const fig=document.createElement('figure');
-   fig.className='eco-paper-foto'+(pl.size==='completa'?' eco-paper-foto-full':' eco-paper-foto-half');
-   const img=document.createElement('img');
-   img.src=mediaSrc(m.url);img.alt=m.caption||'Fotografía';img.loading='lazy';
-   fig.appendChild(img);
-   if(m.caption){const fc=document.createElement('figcaption');fc.textContent=m.caption;fig.appendChild(fc);}
-   return fig;
- }
- function renderPreview(chap,images){
-   paper.innerHTML='';
-   const h1=document.createElement('h1');h1.textContent=chap.title||'(sin título)';
-   paper.appendChild(h1);
-   const inicio=images.map(m=>({...m,_pl:placements[m.url]||{pos:'ocultar',size:'media'}})).filter(m=>m._pl.pos==='inicio');
-   inicio.forEach(m=>{const el=makeFotoEl(m);if(el)paper.appendChild(el);});
-   const bodyDiv=document.createElement('div');bodyDiv.className='eco-paper-body';
-   bodyDiv.textContent=chap.body||chap.content||'(contenido no disponible)';
-   const inline=images.map(m=>({...m,_pl:placements[m.url]||{pos:'ocultar',size:'media'}})).filter(m=>m._pl.pos==='inline');
-   if(inline.length){
-     const half=Math.ceil((bodyDiv.textContent.length/2));
-     const beforeText=bodyDiv.textContent.slice(0,half);
-     const afterText=bodyDiv.textContent.slice(half);
-     const b1=document.createElement('div');b1.className='eco-paper-body';b1.textContent=beforeText;
-     paper.appendChild(b1);
-     inline.forEach(m=>{const el=makeFotoEl(m);if(el)paper.appendChild(el);});
-     const b2=document.createElement('div');b2.className='eco-paper-body';b2.textContent=afterText;
-     paper.appendChild(b2);
-   }else{
-     paper.appendChild(bodyDiv);
-   }
-   const fin=images.map(m=>({...m,_pl:placements[m.url]||{pos:'ocultar',size:'media'}})).filter(m=>m._pl.pos==='fin');
-   fin.forEach(m=>{const el=makeFotoEl(m);if(el)paper.appendChild(el);});
-   if(paper.children.length<=1){
-     const empty=document.createElement('p');empty.className='eco-studio-empty';
-     empty.textContent='Elige las posiciones de las fotografías en el panel izquierdo.';
-     paper.appendChild(empty);
-   }
- }
- if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
+'use strict';
+const DRAFT='eco-book-studio-v2:';
+let overlay,paper,selector,photosBox,photos=[],chapters=[],stories=[],chapter=null,placements={},extraByChapter=new Map();
+const src=u=>'/api/media-file?u='+encodeURIComponent(u);
+const $=(id)=>document.getElementById(id);
+const el=(tag,cls,txt)=>{const x=document.createElement(tag);if(cls)x.className=cls;if(txt!==undefined)x.textContent=txt;return x};
+const idOf=c=>String(c.id);
+function init(){
+ if(!$('lista')||$('ecoStudioLaunch'))return;
+ const header=document.querySelector('body>header');if(!header)return;
+ const launch=el('button','eco-studio-launch','Diseñar libro PDF');launch.id='ecoStudioLaunch';launch.type='button';header.appendChild(launch);
+ launch.addEventListener('click',open);
+}
+function setup(){
+ if(overlay)return;
+ overlay=el('div','eco-studio-overlay');overlay.id='ecoStudioOverlay';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-label','Estudio editorial');
+ overlay.innerHTML=`<div class="eco-studio-topbar"><strong>Estudio editorial · ECO</strong><div class="eco-studio-top-actions"><button type="button" id="ecoStudioPrint">Exportar PDF / Imprimir</button><button type="button" id="ecoStudioClose">Cerrar</button></div></div><div class="eco-studio"><section class="eco-studio-controls"><label for="ecoStudioChapterSel">Capítulo</label><select id="ecoStudioChapterSel"></select><p class="eco-studio-notice">Las imágenes nuevas se conservan solo mientras esta pestaña permanezca abierta. Exporta el PDF antes de salir. Las fotos originales de tus historias no se modifican.</p><label class="eco-studio-upload" for="ecoStudioUpload">+ Agregar fotografías desde mi dispositivo</label><input type="file" id="ecoStudioUpload" accept="image/jpeg,image/png,image/webp" multiple><p id="ecoStudioMsg" role="status" aria-live="polite"></p><h2>Fotografías y posición</h2><div id="ecoStudioFotosList"></div></section><section class="eco-studio-preview"><article id="ecoStudioPaper" class="eco-studio-paper"></article></section></div>`;
+ document.body.appendChild(overlay);selector=$('ecoStudioChapterSel');photosBox=$('ecoStudioFotosList');paper=$('ecoStudioPaper');
+ $('ecoStudioClose').addEventListener('click',close);
+ $('ecoStudioPrint').addEventListener('click',printBook);
+ selector.addEventListener('change',()=>selectChapter(selector.value));
+ $('ecoStudioUpload').addEventListener('change',handleFiles);
+ overlay.addEventListener('keydown',e=>{if(e.key==='Escape')close()});
+}
+async function open(){setup();overlay.classList.add('eco-studio-abierto');document.body.classList.add('eco-studio-active');$('ecoStudioClose').focus();
+ selector.replaceChildren(new Option('Cargando capítulos…',''));
+ try{
+  const [cr,sr]=await Promise.all([fetch('/api/chapters',{credentials:'same-origin'}),fetch('/api/story-log',{credentials:'same-origin'})]);
+  if(!cr.ok||!sr.ok)throw Error('No se pudieron cargar capítulos e historias. Comprueba tu sesión.');
+  const [cd,sd]=await Promise.all([cr.json(),sr.json()]);chapters=Array.isArray(cd.chapters)?cd.chapters:[];stories=Array.isArray(sd.stories)?sd.stories:[];
+  selector.replaceChildren(new Option('Selecciona un capítulo…',''));
+  chapters.forEach(c=>selector.add(new Option(c.title||'Capítulo sin título',idOf(c))));
+  if(chapters.length){selector.value=idOf(chapters[0]);selectChapter(selector.value)}else{paper.replaceChildren(el('p','eco-studio-empty','Todavía no hay capítulos generados.'))}
+ }catch(e){msg(e.message);selector.replaceChildren(new Option('No se pudo cargar',''));}
+}
+function close(){if(!overlay)return;overlay.classList.remove('eco-studio-abierto');document.body.classList.remove('eco-studio-active');$('ecoStudioLaunch')?.focus()}
+function msg(t){$('ecoStudioMsg').textContent=t}
+function getDraft(id){try{return JSON.parse(localStorage.getItem(DRAFT+id)||'{}')}catch{return{}}}
+function save(){if(!chapter)return;try{const originals={};for(const p of photos){if(p.existing&&placements[p.id])originals[p.id]=placements[p.id]};localStorage.setItem(DRAFT+idOf(chapter),JSON.stringify(originals))}catch{msg('No fue posible guardar las posiciones locales.')}}
+function paragraphs(){const t=String(chapter?.generated_text||'').trim();return t?t.split(/\n\s*\n/).map(x=>x.trim()).filter(Boolean):[]}
+function selectChapter(id){chapter=chapters.find(c=>idOf(c)===String(id));photos=[];photosBox.replaceChildren();paper.replaceChildren();msg('');if(!chapter)return;
+ placements=getDraft(id);
+ const ids=new Set((chapter.story_ids||[]).map(Number));const seen=new Set();
+ for(const story of stories){if(!ids.has(Number(story.id)))continue;for(const m of (Array.isArray(story.media_urls)?story.media_urls:[])){
+  if(!m?.url||m.type==='video'||!/^https:\/\//i.test(m.url)||seen.has(m.url))continue;
+  seen.add(m.url);photos.push({id:m.url,url:src(m.url),caption:m.caption||'',existing:true})
+ }}
+ for(const item of extraByChapter.get(id)||[])photos.push(item);
+ updateControls();render();
+ if(!photos.length)msg('Puedes agregar fotos con el botón superior. El texto de tu capítulo ya está listo para maquetar.');
+}
+async function handleFiles(e){if(!chapter){msg('Selecciona primero un capítulo.');return}
+ const files=Array.from(e.target.files||[]).slice(0,12);e.target.value='';if(!files.length)return;
+ const allowed=['image/jpeg','image/png','image/webp'];let added=0;
+ for(const file of files){if(!allowed.includes(file.type)||file.size>10*1024*1024){msg('Se omitieron imágenes de formato no admitido o mayores de 10 MB.');continue}
+  try{const url=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(file)});
+   const id='local:'+crypto.randomUUID();const item={id,url,caption:file.name.replace(/\.[^.]+$/,''),existing:false};
+   photos.push(item);const k=idOf(chapter);extraByChapter.set(k,[...(extraByChapter.get(k)||[]),item]);
+   placements[id]={pos:'0',size:'full'};added++;
+  }catch{msg('No se pudo leer alguna fotografía.')}}
+ updateControls();render();if(added)msg(`${added} fotografía(s) agregada(s) a esta vista temporal. Exporta el PDF antes de cerrar la pestaña.`)
+}
+function updateControls(){photosBox.replaceChildren();const count=paragraphs().length;
+ if(!photos.length){photosBox.appendChild(el('p','eco-studio-empty','Todavía no hay fotografías para este capítulo.'));return}
+ photos.forEach(p=>{
+  const box=el('div','eco-studio-foto-ctrl');const thumb=el('img','eco-studio-foto-thumb');thumb.src=p.url;thumb.alt=p.caption||'Fotografía';box.appendChild(thumb);
+  const form=el('div','eco-studio-foto-info');const cap=el('input','');cap.value=placements[p.id]?.caption??p.caption;cap.setAttribute('aria-label','Descripción de fotografía');cap.maxLength=180;
+  const pos=el('select');pos.setAttribute('aria-label','Posición de fotografía');pos.add(new Option('No incluir','hide'));pos.add(new Option('Antes del primer párrafo','0'));
+  for(let i=1;i<=count;i++)pos.add(new Option(`Después del párrafo ${i}`,String(i)));
+  pos.value=String(placements[p.id]?.pos??'0');
+  const size=el('select');size.setAttribute('aria-label','Tamaño de fotografía');[['small','Pequeña'],['medium','Mediana'],['full','Grande']].forEach(([v,label])=>size.add(new Option(label,v)));
+  size.value=placements[p.id]?.size||'full';
+  const change=()=>{placements[p.id]={pos:pos.value,size:size.value,caption:cap.value};save();render()};
+  pos.addEventListener('change',change);size.addEventListener('change',change);cap.addEventListener('input',change);
+  form.appendChild(cap);form.appendChild(pos);form.appendChild(size);
+  if(!p.existing){const del=el('button','','Quitar foto');del.type='button';del.addEventListener('click',()=>{photos=photos.filter(x=>x!==p);extraByChapter.set(idOf(chapter),(extraByChapter.get(idOf(chapter))||[]).filter(x=>x!==p));delete placements[p.id];updateControls();render()});form.appendChild(del)}
+  box.appendChild(form);photosBox.appendChild(box)
+ });
+}
+function figure(p){const q=placements[p.id]||{pos:'0',size:'full'};const f=el('figure','eco-paper-foto eco-paper-'+q.size);const img=el('img');img.src=p.url;img.alt=q.caption||p.caption||'Fotografía de la historia';f.appendChild(img);if((q.caption??p.caption)){f.appendChild(el('figcaption','',q.caption??p.caption))}return f}
+function render(){paper.replaceChildren();if(!chapter)return;paper.appendChild(el('div','eco-paper-brand','ECO · MEMORIAS DE FAMILIA'));paper.appendChild(el('h1','',chapter.title||'Capítulo'));
+ if(chapter.theme)paper.appendChild(el('p','eco-paper-theme',chapter.theme));
+ const ps=paragraphs();const insertAt=n=>{for(const p of photos){const q=placements[p.id]||{pos:'0',size:'full'};if(String(q.pos)===String(n))paper.appendChild(figure(p))}};
+ insertAt(0);
+ if(!ps.length)paper.appendChild(el('p','eco-studio-empty','Este capítulo no tiene texto disponible.'));
+ ps.forEach((p,i)=>{paper.appendChild(el('p','eco-paper-paragraph',p));insertAt(i+1)});
+ paper.appendChild(el('p','eco-paper-end','✦'));
+}
+async function printBook(){if(!chapter){msg('Selecciona un capítulo antes de exportar.');return}
+ render();const imgs=Array.from(paper.querySelectorAll('img'));
+ await Promise.all(imgs.map(x=>x.complete?Promise.resolve():new Promise(res=>{x.addEventListener('load',res,{once:true});x.addEventListener('error',res,{once:true});setTimeout(res,6000)})));
+ window.print();
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
