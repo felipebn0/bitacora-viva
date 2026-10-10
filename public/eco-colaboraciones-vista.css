@@ -1,0 +1,70 @@
+/* ECO: lista editorial de aportes, misma identidad que Árbol y Mi libro. */
+body>main.wrap .eco-c-actionbar{
+ display:flex;align-items:stretch;gap:9px;flex-wrap:wrap;margin:0 0 24px;
+}
+body>main.wrap .eco-c-actionbar>.aportar-ahora{
+ margin:0!important;display:inline-flex;align-items:center;justify-content:center;
+ min-height:48px;border-radius:13px;padding:10px 18px;font-weight:700;
+ border:1px solid #4d6542;background:#4d6542;color:#fff;text-decoration:none;
+ box-shadow:none;
+}
+body>main.wrap .eco-c-actionbar>.tabs-row{
+ display:flex;flex-wrap:wrap;align-items:stretch;gap:9px;margin:0!important;
+ padding:0;border:none;background:none;
+}
+body>main.wrap .eco-c-actionbar .tab-btn{
+ min-height:48px;padding:10px 17px;border:1px solid #dadaca;
+ border-radius:13px;background:#fffdf6;color:#293d30;font-weight:700;
+ box-shadow:none;
+}
+body>main.wrap .eco-c-actionbar .tab-btn.active,
+body>main.wrap .eco-c-actionbar .tab-btn[aria-selected=true]{
+ background:#4d6542;color:#fff;border-color:#4d6542;
+}
+body>main.wrap #colaboradoresSection,body>main.wrap #aportesSection,
+body>main.wrap #tabDados section{background:#fffdf6;border:1px solid #dadaca;
+ border-radius:20px;padding:clamp(16px,2.5vw,25px);margin:0 0 15px}
+body>main.wrap #colaboradoresSection h2,body>main.wrap #aportesSection h2,
+body>main.wrap #tabDados section h2{font-size:clamp(22px,2.3vw,29px)}
+body>main.wrap .eco-c-section-toggle{cursor:pointer;margin:2px 0 12px;
+ background:#edf0e5;color:#293d30;border:1px solid #dadaca;border-radius:12px;
+ font:700 .93rem "Atkinson Hyperlegible",system-ui,sans-serif;
+ min-height:44px;padding:10px 15px}
+body>main.wrap #colaboradoresLista.eco-c-people-closed{display:none!important}
+body>main.wrap .eco-c-story-card{
+ padding:0!important;margin:0 0 9px!important;border:1px solid #dadaca;
+ border-radius:15px;background:#fffdf6;overflow:hidden;box-shadow:none;
+}
+body>main.wrap .eco-c-story-card .eco-c-story-toggle{
+ display:grid;grid-template-columns:minmax(130px,1fr) minmax(0,1.8fr) 20px;
+ width:100%;min-height:64px;align-items:center;gap:16px;padding:13px 17px;
+ border:0;background:transparent;cursor:pointer;
+ text-align:left;color:#293d30;font:inherit;
+}
+body>main.wrap .eco-c-story-card .eco-c-story-person{font-size:.96rem;overflow-wrap:anywhere}
+body>main.wrap .eco-c-story-card .eco-c-story-excerpt{
+ overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:#777568;font-size:.89rem;
+}
+body>main.wrap .eco-c-story-card .eco-c-story-arrow{font-size:1.28rem;text-align:right;color:#4d6542}
+body>main.wrap .eco-c-story-card.eco-c-is-closed>:not(.eco-c-story-toggle){display:none!important}
+body>main.wrap .eco-c-story-card:not(.eco-c-is-closed)>:not(.eco-c-story-toggle){
+ margin-left:17px;margin-right:17px
+}
+body>main.wrap .eco-c-story-card:not(.eco-c-is-closed) .eco-c-story-toggle{
+ background:#edf0e5;border-bottom:1px solid #dadaca;margin-bottom:13px;
+}
+body>main.wrap .eco-c-story-card .texto{white-space:pre-wrap;line-height:1.6}
+body>main.wrap .eco-c-story-card audio{width:calc(100% - 34px);max-width:600px;margin-bottom:13px}
+body>main.wrap .eco-c-story-card .aporte-acciones{padding-bottom:15px}
+body>main.wrap .eco-c-story-toggle:focus-visible,
+body>main.wrap .eco-c-section-toggle:focus-visible{outline:3px solid #76936e;outline-offset:2px}
+@media(max-width:720px){
+ body>main.wrap .eco-c-actionbar{display:grid;grid-template-columns:1fr;gap:8px}
+ body>main.wrap .eco-c-actionbar>.aportar-ahora{width:100%}
+ body>main.wrap .eco-c-actionbar>.tabs-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+ body>main.wrap .eco-c-actionbar .tab-btn{font-size:.85rem;line-height:1.25;padding:10px 7px}
+ body>main.wrap .eco-c-story-card .eco-c-story-toggle{grid-template-columns:minmax(0,1fr) 22px;gap:4px 8px}
+ body>main.wrap .eco-c-story-person{grid-column:1}
+ body>main.wrap .eco-c-story-excerpt{grid-column:1;grid-row:2}
+ body>main.wrap .eco-c-story-arrow{grid-column:2;grid-row:1/3}
+}
