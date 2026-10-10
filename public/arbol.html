@@ -66,6 +66,7 @@
  .side #relations{max-height:150px;overflow:auto}
 }
 </style>
+<link rel="stylesheet" href="/eco-arbol-generaciones-v5.css?v=5">
 </head>
 <body><div class="shell">
 <header><div><a class="back" href="/app.html">← Volver a mi bitácora</a><h1>Árbol familiar</h1><p class="lead">Tu familia, sus historias y los vínculos que los unen.</p></div><div class="toolbar"><button class="btn" id="addPerson" type="button">＋ Añadir familiar</button><button class="btn" id="treeBtn" aria-pressed="true">♧ Vista de árbol</button><button class="btn" id="listBtn" aria-pressed="false">☷ Vista de lista</button><button class="btn" id="zoomOut" title="Alejar">−</button><span id="zoomText">100%</span><button class="btn" id="zoomIn" title="Acercar">+</button><button class="btn" id="zoomReset" title="Restablecer zoom">↺</button></div></header>
@@ -129,4 +130,6 @@ $('addPerson').onclick=addPersonOpen;$('addCancel').onclick=()=>close('addShade'
 $('addForm').addEventListener('submit',async e=>{e.preventDefault();const nombre=$('addName').value.trim(),relacion=$('addRelation').value.trim(),padres=[...new Set([$('addParent1').value,$('addParent2').value].filter(Boolean))];if(padres.includes(nombre)){$('addError').textContent='Una persona no puede ser su propio padre o madre.';return}try{const r=await fetch('/api/tree/person',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({nombre,relacion,padres})});if(!r.ok){const j=await r.json().catch(()=>({}));throw Error(j.error||'No se pudo guardar')}close('addShade');$('addForm').reset();await load()}catch(e){$('addError').textContent=e.message}});
 load();
 })();
-</script></body></html>
+</script>
+<script src="/eco-arbol-generaciones-v5.js?v=5" defer></script>
+</body></html>
