@@ -492,6 +492,10 @@
        perdido al lado suyo. */
     @media(max-width:640px){
       .brand-mark{width:44px; height:44px}
+      /* En el celular el control A-/A+ no va en el header (pedido de Felipe, 2026-10-10): ya está en
+         el menú de Cuenta de la app, y aquí sumaba una fila al header. El tamaño elegido antes
+         se sigue aplicando (lo lee font-size.js); solo se esconde el control. */
+      .nav-font-ctrl{display:none}
     }
 
     /* Celulares chicos en alto (auditoría UX 2026-09-09, item 1, ej.
