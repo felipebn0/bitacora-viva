@@ -1,0 +1,38 @@
+/* ECO · Identidad visual compartida v1 · Aplicar al final de CSS existentes.
+   Diseñada para respetar módulos de audio, editor, imprimir, estados y modales funcionales.
+   Tipos: Source Serif 4 (titulares) / Atkinson Hyperlegible (interfaz). */
+:root{
+  --eco-bg:#f7f4eb;--eco-surface:#fffdf6;--eco-green:#4d6542;
+  --eco-green-deep:#293d30;--eco-mist:#edf0e5;--eco-ink:#302d25;
+  --eco-muted:#777568;--eco-edge:#dadaca;
+  --eco-font-heading:'Source Serif 4',Georgia,serif;
+  --eco-font-body:'Atkinson Hyperlegible',system-ui,sans-serif;
+  --font-display:var(--eco-font-heading);--font-body:var(--eco-font-body);
+}
+/* Scope by explicit opted-in body class: legacy pages without class unaffected. */
+body.eco-brand-v1{font-family:var(--eco-font-body);color:var(--eco-ink);background-color:var(--eco-bg)}
+body.eco-brand-v1 :is(h1,h2,h3){font-family:var(--eco-font-heading)}
+body.eco-brand-v1 :is(button,input,select,textarea){font-family:var(--eco-font-body)}
+body.eco-brand-v1 :is(button,input,select,textarea,a):focus-visible{outline:3px solid #9b6734;outline-offset:2px}
+/* Interior legacy styles have old color tokens. Unify at the source. */
+body.eco-brand-v1{
+ --bg:var(--eco-bg);--cream:var(--eco-surface);--green:var(--eco-green);
+ --deep:var(--eco-green-deep);--pale:var(--eco-mist);
+ --ink:var(--eco-ink);--sub:var(--eco-muted);--stroke:var(--eco-edge);
+ --paper:var(--eco-surface);--text:var(--eco-ink);--muted:var(--eco-muted);
+ --line:var(--eco-edge);
+}
+/* Explicitly target inner-page backgrounds; never override the voice experience's custom components. */
+body.eco-brand-v1:is(.eco-page-historias,.eco-page-capitulos,.eco-page-colaboraciones,.eco-page-arbol){background:var(--eco-bg);color:var(--eco-ink)}
+body.eco-brand-v1:is(.eco-page-historias,.eco-page-capitulos,.eco-page-colaboraciones,.eco-page-arbol) > header h1,
+body.eco-brand-v1.eco-page-arbol header h1{color:var(--eco-green-deep)}
+/* Cuenta (menú en Inicio): replace off-palette cream shades with shared neutrals. */
+body.eco-brand-v1 #userMenuPanel[data-eco-organizado="1"]{
+ background:var(--eco-surface);border-color:var(--eco-edge);color:var(--eco-ink)
+}
+/* Brand-consistent editing surfaces; no changes to dimensions or print layout. */
+body.eco-brand-v1 .eco-editorial-overlay{background:var(--eco-bg);color:var(--eco-ink)}
+body.eco-brand-v1 .eco-editorial-top,
+body.eco-brand-v1 .eco-editorial-sidebar{background:var(--eco-surface)}
+body.eco-brand-v1 .eco-v6-branch{background:var(--eco-bg)}
+/* Avoid modifying SVG, waveform, camera, buttons containing status semantics, or @media print. */
