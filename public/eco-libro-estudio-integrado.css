@@ -40,3 +40,19 @@ body.eco-editorial-open-body{overflow:hidden}
 .eco-editorial-indexrow{border-bottom:1px solid #dadaca;padding-bottom:12px}
 @media(max-width:850px){.eco-editorial-layout{display:block}.eco-editorial-sidebar{border-right:0;border-bottom:1px solid #dadaca}.eco-editorial-page{min-height:65vh;padding:22px}.eco-editorial-cover{min-height:65vh;padding:30px}.eco-editorial-topbuttons button{font-size:12px;padding:8px 10px}}
 @media print{@page{size:A4;margin:0}html,body{height:auto!important;overflow:visible!important}body>*:not(#ecoEditorialDialog){display:none!important}#ecoEditorialDialog{display:block!important;position:static!important;overflow:visible!important;background:#fff!important}#ecoEditorialDialog .eco-editorial-top,#ecoEditorialDialog .eco-editorial-warning,#ecoEditorialDialog .eco-editorial-sidebar{display:none!important}.eco-editorial-layout{display:block!important}.eco-editorial-preview{background:white!important;padding:0!important;overflow:visible!important}.eco-editorial-pages{display:block!important}.eco-editorial-page{box-shadow:none!important;width:210mm!important;min-height:297mm!important;margin:0!important;break-after:page;page-break-after:always;padding:23mm 20mm!important}.eco-editorial-page:last-child{break-after:auto;page-break-after:auto}}
+
+/* Fase 3: maquetación de fotos de historias originales y QR */
+.eco-editorial-photo-config{display:grid;grid-template-columns:75px minmax(0,1fr);gap:12px;background:#fffdf6;border:1px solid #dadaca;border-radius:13px;padding:10px;margin:11px 0}
+.eco-editorial-photo-config>img{width:75px;height:95px;object-fit:cover;border-radius:8px}
+.eco-editorial-photo-fields{display:grid;gap:7px;min-width:0}
+.eco-editorial-photo-fields label{display:flex;align-items:center;gap:6px;font-size:.85rem}
+.eco-editorial-photo-fields select,.eco-editorial-photo-fields input:not([type=checkbox]){width:100%;min-width:0;border:1px solid #dadaca;border-radius:9px;background:white;padding:8px;font:inherit}
+.eco-editorial-makeqr{min-height:44px;padding:10px 14px;background:#4d6542;color:#fff;border:0;border-radius:12px;font-weight:700;cursor:pointer}
+.eco-editorial-qr-link{color:#293d30;display:block;margin:8px 0}
+.eco-editorial-figure{margin:14px auto;break-inside:avoid;text-align:center}
+.eco-editorial-figure img{display:block;width:100%;max-height:175mm;object-fit:contain}
+.eco-editorial-figure figcaption{font:italic .82rem 'Source Serif 4',serif;color:#777568;margin-top:5px}
+.eco-editorial-photo-small{width:38%}.eco-editorial-photo-medium{width:65%}.eco-editorial-photo-full{width:100%}
+.eco-editorial-qr{display:flex;align-items:center;gap:18px;border-top:1px solid #dadaca;margin-top:20px;padding-top:15px;break-inside:avoid}
+.eco-editorial-qr img{width:105px;height:105px;flex-shrink:0}.eco-editorial-qr p{font-size:.85rem;color:#777568}
+@media(max-width:600px){.eco-editorial-figure{width:100%!important}.eco-editorial-photo-config{grid-template-columns:55px minmax(0,1fr)}.eco-editorial-photo-config>img{width:55px;height:72px}}
