@@ -1,23 +1,12 @@
-/* ECO QR voces v2 · boton visible en Mi libro y QR en editor. Sin cambiar los audios. */
+/* ECO QR voces v3 · único acceso desde «Diseñar libro PDF». */
 (()=>{
  'use strict';
- let active=null;
  function init(){
    const launch=document.getElementById('ecoStudioLaunch');
    if(!launch)return;
-   if(!document.getElementById('ecoQrLaunch')){
-     const btn=document.createElement('button');btn.id='ecoQrLaunch';btn.type='button';
-     btn.className='eco-qr-launch';btn.textContent='QR de voz';
-     btn.addEventListener('click',()=>{
-       launch.click();
-       // El editor se construye de manera sincrónica al abrirlo.
-       mountEditor();
-       const overlay=document.getElementById('ecoStudioOverlay');
-       const sel=overlay?.querySelector('#ecoStudioChapterSel');
-       if(sel)sel.focus();
-     });
-     launch.insertAdjacentElement('afterend',btn);
-   }
+   // Limpia el acceso separado de versiones anteriores si siguiera presente.
+   const extra=document.getElementById('ecoQrLaunch');
+   if(extra)extra.remove();
    mountEditor();
  }
  function mountEditor(){
@@ -53,7 +42,6 @@
      copy.append(heading,description,url);foot.append(image,copy);paper.append(foot);
    }
    select.addEventListener('change',()=>{details=null;chapterId='';status.textContent='';paper.querySelector('#ecoBookQrFoot')?.remove()});
-   // El editor recrea el papel al ajustar fotos; restauramos el QR sin bucle.
    const observer=new MutationObserver(()=>{
      if(details&&chapterId===select.value&&!paper.querySelector('#ecoBookQrFoot'))renderQr();
    });
@@ -74,8 +62,7 @@
      finally{btn.disabled=false;btn.textContent='Crear QR de voz'}
    });
  }
- // El Estudio Editorial añade su botón al cargar y crea el modal al abrir.
- const mo=new MutationObserver(()=>init());
+ const mo=new MutationObserver(init);
  mo.observe(document.documentElement,{childList:true,subtree:true});
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
