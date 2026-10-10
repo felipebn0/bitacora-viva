@@ -6518,6 +6518,73 @@ require('./book-purchase-demo-routes')(app, {
 });
 require('./tree-v4-routes')(app, { sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit });
 
+// ECO FAMILY REVIEW: explicit statements ONLY; this endpoint never mutates data.
+app.get('/api/tree/family-review', requireAuth, bloquearColaborador, rateLimit, async (req,res)=>{
+ try {
+  await ensureSchema();
+  const family=await sql`SELECT id,nombre,padres FROM family_members WHERE user_id=${req.profileUserId}`;
+  const sessions=await sql`SELECT intercambios FROM sessions WHERE user_id=${req.profileUserId} ORDER BY fecha DESC LIMIT 300`;
+  const norm=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+  const named=new Map();for(const p of family){let k=norm(p.nombre);named.set(k,[...(named.get(k)||[]),p])}
+  const found=new Map();
+  for(const sess of sessions){let arr=sess.intercambios;if(typeof arr==='string'){try{arr=JSON.parse(arr)}catch{continue}}if(!Array.isArray(arr))continue;
+   for(const msg of arr){if(msg?.role!=='user'||typeof msg.content!=='string')continue;
+    const parts=msg.content.split(/[.\n;!?]/).map(x=>x.trim()).filter(x=>x.length<250);
+    for(const phrase of parts){
+     // Scope deliberately narrow: an explicit name followed by 'es hijo/a de' plus a complete registered name.
+     const lower=norm(phrase);
+     for(const child of family){const start=norm(child.nombre)+' es hij';if(!lower.startsWith(start))continue;
+      const m=lower.match(/ es hij[oa] de (.+)$/);if(!m)continue;
+      const parentName=m[1].replace(/[.,]$/,'').trim();const options=named.get(parentName)||[];
+      if(options.length!==1||options[0].id===child.id)continue;
+      const parent=options[0],existing=Array.isArray(child.padres)?child.padres:(()=>{try{return JSON.parse(child.padres||'[]')}catch{return []}})();
+      if(existing.some(x=>norm(x)===norm(parent.nombre))||existing.length>=2)continue;
+      const key=child.id+':'+parent.id;found.set(key,{childId:child.id,parentId:parent.id,child:child.nombre,parent:parent.nombre,evidence:phrase});
+     }
+    }
+   }
+  }
+  res.json({reviewedSessions:sessions.length,proposals:[...found.values()].slice(0,100)});
+ }catch(err){console.error(err);res.status(500).json({error:'No fue posible revisar las conversaciones.'})}
+});
+app.post('/api/tree/family-review/confirm', requireAuth, bloquearColaborador, rateLimit, async(req,res)=>{
+ try{
+  await ensureSchema();const childId=Number(req.body?.childId),parentId=Number(req.body?.parentId);
+  if(!Number.isSafeInteger(childId)||!Number.isSafeInteger(parentId)||childId<=0||parentId<=0||childId===parentId)return res.status(400).json({error:'Personas inválidas'});
+  const rows=await sql`SELECT id,nombre,padres FROM family_members WHERE user_id=${req.profileUserId} AND id IN (${childId},${parentId})`;
+  if(rows.length!==2)return res.status(404).json({error:'No se encuentran ambos familiares.'});
+  const child=rows.find(p=>p.id===childId),parent=rows.find(p=>p.id===parentId);
+  if(!child||!parent)return res.status(404).json({error:'Personas no encontradas'});
+  const existing=(()=>{try{const a=JSON.parse(child.padres||'[]');return Array.isArray(a)?a:[]}catch{return []}})();
+  if(existing.includes(parent.nombre))return res.json({ok:true,unchanged:true});
+  if(existing.length>=2)return res.status(409).json({error:'Esta persona ya tiene dos padres registrados. Revisa el árbol manualmente.'});
+  // Validate evidence a second time before persisting, using the same exact statement constraint.
+  const sessions=await sql`SELECT intercambios FROM sessions WHERE user_id=${req.profileUserId} ORDER BY fecha DESC LIMIT 300`;
+  const norm=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+  const target=norm(child.nombre)+' es hij'; const ending=' es hij';
+  let verified=false;
+  for(const sess of sessions){let arr=sess.intercambios;if(typeof arr==='string'){try{arr=JSON.parse(arr)}catch{continue}}if(!Array.isArray(arr))continue;
+   for(const msg of arr){if(msg?.role!=='user'||typeof msg.content!=='string')continue;
+    for(const phrase of msg.content.split(/[.\n;!?]/).map(x=>x.trim()).filter(x=>x.length<250)){
+     const line=norm(phrase);if(!line.startsWith(target))continue;
+     const m=line.match(/ es hij[oa] de (.+)$/);
+     if(m&&m[1].replace(/[.,]$/,'').trim()===norm(parent.nombre)){verified=true;break}
+    }
+    if(verified)break;
+   }
+   if(verified)break;
+  }
+  if(!verified)return res.status(409).json({error:'No se pudo verificar la frase original. No se guardaron cambios.'});
+  const updated=[...existing,parent.nombre];
+  const prior=JSON.stringify({nombre:child.nombre,padres:existing});
+  await sql.transaction([
+   sql`INSERT INTO historia_versiones (tabla, registro_id, texto_anterior, editado_por) VALUES ('family_members', ${child.id}, ${prior}, ${req.userId})`,
+   sql`UPDATE family_members SET padres=${JSON.stringify(updated)} WHERE id=${child.id} AND user_id=${req.profileUserId}`
+  ]);
+  res.json({ok:true});
+ }catch(err){console.error(err);res.status(500).json({error:'No se pudo confirmar el vínculo.'})}
+});
+
 app.get('/api/tree', requireAuth, bloquearColaborador, async (req, res) => {
   try {
     await ensureSchema();
