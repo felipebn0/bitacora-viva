@@ -1,0 +1,30 @@
+/* Critical: V7 uses flex-basis:230px inside a COLUMN -> 230px tall cards.
+   Reset basis and grow, not merely min-height. */
+#eco7Root .eco7-branch>.eco7-person,
+#eco7Root .eco7-center>.eco7-person,
+#eco7Root .eco7-grid>.eco7-person,
+#eco7Root .eco7-pair>.eco7-person{
+ flex:0 0 auto!important;
+ min-height:66px!important;
+ height:auto!important;
+ max-height:none!important;
+ width:min(100%,245px);
+ box-sizing:border-box;
+ align-self:center;
+ padding:10px 12px;
+}
+#eco7Root .eco7-branch>.eco7-person,
+#eco7Root .eco7-center>.eco7-person{
+ border-color:#b7c8ad;
+ background:#fffdf6;
+}
+#eco7Root .eco7-person.eco71-selected{
+ outline:2px solid #4d6542;outline-offset:2px;background:#edf0e5;
+}
+#eco7Root .eco7-person:focus-visible{outline:3px solid #4d6542;outline-offset:3px}
+.eco71-tree-action{margin-top:12px;width:100%;border:1px solid #4d6542;color:#293d30;background:#edf0e5}
+.eco71-tree-action[hidden]{display:none!important}
+@media(max-width:600px){
+ #eco7Root .eco7-person{min-height:60px!important}
+ #eco7Root .eco7-branch>.eco7-person,#eco7Root .eco7-center>.eco7-person{width:min(100%,230px)}
+}
