@@ -62,6 +62,7 @@ for (const u of Object.values(users)) byUsername[u.username] = u;
 let allCalls = []; // {text, values} de cada llamada a fakeSql durante el test actual
 let forceFailSubstring = null; // si está seteado, cualquier query que lo contenga rechaza
 let blobDelCalls = 0;
+const blobBorrados = []; // URL de cada archivo que el servidor mandó borrar de Blob
 
 function fakeSql(strings, ...values) {
   const text = strings.join('?');
@@ -71,6 +72,15 @@ function fakeSql(strings, ...values) {
     return Promise.reject(new Error('DB caída (simulado)'));
   }
 
+  // Borrador del libro (estudio editorial): la cuenta B (id 2) subió una foto propia y alguien
+  // metió en el borrador URL de archivos que NO son suyos — no se deben borrar.
+  if (text.includes('SELECT draft FROM book_editor_drafts WHERE owner_id')) {
+    return Promise.resolve(values[0] === 2 ? [{ draft: { bookPhotos: { '7': [
+      { url: 'https://fake.public.blob.vercel-storage.com/media/libros/2/propia-1.jpg', caption: '' },
+      { url: 'https://fake.public.blob.vercel-storage.com/media/libros/1/de-la-cuenta-A.jpg', caption: '' },
+      { url: 'https://fake.public.blob.vercel-storage.com/audio/1/sesion/user-0.webm', caption: '' },
+    ] } } }] : []);
+  }
   if (text.includes('CREATE TABLE') || text.includes('ALTER TABLE') || text.includes('CREATE INDEX')) return Promise.resolve([]);
   if (text.includes('rate_limits')) return Promise.resolve([{ count: 1 }]);
 
@@ -146,7 +156,7 @@ require.cache[require.resolve('@vercel/blob')] = {
   id: require.resolve('@vercel/blob'), filename: require.resolve('@vercel/blob'), loaded: true,
   exports: {
     put: async () => ({ url: 'https://fake.public.blob.vercel-storage.com/x' }),
-    del: async () => { blobDelCalls++; },
+    del: async (url) => { blobDelCalls++; blobBorrados.push(url); },
   },
 };
 require.cache[require.resolve('@anthropic-ai/sdk')] = {
@@ -261,6 +271,13 @@ async function main() {
     allCalls.filter((c) => /user_id|WHERE id = /.test(c.text) && !c.text.includes('rate_limits')).every((c) => c.values.includes(users[1].id))
   );
 
+  // El libro (borrador, compra de prueba, QR) y el árbol V4 también son contenido de la bitácora.
+  for (const [tabla, columna] of [['book_editor_drafts', 'owner_id'], ['book_demo_purchases', 'owner_id'], ['book_audio_links', 'owner_id'], ['tree_v4_state', 'profile_user_id']]) {
+    check(`reset-bitacora: también borra ${tabla}`, allCalls.some((c) => c.text.includes(`DELETE FROM ${tabla} WHERE ${columna}`) && c.values.includes(users[1].id)));
+  }
+  const codigoServidor = require('fs').readFileSync(serverPath, 'utf8');
+  check('esquema: book_editor_drafts y book_demo_purchases ya no dependen de users (también guardan subperfiles)', /DROP CONSTRAINT IF EXISTS book_editor_drafts_owner_id_fkey/.test(codigoServidor) && /DROP CONSTRAINT IF EXISTS book_demo_purchases_owner_id_fkey/.test(codigoServidor) && !/REFERENCES users\(id\) ON DELETE CASCADE/.test(require('fs').readFileSync(require('path').resolve(__dirname, '..', 'book-editor-routes.js'), 'utf8')));
+
   // Rollback: si una sentencia a mitad de la transacción falla, ninguna fila
   // tendría que quedar aplicada (con el fake, esto se ve como que la ruta
   // responde 500 y no sigue adelante con el borrado de Blob).
@@ -297,6 +314,7 @@ async function main() {
   check('delete-account: la cuenta B sigue existiendo después del rollback', loginTrasFalla.status === 200);
 
   allCalls = [];
+  blobBorrados.length = 0;
   const deleteOk = await request(server, { path: '/api/delete-account', method: 'POST', body: { password: 'claveB123' } }, cookieB);
   check('delete-account: éxito -> 200', deleteOk.status === 200);
   check(
@@ -312,6 +330,15 @@ async function main() {
     const idxUsers = allCalls.findIndex((c) => c.text.includes('DELETE FROM users WHERE id'));
     check(`delete-account: borra ${tabla} antes que la fila de users`, idxTabla !== -1 && idxUsers !== -1 && idxTabla < idxUsers);
   }
+
+  // El libro, el QR, el árbol V4 y las invitaciones personales también son datos de la cuenta.
+  for (const [tabla, columna] of [['book_editor_drafts', 'owner_id'], ['book_demo_purchases', 'owner_id'], ['book_audio_links', 'owner_id'], ['tree_v4_state', 'profile_user_id'], ['invitados', 'owner_id']]) {
+    const idx = allCalls.findIndex((c) => c.text.includes(`DELETE FROM ${tabla} WHERE ${columna}`));
+    const idxUsers = allCalls.findIndex((c) => c.text.includes('DELETE FROM users WHERE id'));
+    check(`delete-account: borra ${tabla} (libro/QR/árbol/invitaciones) antes que la fila de users`, idx !== -1 && idx < idxUsers && allCalls[idx].values.includes(users[2].id));
+  }
+  check('delete-account: borra de Blob la foto del libro que era suya', blobBorrados.some((u) => u.endsWith('/media/libros/2/propia-1.jpg')));
+  check('delete-account: NO borra archivos ajenos metidos en el borrador del libro', !blobBorrados.some((u) => u.includes('/media/libros/1/') || u.includes('/audio/1/')));
 
   // ============================================================
   // POST /api/change-password

@@ -898,6 +898,39 @@ function ensureSchema() {
       sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_invitados_owner_telefono ON invitados(owner_id, telefono)`,
       sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_invitados_codigo ON invitados(codigo)`,
       sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS guest_id TEXT`,
+      // Tablas del estudio del libro, el QR del libro y el árbol V4 (las usan
+      // book-editor-routes.js, book-purchase-demo-routes.js, book-qr-routes.js y
+      // tree-v4-routes.js, que también las crean si faltan). Se aseguran aquí para que
+      // borrar la cuenta o reiniciar la bitácora siempre las pueda limpiar, y SIN llave
+      // foránea a users: owner_id/profile_user_id también puede ser un subperfil
+      // (bitacoras), que no vive en users, y con la llave guardar el borrador del libro
+      // desde un subperfil fallaba. Por eso la limpieza es explícita (ver delete-account
+      // y reset-bitacora).
+      sql`CREATE TABLE IF NOT EXISTS book_editor_drafts (
+        owner_id INTEGER PRIMARY KEY,
+        draft JSONB NOT NULL DEFAULT '{}'::jsonb,
+        version INTEGER NOT NULL DEFAULT 1,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      sql`ALTER TABLE book_editor_drafts DROP CONSTRAINT IF EXISTS book_editor_drafts_owner_id_fkey`,
+      sql`CREATE TABLE IF NOT EXISTS book_demo_purchases (
+        owner_id INTEGER PRIMARY KEY,
+        product_code TEXT NOT NULL DEFAULT 'eco-digital-book',
+        mode TEXT NOT NULL DEFAULT 'simulated',
+        status TEXT NOT NULL DEFAULT 'approved',
+        price_cop INTEGER NOT NULL DEFAULT 49900,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      sql`ALTER TABLE book_demo_purchases DROP CONSTRAINT IF EXISTS book_demo_purchases_owner_id_fkey`,
+      sql`CREATE TABLE IF NOT EXISTS book_audio_links (
+        token TEXT PRIMARY KEY, owner_id INTEGER NOT NULL, chapter_id INTEGER NOT NULL,
+        chapter_title TEXT NOT NULL, audio_urls TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        revoked_at TIMESTAMPTZ
+      )`,
+      sql`CREATE TABLE IF NOT EXISTS tree_v4_state (profile_user_id INTEGER PRIMARY KEY, state JSONB NOT NULL DEFAULT '{}'::jsonb, updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`,
+      sql`ALTER TABLE tree_v4_state ADD COLUMN IF NOT EXISTS revision INTEGER NOT NULL DEFAULT 0`,
       // Item 12 (pedido de Felipe, 2026-09-08): A/B test de DÓNDE se
       // menciona una historia aportada al arrancar la próxima charla —
       // 'inicio' (como ya funcionaba) vs. 'medio' (se difiere unos turnos,
@@ -3493,6 +3526,8 @@ app.post('/api/reset-bitacora', requireAuth, bloquearColaborador, bloquearInvita
     // de la misma transacción. Con la subconsulta no hace falta — mientras
     // corra antes de borrar family_members, ve exactamente las mismas filas
     // que ese "RETURNING" hubiera traído.
+    const borradorLibro = await sql`SELECT draft FROM book_editor_drafts WHERE owner_id = ${req.userId}`;
+    const fotosDelLibro = urlsDeFotosDelLibro(borradorLibro[0] && borradorLibro[0].draft, req.userId);
     const [, s, r, n, m, fm, te, sl, ch] = await sql.transaction([
       sql`DELETE FROM historia_versiones WHERE tabla = 'family_members' AND registro_id IN (SELECT id FROM family_members WHERE user_id = ${req.userId})`,
       sql`DELETE FROM sessions WHERE user_id = ${req.userId} RETURNING id`,
@@ -3503,6 +3538,11 @@ app.post('/api/reset-bitacora', requireAuth, bloquearColaborador, bloquearInvita
       sql`DELETE FROM timeline_events WHERE user_id = ${req.userId} RETURNING id`,
       sql`DELETE FROM story_log WHERE user_id = ${req.userId} RETURNING id, audio_url`,
       sql`DELETE FROM chapters WHERE user_id = ${req.userId} RETURNING id`,
+      // El libro (borrador del estudio, compra de prueba, QR) y el árbol V4 también son contenido de la bitácora.
+      sql`DELETE FROM book_editor_drafts WHERE owner_id = ${req.userId}`,
+      sql`DELETE FROM book_demo_purchases WHERE owner_id = ${req.userId}`,
+      sql`DELETE FROM book_audio_links WHERE owner_id = ${req.userId}`,
+      sql`DELETE FROM tree_v4_state WHERE profile_user_id = ${req.userId}`,
     ]);
 
     // Blob queda deliberadamente FUERA de la transacción SQL (Vercel Blob no
@@ -3518,6 +3558,7 @@ app.post('/api/reset-bitacora', requireAuth, bloquearColaborador, bloquearInvita
     });
     sl.forEach((row) => { if (row.audio_url) audioUrls.push(row.audio_url); });
     m.forEach((row) => { if (row.url) audioUrls.push(row.url); });
+    fotosDelLibro.forEach((u) => audioUrls.push(u));
     await borrarArchivosBlob(audioUrls);
 
     res.json({
@@ -3598,6 +3639,8 @@ app.post('/api/delete-account', requireAuth, rateLimit, async (req, res) => {
     // desde datos de OTRAS personas (colaboraciones, aportes hechos en
     // otras bitácoras, ediciones hechas en el árbol de otra persona); 3)
     // solo al final, con nada más apuntándole, la fila de "users" en sí.
+    const borradorLibro = await sql`SELECT draft FROM book_editor_drafts WHERE owner_id = ${req.userId}`;
+    const fotosDelLibro = urlsDeFotosDelLibro(borradorLibro[0] && borradorLibro[0].draft, req.userId);
     const results = await sql.transaction([
       sql`DELETE FROM historia_versiones WHERE tabla = 'family_members' AND registro_id IN (SELECT id FROM family_members WHERE user_id = ${req.userId})`,
       sql`DELETE FROM sessions WHERE user_id = ${req.userId}`,
@@ -3627,6 +3670,13 @@ app.post('/api/delete-account', requireAuth, rateLimit, async (req, res) => {
       sql`DELETE FROM gift_redemptions WHERE bought_by_user_id = ${req.userId}`,
       sql`DELETE FROM billing_orders WHERE user_id = ${req.userId}`,
       sql`DELETE FROM subscriptions WHERE user_id = ${req.userId}`,
+      // Libro, QR del libro, árbol V4 e invitaciones personales (nombre y celular de las
+      // personas que invitó): también son datos de esta cuenta.
+      sql`DELETE FROM book_editor_drafts WHERE owner_id = ${req.userId}`,
+      sql`DELETE FROM book_demo_purchases WHERE owner_id = ${req.userId}`,
+      sql`DELETE FROM book_audio_links WHERE owner_id = ${req.userId}`,
+      sql`DELETE FROM tree_v4_state WHERE profile_user_id = ${req.userId}`,
+      sql`DELETE FROM invitados WHERE owner_id = ${req.userId}`,
       sql`DELETE FROM users WHERE id = ${req.userId}`,
     ]);
     const n = results[3];
@@ -3644,6 +3694,7 @@ app.post('/api/delete-account', requireAuth, rateLimit, async (req, res) => {
     });
     sl.forEach((row) => { if (row.audio_url) audioUrls.push(row.audio_url); });
     m.forEach((row) => { if (row.url) audioUrls.push(row.url); });
+    fotosDelLibro.forEach((u) => audioUrls.push(u));
     await borrarArchivosBlob(audioUrls);
 
     clearSessionCookie(req, res);
@@ -4545,6 +4596,27 @@ async function asegurarEspanolColombiano(userId, texto) {
   }
   console.log(`[dialecto] hallazgos=${hallazgos.join(',')} resultado=${resultado}`);
   return final;
+}
+
+// Fotos que alguien subió desde el estudio del libro (book-editor-routes.js): quedan
+// en media/libros/<id>/ y sus URL viajan dentro del borrador (bookPhotos). Al borrar la
+// cuenta o reiniciar la bitácora hay que borrar también esos archivos. Solo se aceptan
+// rutas que de verdad cuelgan de media/libros/<id>/ de esta misma cuenta: el borrador
+// lo escribe la persona, y no se debe poder usar para borrar archivos de otra.
+function urlsDeFotosDelLibro(draft, ownerId) {
+  let d = draft;
+  if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { return []; } }
+  const fotos = d && d.bookPhotos;
+  if (!fotos || typeof fotos !== 'object') return [];
+  const out = [];
+  for (const arr of Object.values(fotos)) {
+    if (!Array.isArray(arr)) continue;
+    for (const f of arr) {
+      const datos = f && typeof f.url === 'string' ? datosDelArchivoDeBlob(f.url) : null;
+      if (datos && datos.ownerId === ownerId && datos.pathname.startsWith(`media/libros/${ownerId}/`)) out.push(f.url);
+    }
+  }
+  return out;
 }
 
 // Guarda en story_log lo último que dijo la persona (con su audio y fotos si ya

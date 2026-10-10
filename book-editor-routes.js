@@ -52,7 +52,7 @@ module.exports=(app,{sql,ensureSchema,requireAuth,bloquearColaborador,rateLimit,
  async function schema(){
   await ensureSchema();
   await sql`CREATE TABLE IF NOT EXISTS book_editor_drafts (
-   owner_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+   owner_id INTEGER PRIMARY KEY,
    draft JSONB NOT NULL DEFAULT '{}'::jsonb,
    version INTEGER NOT NULL DEFAULT 1,
    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()

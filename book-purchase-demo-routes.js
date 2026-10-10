@@ -5,7 +5,7 @@ module.exports = function registerBookPurchaseDemo(app, { sql, ensureSchema, req
   async function schema() {
     await ensureSchema();
     await sql`CREATE TABLE IF NOT EXISTS book_demo_purchases (
-      owner_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      owner_id INTEGER PRIMARY KEY,
       product_code TEXT NOT NULL DEFAULT 'eco-digital-book',
       mode TEXT NOT NULL DEFAULT 'simulated',
       status TEXT NOT NULL DEFAULT 'approved',
