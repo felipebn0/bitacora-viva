@@ -1,0 +1,24 @@
+/* ECO Árbol V6.1 — complementos al final de las hojas de V5 y V6 */
+.toolbar>#treeBtn,.toolbar>#listBtn,.toolbar>.eco-v6-switch{display:none!important}
+#ecoV61Nav{display:flex;gap:7px;flex-wrap:wrap}
+#ecoV61Nav .btn[aria-pressed="true"]{background:#4d6542;color:#fff;border-color:#4d6542}
+.eco-v61-subnav{display:flex;gap:7px;padding:8px 0 12px;align-items:center}
+.eco-v61-subnav[hidden]{display:none!important}
+.eco-v61-subnav button{border:1px solid #dadaca;border-radius:12px;background:#fffdf6;padding:9px 15px;color:#293d30;font-weight:700;cursor:pointer}
+.eco-v61-subnav button[aria-pressed="true"]{background:#edf0e5;border-color:#4d6542}
+.eco-v61-notice{padding:10px 14px;margin:10px 0;font-size:13px;line-height:1.4}
+#ecoV6Root[hidden],#listPanel.hidden,#stage.hidden{display:none!important}
+.eco-v6-generation{display:block!important;width:100%}
+.eco-v6-couple{display:grid!important;grid-template-columns:minmax(0,1fr) 22px minmax(0,1fr);align-items:center;gap:9px;width:100%;max-width:100%}
+.eco-v6-couple .eco-v6-card{min-width:0;max-width:none;width:100%;height:auto;min-height:76px;flex:none;align-self:stretch}
+.eco-v6-couple .eco-v6-plus{width:22px;text-align:center}
+.eco-v6-couple .eco-v6-missing{overflow-wrap:anywhere;font-size:11px}
+.eco-v6-lineage .eco-v6-card,.eco-v6-center .eco-v6-card{flex:none!important;min-height:70px!important;max-width:260px;width:min(100%,260px);height:auto!important}
+.eco-v6-lineage{margin:12px 0 14px}
+.eco-v6-branch{display:flex;flex-direction:column;align-items:stretch;gap:6px}
+.eco-v6-branch>.eco-v6-expand{margin-top:auto}
+.eco-v6-relative-grid{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(min(100%,165px),1fr));gap:8px}
+.eco-v6-relative-grid>.eco-v6-card{max-width:none;min-width:0}
+.eco-v6-card{box-sizing:border-box}
+@media(max-width:950px){.eco-v6-columns{grid-template-columns:1fr}.eco-v6-couple .eco-v6-card{min-height:70px}}
+@media(max-width:440px){#ecoV61Nav{width:100%}#ecoV61Nav>.btn{flex:1}.eco-v6-couple{gap:4px;grid-template-columns:minmax(0,1fr) 17px minmax(0,1fr)}.eco-v6-couple .eco-v6-plus{width:17px}.eco-v6-avatar{width:30px;height:30px;flex-basis:30px}}
