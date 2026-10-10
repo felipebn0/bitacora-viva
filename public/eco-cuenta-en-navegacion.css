@@ -1,0 +1,91 @@
+/* ECO — SOLO navegación: Cuenta junto a Colaboración, Árbol y Mi libro. */
+#appContent .topbar[data-eco-cuatro-opciones="1"] {
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  justify-items:center!important;
+  align-items:start!important;
+  max-width:590px!important;
+  width:min(100%,590px)!important;
+  gap:clamp(5px,1.6vw,17px)!important;
+  margin-left:auto!important;
+  margin-right:auto!important;
+}
+#appContent .topbar[data-eco-cuatro-opciones="1"] > .icon-nav-item,
+#appContent .topbar[data-eco-cuatro-opciones="1"] > .user-menu {
+  width:100%!important;
+  min-width:0!important;
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  gap:6px!important;
+  text-align:center!important;
+}
+#appContent .topbar .eco-cuenta-en-nav .icon-nav-item {
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+  width:100%;min-width:0;
+}
+#appContent .topbar .eco-cuenta-en-nav .icon-label,
+#appContent .topbar .eco-cuenta-en-nav .icon-nav-item .icon-label {
+  display:block!important;
+  color:var(--ink-soft,#706551)!important;
+  font-size:.875rem!important;
+  line-height:1.18!important;
+  text-align:center!important;
+}
+#appContent .topbar[data-eco-cuatro-opciones="1"] .icon-label {
+  white-space:normal!important;
+  overflow-wrap:normal!important;
+}
+#appContent .topbar .eco-cuenta-en-nav #userMenuBtn {
+  margin:0!important;
+  width:56px!important;height:56px!important;min-height:0!important;
+  font-size:1.7rem!important;border-radius:50%!important;
+}
+#appContent .greeting-bar.eco-header-sin-cuenta {
+  display:grid!important;
+  grid-template-columns:62px minmax(0,1fr) 62px!important;
+  align-items:center!important;
+  gap:clamp(8px,2vw,20px)!important;
+  max-width:900px!important;
+}
+#appContent .greeting-bar.eco-header-sin-cuenta::after {
+  content:"";display:block;grid-column:3;
+}
+#appContent .greeting-bar.eco-header-sin-cuenta .brand-logo {
+  grid-column:1;grid-row:1;justify-self:center;
+}
+#appContent .greeting-bar.eco-header-sin-cuenta .greeting-text {
+  grid-column:2;grid-row:1;min-width:0;text-align:center;
+  overflow-wrap:break-word;
+}
+@media(max-width:600px) {
+  #appContent .greeting-bar.eco-header-sin-cuenta {
+    grid-template-columns:44px minmax(0,1fr) 44px!important;
+    gap:5px!important;
+  }
+  #appContent .greeting-bar.eco-header-sin-cuenta .brand-logo {
+    width:40px!important;height:40px!important;
+  }
+  #appContent .greeting-bar.eco-header-sin-cuenta .greeting-name {
+    font-size:clamp(1.15rem,5.2vw,1.58rem)!important;
+  }
+  #appContent .greeting-bar.eco-header-sin-cuenta .greeting-text {
+    font-size:clamp(.85rem,3.35vw,1rem)!important;
+    line-height:1.3!important;
+  }
+  #appContent .topbar[data-eco-cuatro-opciones="1"] {
+    max-width:100%!important;gap:4px!important;
+  }
+  #appContent .topbar[data-eco-cuatro-opciones="1"] .icon-btn,
+  #appContent .topbar .eco-cuenta-en-nav #userMenuBtn {
+    width:clamp(43px,12vw,52px)!important;
+    height:clamp(43px,12vw,52px)!important;
+    font-size:1.4rem!important;
+  }
+  #appContent .topbar[data-eco-cuatro-opciones="1"] .icon-label,
+  #appContent .topbar .eco-cuenta-en-nav .icon-label {
+    font-size:clamp(.68rem,2.7vw,.84rem)!important;
+  }
+}
+/* El panel de Cuenta sigue usando sus estilos propios (derecha en PC, abajo en móvil). */
