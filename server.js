@@ -6509,6 +6509,13 @@ require('./book-editor-routes')(app, {
   MEDIA_MIME_PERMITIDOS,
   almacenarArchivo
 });
+require('./book-purchase-demo-routes')(app, {
+  sql,
+  ensureSchema,
+  requireAuth,
+  bloquearColaborador,
+  rateLimit
+});
 require('./tree-v4-routes')(app, { sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit });
 
 app.get('/api/tree', requireAuth, bloquearColaborador, async (req, res) => {
