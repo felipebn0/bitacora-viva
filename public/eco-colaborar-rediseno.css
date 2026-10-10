@@ -16,6 +16,7 @@
 #appContent .eco-colab-personas #collabSwitch .sub{display:none}
 #appContent .eco-colab-personas .collab-switch-list{gap:6px;justify-content:center}
 #appContent .eco-colab-personas .collab-switch-list a{font-size:.88rem;padding:7px 12px}
+#appContent .eco-colab-personas #collabSwitch p a{color:#4d6542;font-weight:700;text-underline-offset:3px}
 #appContent .aportes{width:100%!important;max-width:710px!important;padding:clamp(17px,3vw,25px)!important;gap:10px!important;margin-bottom:16px!important;min-height:0!important}
 #appContent .aportes>h2{text-align:center;font-size:1.4rem;margin-bottom:0}
 #appContent .orb-zone{padding:10px 0 0!important;gap:8px!important;min-height:0!important}
