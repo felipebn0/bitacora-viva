@@ -17,14 +17,12 @@ function generate(people,state){
   if(l.type==='parent')parents.get(b).add(a);
   if(l.type==='partner'){if(!partners.has(a))partners.set(a,new Set());if(!partners.has(b))partners.set(b,new Set());partners.get(a).add(b);partners.get(b).add(a)}
  }
- // Directed graph: depth generation; tolerate bad or cyclic data by bounded relaxation.
  const depths=new Map(persons.map(p=>[num(p.id),0]));
  for(let n=0;n<persons.length;n++){let change=false;
   for(const [child,pp] of parents)for(const parent of pp){const proposed=Math.min(12,(depths.get(parent)||0)+1);
    if(proposed>(depths.get(child)||0)){depths.set(child,proposed);change=true}}
   if(!change)break;
  }
- // Partners share a generation only when compatible with biological tree; never override parent edges.
  for(let pass=0;pass<2;pass++)for(const [a,bb] of partners)for(const b of bb){
   if(parents.get(a)?.has(b)||parents.get(b)?.has(a))continue;
   const x=depths.get(a),y=depths.get(b);
@@ -33,7 +31,6 @@ function generate(people,state){
  const levelMap=new Map();
  for(const p of persons){const z=depths.get(num(p.id))||0;if(!levelMap.has(z))levelMap.set(z,[]);levelMap.get(z).push(p)}
  const positions={};
- // Group by parental anchors to keep siblings and couples together, rather than alphabetical alone.
  const childMap=new Map();
  for(const [child,pp] of parents)for(const parent of pp){if(!childMap.has(parent))childMap.set(parent,[]);childMap.get(parent).push(child)}
  let previousOrder=new Map(),maxWidth=1100;
@@ -42,13 +39,11 @@ function generate(people,state){
   const key=p=>{
    const pp=[...parents.get(num(p.id))||[]].filter(id=>previousOrder.has(id));
    if(pp.length)return Math.min(...pp.map(id=>previousOrder.get(id)));
-   // Include couples near one another when possible, without inventing ancestry.
    const spouses=[...partners.get(num(p.id))||[]].filter(id=>previousOrder.has(id));
    if(spouses.length)return Math.min(...spouses.map(id=>previousOrder.get(id)))+.2;
    return 10000;
   };
   group.sort((a,b)=>key(a)-key(b)||String(a.nombre).localeCompare(String(b.nombre),'es'));
-  // Within one generation place partners adjacent if both have independent roots.
   const placed=new Set(),ordered=[];
   for(const p of group){const id=num(p.id);if(placed.has(id))continue;ordered.push(p);placed.add(id);
    const spouse=[...partners.get(id)||[]].map(x=>byId.get(x)).find(q=>q&&(depths.get(num(q.id))===level)&&!placed.has(num(q.id)));
