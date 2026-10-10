@@ -1,0 +1,128 @@
+/* ECO · Colaboraciones, identidad visual de Árbol familiar.
+   Afecta únicamente a colaboraciones.html. */
+:root{
+  --bg:#f7f4eb; --cream:#fffdf6; --green:#4d6542; --deep:#293d30;
+  --pale:#edf0e5; --ink:#302d25; --sub:#777568; --stroke:#dadaca;
+}
+body{
+  background:var(--bg);color:var(--ink);
+  padding:24px clamp(14px,2.5vw,42px) 80px;
+  font-size:16px;line-height:1.5;
+}
+body > header, body > main.wrap {max-width:1700px;width:100%;margin-left:auto;margin-right:auto}
+body > header{
+  display:flex;align-items:flex-end;justify-content:space-between;
+  gap:16px 28px;flex-wrap:wrap;margin-bottom:24px;
+}
+body > header .eco-colab-heading{min-width:0;flex:1 1 340px}
+body > header h1{
+  font-family:"Source Serif 4",Georgia,serif;
+  font-size:clamp(33px,4.5vw,51px);line-height:1.04;margin:0 0 9px;
+  font-weight:700;color:#302d25;
+}
+body > header p{font-size:1rem;color:var(--sub);line-height:1.5;margin:0}
+body > header .volver{
+  display:inline-flex;align-items:center;min-height:28px;
+  text-decoration:none;border:0;padding:0;margin:0 0 10px;
+  color:var(--deep);font-size:14px;font-weight:700;
+}
+body > header .volver:hover{text-decoration:underline}
+body > main.wrap{display:block}
+body > main .eco-colab-actions{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  margin:0 0 22px;
+}
+body > main .aportar-ahora{
+  display:inline-flex;align-items:center;justify-content:center;
+  border-radius:13px;padding:10px 17px;min-height:44px;margin:0;
+  background:var(--green);color:#fff;font-size:.95rem;font-weight:700;
+  box-shadow:none;text-decoration:none;border:1px solid var(--green);
+}
+body > main .aportar-ahora:hover{background:#3b5233}
+body > main .tabs-row{
+  display:flex;gap:8px;flex-wrap:wrap;margin:0 0 26px;
+  padding:0;border:0;
+}
+body > main .tab-btn{
+  padding:10px 15px;min-height:44px;border-radius:13px;
+  color:var(--deep);border:1px solid var(--stroke);
+  background:var(--cream);font-weight:700;font-family:inherit;
+  font-size:.92rem;
+}
+body > main .tab-btn:hover{background:var(--pale)}
+body > main .tab-btn.active,body > main .tab-btn[aria-selected="true"]{
+  background:var(--green);color:#fff;border-color:var(--green);
+}
+body > main section{margin:0 0 30px;padding:0}
+body > main section h2{
+  font-family:"Source Serif 4",Georgia,serif;
+  color:var(--deep);font-size:clamp(22px,2.3vw,29px);
+  line-height:1.2;margin:0 0 6px;
+}
+body > main section .sub{color:var(--sub);font-size:.94rem;margin:0 0 16px}
+body > main .colab-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,205px),1fr));gap:12px}
+body > main .colab-card, body > main .aporte-item{
+  background:var(--cream);border:1px solid #e7e2d4;
+  border-radius:18px;box-shadow:0 8px 20px #463d2510;
+}
+body > main .colab-card{min-width:0;padding:20px;flex:none}
+body > main .colab-avatar{
+  border:3px solid #f2e8d5;background:#e4e8d8;color:var(--green)
+}
+body > main .colab-card .parentesco,body > main .aporte-item .quien{color:var(--green)}
+body > main .colab-card .count,body > main .aporte-item .texto{color:var(--ink)}
+body > main .aporte-item{padding:19px 20px;margin-bottom:12px}
+body > main .aporte-item .aporte-acciones{gap:8px;flex-wrap:wrap}
+body > main .aporte-item .aporte-acciones button,
+body > main .empty-cta,body > main button.empty-cta,
+body > main .retry-btn{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-height:43px;border:1px solid var(--stroke);border-radius:13px;
+  padding:9px 14px;background:var(--cream);color:var(--deep);
+  text-decoration:none;font:700 .9rem "Atkinson Hyperlegible",system-ui,sans-serif;
+  margin:8px 0 0;cursor:pointer;
+}
+body > main .empty-cta:hover,body > main .retry-btn:hover,
+body > main .aporte-item .aporte-acciones button:hover{background:var(--pale)}
+body > main .aporte-item .aporte-acciones .archivar-btn{color:#943d2f;border-color:#e4bbae}
+body > main #invitarPanel{
+  max-width:540px;margin:12px 0 20px;padding:20px;
+  background:var(--cream);border:1px solid #e7e2d4;border-radius:18px
+}
+body > main #invitarPanel[hidden],body > main [hidden]{display:none!important}
+body > main #invitarPanel label,body > main .dados-select-row label{color:var(--deep);font-weight:700}
+body > main #invitarPanel input,body > main .dados-select-row select{
+  border:1px solid #cfcbbf;background:#fff;
+  border-radius:12px;min-height:45px;padding:10px 12px;
+  max-width:100%;font-size:1rem;color:var(--ink)
+}
+body > main #invitarPanel .invite-send{
+  background:var(--green);color:#fff;border:1px solid var(--green);
+  border-radius:13px;min-height:46px;font-weight:700
+}
+body > main #invitarPanel .invite-acciones a,
+body > main .invite-list .invite-acciones button,
+body > main .invite-list .invite-acciones a,
+body > main .filtro-aviso a{color:var(--green)}
+body > main .filtro-aviso{
+  border-radius:14px;padding:12px 16px;
+  background:#fcf4e6;border:1px solid #e2d5bc
+}
+body > main .empty{
+  padding:24px;border:1px dashed var(--stroke);border-radius:16px;
+  background:var(--cream);color:var(--sub);font-style:normal
+}
+@media(max-width:700px){
+ body{padding:14px 12px 80px}
+ body > header{margin-bottom:16px;align-items:flex-start}
+ body > header h1{font-size:34px}
+ body > header p{font-size:.89rem}
+ body > main .eco-colab-actions{margin-bottom:14px}
+ body > main .aportar-ahora{width:100%;text-align:center}
+ body > main .tabs-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+ body > main .tab-btn{min-width:0;padding:10px 8px;line-height:1.2;font-size:.83rem}
+ body > main .colab-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,155px),1fr))}
+ body > main .aporte-item{padding:15px}
+ body > main #invitarPanel{padding:14px}
+}
+@media(prefers-reduced-motion:reduce){body > main *{scroll-behavior:auto!important}}
