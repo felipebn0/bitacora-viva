@@ -5,7 +5,7 @@ let chapters=[],stories=[],state={},activeId='',dialog,book,form,list,status,mod
 const byId=id=>document.getElementById(id);
 const node=(tag,cls,value)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(value!==undefined)e.textContent=value;return e};
 const plain=t=>String(t||'');
-function fresh(){return {title:'Mi historia familiar',subtitle:'Recuerdos para las próximas generaciones',dedication:'',order:[],edits:{},media:{},qr:{}}}
+function fresh(){return {title:'Mi historia familiar',subtitle:'Recuerdos para las próximas generaciones',dedication:'',order:[],edits:{},media:{},bookPhotos:{},qr:{}}}
 function read(){try{const x=JSON.parse(localStorage.getItem(KEY)||'null');if(x&&typeof x==='object'){return {...fresh(),...x,edits:typeof x.edits==='object'&&x.edits?x.edits:{},order:Array.isArray(x.order)?x.order:[]}}}catch{}return fresh()}
 let version=0,saveTimer=null,saving=Promise.resolve(),dirty=false,serverReady=false;
 function persist(){
@@ -54,7 +54,7 @@ async function open(){create();previousFocus=document.activeElement;dialog.hidde
  if(!r.ok||!dr.ok||!sr.ok)throw Error((r.status===401||dr.status===401)?'Inicia sesión para acceder a tu libro.':'No se pudo conectar con el guardado de ECO.');
  const [data,draft,storyData]=await Promise.all([r.json(),dr.json(),sr.json()]);stories=Array.isArray(storyData.stories)?storyData.stories:[];
  chapters=Array.isArray(data.chapters)?data.chapters:[];
- state={...fresh(),...(draft.book||{}),edits:draft.book?.edits||{},order:Array.isArray(draft.book?.order)?draft.book.order:[],media:draft.book?.media||{},qr:draft.book?.qr||{}};
+ state={...fresh(),...(draft.book||{}),edits:draft.book?.edits||{},order:Array.isArray(draft.book?.order)?draft.book.order:[],media:draft.book?.media||{},bookPhotos:draft.book?.bookPhotos||{},qr:draft.book?.qr||{}};
  version=draft.version||0;serverReady=true;dirty=false;
  activeId=String(ordered()[0]?.id||'');
  status.textContent='Libro sincronizado con tu cuenta ECO ✓';
@@ -76,7 +76,7 @@ function photoOptions(c){
   for(const m of Array.isArray(st.media_urls)?st.media_urls:[]){if(!m||m.type==='video'||typeof m.url!=='string'||!/^https:\/\//i.test(m.url)||seen.has(m.url))continue;
    seen.add(m.url);a.push({url:m.url,caption:String(m.caption||'').slice(0,180)});
   }
- }return a;
+ }for(const p of (state.bookPhotos?.[String(c.id)]||[])){if(p&&typeof p.url==='string'&&/^https:\/\//.test(p.url)&&!seen.has(p.url)){seen.add(p.url);a.push({url:p.url,caption:p.caption||'',uploaded:true})}}return a;
 }
 function mediaPanel(){
  form.appendChild(node('h3','','Fotografías y voces'));
@@ -84,9 +84,31 @@ function mediaPanel(){
  if(!ordered().some(c=>String(c.id)===activeId))activeId=String(ordered()[0]?.id||'');sel.value=activeId;
  sel.addEventListener('change',()=>{activeId=sel.value;choose()});form.appendChild(sel);
  const c=chapters.find(x=>String(x.id)===activeId);if(!c){form.appendChild(node('p','','Genera capítulos primero.'));return}
- form.appendChild(node('p','eco-editorial-hint','Usa las fotografías ya guardadas en tus historias. La posición y los pies de foto se guardan en ECO.'));
+ form.appendChild(node('p','eco-editorial-hint','Sube fotografías directamente a este capítulo. Puedes elegir su tamaño, posición y pie de foto. Se guardan en tu cuenta ECO.'));
+ const uploader=node('input','eco-editorial-upload-input');uploader.type='file';uploader.accept='image/jpeg,image/png,image/webp';uploader.multiple=true;uploader.id='ecoEditorialUpload';
+ const uploadLabel=node('label','eco-editorial-upload-label','＋ Subir fotografías');uploadLabel.htmlFor=uploader.id;
+ const note=node('p','eco-editorial-hint','Hasta 3 MB por foto (JPG, PNG o WebP). Puedes elegir varias.');
+ form.append(uploadLabel,uploader,note);
+ uploader.addEventListener('change',async()=>{
+  const files=Array.from(uploader.files||[]).slice(0,12);uploader.value='';if(!files.length)return;
+  uploadLabel.textContent='Subiendo fotografías…';uploader.disabled=true;
+  let count=0,failed=[];
+  for(const file of files){
+   if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>3*1024*1024){failed.push(file.name+' (formato o tamaño)');continue}
+   try{const r=await fetch('/api/book-editor/photo',{method:'POST',headers:{'Content-Type':file.type},credentials:'same-origin',body:file});
+    const d=await r.json().catch(()=>({}));if(!r.ok||!d.url)throw Error(d.error||'No se pudo subir');
+    state.bookPhotos??={};state.bookPhotos[activeId]??=[];
+    if(!state.bookPhotos[activeId].some(p=>p.url===d.url))state.bookPhotos[activeId].push({url:d.url,caption:file.name.replace(/\.[^.]+$/,'').slice(0,180)});
+    state.media??={};state.media[activeId]??={};state.media[activeId][d.url]={pos:'0',size:'full',caption:file.name.replace(/\.[^.]+$/,'').slice(0,180)};
+    persist();count++;
+   }catch(e){failed.push(file.name+' ('+e.message+')')}
+  }
+  uploadLabel.textContent='＋ Subir fotografías';uploader.disabled=false;
+  if(count)choose();
+  if(failed.length){const error=node('p','eco-editorial-hint','No se subieron: '+failed.join(', '));form.prepend(error)}
+ });
  const images=photoOptions(c),chosen=state.media?.[activeId]||{};
- if(!images.length)form.appendChild(node('p','eco-editorial-hint','Este capítulo todavía no tiene fotografías guardadas en sus historias. Súbelas primero desde la conversación original.'));
+ if(!images.length)form.appendChild(node('p','eco-editorial-hint','Todavía no hay fotografías. Puedes subirlas aquí mismo.'));
  const count=String(entry(c).text??c.generated_text??'').split(/\n\s*\n/).filter(Boolean).length;
  for(const img of images){const wrap=node('div','eco-editorial-photo-config');const thumb=node('img');thumb.src='/api/media-file?u='+encodeURIComponent(img.url);thumb.alt=img.caption||'Foto de la historia';thumb.loading='lazy';wrap.appendChild(thumb);
  const controls=node('div','eco-editorial-photo-fields');const label=node('label');const chk=node('input');chk.type='checkbox';chk.checked=chosen[img.url]?.pos!=='hide';label.append(chk,node('span','',' Incluir esta fotografía'));
@@ -96,7 +118,12 @@ function mediaPanel(){
  const caption=node('input');caption.setAttribute('aria-label','Pie de fotografía');caption.maxLength=180;caption.placeholder='Pie de foto';caption.value=chosen[img.url]?.caption??img.caption;
  const size=node('select');size.setAttribute('aria-label','Tamaño de fotografía');[['small','Pequeña'],['medium','Mediana'],['full','Grande']].forEach(([v,t])=>size.add(new Option(t,v)));size.value=chosen[img.url]?.size||'full';
  const save=()=>{state.media??={};state.media[activeId]??={};state.media[activeId][img.url]={pos:chk.checked?position.value:'hide',caption:caption.value,size:size.value};persist();drawBook()};
- [chk,position,size].forEach(x=>x.addEventListener('change',save));caption.addEventListener('input',save);controls.append(label,position,size,caption);wrap.appendChild(controls);form.appendChild(wrap);
+ [chk,position,size].forEach(x=>x.addEventListener('change',save));caption.addEventListener('input',save);controls.append(label,position,size,caption);
+ if(img.uploaded){const remove=node('button','eco-editorial-remove-photo','Quitar del libro');remove.type='button';
+ remove.addEventListener('click',()=>{if(!confirm('¿Quitar esta fotografía del libro? No se borrará de los archivos de ECO.'))return;
+ state.bookPhotos[activeId]=state.bookPhotos[activeId].filter(x=>x.url!==img.url);
+ if(state.media?.[activeId])delete state.media[activeId][img.url];persist();choose()});controls.appendChild(remove)}
+ wrap.appendChild(controls);form.appendChild(wrap);
  }
  const title=node('h3','','Escucha este recuerdo');form.appendChild(title);
  const qr=state.qr?.[activeId];if(qr?.token){const a=node('a','eco-editorial-qr-link','Probar enlace de escucha ↗');a.href=qr.url;a.target='_blank';a.rel='noopener noreferrer';form.appendChild(a)}

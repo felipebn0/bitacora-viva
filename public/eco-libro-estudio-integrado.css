@@ -56,3 +56,9 @@ body.eco-editorial-open-body{overflow:hidden}
 .eco-editorial-qr{display:flex;align-items:center;gap:18px;border-top:1px solid #dadaca;margin-top:20px;padding-top:15px;break-inside:avoid}
 .eco-editorial-qr img{width:105px;height:105px;flex-shrink:0}.eco-editorial-qr p{font-size:.85rem;color:#777568}
 @media(max-width:600px){.eco-editorial-figure{width:100%!important}.eco-editorial-photo-config{grid-template-columns:55px minmax(0,1fr)}.eco-editorial-photo-config>img{width:55px;height:72px}}
+
+/* Fotos directas dentro del Estudio Editorial */
+.eco-editorial-upload-label{display:flex;align-items:center;justify-content:center;min-height:48px;padding:13px;background:#4d6542;color:white;border-radius:13px;font-weight:700;cursor:pointer;text-align:center;margin-top:12px}
+.eco-editorial-upload-label:hover{background:#3b5233}
+.eco-editorial-upload-input{width:100%;font-size:13px;min-height:40px}
+.eco-editorial-remove-photo{background:#fffdf6;border:1px solid #bca99c;color:#7d4132;border-radius:10px;padding:10px;cursor:pointer}

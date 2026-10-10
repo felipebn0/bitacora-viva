@@ -1,8 +1,20 @@
 /* ECO · Borrador editorial persistente, aislado de chapters y story_log.
    Solo rama de pruebas hasta validar. */
 'use strict';
-module.exports=(app,{sql,ensureSchema,requireAuth,bloquearColaborador,rateLimit})=>{
+module.exports=(app,{sql,ensureSchema,requireAuth,bloquearColaborador,rateLimit,express,verificarArchivoReal,MEDIA_MIME_PERMITIDOS,almacenarArchivo})=>{
  const guard=[requireAuth,bloquearColaborador];
+ app.post('/api/book-editor/photo',...guard,rateLimit,express.raw({type:'image/*',limit:'4mb'}),async(req,res)=>{
+  try{
+   if(!req.body||!Buffer.isBuffer(req.body)||req.body.length<100||req.body.length>3*1024*1024)return res.status(413).json({error:'La fotografía debe pesar menos de 3 MB.'});
+   const allowed={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'};
+   const real=await verificarArchivoReal(req.body,MEDIA_MIME_PERMITIDOS);
+   if(!real||!allowed[real.mime])return res.status(400).json({error:'Formato inválido. Usa JPG, PNG o WebP.'});
+   const id=require('crypto').randomBytes(16).toString('hex');
+   const stored=await almacenarArchivo(`media/libros/${req.profileUserId}/${id}.${allowed[real.mime]}`,req.body,real.mime);
+   res.set('Cache-Control','private, no-store');return res.json({ok:true,url:stored.url});
+  }catch(e){console.error('book-editor photo',e);return res.status(500).json({error:'No se pudo guardar la fotografía en ECO.'})}
+ });
+
  const clean=(b)=>{
   if(!b||typeof b!=='object'||Array.isArray(b))throw Error('Formato de libro inválido.');
   const string=(v,n)=>String(v??'').slice(0,n);
@@ -18,7 +30,7 @@ module.exports=(app,{sql,ensureSchema,requireAuth,bloquearColaborador,rateLimit}
   return {title:string(b.title,200),subtitle:string(b.subtitle,300),
     dedication:string(b.dedication,4000),
     order:Array.isArray(b.order)?b.order.filter(v=>/^\d{1,12}$/.test(String(v))).slice(0,250).map(String):[],
-    edits,media:cleanMedia(b.media),qr:cleanQr(b.qr)};
+    edits,media:cleanMedia(b.media),bookPhotos:cleanPhotos(b.bookPhotos),qr:cleanQr(b.qr)};
  };
  function cleanMedia(raw){const out={};if(!raw||typeof raw!=='object'||Array.isArray(raw))return out;
  for(const [chapter,items] of Object.entries(raw).slice(0,250)){if(!/^\d{1,12}$/.test(chapter)||!items||typeof items!=='object')continue;
@@ -26,6 +38,11 @@ module.exports=(app,{sql,ensureSchema,requireAuth,bloquearColaborador,rateLimit}
    if(!/^https:\/\//i.test(url)||url.length>2200||!opts||typeof opts!=='object')continue;
    out[chapter][url]={pos:opts.pos==='hide'?'hide':(/^\d{1,3}$/.test(String(opts.pos))?String(opts.pos):'0'),size:['small','medium','full'].includes(opts.size)?opts.size:'full',caption:String(opts.caption||'').slice(0,180)};
   }
+ }return out;}
+ function cleanPhotos(raw){const out={};if(!raw||typeof raw!=='object'||Array.isArray(raw))return out;
+ for(const [chapter,arr] of Object.entries(raw).slice(0,250)){
+  if(!/^\d{1,12}$/.test(chapter)||!Array.isArray(arr))continue;
+  out[chapter]=arr.slice(0,60).filter(p=>p&&typeof p.url==='string'&&/^https:\/\//.test(p.url)&&p.url.length<2200).map(p=>({url:p.url,caption:String(p.caption||'').slice(0,180)}));
  }return out;}
  function cleanQr(raw){const out={};if(!raw||typeof raw!=='object'||Array.isArray(raw))return out;
  for(const [chapter,qr] of Object.entries(raw).slice(0,250)){
