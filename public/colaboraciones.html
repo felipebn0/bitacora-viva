@@ -392,7 +392,8 @@
   async function cargarAportesDados(ownerId) {
     dadosLista.innerHTML = '<p class="empty">Cargando…</p>';
     try {
-      const resp = await fetch('/api/contributions?owner=' + encodeURIComponent(ownerId));
+      // ECO-COLAB-INTEGRAL-1: solo aportes hechos por esta cuenta.
+      const resp = await fetch('/api/my-contributed-notes?owner=' + encodeURIComponent(ownerId));
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) {
         dadosStatus.textContent = mensajeDeError(resp, data, 'No se pudieron cargar tus aportes.');

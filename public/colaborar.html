@@ -427,6 +427,8 @@
     <div class="collab-switch pc-93b8ea5b" id="collabSwitch">
       <p class="sub">Tus colaboraciones:</p>
       <div class="collab-switch-list" id="collabSwitchList"></div>
+      <!-- ECO-COLAB-INTEGRAL-1: ruta explícita, reutiliza el formulario y servidor existentes. -->
+      <p><a href="/colaborar.html?unirme=1">Tengo un código para otra historia</a></p>
     </div>
 
     <div class="aportes">
@@ -883,7 +885,7 @@
       const resp = await fetch('/api/my-collaborations');
       if (!resp.ok) return;
       const data = await resp.json();
-      const historias = data.historias || [];
+      const historias = (data.historias || []).filter(h => !h.soloHistorial);
       if (historias.length < 2) return; // con una sola no hace falta el selector
       collabSwitchList.innerHTML = '';
       // Con muchas colaboraciones, la fila de burbujas se ve desordenada —
@@ -950,6 +952,17 @@
       // sesión abierta no se la pisa; si es otro invitado, se ofrece cambiar.
       if (invitacionUrl) { showGuestEntry({ conCuenta: !data.isGuest }); return; }
 
+      // ECO-COLAB-INTEGRAL-1: mostrar formulario para unirse, incluso
+      // si ya participaba en una o varias historias.
+      if (new URLSearchParams(location.search).get('unirme') === '1') {
+        if (data.isGuest) {
+          mostrarHub();
+          hubError.textContent = 'Para colaborar sin cuenta necesitas tu enlace personal.';
+        } else {
+          mostrarHub();
+        }
+        return;
+      }
       // Llegó por el botón "Colaborar" de app.html (nav directa, sin
       // ?owner= ni ?codigo=) — antes esto rebotaba siempre a /app.html.
       // Si esta cuenta ya colabora con alguna historia, entramos derecho
@@ -960,8 +973,9 @@
         try {
           const resp = await fetch('/api/my-collaborations');
           const historias = resp.ok ? (await resp.json()).historias || [] : [];
-          if (historias.length) {
-            activeOwnerId = historias[0].ownerId;
+          const conAcceso = historias.find(h => !h.soloHistorial);
+          if (conAcceso) {
+            activeOwnerId = conAcceso.ownerId;
             history.replaceState(null, '', location.pathname + '?owner=' + activeOwnerId);
           }
         } catch (e) {}

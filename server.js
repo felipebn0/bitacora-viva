@@ -2939,6 +2939,32 @@ app.get('/api/invitacion-info', rateLimit, async (req, res) => {
 // Las bitácoras a las que ESTA cuenta se sumó como colaboradora — para
 // mostrar en colaborar.html un ir-y-venir entre ellas sin pedir el código
 // de nuevo cada vez. Solo lo suyo, nunca lo de otras cuentas.
+// ECO-COLAB-INTEGRAL-1: historial del autor, separado del acceso a colaborar.
+app.get('/api/my-contributed-notes', requireAuth, async (req, res) => {
+  try {
+    if (!req.userId || req.isGuest) return res.status(403).json({ error: 'Requiere cuenta.' });
+    const ownerId = Number(req.query.owner);
+    if (!Number.isSafeInteger(ownerId) || ownerId <= 0) return res.status(400).json({ error: 'Destinatario inválido.' });
+    await ensureSchema();
+    const rows = await sql`
+      SELECT id, contributor, parentesco, protagonista, texto, audio_url,
+             audio_urls, media_urls, created_at, is_private
+      FROM family_notes
+      WHERE user_id = ${ownerId} AND contributed_by = ${req.userId}
+        AND archived_at IS NULL
+      ORDER BY created_at DESC LIMIT 100`;
+    res.json({ notes: rows.map(n => ({
+      ...n, contributor: capitalizarNombre(n.contributor),
+      texto: capitalizarInicio(n.texto),
+      audio_urls: parseJsonArray(n.audio_urls),
+      media_urls: parseJsonArray(n.media_urls)
+    })) });
+  } catch (err) {
+    console.error('my-contributed-notes',err);
+    res.status(500).json({ error: 'No se pudo cargar el historial de aportes.' });
+  }
+});
+
 app.get('/api/my-collaborations', requireAuth, async (req, res) => {
   try {
     await ensureSchema();
@@ -2950,6 +2976,20 @@ app.get('/api/my-collaborations', requireAuth, async (req, res) => {
       ORDER BY c.created_at ASC
     `;
     const historias = rows.map((r) => ({ ownerId: r.owner_id, ownerName: capitalizarNombre(r.name || r.username) }));
+    // ECO-COLAB-INTEGRAL-1: incluir destinatarios de aportes pasados
+    // hechos desde esta cuenta, aunque falte una relación collaborations.
+    // Esto NO otorga acceso a la bitácora ni a contribuciones ajenas.
+    if (req.userId && !req.isGuest) {
+      const anteriores = await sql`
+        SELECT DISTINCT u.id AS owner_id, u.name, u.username
+        FROM family_notes n JOIN users u ON u.id = n.user_id
+        WHERE n.contributed_by = ${req.userId} AND n.archived_at IS NULL`;
+      for (const r of anteriores) {
+        if (!historias.some(h => Number(h.ownerId) === Number(r.owner_id))) {
+          historias.push({ ownerId: r.owner_id, ownerName: capitalizarNombre(r.name || r.username), soloHistorial: true });
+        }
+      }
+    }
     // Cuenta 100% colaboradora de siempre (owner_user_id fijo desde el
     // signup) — si no está ya en la lista de arriba, la sumamos también.
     if (req.isCollaborator && !historias.some((h) => h.ownerId === req.profileUserId)) {
