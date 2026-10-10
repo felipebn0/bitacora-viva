@@ -1,0 +1,11 @@
+/* ECO · imágenes reales asociadas al capítulo editorial */
+#ecoFotosRegion{max-width:740px;margin:34px auto 0}
+.eco-photo-intro{font:700 .95rem "Atkinson Hyperlegible",system-ui,sans-serif;color:#4d6542;margin:0 0 17px}
+.eco-fotos-status,.eco-fotos-nota{color:#777568;font-size:.86rem;line-height:1.5}
+.eco-fotos-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:start}
+.eco-foto{padding:0;margin:0;min-width:0}
+.eco-foto img{display:block;width:100%;height:auto;max-height:440px;object-fit:contain;background:#ede9df;border-radius:12px}
+.eco-foto figcaption{font:italic .83rem/1.5 "Source Serif 4",Georgia,serif;color:#777568;margin-top:9px;text-align:center}
+.eco-foto-error img{min-height:60px}
+.eco-fotos-nota{border-top:1px solid #dadaca;padding-top:12px;margin-top:22px}
+@media(max-width:580px){.eco-fotos-grid{grid-template-columns:1fr;gap:24px}.eco-foto img{max-height:none}}
