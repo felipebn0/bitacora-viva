@@ -1,0 +1,45 @@
+/* ECO · Navegación interior igual a Árbol familiar.
+   Se carga al FINAL de los CSS de cada página. No cambia botones de acción. */
+body > header a.volver[href^='/app.html'],
+body > header a.volver[href^="/app.html"],
+#appContent #ownTopbar a.volver[href^='/app.html'],
+body > .wrap > header a.volver[href^='/app.html'] {
+  display: inline-block !important;
+  width: auto !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  min-height: 28px !important;
+  margin: 0 0 10px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-bottom: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transform: none !important;
+  color: #293d30 !important;
+  font: 700 14px/1.5 "Atkinson Hyperlegible",system-ui,sans-serif !important;
+  text-decoration: none !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  text-align: left !important;
+}
+body > header a.volver[href^='/app.html']:hover,
+#appContent #ownTopbar a.volver[href^='/app.html']:hover {
+  color: #4d6542 !important;
+  text-decoration: underline !important;
+}
+body > header a.volver[href^='/app.html']:focus-visible,
+#appContent #ownTopbar a.volver[href^='/app.html']:focus-visible {
+  outline: 3px solid #76936e !important;
+  outline-offset: 4px !important;
+  border-radius: 2px !important;
+}
+@media (max-width: 680px) {
+  body > header a.volver[href^='/app.html'],
+  #appContent #ownTopbar a.volver[href^='/app.html'] {
+    padding: 0 !important;
+    margin-bottom: 8px !important;
+    font-size: 14px !important;
+  }
+}
