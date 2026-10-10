@@ -182,3 +182,18 @@ Pendiente/fuera de alcance de esta vuelta (no adivinado, dejado explícito):
 **Hecho el mismo día (ver README, "Invitados con enlace personal"):** SEC-002A (invitados con el mismo nombre) con invitaciones personales por celular, y SEC-002C (un `draftId` ajeno sobrescribía el aporte de otra persona).
 
 **Hecho (2026-10-08):** las subidas de aportes llevan la huella de quien las hizo en la ruta y `estaAutorizadoParaVerArchivo` deja a un colaborador o invitado abrir solo lo suyo (por huella, o porque el archivo aparece en sus aportes si es de antes de las huellas); el dueño ve todo. Pruebas en `test/media-file.smoke.js` y `test/guest.smoke.js`.
+
+## 20. Dominio nuevo de Eco y redirección del link viejo — pendiente (Felipe pasa el dominio real)
+
+**Qué es** (pedido de Felipe, 2026-10-09): la app ya se llama Eco, pero sigue en `bitacora-viva.vercel.app`. Hay que ponerla en su dominio real y que quien tenga el link viejo (`bitacora-viva.vercel.app/...`) entre al nuevo sin perder la ruta ni los parámetros: enlaces personales de invitado (`?invitacion=`), códigos viejos (`?codigo=`) y enlaces mágicos de correos ya enviados.
+
+**Lo que ya está hecho:** la ruta `/api/redirigir-dominio` (redirección 308 que conserva ruta y parámetros, con prueba en `test/redireccion-dominio.smoke.js`) y la explicación en el README, sección "Marca: Eco". Todavía NO está activada: sin dominio nuevo y sin la variable, activarla dejaría el sitio viejo sin abrir.
+
+**Para retomarlo (cuando Felipe pase el dominio):**
+1. En Vercel, Settings → Domains: agregar el dominio nuevo; en `bitacora-viva.vercel.app`, Edit → Redirect to another domain (308). Esta es la forma más simple y no toca código. Si Vercel no deja redirigir, usar la ruta propia: variable `DOMINIO_NUEVO` en Vercel y la regla de `vercel.json` que está en el README.
+2. Cambiar `RESEND_FROM` a "Eco <correo@dominio>" y revisar que los correos salgan del dominio nuevo (SPF/DKIM en Resend).
+3. Actualizar el link viejo donde aparezca escrito (README, textos legales si lo nombran, mensajes de WhatsApp).
+4. Avisar que las sesiones no pasan de un dominio a otro: quien ya había entrado tendrá que iniciar sesión de nuevo. Los enlaces mágicos viejos siguen valiendo 15 minutos desde que se enviaron.
+5. Según el manual de marca: buscar "Eco" en la SIC (clases 9, 41 y 42), reservar el mismo usuario en Instagram, TikTok y WhatsApp Business, y revisar `.co` y `.com`. Es un nombre muy usado: conviene un abogado de marcas antes de invertir más.
+
+**Idea relacionada, aparte:** `eco.vercel.app` hoy responde 404 de Vercel (parece libre, pero lo confirma Vercel al agregarlo); sirve como dominio provisional si el real tarda.

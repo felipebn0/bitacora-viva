@@ -718,6 +718,97 @@
     .pc-71494e54{display:none; margin-top: 10px !important;}
     .pc-ccc12387{max-width: 340px !important; margin: 0 auto 8px !important;}
     .pc-298fc7ae{font-family: var(--font-display) !important; font-size: 1.4rem !important; font-weight: 700 !important; letter-spacing: 0.1em !important; margin: 0 0 4px !important;}
+
+  /* Eco: el botón de hablar ES el logo animado (animación "Una gota que despierta el
+     eco", del manual de movimiento de marca). Tres momentos:
+     - Turno de la persona (listening): corre la intro (cae la gota, salen las ondas y
+       los anillos se abren uno tras otro) y luego el punto late y las ondas hacen vibrar
+       los anillos. Se repite cada vez que vuelve a ser su turno.
+     - Turno de la IA (speaking/thinking): los anillos se CIERRAN (círculos completos) y
+       el botón se pone negro, para que se note que ahora no se habla.
+     - Reposo (idle): logo quieto con una onda suave cada 5 segundos (así, al presionar,
+       la intro del turno de la persona sí se nota).
+     Los tiempos son los de la animación original multiplicados por 0,7 para que la
+     persona no espere para empezar a contar. Con "reducir movimiento" no hay animación:
+     queda el logo quieto (ya lo apaga la regla general de prefers-reduced-motion). */
+  .orb { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3%;
+    background: #4F5D3A; box-shadow: 0 10px 26px -10px rgba(79,93,58,0.55);
+    transition: background-color .5s ease, box-shadow .5s ease; }
+  .orb[data-state="listening"] { background: #4F5D3A; }
+  .orb[data-state="speaking"], .orb[data-state="thinking"] { background: #1A1A1A; box-shadow: 0 10px 26px -10px rgba(0,0,0,0.6); }
+  .orb[data-state="paused"] { background: #706551; }
+  .orb[data-state="speaking"]::before, .orb[data-state="thinking"]::before { animation: none; opacity: 0.25; border-color: #1A1A1A; }
+  .orb-logo { width: 58%; height: auto; flex: none; display: block; overflow: visible; }
+  #orbLabel { font-size: clamp(0.8rem, calc(var(--orb) * 0.07), 1.25rem); line-height: 1.15; text-align: center; }
+  .orb-logo .ring { fill: none; stroke: #F6EEDC; stroke-width: 12; stroke-linecap: round; stroke-dasharray: 72 28; transition: stroke-dasharray .5s ease; }
+  .orb-logo .wave-c { fill: none; stroke: #F6EEDC; stroke-width: 6; stroke-linecap: round; stroke-dasharray: 72 28; }
+  .orb-logo .w1 .wave-c { stroke: #D9A441; }
+  .orb-logo .dot, .orb-logo .drop-fill { fill: #D9A441; }
+  .orb-logo .dot, .orb-logo .rg, .orb-logo .wave-g, .orb-logo .drop { transform-box: fill-box; transform-origin: center; }
+  .orb-logo .wave-g, .orb-logo .drop { opacity: 0; }
+  /* Turno de la IA: anillos cerrados */
+  .orb[data-state="speaking"] .orb-logo .ring, .orb[data-state="thinking"] .orb-logo .ring { stroke-dasharray: 100 0; }
+  .orb[data-state="speaking"] .orb-logo, .orb[data-state="thinking"] .orb-logo { opacity: 0.8; }
+
+  @keyframes eco-dropFall { 0% { transform: translateY(-150px) scaleY(1.25); opacity: 0; } 8% { opacity: 1; } 99% { opacity: 1; } 100% { transform: translateY(0) scaleY(1.1); opacity: 0; } }
+  @keyframes eco-dotLand { 0% { opacity: 0; transform: scale(1.7, 0.4); } 1% { opacity: 1; } 40% { transform: scale(0.82, 1.3); } 70% { transform: scale(1.1, 0.92); } 100% { opacity: 1; transform: scale(1, 1); } }
+  @keyframes eco-waveOut { 0% { transform: scale(0.08); opacity: 0; } 8% { opacity: 0.6; } 100% { transform: scale(1.55); opacity: 0; } }
+  @keyframes eco-waveSoft { 0% { transform: scale(0.3); opacity: 0; } 10% { opacity: 0.3; } 100% { transform: scale(1.5); opacity: 0; } }
+  @keyframes eco-ringDraw { 0% { stroke-dasharray: 0.01 100; opacity: 0; } 12% { opacity: 1; } 100% { stroke-dasharray: 72 28; opacity: 1; } }
+  @keyframes eco-ringBloom { from { transform: scale(0.35) rotate(-70deg); } to { transform: scale(1) rotate(0deg); } }
+  @keyframes eco-ringKick { 0%, 28% { transform: scale(1); } 40% { transform: scale(1.08); } 56%, 100% { transform: scale(1); } }
+  @keyframes eco-dotBeat { 0% { transform: scale(1); } 7% { transform: scale(1.32); } 22%, 100% { transform: scale(1); } }
+
+  /* Intro (turno de la persona): se repite cada vez que vuelve a ser su turno, porque al venir del
+     turno de la IA no hay ninguna animación activa y todas arrancan de nuevo. */
+  .orb[data-state="listening"] .drop { animation: eco-dropFall 0.56s cubic-bezier(0.55, 0.05, 0.9, 0.5) 0.14s both; }
+  .orb[data-state="listening"] .dot { animation: eco-dotLand 0.49s cubic-bezier(0.3, 0.7, 0.3, 1) 0.7s both; }
+  .orb[data-state="listening"] .w1 { animation: eco-waveOut 0.77s cubic-bezier(0.2, 0.6, 0.3, 1) 0.7s both; }
+  .orb[data-state="listening"] .w2 { animation: eco-waveOut 0.77s cubic-bezier(0.2, 0.6, 0.3, 1) 0.83s both; }
+  .orb[data-state="listening"] .w3 { animation: eco-waveOut 0.77s cubic-bezier(0.2, 0.6, 0.3, 1) 0.95s both; }
+  .orb[data-state="listening"] .r1 { animation: eco-ringBloom 0.63s cubic-bezier(0.2, 0.9, 0.3, 1.25) 0.77s both; }
+  .orb[data-state="listening"] .r1 .ring { animation: eco-ringDraw 0.63s cubic-bezier(0.22, 1, 0.36, 1) 0.77s both; }
+  .orb[data-state="listening"] .r2 { animation: eco-ringBloom 0.63s cubic-bezier(0.2, 0.9, 0.3, 1.25) 0.91s both; }
+  .orb[data-state="listening"] .r2 .ring { animation: eco-ringDraw 0.63s cubic-bezier(0.22, 1, 0.36, 1) 0.91s both; }
+  .orb[data-state="listening"] .r3 { animation: eco-ringBloom 0.63s cubic-bezier(0.2, 0.9, 0.3, 1.25) 1.05s both; }
+  .orb[data-state="listening"] .r3 .ring { animation: eco-ringDraw 0.63s cubic-bezier(0.22, 1, 0.36, 1) 1.05s both; }
+  /* Después de la intro: reposo = una onda suave cada 5 s */
+  .orb[data-state="idle"] .w4 { animation: eco-waveSoft 5s ease-out 1s infinite both; }
+  /* Después de la intro: escuchando = el punto late y las ondas hacen vibrar los anillos.
+     Las animaciones de repetición no llevan "both": si lo llevaran taparían la intro
+     mientras esperan su turno. */
+  .orb[data-state="listening"] .dot { animation: eco-dotLand 0.49s cubic-bezier(0.3, 0.7, 0.3, 1) 0.7s both, eco-dotBeat 2.4s ease-in-out 1.7s infinite; }
+  .orb[data-state="listening"] .w1 { animation: eco-waveOut 0.77s cubic-bezier(0.2, 0.6, 0.3, 1) 0.7s both, eco-waveOut 2.4s cubic-bezier(0.2, 0.6, 0.3, 1) 2s infinite; }
+  .orb[data-state="listening"] .w2 { animation: eco-waveOut 0.77s cubic-bezier(0.2, 0.6, 0.3, 1) 0.83s both, eco-waveOut 2.4s cubic-bezier(0.2, 0.6, 0.3, 1) 3.2s infinite; }
+  .orb[data-state="listening"] .r1 { animation: eco-ringBloom 0.63s cubic-bezier(0.2, 0.9, 0.3, 1.25) 0.77s both, eco-ringKick 2.4s ease-in-out 2s infinite; }
+  .orb[data-state="listening"] .r2 { animation: eco-ringBloom 0.63s cubic-bezier(0.2, 0.9, 0.3, 1.25) 0.91s both, eco-ringKick 2.4s ease-in-out 2.15s infinite; }
+  .orb[data-state="listening"] .r3 { animation: eco-ringBloom 0.63s cubic-bezier(0.2, 0.9, 0.3, 1.25) 1.05s both, eco-ringKick 2.4s ease-in-out 2.3s infinite; }
+
+  /* Pantalla principal en UNA sola vista, sin scroll (pedido de Felipe, 2026-10-09):
+     el botón de hablar es lo principal y crece con el alto de la pantalla; todo lo
+     demás (saludo, tarjeta, íconos, "Invitar") se compacta para que quepa. El alto
+     disponible para el botón es el de la ventana menos lo que ocupa lo demás
+     (~440px); con poca altura (o poco ancho) el botón se achica hasta 150px y, si aun así no
+     cabe (letra muy grande con A+), la página hace scroll como siempre. */
+  :root { --orb: clamp(150px, min(calc(100dvh - 440px), calc(100vw - 130px)), 330px); }
+  /* en pantalla ancha la tarjeta mide 640px y el botón puede crecer más */
+  @media (min-width: 980px) { :root { --orb: clamp(150px, calc(100dvh - 440px), 400px); } }
+  body { padding-top: calc(10px + env(safe-area-inset-top)); padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+  #appContent { min-height: calc(100dvh - 20px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+  #appContent .greeting-bar { margin-bottom: 4px; }
+  #appContent .device { min-height: 0; padding: clamp(14px, 3dvh, 36px) clamp(20px, 5vw, 52px); gap: 10px; }
+  #appContent .body-area { gap: clamp(10px, 2.2dvh, 26px); }
+  #appContent .orb-zone { gap: 8px; }
+  #appContent .orb { width: var(--orb); height: var(--orb); font-size: clamp(1.2rem, calc(var(--orb) * 0.08), 1.8rem); }
+  #appContent .orb::before { inset: -10px; }
+  #appContent .topbar { margin: clamp(8px, 1.8dvh, 22px) auto clamp(6px, 1.4dvh, 18px); gap: clamp(14px, 3vw, 22px); }
+  #appContent .logout-row { margin-top: 0; }
+  /* Pantallas bajitas (celulares chicos, ventanas de poca altura): un poco más compacto todo. */
+  @media (max-height: 640px) {
+    #appContent .device { padding-top: 10px; padding-bottom: 10px; gap: 6px; }
+    #appContent .body-area { gap: 6px; }
+    #appContent .topbar { margin-top: 6px; margin-bottom: 4px; }
+  }
 </style>
 </head>
 <body>
@@ -1052,6 +1143,17 @@
                botón que sí importa todo el tiempo. -->
           <div class="orb-wrap">
             <button class="orb" id="orb" data-state="idle" aria-label="Presionar para comenzar la charla">
+              <svg class="orb-logo" viewBox="16 16 168 168" aria-hidden="true" focusable="false">
+                <g class="wave-g w1"><circle class="wave-c" cx="100" cy="100" r="72" pathLength="100" transform="rotate(-34 100 100)"/></g>
+                <g class="wave-g w2"><circle class="wave-c" cx="100" cy="100" r="72" pathLength="100" transform="rotate(-34 100 100)"/></g>
+                <g class="wave-g w3"><circle class="wave-c" cx="100" cy="100" r="72" pathLength="100" transform="rotate(-34 100 100)"/></g>
+                <g class="wave-g w4"><circle class="wave-c" cx="100" cy="100" r="72" pathLength="100" transform="rotate(-34 100 100)"/></g>
+                <g class="rg r1"><circle class="ring" cx="100" cy="100" r="28" pathLength="100" transform="rotate(-10 100 100)"/></g>
+                <g class="rg r2"><circle class="ring" cx="100" cy="100" r="50" pathLength="100" transform="rotate(-22 100 100)"/></g>
+                <g class="rg r3"><circle class="ring" cx="100" cy="100" r="72" pathLength="100" transform="rotate(-34 100 100)"/></g>
+                <circle class="dot" cx="100" cy="100" r="13"/>
+                <g class="drop"><path class="drop-fill" transform="translate(100 100)" d="M0 -27C3 -17 13 -9 13 0A13 13 0 0 1 -13 0C-13 -9 -3 -17 0 -27Z"/></g>
+              </svg>
               <span id="orbLabel">Presiona<br>para hablar</span>
             </button>
             <button class="orb-mini-end" id="endBtn" type="button" aria-label="Terminar la charla">Fin</button>
