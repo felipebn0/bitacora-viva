@@ -1,0 +1,50 @@
+/* ECO — SOLO menú Cuenta en main, sin modificar la pantalla ni el orbe. */
+#appContent .user-menu-panel[data-eco-lateral="1"]{
+  position:fixed!important;
+  top:0!important;right:0!important;bottom:0!important;left:auto!important;
+  width:min(420px,100vw)!important;
+  max-width:100vw!important;
+  height:100dvh!important;max-height:100dvh!important;
+  box-sizing:border-box!important;
+  padding:0!important;margin:0!important;
+  border-radius:24px 0 0 24px!important;
+  border:1px solid #e3e1d4!important;
+  background:#fffdf6!important;
+  box-shadow:-22px 0 68px rgba(25,43,30,.2)!important;
+  overflow-y:auto!important;overscroll-behavior:contain;
+  z-index:9999!important;
+  text-align:left;
+}
+#appContent .user-menu-panel[data-eco-lateral="1"] [hidden]{display:none!important;}
+#appContent .eco-lateral-layout{padding:24px 22px 32px;min-height:100%;box-sizing:border-box;}
+#appContent .eco-lateral-header{display:flex;justify-content:space-between;align-items:center;gap:10px;font:700 1.38rem "Source Serif 4",Georgia,serif;color:#293d30;}
+#appContent .eco-lateral-close{width:44px;height:44px;flex-shrink:0;border:1px solid #dadaca;border-radius:50%;background:#f7f4eb;color:#293d30;font:400 1.8rem sans-serif;cursor:pointer;}
+#appContent .eco-lateral-identidad{margin:15px 0 22px;padding:15px 17px;border-radius:17px;background:#edf0e5;}
+#appContent .eco-lateral-identidad .um-username{margin:0;color:#4d6542;font-weight:700;overflow-wrap:anywhere;}
+#appContent .eco-lateral-nav{display:grid;gap:9px;}
+#appContent .eco-lateral-item{width:100%;position:relative;text-align:left;border:1px solid #dadaca;border-radius:17px;background:#fffdf6;min-height:73px;padding:12px 36px 12px 16px;display:flex;flex-direction:column;justify-content:center;gap:3px;cursor:pointer;font-family:inherit;color:#293d30;}
+#appContent .eco-lateral-item:hover,#appContent .eco-lateral-item:focus-visible{background:#edf0e5;border-color:#8c9e82;}
+#appContent .eco-lateral-item-name{font-size:1rem;font-weight:800;}
+#appContent .eco-lateral-item small{font-size:.8rem;color:#777568;}
+#appContent .eco-lateral-chevron{position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:1.6rem;color:#4d6542;}
+#appContent .eco-lateral-vista{min-width:0;}
+#appContent .eco-lateral-vista h2{font:700 1.42rem "Source Serif 4",Georgia,serif;color:#293d30;margin:6px 0 17px;}
+#appContent .eco-lateral-back{border:0;background:none;color:#4d6542;font-family:inherit;font-size:.9rem;font-weight:700;padding:10px 0;cursor:pointer;min-height:44px;}
+#appContent .eco-lateral-vista .um-section-toggle{width:100%;text-align:left;min-height:48px;color:#293d30;}
+#appContent .eco-lateral-vista .um-section-body{min-width:0;}
+#appContent .eco-lateral-vista #umSecPerfil{display:block!important;}
+#appContent .eco-lateral-vista input,#appContent .eco-lateral-vista select,#appContent .eco-lateral-vista textarea{max-width:100%;box-sizing:border-box;font-size:16px;}
+#appContent .eco-lateral-footer{border-top:1px solid #dadaca;margin-top:22px;padding-top:12px;text-align:center;}
+#appContent .eco-lateral-footer #umLogoutBtn{min-height:44px;}
+@media(max-width:650px){
+ #appContent .user-menu-panel[data-eco-lateral="1"]{
+  top:auto!important;bottom:0!important;left:0!important;right:0!important;
+  width:100%!important;height:auto!important;max-height:88dvh!important;
+  border-radius:24px 24px 0 0!important;
+  padding-bottom:env(safe-area-inset-bottom)!important;
+  box-shadow:0 -18px 60px rgba(25,43,30,.22)!important;
+ }
+ #appContent .eco-lateral-layout{padding:18px 18px 28px;}
+}
+
+#appContent .user-menu-panel[data-eco-lateral="1"] > :not(.eco-lateral-layout){display:none!important;}
