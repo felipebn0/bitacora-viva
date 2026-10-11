@@ -216,6 +216,7 @@
     chapters.forEach((c) => {
       const div = document.createElement('div');
       div.className = 'chapter';
+      div.dataset.chapterId = String(c.id);
       const fecha = c.created_at ? new Date(c.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
       const topRow = document.createElement('div');
       topRow.className = 'top-row';
