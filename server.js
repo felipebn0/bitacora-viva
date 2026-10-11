@@ -6859,6 +6859,32 @@ app.get('/api/tree', requireAuth, bloquearColaborador, async (req, res) => {
   }
 });
 
+// Añadir una nueva persona al árbol manualmente.
+app.post('/api/tree/person', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    const { nombre, relacion, padres = [] } = req.body;
+    if (!nombre || !relacion) return res.status(400).json({ error: 'Nombre y parentesco son obligatorios.' });
+    const nombreCap = capitalizarNombre(nombre.trim());
+    const relacionTrim = relacion.trim();
+    const padresArr = (Array.isArray(padres) ? padres : []).map(p => capitalizarNombre(String(p).trim())).filter(Boolean).slice(0, 2);
+
+    // Verificar que no exista ya alguien con ese nombre exacto
+    const existing = await sql`SELECT id FROM family_members WHERE user_id = ${req.profileUserId} AND LOWER(TRIM(nombre)) = LOWER(TRIM(${nombreCap})) LIMIT 1`;
+    if (existing.length > 0) return res.status(409).json({ error: `Ya existe "${nombreCap}" en el árbol.` });
+
+    const [row] = await sql`
+      INSERT INTO family_members (user_id, nombre, relacion, padres, es_principal)
+      VALUES (${req.profileUserId}, ${nombreCap}, ${relacionTrim}, ${JSON.stringify(padresArr)}, false)
+      RETURNING id
+    `;
+    res.json({ ok: true, id: row.id, nombre: nombreCap });
+  } catch (err) {
+    console.error('POST /api/tree/person', err);
+    res.status(500).json({ error: 'No se pudo guardar el familiar.' });
+  }
+});
+
 // Corregir a mano el nombre o el parentesco de alguien en el árbol (por
 // ejemplo si quedó mal escrito). Si el nombre cambia, hay que actualizar
 // también la lista "padres" de todos los demás — ahí se guarda por nombre,
