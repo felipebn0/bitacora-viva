@@ -3022,6 +3022,40 @@ app.get('/api/my-collaborations', requireAuth, async (req, res) => {
   }
 });
 
+// Vincula aportes de invitado (contributed_by IS NULL) de esta bitácora al
+// usuario autenticado actual, si el nombre del colaborador coincide con el
+// nombre registrado en la cuenta. Se llama desde colaborar.html al cargar la
+// página cuando hay sesión autenticada — permite que aportes hechos antes de
+// tener cuenta (o sin haber iniciado sesión) aparezcan en "Lo que yo dije".
+// Criterio conservador: solo coincide por nombre exacto (sin distinción de
+// mayúsculas) para evitar vincular aportes de otra persona que se llame igual.
+app.post('/api/claim-guest-contributions', requireAuth, bloquearInvitado, rateLimit, async (req, res) => {
+  try {
+    if (!req.userId) return res.status(403).json({ error: 'No autorizado.' });
+    const ownerId = await resolveProfileUserId(req);
+    if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
+    await ensureSchema();
+    const meRow = await sql`SELECT name, username FROM users WHERE id = ${req.userId}`;
+    if (!meRow.length) return res.json({ claimed: 0 });
+    const miNombre = capitalizarNombre(meRow[0].name || meRow[0].username || '');
+    if (!miNombre) return res.json({ claimed: 0 });
+    // Solo actualiza notas de este dueño donde el nombre del colaborador
+    // coincide y aún no tienen contributed_by. No toca aportes de otros usuarios.
+    const result = await sql`
+      UPDATE family_notes
+      SET contributed_by = ${req.userId}
+      WHERE user_id = ${ownerId}
+        AND contributed_by IS NULL
+        AND LOWER(contributor) = LOWER(${miNombre})
+        AND archived_at IS NULL
+      RETURNING id`;
+    res.json({ claimed: result.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo vincular los aportes.' });
+  }
+});
+
 // Quiénes tienen acceso de colaborador a MI bitácora — cuentas 100%
 // colaboradoras (owner_user_id fijo) más las que se sumaron con el botón
 // "colaborar con otra historia" (tabla collaborations). Solo para el dueño.

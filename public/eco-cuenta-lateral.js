@@ -107,17 +107,22 @@
     if(aToggle)aToggle.hidden=true;
     avanzadas.hidden=true;
 
+    let ultimoBoton = null;
     function mostrarMenu(){
       nav.hidden=false;
       Object.values(panels).forEach(v=>v.hidden=true);
       Object.values(botones).forEach(b=>b.setAttribute('aria-expanded','false'));
       panel.scrollTop=0;
+      if(ultimoBoton) requestAnimationFrame(()=>ultimoBoton.focus());
     }
     function mostrarVista(id){
       nav.hidden=true;
       Object.entries(panels).forEach(([key,v])=>v.hidden=(key!==id));
       Object.entries(botones).forEach(([key,b])=>b.setAttribute('aria-expanded',String(key===id)));
       panel.scrollTop=0;
+      ultimoBoton=botones[id];
+      const retro=panels[id]?.querySelector('.eco-lateral-back');
+      if(retro) requestAnimationFrame(()=>retro.focus());
     }
     // Las secciones originales movidas de "Opciones avanzadas" están ahora
     // dentro de la vista correspondiente, no dentro del contenedor oculto.
@@ -125,6 +130,20 @@
     panel.dataset.ecoLateral='1';
     panel.setAttribute('role','dialog');
     panel.setAttribute('aria-label','Cuenta');
+    panel.setAttribute('aria-modal','true');
+
+    // Telón oscuro detrás del panel lateral; se sincroniza con .visible.
+    const telón = document.createElement('div');
+    telón.className = 'eco-lateral-backdrop';
+    telón.setAttribute('aria-hidden','true');
+    document.body.appendChild(telón);
+    telón.addEventListener('click', ()=>cuentaBtn.click());
+    new MutationObserver(()=>{
+      const abierto = panel.classList.contains('visible');
+      telón.classList.toggle('eco-lateral-backdrop-abierto', abierto);
+      if(abierto) requestAnimationFrame(()=>cerrar.focus());
+    }).observe(panel,{attributes:true,attributeFilter:['class']});
+
     mostrarMenu();
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',iniciar);

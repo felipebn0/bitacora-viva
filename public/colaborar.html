@@ -986,6 +986,11 @@
           if (!resp.ok) { window.location.href = '/app.html'; return; }
           const info = await resp.json();
           showApp({ username: data.username, ownerName: info.ownerName, isGuest: data.isGuest });
+          // Vincula aportes de invitado previos del usuario autenticado para
+          // que aparezcan en "Lo que yo dije de otros" sin intervención manual.
+          if (!data.isGuest) {
+            fetch(conOwner('/api/claim-guest-contributions'), { method: 'POST' }).catch(() => {});
+          }
           cargarMisColaboraciones(activeOwnerId);
           iniciarAporte();
         } catch (e) {
@@ -1024,6 +1029,7 @@
           activeOwnerId = info.ownerId;
           history.replaceState(null, '', location.pathname + '?owner=' + info.ownerId);
           showApp({ username: data.username, ownerName: info.ownerName, isGuest: false });
+          fetch(conOwner('/api/claim-guest-contributions'), { method: 'POST' }).catch(() => {});
           cargarMisColaboraciones(info.ownerId);
           iniciarAporte();
         } catch (e) {
@@ -1177,6 +1183,11 @@
   }
 
   async function enviarTurno() {
+    // Si la persona seleccionó una foto pero no tocó "Subir" todavía,
+    // la subimos ahora para que quede dentro de mediaUrlsLocal antes de
+    // armar el turno — así no se pierde aunque el envío y la selección
+    // de foto ocurran casi al mismo tiempo.
+    if (fotoPendiente) { try { await subirFotoPendiente(); } catch (e) {} }
     // Ver el comentario junto a subidaFotoEnCurso: si hay una foto
     // subiéndose todavía, esperamos a que termine antes de armar este
     // turno — así mediaUrlsLocal ya la tiene adentro.
