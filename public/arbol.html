@@ -231,7 +231,7 @@ $('mergeNo').onclick=async()=>{
 };
 // ─────────────────────────────────────────────────────────────────────────
 
-load();loadMergeSugg();
+load();loadMergeSugg();fetch('/api/tree/mark-seen',{method:'POST',credentials:'same-origin'}).catch(()=>{});
 })();
 </script>
 <script src="/eco-arbol-v7.js?v=7" defer></script>
