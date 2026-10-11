@@ -2746,8 +2746,9 @@
   // recortarFinMs: milisegundos de la cola que NO se reproducen (solo se usa en
   // el último pedazo de una respuesta). Algunos audios de voz terminan con un
   // poco de estática después de la última palabra, y en el celular se oía justo
-  // al final de lo que dice la IA.
-  const RECORTE_FIN_VOZ_MS = 120;
+  // al final de lo que dice la IA. 200ms cubre colas más largas de la voz
+  // femenina sin recortar nada perceptible del habla.
+  const RECORTE_FIN_VOZ_MS = 200;
   function reproducirBlob(blob, recortarFinMs = 0) {
     return new Promise((resolve, reject) => {
       const url = URL.createObjectURL(blob);

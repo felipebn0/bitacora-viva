@@ -5143,6 +5143,13 @@ function escapeSsml(text) {
 }
 
 async function pedirVozAElevenLabs(text, modelId, voiceId = ELEVEN_VOICE_ID) {
+  // Ajustes por voz: la femenina produce artefactos/estática con stability
+  // bajo + style alto (la voz masculina es menos sensible a eso). Subir
+  // stability y bajar style reduce el ruido sin perder expresividad perceptible.
+  const esMasculina = voiceId === ELEVEN_VOICE_ID_MASCULINA;
+  const voiceSettings = esMasculina
+    ? { stability: 0.4,  similarity_boost: 0.75, style: 0.5, use_speaker_boost: true }
+    : { stability: 0.58, similarity_boost: 0.75, style: 0.3, use_speaker_boost: true };
   const resp = await fetch(
     `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
     {
@@ -5160,7 +5167,7 @@ async function pedirVozAElevenLabs(text, modelId, voiceId = ELEVEN_VOICE_ID) {
         // ninguna inflexión de estilo. "use_speaker_boost" mejora la
         // claridad/similitud con la voz original, a costa de un poquito
         // más de latencia (aceptable aquí, no es una llamada en vivo).
-        voice_settings: { stability: 0.4, similarity_boost: 0.75, style: 0.5, use_speaker_boost: true },
+        voice_settings: voiceSettings,
       }),
       signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
     }
