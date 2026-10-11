@@ -1024,7 +1024,24 @@ function ensureSchema() {
       // updateFamilyTree() vuelve a fijar en cada reconstrucción — ver el
       // comentario ahí sobre cómo se decide a quién le corresponde.
       sql`ALTER TABLE family_members ADD COLUMN IF NOT EXISTS es_principal BOOLEAN NOT NULL DEFAULT false`,
+      // aliases: nombres alternativos que esta persona también usa — JSON array
+      // de strings normalizados. Se puebla cuando el usuario confirma que dos
+      // entradas del árbol son la misma persona (ver /api/tree/merge).
+      sql`ALTER TABLE family_members ADD COLUMN IF NOT EXISTS aliases TEXT`,
       sql`CREATE INDEX IF NOT EXISTS idx_family_members_user ON family_members(user_id)`,
+
+      // Sugerencias de fusión: pares de personas cuyo nombre normalizado
+      // encaja como prefijo del otro ("jorge" ⊂ "jorge alejandro"). El
+      // dueño confirma o descarta desde la UI del árbol.
+      sql`CREATE TABLE IF NOT EXISTS family_member_merge_suggestions (
+        id SERIAL PRIMARY KEY,
+        user_id INT NOT NULL REFERENCES users(id),
+        nombre_a TEXT NOT NULL,
+        nombre_b TEXT NOT NULL,
+        dismissed BOOLEAN NOT NULL DEFAULT false,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_merge_suggestions_unico ON family_member_merge_suggestions(user_id, nombre_a, nombre_b)`,
 
       // Personas borradas a mano del árbol (pedido de Felipe, 2026-09-08):
       // borrar en /api/tree/person/:id solo saca la fila de ESTA vez, pero
@@ -4149,9 +4166,57 @@ function charlaCompactaParaArbol(intercambios) {
   return lineas.join('\n');
 }
 
+// Detecta pares de personas donde el nombre normalizado de uno es prefijo
+// exacto del otro (separado por espacio), indicando que probablemente son la
+// misma persona con nombre completo vs. apodo/nombre corto.
+// Ej: "jorge" ⊂ "jorge alejandro", "juan vargas" ⊂ "juan vargas perez".
+// Devuelve [{nombre_a (el corto), nombre_b (el largo)}].
+function detectarPosiblesDuplicados(personas) {
+  const pares = [];
+  for (let i = 0; i < personas.length; i++) {
+    for (let j = i + 1; j < personas.length; j++) {
+      const a = personas[i], b = personas[j];
+      const na = normalizarNombreParaComparar(a.nombre);
+      const nb = normalizarNombreParaComparar(b.nombre);
+      if (!na || !nb || na === nb) continue;
+      // Prefijo de palabra completa (el corto termina antes de una parte del largo)
+      const [corto, cortaNorm, largo, largaNorm] =
+        na.length <= nb.length ? [a, na, b, nb] : [b, nb, a, na];
+      if (largaNorm.startsWith(cortaNorm + ' ') || largaNorm === cortaNorm) {
+        pares.push({ nombre_a: corto.nombre, nombre_b: largo.nombre });
+      }
+    }
+  }
+  return pares;
+}
+
+// Persiste las sugerencias de fusión nuevas (ignora las que ya existen).
+async function guardarSugerenciasFusion(userId, pares) {
+  if (!pares.length) return;
+  for (const { nombre_a, nombre_b } of pares) {
+    try {
+      await sql`
+        INSERT INTO family_member_merge_suggestions (user_id, nombre_a, nombre_b)
+        VALUES (${userId}, ${nombre_a}, ${nombre_b})
+        ON CONFLICT (user_id, nombre_a, nombre_b) DO NOTHING
+      `;
+    } catch (e) {
+      // No fatal: si falla una sugerencia, seguimos con las demás.
+      console.warn(`[merge-suggestions] userId=${userId} error al guardar "${nombre_a}"/"${nombre_b}":`, e.message);
+    }
+  }
+}
+
 const limpiarCampoCompacto = (v) => String(v == null ? '' : v).replace(/[|\n\r]+/g, ' ').trim();
 function personasPreviasCompactas(personas) {
-  return personas.map((p, i) => `${i + 1} | ${limpiarCampoCompacto(p.nombre)} | ${limpiarCampoCompacto(p.relacion)} | ${limpiarCampoCompacto(p.detalles)} | ${(Array.isArray(p.padres) ? p.padres : []).map(limpiarCampoCompacto).join(', ')}`).join('\n');
+  return personas.map((p, i) => {
+    let aliasesStr = '';
+    try {
+      const aliases = JSON.parse(p.aliases || '[]');
+      if (aliases.length) aliasesStr = ` [también: ${aliases.join(', ')}]`;
+    } catch {}
+    return `${i + 1} | ${limpiarCampoCompacto(p.nombre)}${aliasesStr} | ${limpiarCampoCompacto(p.relacion)} | ${limpiarCampoCompacto(p.detalles)} | ${(Array.isArray(p.padres) ? p.padres : []).map(limpiarCampoCompacto).join(', ')}`;
+  }).join('\n');
 }
 function eventosPreviosCompactos(eventos) {
   return eventos.map((e, i) => `${i + 1} | ${limpiarCampoCompacto(e.descripcion)} | ${limpiarCampoCompacto(e.categoria)} | ${e.anio == null ? '' : e.anio} | ${e.edad_aprox == null ? '' : e.edad_aprox}`).join('\n');
@@ -4225,7 +4290,7 @@ async function updateFamilyTree(userId, esPropia, newExchanges) {
     if (!nuevaCharla.trim()) return true;
 
     await ensureSchema();
-    const personasPreviasRaw = await sql`SELECT nombre, relacion, detalles, padres, es_principal FROM family_members WHERE user_id = ${userId}`;
+    const personasPreviasRaw = await sql`SELECT nombre, relacion, detalles, padres, es_principal, aliases FROM family_members WHERE user_id = ${userId}`;
     const personasPrevias = personasPreviasRaw.map((p) => ({ ...p, padres: parseJsonArray(p.padres) }));
     // Quién quedó marcado como "Yo" (es_principal) antes de esta corrida, si
     // había alguien — se usa más abajo para no perder el resaltado ni
@@ -4338,13 +4403,24 @@ async function updateFamilyTree(userId, esPropia, newExchanges) {
       console.log(`[arbol-consumo] userId=${userId} sin-cambios (no se reescribió la base)`);
       return true;
     }
+    // Leer aliases existentes para preservarlos al reescribir family_members.
+    // La transacción borra y vuelve a insertar toda la tabla del usuario; sin
+    // esto los aliases quedaban NULL en cada reconstrucción.
+    const aliasesActualesRows = await sql`SELECT nombre, aliases FROM family_members WHERE user_id = ${userId}`;
+    const aliasesPorNombreNorm = new Map(
+      aliasesActualesRows
+        .filter((r) => r.aliases)
+        .map((r) => [normalizarNombreParaComparar(r.nombre), r.aliases])
+    );
+
     await sql.transaction([
       sql`DELETE FROM family_members WHERE user_id = ${userId}`,
       ...personas.map((p, i) => {
         const padres = Array.isArray(p.padres) ? p.padres.filter((x) => typeof x === 'string' && x.trim()).slice(0, 2) : [];
         const esPrincipal = i === indicePrincipal;
-        return sql`INSERT INTO family_members (user_id, nombre, relacion, detalles, padres, es_principal) VALUES (
-        ${userId}, ${String(p.nombre).slice(0, 120)}, ${String(p.relacion).slice(0, 80)}, ${p.detalles ? capitalizarInicio(String(p.detalles).slice(0, 300)) : null}, ${padres.length ? JSON.stringify(padres) : null}, ${esPrincipal}
+        const aliasesJson = aliasesPorNombreNorm.get(normalizarNombreParaComparar(p.nombre)) || null;
+        return sql`INSERT INTO family_members (user_id, nombre, relacion, detalles, padres, es_principal, aliases) VALUES (
+        ${userId}, ${String(p.nombre).slice(0, 120)}, ${String(p.relacion).slice(0, 80)}, ${p.detalles ? capitalizarInicio(String(p.detalles).slice(0, 300)) : null}, ${padres.length ? JSON.stringify(padres) : null}, ${esPrincipal}, ${aliasesJson}
       )`;
       }),
       sql`DELETE FROM timeline_events WHERE user_id = ${userId}`,
@@ -4357,6 +4433,15 @@ async function updateFamilyTree(userId, esPropia, newExchanges) {
       )`;
       }),
     ]);
+
+    // Detectar y guardar sugerencias de fusión (no bloquea si falla).
+    try {
+      const pares = detectarPosiblesDuplicados(personas);
+      if (pares.length) await guardarSugerenciasFusion(userId, pares);
+    } catch (e) {
+      console.warn(`[merge-suggestions] userId=${userId} error en detección:`, e.message);
+    }
+
     return true;
   } catch (err) {
     console.error('No se pudo actualizar el árbol genealógico:', err);
@@ -6998,6 +7083,100 @@ app.get('/api/tree/colaboradores', requireAuth, bloquearColaborador, async (req,
     res.status(500).json({ error: 'No se pudo cargar quiénes colaboraron.' });
   }
 });
+
+// ─── Sugerencias de fusión (personas posiblemente duplicadas) ──────────────
+
+// GET /api/tree/merge-suggestions — devuelve sugerencias pendientes (no descartadas).
+app.get('/api/tree/merge-suggestions', requireAuth, bloquearColaborador, async (req, res) => {
+  try {
+    await ensureSchema();
+    const ownerId = await resolveProfileUserId(req);
+    if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa bitácora.' });
+    const rows = await sql`
+      SELECT id, nombre_a, nombre_b
+      FROM family_member_merge_suggestions
+      WHERE user_id = ${ownerId} AND dismissed = false
+      ORDER BY created_at ASC
+    `;
+    res.json({ sugerencias: rows.map((r) => ({ id: r.id, nombre_a: r.nombre_a, nombre_b: r.nombre_b })) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudieron cargar las sugerencias.' });
+  }
+});
+
+// POST /api/tree/merge — fusiona dos entradas en una sola.
+// Body: { keepNombre, mergeNombre }
+// keepNombre: el nombre que se conserva (normalmente el más completo).
+// mergeNombre: el nombre que desaparece (se agrega como alias del keep).
+app.post('/api/tree/merge', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    const ownerId = await resolveProfileUserId(req);
+    if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa bitácora.' });
+    const { keepNombre, mergeNombre } = req.body;
+    if (!keepNombre || !mergeNombre || keepNombre === mergeNombre) {
+      return res.status(400).json({ error: 'Faltan nombres o son iguales.' });
+    }
+
+    await ensureSchema();
+    const [kept] = await sql`SELECT aliases FROM family_members WHERE user_id = ${ownerId} AND nombre = ${keepNombre} LIMIT 1`;
+    if (!kept) return res.status(404).json({ error: `No se encontró a "${keepNombre}" en el árbol.` });
+
+    // 1. Agregar mergeNombre a los aliases del kept.
+    let currentAliases = [];
+    try { currentAliases = JSON.parse(kept.aliases || '[]'); } catch {}
+    const mergeNorm = normalizarNombreParaComparar(mergeNombre);
+    if (!currentAliases.includes(mergeNorm)) currentAliases.push(mergeNorm);
+    await sql`UPDATE family_members SET aliases = ${JSON.stringify(currentAliases)} WHERE user_id = ${ownerId} AND nombre = ${keepNombre}`;
+
+    // 2. Redirigir protagonista en family_notes.
+    await sql`UPDATE family_notes SET protagonista = ${keepNombre} WHERE user_id = ${ownerId} AND protagonista = ${mergeNombre}`;
+
+    // 3. Eliminar la entrada duplicada.
+    await sql`DELETE FROM family_members WHERE user_id = ${ownerId} AND nombre = ${mergeNombre}`;
+
+    // 4. Agregar el nombre fusionado a excluidos para que la IA no lo recree.
+    await sql`
+      INSERT INTO family_members_excluidos (user_id, nombre_normalizado, nombre_original)
+      VALUES (${ownerId}, ${mergeNorm}, ${mergeNombre})
+      ON CONFLICT (user_id, nombre_normalizado) DO NOTHING
+    `;
+
+    // 5. Descartar todas las sugerencias que involucren estos dos nombres.
+    await sql`
+      UPDATE family_member_merge_suggestions
+      SET dismissed = true
+      WHERE user_id = ${ownerId}
+        AND ((nombre_a = ${keepNombre} AND nombre_b = ${mergeNombre})
+          OR (nombre_a = ${mergeNombre} AND nombre_b = ${keepNombre}))
+    `;
+
+    console.log(`[merge] userId=${ownerId} fusionó "${mergeNombre}" → "${keepNombre}"`);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo fusionar.' });
+  }
+});
+
+// POST /api/tree/merge-suggestions/:id/dismiss — descarta una sugerencia falsa.
+app.post('/api/tree/merge-suggestions/:id/dismiss', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    const ownerId = await resolveProfileUserId(req);
+    if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa bitácora.' });
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido.' });
+    await sql`UPDATE family_member_merge_suggestions SET dismissed = true WHERE id = ${id} AND user_id = ${ownerId}`;
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo descartar la sugerencia.' });
+  }
+});
+
+// ───────────────────────────────────────────────────────────────────────────
 
 // Repasa TODAS las charlas ya guardadas (de antes de que existiera el árbol,
 // o si se quiere reconstruir desde cero) y actualiza personas/eventos.

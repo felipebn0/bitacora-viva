@@ -7,6 +7,14 @@
 <style>
 :root{--bg:#f7f4eb;--cream:#fffdf6;--green:#4d6542;--deep:#293d30;--pale:#edf0e5;--brown:#8b6345;--ink:#302d25;--sub:#777568;--stroke:#dadaca;--line:#8c9e82}*{box-sizing:border-box}body{margin:0;font:16px/1.5 "Atkinson Hyperlegible",system-ui,sans-serif;color:var(--ink);background:var(--bg)}button,input,select{font:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #9b6734;outline-offset:2px}button:disabled{opacity:.5;cursor:not-allowed}a{color:var(--deep)}.shell{max-width:1700px;margin:auto;padding:24px clamp(14px,2.5vw,42px) 80px}header{display:flex;gap:22px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;margin-bottom:24px}.back{font-size:14px;font-weight:700;text-decoration:none;display:inline-block;margin-bottom:10px}h1,h2,h3{font-family:"Source Serif 4",Georgia,serif}h1{font-size:clamp(33px,4.5vw,51px);line-height:1.04;margin:0 0 9px}.lead{color:var(--sub);margin:0}.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.btn{border:1px solid var(--stroke);border-radius:13px;padding:10px 15px;background:var(--cream);color:var(--deep);min-height:43px;font-weight:700}.btn:hover{background:var(--pale)}.btn.primary{background:var(--green);color:#fff;border-color:var(--green)}.btn[aria-pressed=true]{background:var(--green);color:white}.info{display:flex;gap:18px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:12px 0;color:var(--sub);font-size:14px}.notice{border:1px solid #e2d5bc;background:#fcf4e6;border-radius:14px;padding:12px 16px;color:#624d31;font-size:13px;margin:8px 0 18px}.layout{display:grid;grid-template-columns:minmax(0,1fr) 295px;gap:18px}.stage{height:min(73vh,750px);min-height:470px;overflow:auto;position:relative;border:1px solid #e7e2d4;border-radius:26px;background:radial-gradient(circle at 20% 10%,#f3eddd 0,transparent 28%),var(--cream);touch-action:pan-x pan-y}.paper{position:relative;transform-origin:0 0}.wires{position:absolute;pointer-events:none;overflow:visible;z-index:1}.person{width:196px;min-height:82px;position:absolute;z-index:2;border:1px solid #e7e2d4;border-radius:17px;background:#fffdfa;display:flex;align-items:center;gap:10px;text-align:left;padding:11px;box-shadow:0 8px 20px #463d2510;user-select:none;touch-action:none}.person:hover{border-color:#93a687}.person.active{border:2px solid #55784a;background:#f6faef;box-shadow:0 8px 24px #526c4533}.person.target{border:2px dashed #9a673d}.person.dimmed{opacity:.42}.person .avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}.btn.danger{color:#933c2d;border-color:#e4bbae}.person .avatar{display:flex;align-items:center;justify-content:center;flex:0 0 48px;height:48px;border-radius:50%;background:#e4e8d8;border:3px solid #f2e8d5;color:var(--green);font:bold 17px Georgia,serif}.person .name{font:bold 16px/1.1 Georgia,serif;display:block}.person .relation{font-size:12px;color:var(--sub);display:block;margin-top:4px}.person .pin{font-size:10px;font-weight:700;color:#53714b}.person.dragging{opacity:.75;cursor:grabbing}.side{background:var(--cream);border:1px solid #e7e2d4;border-radius:23px;padding:19px;align-self:start}.side h2{font-size:24px;margin:0 0 8px}.side p{color:var(--sub);font-size:14px;margin:0 0 16px}.side .btn{display:block;width:100%;margin-bottom:9px}.side .legend{font-size:13px;color:var(--sub);border-top:1px solid var(--stroke);padding-top:15px;margin-top:20px}.legend div{margin:8px 0}.legend b{font-weight:600}.swatch{display:inline-block;width:27px;border-top:3px solid var(--green);vertical-align:middle;margin-right:7px}.swatch.dash{border-top-style:dashed;border-color:#ad815a}.list{display:none;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}.list .person{position:relative;width:100%;min-height:80px}.list.visible{display:grid}.hidden{display:none!important}.shade{position:fixed;inset:0;background:#1e231cc0;z-index:10;display:flex;align-items:center;justify-content:center;padding:15px}.shade[hidden]{display:none}.modal{background:#fffdfa;border-radius:23px;padding:24px;width:min(100%,480px);max-height:90vh;overflow:auto;box-shadow:0 25px 70px #0004}.modal h2{margin:0 0 10px}.modal label{display:block;margin-top:14px;font-weight:700;font-size:14px}.modal select,.modal input{width:100%;border:1px solid #cfcbbf;background:white;border-radius:10px;padding:11px;margin-top:5px}.modal .foot{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:20px}.message{font-size:13px;color:#9d392d;min-height:20px}.tip{font-size:12px;color:var(--sub)}.list-panel{display:none}.list-panel.visible{display:block}.pill{border-radius:30px;padding:3px 9px;background:var(--pale);font-size:12px;color:var(--green);font-weight:700}.relation-row{padding:9px 0;border-bottom:1px solid #ebe6d8;font-size:13px}.relation-row button{float:right;border:0;background:transparent;color:#8d422c;text-decoration:underline}.empty{padding:35px;text-align:center;color:var(--sub)}@media(max-width:940px){.layout{grid-template-columns:1fr}.side{order:-1}.side .btn{display:inline-block;width:auto;margin-right:6px}.stage{height:60vh}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
 
+/* Banner de sugerencias de fusión de personas */
+#mergeBanner{border:1px solid #b8d4b0;background:#eef5e8;border-radius:14px;padding:13px 16px;margin:0 0 12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+#mergeBanner[hidden]{display:none!important}
+#mergeBanner .merge-text{flex:1 1 200px;font-size:14px;color:var(--deep)}
+#mergeBanner .merge-text strong{color:#2d5c25}
+#mergeBanner .merge-actions{display:flex;gap:8px;flex-wrap:wrap}
+#mergeBanner .merge-actions .btn{min-height:38px;padding:8px 13px;font-size:13px}
+
 /* RAÍZ: adaptación táctil compacta para celulares */
 .mobile-actions-toggle{display:none}
 .photo-options{display:grid;gap:12px;margin:18px 0}
@@ -75,6 +83,13 @@
 <body class="eco-brand-v1 eco-page-arbol"><div class="shell">
 <header><div><a class="back" href="/app.html">← Volver a mi bitácora</a><h1>Árbol familiar</h1><p class="lead">Tu familia, sus historias y los vínculos que los unen.</p></div><div class="toolbar"><button class="btn" id="addPerson" type="button">＋ Añadir familiar</button><button class="btn" id="treeBtn" aria-pressed="true">♧ Vista de árbol</button><button class="btn" id="listBtn" aria-pressed="false">☷ Vista de lista</button><button class="btn" id="zoomOut" title="Alejar">−</button><span id="zoomText">100%</span><button class="btn" id="zoomIn" title="Acercar">+</button><button class="btn" id="zoomReset" title="Restablecer zoom">↺</button></div></header>
 <div class="notice">Árbol familiar RAÍZ: <b>las ediciones, eliminaciones y vínculos de padres</b> se guardan en tu cuenta. <b>Las fotos, posiciones, ocultos y vínculos personalizados</b> se guardan en tu cuenta en la nube. No los uses como copia única.</div>
+<div id="mergeBanner" hidden>
+  <div class="merge-text">🔍 <strong>¿Misma persona?</strong> <span id="mergeQuestion"></span></div>
+  <div class="merge-actions">
+    <button class="btn primary" id="mergeYes" type="button">Sí, unirlos</button>
+    <button class="btn" id="mergeNo" type="button">No, son distintos</button>
+  </div>
+</div>
 <div class="info"><span id="stats">Cargando familiares…</span><span id="modeHint">Haz clic en una persona para ver sus vínculos. Arrástrala para organizar el árbol.</span></div>
 <div class="layout"><main><div class="stage" id="stage"><div id="paper" class="paper"><svg id="wires" class="wires"></svg><div id="nodes"></div></div></div><div class="list-panel" id="listPanel"><div class="list" id="listGrid"></div></div></main><aside class="side"><div class="side-top"><h2 id="sideTitle">Tu árbol, más claro</h2><button type="button" class="actions-trigger" id="actionsTrigger" aria-haspopup="menu" aria-expanded="false" aria-controls="sideActions" aria-label="Más opciones de esta persona" title="Más opciones">⋯</button></div><p id="sideDesc">Selecciona a alguien para ver su familia cercana. RAÍZ conecta automáticamente los familiares cuando comparten padres registrados.</p><div class="side-actions" id="sideActions" role="menu" aria-label="Acciones del árbol"><div class="sheet-head"><strong id="sheetTitle">Opciones</strong><button type="button" class="sheet-close" id="closeActions" aria-label="Cerrar opciones">×</button></div><button class="btn primary" id="addLink">+ Crear vínculo</button><button class="btn" id="toggleAll">Mostrar todas las conexiones</button><button class="btn" id="editPerson" disabled>✎ Editar familiar</button><button class="btn" id="photoPerson" disabled>Gestionar foto</button><button class="btn" id="hidePerson" disabled>◉ Ocultar / mostrar familiar</button><button class="btn danger" id="deletePerson" disabled>Eliminar persona</button><button class="btn" id="showHidden">Mostrar familiares ocultos</button><button class="btn" id="resetPlaces">Reorganizar tarjetas</button></div><div id="relations"></div><input type="file" id="photoFile" accept="image/jpeg,image/png,image/webp" hidden><p class="tip" id="photoNotice">Las fotos y los vínculos se guardan en tu cuenta cuando la sincronización está disponible.</p><div class="legend"><div><i class="swatch"></i> Padre / madre → hijo/a (los hermanos se reconocen automáticamente)</div><div><i class="swatch dash"></i> Vínculo personalizado</div><p>Para evitar cambios por accidente, <b>arrastrar una tarjeta solo cambia su posición</b>, no su parentesco.</p></div></aside></div>
 </div>
@@ -162,7 +177,55 @@ $('treeBtn').onclick=()=>viewSet('tree');$('listBtn').onclick=()=>viewSet('list'
 function addPersonOpen(){for(const id of ['addParent1','addParent2']){const sel=$(id);sel.replaceChildren();const empty=document.createElement('option');empty.value='';empty.textContent='Sin seleccionar';sel.appendChild(empty);for(const p of people){const op=document.createElement('option');op.value=p.nombre;op.textContent=p.nombre;sel.appendChild(op)}}$('addError').textContent='';$('addShade').hidden=false;$('addName').focus()}
 $('addPerson').onclick=addPersonOpen;$('addCancel').onclick=()=>close('addShade');
 $('addForm').addEventListener('submit',async e=>{e.preventDefault();const nombre=$('addName').value.trim(),relacion=$('addRelation').value.trim(),padres=[...new Set([$('addParent1').value,$('addParent2').value].filter(Boolean))];if(padres.includes(nombre)){$('addError').textContent='Una persona no puede ser su propio padre o madre.';return}try{const r=await fetch('/api/tree/person',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({nombre,relacion,padres})});if(!r.ok){const j=await r.json().catch(()=>({}));throw Error(j.error||'No se pudo guardar')}close('addShade');$('addForm').reset();await load()}catch(e){$('addError').textContent=e.message}});
-load();
+
+// ─── Sugerencias de fusión de personas duplicadas ────────────────────────
+let mergeSuggs=[];
+async function loadMergeSugg(){
+  try{
+    const r=await fetch('/api/tree/merge-suggestions',{credentials:'same-origin',cache:'no-store'});
+    if(!r.ok)return;
+    const j=await r.json();
+    mergeSuggs=Array.isArray(j.sugerencias)?j.sugerencias:[];
+    showNextMergeSugg();
+  }catch{}
+}
+function showNextMergeSugg(){
+  const banner=$('mergeBanner');
+  if(!mergeSuggs.length){banner.hidden=true;return}
+  const s=mergeSuggs[0];
+  // Mostramos siempre el nombre más corto primero, el más largo como "nombre completo"
+  const [corto,largo]=s.nombre_a.length<=s.nombre_b.length?[s.nombre_a,s.nombre_b]:[s.nombre_b,s.nombre_a];
+  $('mergeQuestion').innerHTML=`¿«<strong>${corto}</strong>» y «<strong>${largo}</strong>» son la misma persona?`;
+  banner.hidden=false;
+}
+$('mergeYes').onclick=async()=>{
+  if(!mergeSuggs.length)return;
+  const s=mergeSuggs[0];
+  // El nombre canónico es el más largo (más completo)
+  const [,largo]=s.nombre_a.length<=s.nombre_b.length?[s.nombre_a,s.nombre_b]:[s.nombre_b,s.nombre_a];
+  const [,corto]=s.nombre_a.length<=s.nombre_b.length?[s.nombre_b,s.nombre_a]:[s.nombre_a,s.nombre_b];
+  $('mergeYes').disabled=true;
+  try{
+    const r=await fetch('/api/tree/merge',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({keepNombre:largo,mergeNombre:corto})});
+    if(!r.ok){const j=await r.json().catch(()=>({}));throw Error(j.error||'No se pudo fusionar');}
+    mergeSuggs.shift();
+    showNextMergeSugg();
+    await load();
+  }catch(err){alert(err.message||'Error al fusionar')}
+  finally{$('mergeYes').disabled=false;}
+};
+$('mergeNo').onclick=async()=>{
+  if(!mergeSuggs.length)return;
+  const s=mergeSuggs[0];
+  try{
+    await fetch('/api/tree/merge-suggestions/'+s.id+'/dismiss',{method:'POST',credentials:'same-origin'});
+  }catch{}
+  mergeSuggs.shift();
+  showNextMergeSugg();
+};
+// ─────────────────────────────────────────────────────────────────────────
+
+load();loadMergeSugg();
 })();
 </script>
 <script src="/eco-arbol-v7.js?v=7" defer></script>
