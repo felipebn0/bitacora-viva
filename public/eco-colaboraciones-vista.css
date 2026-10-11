@@ -58,6 +58,13 @@ body>main.wrap .eco-c-story-card audio{width:calc(100% - 34px);max-width:600px;m
 body>main.wrap .eco-c-story-card .aporte-acciones{padding-bottom:15px}
 body>main.wrap .eco-c-story-toggle:focus-visible,
 body>main.wrap .eco-c-section-toggle:focus-visible{outline:3px solid #76936e;outline-offset:2px}
+body>main.wrap .eco-c-filter-row{margin:0 0 14px;display:flex;align-items:center;gap:8px}
+body>main.wrap .eco-c-filter-sel{
+ border:1px solid #dadaca;border-radius:12px;background:#fffdf6;
+ color:#293d30;font:700 .92rem "Atkinson Hyperlegible",system-ui,sans-serif;
+ min-height:42px;padding:8px 14px;cursor:pointer;
+}
+body>main.wrap .eco-c-filter-sel:focus-visible{outline:3px solid #76936e;outline-offset:2px}
 @media(max-width:720px){
  body>main.wrap .eco-c-actionbar{display:grid;grid-template-columns:1fr;gap:8px}
  body>main.wrap .eco-c-actionbar>.aportar-ahora{width:100%}

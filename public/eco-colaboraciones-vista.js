@@ -65,19 +65,19 @@
     box.append(mHead,invPanel);
     modal.appendChild(box);
     document.body.appendChild(modal);
-    function openModal(){
+    const openModal=()=>{
      invBtn.setAttribute('aria-expanded','true');
      modal.hidden=false;
      document.body.classList.add('eco-c-modal-open');
-     mClose.focus();
+     requestAnimationFrame(()=>mClose.focus());
      if(typeof cargarInvitaciones==='function')cargarInvitaciones();
-    }
-    function closeModal(){
+    };
+    const closeModal=()=>{
      invBtn.setAttribute('aria-expanded','false');
      modal.hidden=true;
      document.body.classList.remove('eco-c-modal-open');
      invBtn.focus();
-    }
+    };
     invBtn.setAttribute('aria-expanded','false');
     invBtn.setAttribute('aria-controls','ecoInvitarModal');
     invBtn.addEventListener('click',openModal);
@@ -125,6 +125,47 @@
   if(title)title.textContent='Aportes recibidos';
   const sub=aportes?.querySelector('p.sub');
   if(sub)sub.textContent='Selecciona una historia para leerla, escucharla o administrar sus permisos.';
+
+  // Filtro por colaborador en #aportesLista
+  const aportesListaEl=document.getElementById('aportesLista');
+  if(aportes&&aportesListaEl){
+   const filterRow=document.createElement('div');
+   filterRow.className='eco-c-filter-row';
+   const filterSel=document.createElement('select');
+   filterSel.className='eco-c-filter-sel';
+   filterSel.setAttribute('aria-label','Filtrar aportes por persona');
+   filterRow.appendChild(filterSel);
+   (sub||title)?.insertAdjacentElement('afterend',filterRow);
+
+   function rebuildFilter(){
+    const prev=filterSel.value;
+    const names=new Set();
+    for(const card of aportesListaEl.querySelectorAll('.aporte-item')){
+     const n=card.querySelector('.quien')?.textContent?.trim()||'';
+     if(n)names.add(n);
+    }
+    filterSel.innerHTML='';
+    const all=document.createElement('option');
+    all.value='';all.textContent='Listado completo';
+    filterSel.appendChild(all);
+    [...names].sort().forEach(n=>{
+     const o=document.createElement('option');
+     o.value=n;o.textContent=n;filterSel.appendChild(o);
+    });
+    if(prev&&names.has(prev))filterSel.value=prev;
+    applyFilter();
+   }
+   function applyFilter(){
+    const v=filterSel.value;
+    for(const card of aportesListaEl.querySelectorAll('.aporte-item')){
+     const n=card.querySelector('.quien')?.textContent?.trim()||'';
+     card.hidden=!!(v&&n!==v);
+    }
+   }
+   filterSel.addEventListener('change',applyFilter);
+   new MutationObserver(rebuildFilter).observe(aportesListaEl,{childList:true});
+   rebuildFilter();
+  }
  }
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();

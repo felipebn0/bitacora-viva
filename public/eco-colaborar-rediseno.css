@@ -6,7 +6,7 @@
 #appContent header h1{font-size:clamp(1.65rem,4vw,2.3rem);line-height:1.1;color:#293d30}
 #appContent header .owner-name{font-size:clamp(1.4rem,3.5vw,2.15rem);margin:3px 0!important;line-height:1.18}
 #appContent header .sub{font-size:.95rem}
-#appContent .eco-colab-personas{width:min(100%,580px);margin:0 auto 12px;background:#fffdf6;border:1px solid #dadaca;border-radius:15px}
+#appContent .eco-colab-personas{width:min(100%,710px);margin:0 auto 12px;background:#fffdf6;border:1px solid #dadaca;border-radius:15px}
 #appContent .eco-colab-personas>summary,#appContent .eco-colab-historial>summary{list-style:none;cursor:pointer;min-height:48px;padding:12px 17px;display:flex;align-items:center;gap:6px;font-weight:700;color:#293d30}
 #appContent .eco-colab-personas>summary::-webkit-details-marker,#appContent .eco-colab-historial>summary::-webkit-details-marker{display:none}
 #appContent .eco-colab-personas>summary::before,#appContent .eco-colab-historial>summary::before{content:"⌄";color:#4d6542;font-size:1.25rem}
@@ -27,9 +27,12 @@
 #appContent .aporte-chat{width:100%;max-width:600px;margin:10px auto 0;gap:9px!important}
 #appContent .aporte-chat:empty{display:none!important}
 #appContent .aporte-bubble{font-size:.94rem;max-width:90%}
-#appContent .eco-colab-historial{border-top:1px solid #dadaca;margin-top:8px}
-#appContent .eco-colab-historial>summary{justify-content:flex-start;color:#4d6542;padding-left:0}
-#appContent .eco-colab-historial>.lista{padding-top:8px}
+#appContent .eco-colab-historial{
+ border:1px solid #dadaca;border-radius:15px;background:#fffdf6;
+ width:100%;max-width:710px;margin:0 auto 16px;
+}
+#appContent .eco-colab-historial>summary{justify-content:flex-start;color:#4d6542;padding:12px 17px}
+#appContent .eco-colab-historial>.lista{padding:0 17px 16px}
 #appContent .eco-colab-historial>hr{display:none}
 #appContent .write-row{max-width:min(100%,400px)}
 #appContent .write-row input{min-width:0}
