@@ -255,6 +255,8 @@
         const audio = document.createElement('audio');
         audio.preload = 'none';
         audio.src = '/api/media-file?u=' + encodeURIComponent(url);
+        // eco-audio-player.js lo ignora; eco-lectura.js lo clona al overlay
+        audio.dataset.ecoSkip = '1';
         div.appendChild(audio);
       });
 

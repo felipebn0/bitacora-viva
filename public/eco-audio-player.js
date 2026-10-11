@@ -144,7 +144,7 @@
   const pendingInline = new Set();
 
   function scheduleAudio(audio) {
-    if (audio.dataset.ecoUp) return;
+    if (audio.dataset.ecoUp || audio.dataset.ecoSkip) return;
     const card = audio.closest(CARD_SEL);
     if (card) {
       if (!pendingCards.has(card)) {
