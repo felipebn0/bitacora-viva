@@ -6834,12 +6834,22 @@ app.post('/api/tree/family-review/natural/confirm',requireAuth,bloquearColaborad
 app.get('/api/tree', requireAuth, bloquearColaborador, async (req, res) => {
   try {
     await ensureSchema();
-    const peopleRaw = await sql`SELECT id, nombre, relacion, detalles, padres, es_principal FROM family_members WHERE user_id = ${req.profileUserId} ORDER BY id`;
+    const peopleRaw = await sql`
+      SELECT fm.id, fm.nombre, fm.relacion, fm.detalles, fm.padres, fm.es_principal,
+        COUNT(fn.id)::int AS notas_count
+      FROM family_members fm
+      LEFT JOIN family_notes fn ON fn.user_id = fm.user_id
+        AND LOWER(TRIM(fn.protagonista)) = LOWER(TRIM(fm.nombre))
+      WHERE fm.user_id = ${req.profileUserId}
+      GROUP BY fm.id
+      ORDER BY fm.id
+    `;
     const people = peopleRaw.map((p) => ({
       ...p,
       nombre: capitalizarNombre(p.nombre),
       padres: parseJsonArray(p.padres).map(capitalizarNombre),
       es_principal: !!p.es_principal,
+      notas_count: Number(p.notas_count) || 0,
     }));
     const events = await sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${req.profileUserId} ORDER BY anio NULLS LAST, id`;
     res.json({ people, events });
