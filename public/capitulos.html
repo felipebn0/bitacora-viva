@@ -90,6 +90,9 @@
     padding: 22px 26px;
     margin-bottom: 20px;
   }
+  /* Los <audio> se insertan para que eco-lectura.js los encuentre al abrir
+     el overlay del lector. No se muestran en la lista de capítulos. */
+  .chapter > audio { display: none !important; }
   .chapter .top-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
   .chapter .theme { color: var(--gold-deep); font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; margin: 0 0 4px; }
   .chapter h2 { font-family: var(--font-display); font-size: 1.3rem; margin: 0 0 12px; }
@@ -128,6 +131,9 @@
 <script src="/eco-libro.js?v=1" defer></script>
 <link rel="stylesheet" href="/eco-lectura.css?v=1">
 <script src="/eco-lectura.js?v=1" defer></script>
+<link rel="stylesheet" href="/eco-audio-player.css">
+<script src="/eco-audio-exclusivo.js" defer></script>
+<script src="/eco-audio-player.js" defer></script>
 <link rel="stylesheet" href="/eco-libro-fotos-reales.css?v=1">
 <script src="/eco-libro-fotos-reales.js?v=1" defer></script>
 <link rel="stylesheet" href="/eco-estudio-libro.css?v=2">
@@ -242,6 +248,16 @@
       metaP.className = 'meta';
       metaP.textContent = `Armado a partir de ${(c.story_ids || []).length} historia(s)${fecha ? ' · ' + fecha : ''}`;
       div.appendChild(metaP);
+      // Los audios de las historias que arman este capítulo — eco-lectura.js
+      // los copia al overlay del lector; no se muestran en la lista.
+      (c.audios || []).forEach((url) => {
+        if (typeof url !== 'string' || !/^https?:\/\//.test(url)) return;
+        const audio = document.createElement('audio');
+        audio.preload = 'none';
+        audio.src = '/api/media-file?u=' + encodeURIComponent(url);
+        div.appendChild(audio);
+      });
+
       borrarBtn.addEventListener('click', () => borrarCapitulo(c.id, div, borrarBtn));
       lista.appendChild(div);
     });
