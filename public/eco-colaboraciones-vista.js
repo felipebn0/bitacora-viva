@@ -25,8 +25,11 @@
    b.setAttribute('aria-expanded','false');
    b.setAttribute('aria-controls','colaboradoresLista');
    b.textContent='Ver colaboradores ▾';
-   if(sub)sub.insertAdjacentElement('afterend',b);
-   else if(heading)heading.insertAdjacentElement('afterend',b);
+   const btnRow=document.createElement('div');
+   btnRow.className='eco-c-colabs-btnrow';
+   if(sub)sub.insertAdjacentElement('afterend',btnRow);
+   else if(heading)heading.insertAdjacentElement('afterend',btnRow);
+   btnRow.appendChild(b);
    people.classList.add('eco-c-people-closed');
    b.addEventListener('click',()=>{
     const expanded=b.getAttribute('aria-expanded')!=='true';
@@ -34,6 +37,54 @@
     b.textContent=expanded?'Ocultar colaboradores ▴':'Ver colaboradores ▾';
     people.classList.toggle('eco-c-people-closed',!expanded);
    });
+   const invOrig=document.getElementById('invitarToggle');
+   const invPanel=document.getElementById('invitarPanel');
+   if(invOrig&&invPanel){
+    const invBtn=invOrig.cloneNode(true);
+    btnRow.appendChild(invBtn);
+    invOrig.remove();
+    const modal=document.createElement('div');
+    modal.id='ecoInvitarModal';
+    modal.className='eco-c-modal-overlay';
+    modal.setAttribute('role','dialog');
+    modal.setAttribute('aria-modal','true');
+    modal.setAttribute('aria-labelledby','ecoInvitarModalTitle');
+    modal.hidden=true;
+    const box=document.createElement('div');
+    box.className='eco-c-modal-box';
+    const mHead=document.createElement('div');
+    mHead.className='eco-c-modal-header';
+    const mTitle=document.createElement('h3');
+    mTitle.id='ecoInvitarModalTitle';
+    mTitle.textContent='Invitar familiares';
+    const mClose=document.createElement('button');
+    mClose.type='button';mClose.className='eco-c-modal-close';
+    mClose.setAttribute('aria-label','Cerrar');mClose.textContent='×';
+    mHead.append(mTitle,mClose);
+    invPanel.hidden=false;
+    box.append(mHead,invPanel);
+    modal.appendChild(box);
+    document.body.appendChild(modal);
+    function openModal(){
+     invBtn.setAttribute('aria-expanded','true');
+     modal.hidden=false;
+     document.body.classList.add('eco-c-modal-open');
+     mClose.focus();
+     if(typeof cargarInvitaciones==='function')cargarInvitaciones();
+    }
+    function closeModal(){
+     invBtn.setAttribute('aria-expanded','false');
+     modal.hidden=true;
+     document.body.classList.remove('eco-c-modal-open');
+     invBtn.focus();
+    }
+    invBtn.setAttribute('aria-expanded','false');
+    invBtn.setAttribute('aria-controls','ecoInvitarModal');
+    invBtn.addEventListener('click',openModal);
+    mClose.addEventListener('click',closeModal);
+    modal.addEventListener('click',e=>{if(e.target===modal)closeModal();});
+    document.addEventListener('keydown',e=>{if(!modal.hidden&&e.key==='Escape'){e.preventDefault();closeModal();}});
+   }
   }
 
   // Vista previa por aporte. No modifica la estructura de cada tarjeta salvo añadir
