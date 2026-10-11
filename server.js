@@ -5567,16 +5567,18 @@ app.post('/api/contribute-story', requireAuth, rateLimit, async (req, res) => {
     const ownerId = await resolveProfileUserId(req);
     if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
 
-    let { contributor, parentesco, text, audioUrl } = req.body || {};
+    let { contributor, parentesco, text, audioUrl, mediaUrls } = req.body || {};
     text = capitalizarInicio((text || '').trim());
     if (!text) return res.status(400).json({ error: 'Falta el texto de la historia.' });
     if (text.length > 4000) text = text.slice(0, 4000);
     const cleanContributor = capitalizarNombre((contributor || '').trim().slice(0, 60)) || null;
     const cleanParentesco = capitalizarNombre((parentesco || '').trim().slice(0, 60)) || null;
     const cleanAudioUrl = urlHttpValida(typeof audioUrl === 'string' ? audioUrl.slice(0, 1000) : null);
+    const mediaUrlsLimpias = limpiarMediaAdjunta(mediaUrls);
+    const mediaUrlsJson = mediaUrlsLimpias.length ? JSON.stringify(mediaUrlsLimpias) : null;
 
     await ensureSchema();
-    await sql`INSERT INTO family_notes (user_id, contributor, parentesco, texto, audio_url, contributed_by, guest_id) VALUES (${ownerId}, ${cleanContributor}, ${cleanParentesco}, ${text}, ${cleanAudioUrl}, ${req.userId}, ${req.guestId || null})`;
+    await sql`INSERT INTO family_notes (user_id, contributor, parentesco, texto, audio_url, media_urls, contributed_by, guest_id) VALUES (${ownerId}, ${cleanContributor}, ${cleanParentesco}, ${text}, ${cleanAudioUrl}, ${mediaUrlsJson}, ${req.userId}, ${req.guestId || null})`;
     await marcarAportePendiente(ownerId, cleanContributor);
     res.json({ ok: true });
   } catch (err) {

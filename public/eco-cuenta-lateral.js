@@ -144,6 +144,28 @@
       if(abierto) requestAnimationFrame(()=>cerrar.focus());
     }).observe(panel,{attributes:true,attributeFilter:['class']});
 
+    // Trampa de foco: Tab/Shift+Tab no sale del panel mientras está abierto.
+    panel.addEventListener('keydown', e => {
+      if (e.key !== 'Tab' || !panel.classList.contains('visible')) return;
+      const focusables = [...panel.querySelectorAll(
+        'button:not([disabled]):not([hidden]),input:not([disabled]):not([hidden]),' +
+        'select:not([disabled]):not([hidden]),textarea:not([disabled]):not([hidden]),' +
+        'a[href],[tabindex]:not([tabindex="-1"])'
+      )].filter(el => !el.closest('[hidden]'));
+      if (!focusables.length) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault(); last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault(); first.focus();
+      }
+    });
+    // Cerrar con Escape.
+    panel.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && panel.classList.contains('visible')) cuentaBtn.click();
+    });
+
     mostrarMenu();
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',iniciar);
