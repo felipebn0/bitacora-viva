@@ -548,6 +548,7 @@
        espacios", son necesarias para que el registro y las tarjetas de
        arriba funcionen igual que antes. */
     .pc-f1b4ce9c{color:#D9B479 !important;}
+    .pc-mt16{margin-top:16px !important;}
     .pc-9b54a373{justify-content:center !important;}
     .pc-1e28117f{font-size:.85rem !important;}
     .pc-fa3e1c7d{margin-bottom:12px !important;}
@@ -560,6 +561,7 @@
     .pc-81e00bde{display:none; color:#B3261E !important; font-size:.85rem !important; margin:4px 0 0 !important;}
     .pc-a2ef1fee{width:30px !important; height:30px !important;}
 </style>
+<link rel="stylesheet" href="/eco-v5.css?v=5">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Saltar al contenido</a>
@@ -576,6 +578,8 @@
       </div>
       <div class="nav-links">
         <a href="#como-funciona">Cómo funciona</a>
+        <a href="#mi-libro">Mi libro</a>
+        <a href="#arbol-familiar">Árbol familiar</a>
         <a href="#familia">Familia</a>
         <a href="#privacidad">Privacidad</a>
         <a href="/app.html" class="nav-login">Iniciar sesión</a>
@@ -590,7 +594,7 @@
         <div class="hero-copy reveal">
           <div class="eyebrow">Un legado contado con tu propia voz</div>
           <h1>Las historias de tu familia merecen <em>seguir vivas.</em></h1>
-          <p>Conversaciones guiadas que convierten recuerdos, anécdotas y voces en una historia familiar que puedes volver a escuchar, consultar y compartir.</p>
+          <p>Conserva las voces, recuerdos e historias de tu familia en un solo lugar.</p>
           <div class="hero-actions">
             <a class="btn btn-primary" href="#registro-form">Crear mi cuenta</a>
             <a class="btn btn-secondary" href="#como-funciona">Ver cómo funciona ↓</a>
@@ -635,7 +639,7 @@
             <div class="question-card">“¿Cuál fue uno de los días más importantes de tu vida?”</div>
             <div class="question-card">“¿Qué historia quieres que nunca olvidemos?”</div>
           </div>
-          <p class="problem-note">Esas preguntas casi nunca se hacen a tiempo. Después queda el silencio, y el "ojalá le hubiera preguntado". Eco ayuda a tener esas conversaciones hoy, para que la familia pueda volver a ellas siempre.</p>
+          <p class="problem-note">ECO te ayuda a hacer esas preguntas hoy, para volver a escuchar sus respuestas mañana.</p>
         </div>
       </div>
     </section>
@@ -645,7 +649,7 @@
         <div class="section-head reveal">
           <div class="eyebrow">Cómo funciona</div>
           <h2>Hablar es suficiente.</h2>
-          <p>No hace falta escribir una biografía ni saber por dónde empezar. La experiencia acompaña la conversación, organiza los recuerdos y los deja listos para volver a encontrarlos.</p>
+          <p>Solo empieza a hablar. ECO te ayuda a conservar cada recuerdo.</p>
         </div>
         <div class="steps-grid">
           <article class="step reveal"><div class="step-num">01</div><h3>Conversa</h3><p>Presiona un botón y empieza a hablar. La app escucha, hace preguntas y sigue el hilo de forma natural.</p></article>
@@ -699,7 +703,37 @@
       </div>
     </section>
 
-    <section id="para-quien">
+    
+<!-- ECO V5: visual demos only, no family data, no hidden registration logic -->
+<section class="eco5-feature eco5-book" id="mi-libro" aria-labelledby="eco5BookHeading">
+ <div class="wrap eco5-grid reverse">
+  <div class="eco5-stage eco5-motion">
+   <div><div class="eco5-openbook" aria-label="Ilustración de un libro de recuerdos">
+    <div class="eco5-page"><small>Mi libro · Capítulo 01</small><h3>La casa donde crecimos</h3><p>"Los domingos eran para reunirnos. Cada comida traía una historia nueva..."</p><div class="eco5-audio"><span class="eco5-play" aria-hidden="true">▶</span><span class="eco5-wave" aria-hidden="true"></span><span>02:14</span></div></div>
+    <div class="eco5-page"><div class="eco5-photo" role="img" aria-label="Siluetas ilustrativas de dos familiares"><span></span><span></span></div><small class="pc-mt16">Las historias de nuestra familia</small></div>
+   </div><p class="eco5-caption">Vista ilustrativa de Mi libro · No contiene recuerdos reales</p></div>
+  </div>
+  <div class="eco5-copy eco5-motion"><p class="eco5-overline">Tus recuerdos en capítulos</p><h2 id="eco5BookHeading">Mi libro, una historia que sigue creciendo.</h2><p>Las conversaciones se convierten en capítulos que puedes leer y volver a escuchar. Cada recuerdo encuentra su lugar.</p><a class="btn btn-primary" href="#registro-form">Comenzar mi libro →</a></div>
+ </div>
+</section>
+<section class="eco5-feature eco5-tree" id="arbol-familiar" aria-labelledby="eco5TreeHeading">
+ <div class="wrap eco5-grid">
+  <div class="eco5-copy eco5-motion"><p class="eco5-overline">Personas, recuerdos, generaciones</p><h2 id="eco5TreeHeading">Tu historia también tiene un árbol.</h2><p>Conecta a los familiares, consulta sus vínculos y descubre cómo cada historia forma parte de algo más grande.</p><a class="btn btn-primary" href="#registro-form">Conocer mi árbol →</a></div>
+  <div class="eco5-stage eco5-motion"><div class="eco5-family-card" aria-label="Ejemplo visual de un árbol familiar">
+    <div class="eco5-family-head"><strong>Árbol familiar</strong><span class="eco5-tag">Ejemplo</span></div>
+    <div class="eco5-relatives"><div class="eco5-relative"><span class="eco5-avatar">P</span><span><strong>Papá</strong><small>Familia paterna</small></span></div><div class="eco5-relative"><span class="eco5-avatar">M</span><span><strong>Mamá</strong><small>Familia materna</small></span></div></div>
+    <div class="eco5-connect" aria-hidden="true"></div><div class="eco5-relative eco5-you"><span class="eco5-avatar">Y</span><span><strong>Tú</strong><small>Persona principal</small></span></div>
+    <div class="eco5-branches"><span>Abuelos</span><span>Hermanos</span><span>Tíos y tías</span></div>
+    <p class="eco5-caption">Ilustración conceptual, no datos de una familia real.</p>
+  </div></div>
+ </div>
+</section>
+<section class="eco5-ai" id="inteligencia-familiar" aria-labelledby="eco5AiHeading"><div class="wrap eco5-grid reverse">
+ <div class="eco5-ai-card eco5-motion"><span class="eco5-ai-chip">Posible conexión familiar</span><blockquote>"Mi papá siempre contaba historias de su abuelo..."</blockquote><div class="eco5-proposal">ECO puede sugerir un parentesco para que lo revises.</div><div class="eco5-check">✓ La decisión de confirmar es siempre tuya.</div></div>
+ <div class="eco5-copy eco5-motion"><p class="eco5-overline">Historias que se conectan</p><h2 id="eco5AiHeading">Los recuerdos pueden revelar vínculos.</h2><p>Al contar historias, ECO puede detectar posibles relaciones familiares. Tú revisas la información y decides qué guardar.</p><a class="btn btn-secondary" href="#como-funciona">Ver cómo funciona ↓</a></div>
+</div></section>
+
+<section id="para-quien">
       <div class="wrap">
         <div class="section-head center reveal">
           <div class="eyebrow pc-9b54a373">Para quién es</div>
@@ -731,7 +765,7 @@
         <div class="section-head center reveal">
           <div class="eyebrow pc-9b54a373">Una historia de todos</div>
           <h2>Esta historia la construimos entre todos.</h2>
-          <p>No hace falta que una sola persona cuente todo. Manda tu código de invitación por WhatsApp: quien lo recibe puede sumar sus propios recuerdos, y también volver cuando quiera a escuchar y leer los que ya se guardaron — así esta historia se arma y se disfruta entre todos.</p>
+          <p>Invita a tu familia a contar, escuchar y conservar recuerdos juntos.</p>
         </div>
         <div class="family-cards reveal">
           <div class="family-card">
@@ -923,7 +957,7 @@
       <div class="wrap inner reveal">
         <div class="eyebrow pc-9b54a373">Una historia empieza con una pregunta</div>
         <h2>Algún día vas a querer escuchar esa historia una vez más.</h2>
-        <p>Su voz, sus palabras, su forma de contar las cosas — eso no se puede recuperar después. Guárdala mientras todavía puede ser contada.</p>
+        <p>Guarda hoy las voces que querrás escuchar mañana.</p>
         <a class="btn btn-primary" href="#registro-form">Crear mi cuenta</a>
       </div>
     </section>
@@ -1245,5 +1279,6 @@
     }, {threshold:.12});
     document.querySelectorAll('.reveal').forEach(el => io.observe(el));
   </script>
+<script src="/eco-v5.js?v=5" defer></script>
 </body>
 </html>

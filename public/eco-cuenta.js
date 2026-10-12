@@ -3,6 +3,9 @@
 (function () {
   'use strict';
   function init() {
+    // Si el panel lateral ya está activo, ese script hace una reorganización
+    // más completa — el acordeón de aquí es trabajo duplicado.
+    if (document.querySelector('link[href*="eco-cuenta-lateral"]')) return;
     var panel = document.getElementById('userMenuPanel');
     if (!panel || panel.dataset.ecoOrganizado === '1') return;
     var original = {

@@ -6,15 +6,15 @@ function init(){
  const header=root?.querySelector('header');
  const sw=root?.querySelector('#collabSwitch');
  const wrap=root?.querySelector('.aportes');
- const chat=root?.querySelector('#aporteChat');
  const orbZone=wrap?.querySelector('.orb-zone');
  const list=root?.querySelector('#aportesLista');
- if(!root||!header||!wrap||!orbZone||!chat||root.dataset.ecoColabCompacto)return;
+ if(!root||!header||!wrap||!orbZone||root.dataset.ecoColabCompacto)return;
  root.dataset.ecoColabCompacto='1';
- // El micrófono siempre es lo primero: mover el log existente sin recrearlo.
- orbZone.insertAdjacentElement('afterend',chat);
  const h2=wrap.querySelector('h2');
  if(h2)h2.textContent='Cuenta tu recuerdo';
+ // Barra de acciones compacta encima del panel principal.
+ const barra=document.createElement('div');
+ barra.className='eco-colab-barra';
  // Selector de bitácora compactado sin sustituir los enlaces originales.
  if(sw){
    const details=document.createElement('details');
@@ -24,8 +24,8 @@ function init(){
    const hint=document.createElement('span');
    hint.className='eco-colab-actual';
    sum.appendChild(hint);
-   sw.parentNode.insertBefore(details,sw);
    details.append(sum,sw);
+   barra.appendChild(details);
    function sync(){
      const active=sw.querySelector('.collab-switch-list a.active');
      const selected=sw.querySelector('.collab-switch-list select');
@@ -46,13 +46,15 @@ function init(){
    details.append(sum);
    if(hr)details.appendChild(hr);
    details.appendChild(list);
-   wrap.appendChild(details);
+   barra.appendChild(details);
    const watch=new MutationObserver(()=>{
      const count=list.querySelectorAll('.item').length;
      sum.textContent='Ver historias que he aportado'+(count?' ('+count+')':'');
    });
    watch.observe(list,{childList:true});
  }
+ // Insertar barra antes del panel principal.
+ wrap.parentNode.insertBefore(barra,wrap);
  // Agrupa opciones para adjuntar, pero no mueve los inputs ni los controles.
  const audioBtn=orbZone.querySelector('#subirAudioBtn');
  const photoBtn=orbZone.querySelector('#subirFotoBtn');

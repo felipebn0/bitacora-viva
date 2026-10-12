@@ -68,13 +68,13 @@
      try{
        await getData();
        if(current!==token||reader.hidden)return;
-       const currentTitle=title.textContent?.trim();
-       const matches=chapters.filter(c=>c.title?.trim()===currentTitle);
-       if(matches.length!==1){
-         status.textContent='No fue posible asociar de forma segura las fotografías a este capítulo.';
+       const chapterId=reader.dataset.chapterId;
+       const match=chapterId?chapters.find(c=>String(c.id)===chapterId):null;
+       if(!match){
+         status.textContent='No fue posible asociar las fotografías a este capítulo.';
          return;
        }
-       const ids=new Set((matches[0].story_ids||[]).map(Number));
+       const ids=new Set((match.story_ids||[]).map(Number));
        const images=[];
        for(const s of stories){
          if(!ids.has(Number(s.id)))continue;

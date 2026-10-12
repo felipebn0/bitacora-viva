@@ -1,0 +1,136 @@
+/* ECO · Custom audio player — reemplaza <audio controls> con un diseño propio.
+   Se combina con eco-audio-player.js que hace el upgrade del DOM. */
+
+/* ── Fila de pista ── */
+.eco-player-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ── Botón play/pause ── */
+.eco-play-btn {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #4d6542;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 120ms, transform 80ms;
+  -webkit-tap-highlight-color: transparent;
+}
+.eco-play-btn:hover  { background: #293d30; }
+.eco-play-btn:active { transform: scale(.93); }
+.eco-play-btn svg {
+  fill: #fff;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+}
+.eco-play-btn .ico-play  { display: block; }
+.eco-play-btn .ico-pause { display: none; }
+.eco-play-btn.playing .ico-play  { display: none; }
+.eco-play-btn.playing .ico-pause { display: block; }
+
+/* ── Área de pista (barra + tiempos) ── */
+.eco-track-area {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.eco-track-bar {
+  position: relative;
+  height: 4px;
+  border-radius: 2px;
+  background: #d4d0bf;
+  cursor: pointer;
+  overflow: visible;
+}
+.eco-track-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 2px;
+  background: #4d6542;
+  width: 0%;
+  transition: width 250ms linear;
+}
+.eco-track-thumb {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #4d6542;
+  box-shadow: 0 0 0 2px #fffdf6;
+  pointer-events: none;
+  left: 0%;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.eco-player-row:hover .eco-track-thumb,
+.eco-player-row:focus-within .eco-track-thumb { opacity: 1; }
+
+.eco-track-times {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: #777568;
+  line-height: 1;
+}
+
+/* Número de pista cuando hay varias */
+.eco-track-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: #777568;
+  flex-shrink: 0;
+  width: 18px;
+  text-align: right;
+}
+
+/* ── Footer de tarjeta (cuando el audio está en .aporte-item o .chapter) ──
+   El margen negativo extiende el footer hasta los bordes de la tarjeta. */
+.eco-player-footer {
+  border-top: 1px solid #dadaca;
+  background: #edf0e5;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  /* Padding horizontal por defecto — se sobreescribe por tipo de tarjeta */
+  padding: 11px 16px 12px;
+}
+
+/* .aporte-item: padding 14px 18px, border-radius 14px */
+.aporte-item > .eco-player-footer {
+  margin: 8px -18px -14px;
+  border-radius: 0 0 14px 14px;
+}
+
+/* .chapter: padding 22px 26px, border-radius 18px */
+.chapter > .eco-player-footer {
+  margin: 10px -26px -22px;
+  border-radius: 0 0 18px 18px;
+  padding: 11px 20px 14px;
+}
+
+/* ── Player inline (cuando no está en tarjeta conocida) ──
+   Reemplaza el <audio> en su posición, con fondo sutil. */
+.eco-player-inline {
+  background: #edf0e5;
+  border: 1px solid #dadaca;
+  border-radius: 10px;
+  padding: 10px 14px 11px;
+  margin: 6px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}

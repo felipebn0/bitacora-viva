@@ -1057,7 +1057,24 @@ function ensureSchema() {
       // updateFamilyTree() vuelve a fijar en cada reconstrucción — ver el
       // comentario ahí sobre cómo se decide a quién le corresponde.
       sql`ALTER TABLE family_members ADD COLUMN IF NOT EXISTS es_principal BOOLEAN NOT NULL DEFAULT false`,
+      // aliases: nombres alternativos que esta persona también usa — JSON array
+      // de strings normalizados. Se puebla cuando el usuario confirma que dos
+      // entradas del árbol son la misma persona (ver /api/tree/merge).
+      sql`ALTER TABLE family_members ADD COLUMN IF NOT EXISTS aliases TEXT`,
       sql`CREATE INDEX IF NOT EXISTS idx_family_members_user ON family_members(user_id)`,
+
+      // Sugerencias de fusión: pares de personas cuyo nombre normalizado
+      // encaja como prefijo del otro ("jorge" ⊂ "jorge alejandro"). El
+      // dueño confirma o descarta desde la UI del árbol.
+      sql`CREATE TABLE IF NOT EXISTS family_member_merge_suggestions (
+        id SERIAL PRIMARY KEY,
+        user_id INT NOT NULL REFERENCES users(id),
+        nombre_a TEXT NOT NULL,
+        nombre_b TEXT NOT NULL,
+        dismissed BOOLEAN NOT NULL DEFAULT false,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_merge_suggestions_unico ON family_member_merge_suggestions(user_id, nombre_a, nombre_b)`,
 
       // Personas borradas a mano del árbol (pedido de Felipe, 2026-09-08):
       // borrar en /api/tree/person/:id solo saca la fila de ESTA vez, pero
@@ -2972,6 +2989,32 @@ app.get('/api/invitacion-info', rateLimit, async (req, res) => {
 // Las bitácoras a las que ESTA cuenta se sumó como colaboradora — para
 // mostrar en colaborar.html un ir-y-venir entre ellas sin pedir el código
 // de nuevo cada vez. Solo lo suyo, nunca lo de otras cuentas.
+// ECO-COLAB-INTEGRAL-1: historial del autor, separado del acceso a colaborar.
+app.get('/api/my-contributed-notes', requireAuth, async (req, res) => {
+  try {
+    if (!req.userId || req.isGuest) return res.status(403).json({ error: 'Requiere cuenta.' });
+    const ownerId = Number(req.query.owner);
+    if (!Number.isSafeInteger(ownerId) || ownerId <= 0) return res.status(400).json({ error: 'Destinatario inválido.' });
+    await ensureSchema();
+    const rows = await sql`
+      SELECT id, contributor, parentesco, protagonista, texto, audio_url,
+             audio_urls, media_urls, created_at, is_private
+      FROM family_notes
+      WHERE user_id = ${ownerId} AND contributed_by = ${req.userId}
+        AND archived_at IS NULL
+      ORDER BY created_at DESC LIMIT 100`;
+    res.json({ notes: rows.map(n => ({
+      ...n, contributor: capitalizarNombre(n.contributor),
+      texto: capitalizarInicio(n.texto),
+      audio_urls: parseJsonArray(n.audio_urls),
+      media_urls: parseJsonArray(n.media_urls)
+    })) });
+  } catch (err) {
+    console.error('my-contributed-notes',err);
+    res.status(500).json({ error: 'No se pudo cargar el historial de aportes.' });
+  }
+});
+
 app.get('/api/my-collaborations', requireAuth, async (req, res) => {
   try {
     await ensureSchema();
@@ -2983,6 +3026,20 @@ app.get('/api/my-collaborations', requireAuth, async (req, res) => {
       ORDER BY c.created_at ASC
     `;
     const historias = rows.map((r) => ({ ownerId: r.owner_id, ownerName: capitalizarNombre(r.name || r.username) }));
+    // ECO-COLAB-INTEGRAL-1: incluir destinatarios de aportes pasados
+    // hechos desde esta cuenta, aunque falte una relación collaborations.
+    // Esto NO otorga acceso a la bitácora ni a contribuciones ajenas.
+    if (req.userId && !req.isGuest) {
+      const anteriores = await sql`
+        SELECT DISTINCT u.id AS owner_id, u.name, u.username
+        FROM family_notes n JOIN users u ON u.id = n.user_id
+        WHERE n.contributed_by = ${req.userId} AND n.archived_at IS NULL`;
+      for (const r of anteriores) {
+        if (!historias.some(h => Number(h.ownerId) === Number(r.owner_id))) {
+          historias.push({ ownerId: r.owner_id, ownerName: capitalizarNombre(r.name || r.username), soloHistorial: true });
+        }
+      }
+    }
     // Cuenta 100% colaboradora de siempre (owner_user_id fijo desde el
     // signup) — si no está ya en la lista de arriba, la sumamos también.
     if (req.isCollaborator && !historias.some((h) => h.ownerId === req.profileUserId)) {
@@ -2995,6 +3052,40 @@ app.get('/api/my-collaborations', requireAuth, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo cargar tus colaboraciones.' });
+  }
+});
+
+// Vincula aportes de invitado (contributed_by IS NULL) de esta bitácora al
+// usuario autenticado actual, si el nombre del colaborador coincide con el
+// nombre registrado en la cuenta. Se llama desde colaborar.html al cargar la
+// página cuando hay sesión autenticada — permite que aportes hechos antes de
+// tener cuenta (o sin haber iniciado sesión) aparezcan en "Lo que yo dije".
+// Criterio conservador: solo coincide por nombre exacto (sin distinción de
+// mayúsculas) para evitar vincular aportes de otra persona que se llame igual.
+app.post('/api/claim-guest-contributions', requireAuth, bloquearInvitado, rateLimit, async (req, res) => {
+  try {
+    if (!req.userId) return res.status(403).json({ error: 'No autorizado.' });
+    const ownerId = await resolveProfileUserId(req);
+    if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
+    await ensureSchema();
+    const meRow = await sql`SELECT name, username FROM users WHERE id = ${req.userId}`;
+    if (!meRow.length) return res.json({ claimed: 0 });
+    const miNombre = capitalizarNombre(meRow[0].name || meRow[0].username || '');
+    if (!miNombre) return res.json({ claimed: 0 });
+    // Solo actualiza notas de este dueño donde el nombre del colaborador
+    // coincide y aún no tienen contributed_by. No toca aportes de otros usuarios.
+    const result = await sql`
+      UPDATE family_notes
+      SET contributed_by = ${req.userId}
+      WHERE user_id = ${ownerId}
+        AND contributed_by IS NULL
+        AND LOWER(contributor) = LOWER(${miNombre})
+        AND archived_at IS NULL
+      RETURNING id`;
+    res.json({ claimed: result.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo vincular los aportes.' });
   }
 });
 
@@ -4160,9 +4251,57 @@ function charlaCompactaParaArbol(intercambios) {
   return lineas.join('\n');
 }
 
+// Detecta pares de personas donde el nombre normalizado de uno es prefijo
+// exacto del otro (separado por espacio), indicando que probablemente son la
+// misma persona con nombre completo vs. apodo/nombre corto.
+// Ej: "jorge" ⊂ "jorge alejandro", "juan vargas" ⊂ "juan vargas perez".
+// Devuelve [{nombre_a (el corto), nombre_b (el largo)}].
+function detectarPosiblesDuplicados(personas) {
+  const pares = [];
+  for (let i = 0; i < personas.length; i++) {
+    for (let j = i + 1; j < personas.length; j++) {
+      const a = personas[i], b = personas[j];
+      const na = normalizarNombreParaComparar(a.nombre);
+      const nb = normalizarNombreParaComparar(b.nombre);
+      if (!na || !nb || na === nb) continue;
+      // Prefijo de palabra completa (el corto termina antes de una parte del largo)
+      const [corto, cortaNorm, largo, largaNorm] =
+        na.length <= nb.length ? [a, na, b, nb] : [b, nb, a, na];
+      if (largaNorm.startsWith(cortaNorm + ' ') || largaNorm === cortaNorm) {
+        pares.push({ nombre_a: corto.nombre, nombre_b: largo.nombre });
+      }
+    }
+  }
+  return pares;
+}
+
+// Persiste las sugerencias de fusión nuevas (ignora las que ya existen).
+async function guardarSugerenciasFusion(userId, pares) {
+  if (!pares.length) return;
+  for (const { nombre_a, nombre_b } of pares) {
+    try {
+      await sql`
+        INSERT INTO family_member_merge_suggestions (user_id, nombre_a, nombre_b)
+        VALUES (${userId}, ${nombre_a}, ${nombre_b})
+        ON CONFLICT (user_id, nombre_a, nombre_b) DO NOTHING
+      `;
+    } catch (e) {
+      // No fatal: si falla una sugerencia, seguimos con las demás.
+      console.warn(`[merge-suggestions] userId=${userId} error al guardar "${nombre_a}"/"${nombre_b}":`, e.message);
+    }
+  }
+}
+
 const limpiarCampoCompacto = (v) => String(v == null ? '' : v).replace(/[|\n\r]+/g, ' ').trim();
 function personasPreviasCompactas(personas) {
-  return personas.map((p, i) => `${i + 1} | ${limpiarCampoCompacto(p.nombre)} | ${limpiarCampoCompacto(p.relacion)} | ${limpiarCampoCompacto(p.detalles)} | ${(Array.isArray(p.padres) ? p.padres : []).map(limpiarCampoCompacto).join(', ')}`).join('\n');
+  return personas.map((p, i) => {
+    let aliasesStr = '';
+    try {
+      const aliases = JSON.parse(p.aliases || '[]');
+      if (aliases.length) aliasesStr = ` [también: ${aliases.join(', ')}]`;
+    } catch {}
+    return `${i + 1} | ${limpiarCampoCompacto(p.nombre)}${aliasesStr} | ${limpiarCampoCompacto(p.relacion)} | ${limpiarCampoCompacto(p.detalles)} | ${(Array.isArray(p.padres) ? p.padres : []).map(limpiarCampoCompacto).join(', ')}`;
+  }).join('\n');
 }
 function eventosPreviosCompactos(eventos) {
   return eventos.map((e, i) => `${i + 1} | ${limpiarCampoCompacto(e.descripcion)} | ${limpiarCampoCompacto(e.categoria)} | ${e.anio == null ? '' : e.anio} | ${e.edad_aprox == null ? '' : e.edad_aprox}`).join('\n');
@@ -4236,7 +4375,7 @@ async function updateFamilyTree(userId, esPropia, newExchanges) {
     if (!nuevaCharla.trim()) return true;
 
     await ensureSchema();
-    const personasPreviasRaw = await sql`SELECT nombre, relacion, detalles, padres, es_principal FROM family_members WHERE user_id = ${userId}`;
+    const personasPreviasRaw = await sql`SELECT nombre, relacion, detalles, padres, es_principal, aliases FROM family_members WHERE user_id = ${userId}`;
     const personasPrevias = personasPreviasRaw.map((p) => ({ ...p, padres: parseJsonArray(p.padres) }));
     // Quién quedó marcado como "Yo" (es_principal) antes de esta corrida, si
     // había alguien — se usa más abajo para no perder el resaltado ni
@@ -4349,13 +4488,24 @@ async function updateFamilyTree(userId, esPropia, newExchanges) {
       console.log(`[arbol-consumo] userId=${userId} sin-cambios (no se reescribió la base)`);
       return true;
     }
+    // Leer aliases existentes para preservarlos al reescribir family_members.
+    // La transacción borra y vuelve a insertar toda la tabla del usuario; sin
+    // esto los aliases quedaban NULL en cada reconstrucción.
+    const aliasesActualesRows = await sql`SELECT nombre, aliases FROM family_members WHERE user_id = ${userId}`;
+    const aliasesPorNombreNorm = new Map(
+      aliasesActualesRows
+        .filter((r) => r.aliases)
+        .map((r) => [normalizarNombreParaComparar(r.nombre), r.aliases])
+    );
+
     await sql.transaction([
       sql`DELETE FROM family_members WHERE user_id = ${userId}`,
       ...personas.map((p, i) => {
         const padres = Array.isArray(p.padres) ? p.padres.filter((x) => typeof x === 'string' && x.trim()).slice(0, 2) : [];
         const esPrincipal = i === indicePrincipal;
-        return sql`INSERT INTO family_members (user_id, nombre, relacion, detalles, padres, es_principal) VALUES (
-        ${userId}, ${String(p.nombre).slice(0, 120)}, ${String(p.relacion).slice(0, 80)}, ${p.detalles ? capitalizarInicio(String(p.detalles).slice(0, 300)) : null}, ${padres.length ? JSON.stringify(padres) : null}, ${esPrincipal}
+        const aliasesJson = aliasesPorNombreNorm.get(normalizarNombreParaComparar(p.nombre)) || null;
+        return sql`INSERT INTO family_members (user_id, nombre, relacion, detalles, padres, es_principal, aliases) VALUES (
+        ${userId}, ${String(p.nombre).slice(0, 120)}, ${String(p.relacion).slice(0, 80)}, ${p.detalles ? capitalizarInicio(String(p.detalles).slice(0, 300)) : null}, ${padres.length ? JSON.stringify(padres) : null}, ${esPrincipal}, ${aliasesJson}
       )`;
       }),
       sql`DELETE FROM timeline_events WHERE user_id = ${userId}`,
@@ -4368,6 +4518,15 @@ async function updateFamilyTree(userId, esPropia, newExchanges) {
       )`;
       }),
     ]);
+
+    // Detectar y guardar sugerencias de fusión (no bloquea si falla).
+    try {
+      const pares = detectarPosiblesDuplicados(personas);
+      if (pares.length) await guardarSugerenciasFusion(userId, pares);
+    } catch (e) {
+      console.warn(`[merge-suggestions] userId=${userId} error en detección:`, e.message);
+    }
+
     return true;
   } catch (err) {
     console.error('No se pudo actualizar el árbol genealógico:', err);
@@ -5056,6 +5215,13 @@ function escapeSsml(text) {
 }
 
 async function pedirVozAElevenLabs(text, modelId, voiceId = ELEVEN_VOICE_ID) {
+  // Ajustes por voz: la femenina produce artefactos/estática con stability
+  // bajo + style alto (la voz masculina es menos sensible a eso). Subir
+  // stability y bajar style reduce el ruido sin perder expresividad perceptible.
+  const esMasculina = voiceId === ELEVEN_VOICE_ID_MASCULINA;
+  const voiceSettings = esMasculina
+    ? { stability: 0.4,  similarity_boost: 0.75, style: 0.5, use_speaker_boost: true }
+    : { stability: 0.58, similarity_boost: 0.75, style: 0.3, use_speaker_boost: true };
   const resp = await fetch(
     `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
     {
@@ -5073,7 +5239,7 @@ async function pedirVozAElevenLabs(text, modelId, voiceId = ELEVEN_VOICE_ID) {
         // ninguna inflexión de estilo. "use_speaker_boost" mejora la
         // claridad/similitud con la voz original, a costa de un poquito
         // más de latencia (aceptable aquí, no es una llamada en vivo).
-        voice_settings: { stability: 0.4, similarity_boost: 0.75, style: 0.5, use_speaker_boost: true },
+        voice_settings: voiceSettings,
       }),
       signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
     }
@@ -5480,16 +5646,18 @@ app.post('/api/contribute-story', requireAuth, rateLimit, async (req, res) => {
     const ownerId = await resolveProfileUserId(req);
     if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
 
-    let { contributor, parentesco, text, audioUrl } = req.body || {};
+    let { contributor, parentesco, text, audioUrl, mediaUrls } = req.body || {};
     text = capitalizarInicio((text || '').trim());
     if (!text) return res.status(400).json({ error: 'Falta el texto de la historia.' });
     if (text.length > 4000) text = text.slice(0, 4000);
     const cleanContributor = capitalizarNombre((contributor || '').trim().slice(0, 60)) || null;
     const cleanParentesco = capitalizarNombre((parentesco || '').trim().slice(0, 60)) || null;
     const cleanAudioUrl = urlHttpValida(typeof audioUrl === 'string' ? audioUrl.slice(0, 1000) : null);
+    const mediaUrlsLimpias = limpiarMediaAdjunta(mediaUrls);
+    const mediaUrlsJson = mediaUrlsLimpias.length ? JSON.stringify(mediaUrlsLimpias) : null;
 
     await ensureSchema();
-    await sql`INSERT INTO family_notes (user_id, contributor, parentesco, texto, audio_url, contributed_by, guest_id) VALUES (${ownerId}, ${cleanContributor}, ${cleanParentesco}, ${text}, ${cleanAudioUrl}, ${req.userId}, ${req.guestId || null})`;
+    await sql`INSERT INTO family_notes (user_id, contributor, parentesco, texto, audio_url, media_urls, contributed_by, guest_id) VALUES (${ownerId}, ${cleanContributor}, ${cleanParentesco}, ${text}, ${cleanAudioUrl}, ${mediaUrlsJson}, ${req.userId}, ${req.guestId || null})`;
     await marcarAportePendiente(ownerId, cleanContributor);
     res.json({ ok: true });
   } catch (err) {
@@ -5820,7 +5988,9 @@ app.post('/api/contribute-chat', requireAuth, rateLimit, async (req, res) => {
     });
     await logClaudeUsage(ownerId, 'aporte_charla', response);
 
-    let text = response.content[0].text.trim();
+    const _block = response.content && response.content[0];
+    if (!_block || _block.type !== 'text') throw new Error('Respuesta inesperada del modelo.');
+    let text = _block.text.trim();
     const done = text.includes('[FIN]');
     const needsBasicInfo = !done && text.includes('[FALTA_DATO]');
     text = text.replace('[FIN]', '').replace('[FALTA_DATO]', '').trim();
@@ -6779,18 +6949,54 @@ app.post('/api/tree/family-review/natural/confirm',requireAuth,bloquearColaborad
 app.get('/api/tree', requireAuth, bloquearColaborador, async (req, res) => {
   try {
     await ensureSchema();
-    const peopleRaw = await sql`SELECT id, nombre, relacion, detalles, padres, es_principal FROM family_members WHERE user_id = ${req.profileUserId} ORDER BY id`;
+    const peopleRaw = await sql`
+      SELECT fm.id, fm.nombre, fm.relacion, fm.detalles, fm.padres, fm.es_principal,
+        COUNT(fn.id)::int AS notas_count
+      FROM family_members fm
+      LEFT JOIN family_notes fn ON fn.user_id = fm.user_id
+        AND LOWER(TRIM(fn.protagonista)) = LOWER(TRIM(fm.nombre))
+      WHERE fm.user_id = ${req.profileUserId}
+      GROUP BY fm.id
+      ORDER BY fm.id
+    `;
     const people = peopleRaw.map((p) => ({
       ...p,
       nombre: capitalizarNombre(p.nombre),
       padres: parseJsonArray(p.padres).map(capitalizarNombre),
       es_principal: !!p.es_principal,
+      notas_count: Number(p.notas_count) || 0,
     }));
     const events = await sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${req.profileUserId} ORDER BY anio NULLS LAST, id`;
     res.json({ people, events });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo cargar el árbol genealógico.' });
+  }
+});
+
+// Añadir una nueva persona al árbol manualmente.
+app.post('/api/tree/person', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    const { nombre, relacion, padres = [] } = req.body;
+    if (!nombre || !relacion) return res.status(400).json({ error: 'Nombre y parentesco son obligatorios.' });
+    const nombreCap = capitalizarNombre(nombre.trim());
+    const relacionTrim = relacion.trim();
+    const padresArr = (Array.isArray(padres) ? padres : []).map(p => capitalizarNombre(String(p).trim())).filter(Boolean).slice(0, 2);
+
+    // Verificar que no exista ya alguien con ese nombre exacto
+    const existing = await sql`SELECT id FROM family_members WHERE user_id = ${req.profileUserId} AND LOWER(TRIM(nombre)) = LOWER(TRIM(${nombreCap})) LIMIT 1`;
+    if (existing.length > 0) return res.status(409).json({ error: `Ya existe "${nombreCap}" en el árbol.` });
+
+    const [row] = await sql`
+      INSERT INTO family_members (user_id, nombre, relacion, padres, es_principal)
+      VALUES (${req.profileUserId}, ${nombreCap}, ${relacionTrim}, ${JSON.stringify(padresArr)}, false)
+      RETURNING id
+    `;
+    res.json({ ok: true, id: row.id, nombre: nombreCap });
+  } catch (err) {
+    console.error('POST /api/tree/person', err);
+    res.status(500).json({ error: 'No se pudo guardar el familiar.' });
   }
 });
 
@@ -7028,6 +7234,100 @@ app.get('/api/tree/colaboradores', requireAuth, bloquearColaborador, async (req,
     res.status(500).json({ error: 'No se pudo cargar quiénes colaboraron.' });
   }
 });
+
+// ─── Sugerencias de fusión (personas posiblemente duplicadas) ──────────────
+
+// GET /api/tree/merge-suggestions — devuelve sugerencias pendientes (no descartadas).
+app.get('/api/tree/merge-suggestions', requireAuth, bloquearColaborador, async (req, res) => {
+  try {
+    await ensureSchema();
+    const ownerId = await resolveProfileUserId(req);
+    if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa bitácora.' });
+    const rows = await sql`
+      SELECT id, nombre_a, nombre_b
+      FROM family_member_merge_suggestions
+      WHERE user_id = ${ownerId} AND dismissed = false
+      ORDER BY created_at ASC
+    `;
+    res.json({ sugerencias: rows.map((r) => ({ id: r.id, nombre_a: r.nombre_a, nombre_b: r.nombre_b })) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudieron cargar las sugerencias.' });
+  }
+});
+
+// POST /api/tree/merge — fusiona dos entradas en una sola.
+// Body: { keepNombre, mergeNombre }
+// keepNombre: el nombre que se conserva (normalmente el más completo).
+// mergeNombre: el nombre que desaparece (se agrega como alias del keep).
+app.post('/api/tree/merge', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    const ownerId = await resolveProfileUserId(req);
+    if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa bitácora.' });
+    const { keepNombre, mergeNombre } = req.body;
+    if (!keepNombre || !mergeNombre || keepNombre === mergeNombre) {
+      return res.status(400).json({ error: 'Faltan nombres o son iguales.' });
+    }
+
+    await ensureSchema();
+    const [kept] = await sql`SELECT aliases FROM family_members WHERE user_id = ${ownerId} AND nombre = ${keepNombre} LIMIT 1`;
+    if (!kept) return res.status(404).json({ error: `No se encontró a "${keepNombre}" en el árbol.` });
+
+    // 1. Agregar mergeNombre a los aliases del kept.
+    let currentAliases = [];
+    try { currentAliases = JSON.parse(kept.aliases || '[]'); } catch {}
+    const mergeNorm = normalizarNombreParaComparar(mergeNombre);
+    if (!currentAliases.includes(mergeNorm)) currentAliases.push(mergeNorm);
+    await sql`UPDATE family_members SET aliases = ${JSON.stringify(currentAliases)} WHERE user_id = ${ownerId} AND nombre = ${keepNombre}`;
+
+    // 2. Redirigir protagonista en family_notes.
+    await sql`UPDATE family_notes SET protagonista = ${keepNombre} WHERE user_id = ${ownerId} AND protagonista = ${mergeNombre}`;
+
+    // 3. Eliminar la entrada duplicada.
+    await sql`DELETE FROM family_members WHERE user_id = ${ownerId} AND nombre = ${mergeNombre}`;
+
+    // 4. Agregar el nombre fusionado a excluidos para que la IA no lo recree.
+    await sql`
+      INSERT INTO family_members_excluidos (user_id, nombre_normalizado, nombre_original)
+      VALUES (${ownerId}, ${mergeNorm}, ${mergeNombre})
+      ON CONFLICT (user_id, nombre_normalizado) DO NOTHING
+    `;
+
+    // 5. Descartar todas las sugerencias que involucren estos dos nombres.
+    await sql`
+      UPDATE family_member_merge_suggestions
+      SET dismissed = true
+      WHERE user_id = ${ownerId}
+        AND ((nombre_a = ${keepNombre} AND nombre_b = ${mergeNombre})
+          OR (nombre_a = ${mergeNombre} AND nombre_b = ${keepNombre}))
+    `;
+
+    console.log(`[merge] userId=${ownerId} fusionó "${mergeNombre}" → "${keepNombre}"`);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo fusionar.' });
+  }
+});
+
+// POST /api/tree/merge-suggestions/:id/dismiss — descarta una sugerencia falsa.
+app.post('/api/tree/merge-suggestions/:id/dismiss', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    const ownerId = await resolveProfileUserId(req);
+    if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa bitácora.' });
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID inválido.' });
+    await sql`UPDATE family_member_merge_suggestions SET dismissed = true WHERE id = ${id} AND user_id = ${ownerId}`;
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo descartar la sugerencia.' });
+  }
+});
+
+// ───────────────────────────────────────────────────────────────────────────
 
 // Repasa TODAS las charlas ya guardadas (de antes de que existiera el árbol,
 // o si se quiere reconstruir desde cero) y actualiza personas/eventos.

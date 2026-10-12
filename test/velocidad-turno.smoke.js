@@ -220,7 +220,7 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
   ok(/hablaEnCurso\.agregar\(data\.restante\)/.test(app_), 'app: el resto del mensaje se dice en un solo audio');
 
   // --- Recorte de la cola del último audio (estática al final, celular) ---
-  ok(/const RECORTE_FIN_VOZ_MS = 120;/.test(app_) && /reproducirBlob\(blob, esUltimo \? RECORTE_FIN_VOZ_MS : 0\)/.test(app_), 'app: solo el último pedazo de la respuesta se reproduce sin su cola');
+  ok(/const RECORTE_FIN_VOZ_MS = 200;/.test(app_) && /reproducirBlob\(blob, esUltimo \? RECORTE_FIN_VOZ_MS : 0\)/.test(app_), 'app: solo el último pedazo de la respuesta se reproduce sin su cola');
   {
     const r0 = app_.indexOf('function reproducirBlob');
     const r1 = app_.indexOf('function iniciarHabla');

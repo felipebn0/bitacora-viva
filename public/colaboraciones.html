@@ -15,10 +15,10 @@
 <script src="/font-size.js"></script>
 <style>
   :root {
-    --bg: #F5EFE2;
-    --ink: #2B241C;
-    --ink-soft: #706551;
-    --gold-deep: #8F5A20;
+    --bg: var(--eco-bg, #f7f4eb);
+    --ink: var(--eco-ink, #302d25);
+    --ink-soft: var(--eco-muted, #777568);
+    --gold-deep: var(--eco-green, #4d6542);
     --font-display: "Source Serif 4", Georgia, serif;
     --font-body: "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif;
   }
@@ -36,7 +36,6 @@
   header { max-width: 720px; margin: 0 auto 20px; display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
   h1 { font-family: var(--font-display); font-size: 1.6rem; margin: 0; }
   header p { color: var(--ink-soft); margin: 4px 0 0; font-size: 0.95rem; }
-  a.volver { color: var(--gold-deep); font-size: 0.9rem; text-decoration: none; border-bottom: 1px solid var(--gold-deep); display: inline-flex; align-items: center; min-height: 44px; padding: 10px 4px; }
 
   .wrap { max-width: 720px; margin: 0 auto; }
 
@@ -163,6 +162,7 @@
 <link rel="stylesheet" href="/eco-volver-unificado.css?v=1">
 <script src="/eco-volver-unificado.js?v=1" defer></script>
 <link rel="stylesheet" href="/eco-identidad-global.css?v=1">
+<link rel="stylesheet" href="/eco-audio-player.css">
 </head>
 <body class="eco-brand-v1 eco-page-colaboraciones">
   <header>
@@ -371,13 +371,29 @@
         div.appendChild(audio);
       }
     });
+    // ECO-COLAB-V2: mostrar los archivos asociados también en los aportes enviados.
+    const adjuntos = Array.isArray(it.media_urls) ? it.media_urls : [];
+    if (adjuntos.length) {
+      const galeria = document.createElement('div');
+      galeria.className = 'media-adjunta';
+      adjuntos.forEach((m) => {
+        if (!m || typeof m.url !== 'string' || !/^https?:\/\//.test(m.url)) return;
+        const src = '/api/media-file?u=' + encodeURIComponent(m.url);
+        const el = m.type === 'video' ? document.createElement('video') : document.createElement('img');
+        if (m.type === 'video') { el.controls = true; el.preload = 'none'; el.src = src; }
+        else { el.loading = 'lazy'; el.src = src; el.alt = m.caption || 'Foto de la historia'; }
+        galeria.appendChild(el);
+      });
+      if (galeria.childElementCount) div.appendChild(galeria);
+    }
     container.appendChild(div);
   }
 
   async function cargarAportesDados(ownerId) {
     dadosLista.innerHTML = '<p class="empty">Cargando…</p>';
     try {
-      const resp = await fetch('/api/contributions?owner=' + encodeURIComponent(ownerId));
+      // ECO-COLAB-INTEGRAL-1: solo aportes hechos por esta cuenta.
+      const resp = await fetch('/api/my-contributed-notes?owner=' + encodeURIComponent(ownerId));
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) {
         dadosStatus.textContent = mensajeDeError(resp, data, 'No se pudieron cargar tus aportes.');
@@ -769,6 +785,9 @@
 
   cargarSelectorRecibidos();
 })();
+
 </script>
+<script src="/eco-audio-exclusivo.js" defer></script>
+<script src="/eco-audio-player.js" defer></script>
 </body>
 </html>

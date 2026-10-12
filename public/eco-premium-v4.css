@@ -1,0 +1,35 @@
+/* ECO Premium V4: visual-only, preserving all original content and business JS. */
+:root{--bg:#f7f4eb;--bg-alt:#edf0e5;--surface:#fffdf6;--surface-2:#f7f5ec;--ink:#302d25;--ink-2:#60665c;--ink-3:#627164;--hairline:#dadaca;--hairline-soft:#e5e7dd;--accent:#4d6542;--accent-press:#293d30;--accent-tint:rgba(77,101,66,.12);--accent-2:#4d6542;--accent-2-press:#293d30;--accent-2-tint:rgba(77,101,66,.12);--on-accent:#fffdf6;--nav-bg:rgba(247,244,235,.86)}
+body{background:#f7f4eb;color:#302d25}
+nav{backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+.hero{position:relative;isolation:isolate}
+.hero:before{content:"";position:absolute;z-index:-1;right:0;top:0;width:52%;height:100%;background:radial-gradient(ellipse at 60% 40%,rgba(77,101,66,.10),transparent 65%);pointer-events:none}
+.hero-copy h1{letter-spacing:-.038em;text-wrap:balance}
+.hero-copy h1 em{color:#4d6542}
+.hero-copy>p{max-width:540px}
+.hero-device-wrap{filter:drop-shadow(0 20px 28px rgba(41,61,48,.08))}
+.device{box-shadow:0 24px 62px rgba(41,61,48,.14)}
+.btn,.question-card,.family-card,.step,.device,.product-window{transition:transform .28s cubic-bezier(.2,.8,.2,1),box-shadow .28s ease,border-color .28s ease}
+.btn:hover{transform:translateY(-2px)}
+.question-card:hover,.family-card:hover,.step:hover{transform:translateY(-3px)}
+#producto,.eco2-story,.eco2-chapter{scroll-margin-top:85px}
+.eco2-story{background:linear-gradient(160deg,#f4f5ec,#e9eee4);border-block:1px solid #dadaca}
+.eco2-tree,.eco2-step,.eco2-paper{box-shadow:0 20px 50px rgba(41,61,48,.08)}
+.eco2-tree{transform:translateZ(0)}
+.eco2-chapter{background:#fffdf6}
+.eco2-story .eco2-lead,.eco2-chapter p{max-width:640px}
+.eco4-feature-strip{padding:clamp(46px,6vw,90px) 0;background:#fffdf6;border-block:1px solid #dadaca}
+.eco4-feature-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.eco4-feature{background:#f7f4eb;border:1px solid #dadaca;border-radius:19px;padding:22px;min-height:184px}
+.eco4-feature .eco4-number{color:#4d6542;font-size:.8rem;font-weight:700;letter-spacing:.13em}
+.eco4-feature h3{color:#293d30;font-size:1.22rem;margin:15px 0 8px}
+.eco4-feature p{font-size:.91rem;line-height:1.5;color:#637066;margin:0}
+.eco4-section-title{font-size:clamp(1.65rem,3.4vw,2.65rem);color:#293d30;margin-bottom:28px}
+.eco4-sticky-visual{position:relative}
+@media(min-width:900px){.eco2-tree{position:sticky;top:110px}.eco2-grid{align-items:start}}
+@media(max-width:740px){.eco4-feature-grid{grid-template-columns:1fr}.eco4-feature{min-height:0}.hero:before{width:100%;height:55%}}
+/* Animations are opt-in after enhancement JS initialization. Without JS all content stays visible. */
+html.eco4-motion .reveal:not(.show){opacity:0;transform:translate3d(0,24px,0)}
+html.eco4-motion .reveal{transition:opacity .7s ease,transform .7s cubic-bezier(.2,.75,.2,1)}
+html.eco4-motion .reveal.show{opacity:1;transform:translate3d(0,0,0)}
+@media(prefers-reduced-motion:reduce){html.eco4-motion .reveal,html.eco4-motion .reveal.show{opacity:1!important;transform:none!important;transition:none!important}.btn,.question-card,.step,.family-card{transition:none!important}}

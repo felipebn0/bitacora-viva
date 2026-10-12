@@ -95,9 +95,9 @@ require.cache[require.resolve('@anthropic-ai/sdk')] = {
             return { content: [{ type: 'tool_use', id: 't1', name: 'guardar_aporte', input: { parentesco: 'Hija', texto: 'Un recuerdo pulido por la IA.' } }] };
           }
           turno++;
-          if (turno === 1) return { content: [{ text: '¡Hola! Cuéntame tu historia.' }] };
-          if (turno === 2) return { content: [{ text: '¿Y en qué época fue eso?' }] };
-          return { content: [{ text: 'Gracias por contarme. La historia quedó guardada.\n[FIN]' }] };
+          if (turno === 1) return { content: [{ type: 'text', text: '¡Hola! Cuéntame tu historia.' }] };
+          if (turno === 2) return { content: [{ type: 'text', text: '¿Y en qué época fue eso?' }] };
+          return { content: [{ type: 'text', text: 'Gracias por contarme. La historia quedó guardada.\n[FIN]' }] };
         },
       };
     }

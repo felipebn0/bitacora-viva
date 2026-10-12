@@ -188,7 +188,7 @@ function fakeSql(strings, ...values) {
   }
   // /api/contribute-story: family_notes.user_id es a qué bitácora quedó
   // atado el aporte — se guarda para verificar que cayó en el subperfil.
-  if (text.includes('INSERT INTO family_notes (user_id, contributor, parentesco, texto, audio_url, contributed_by, guest_id)')) {
+  if (text.includes('INSERT INTO family_notes (user_id, contributor, parentesco, texto, audio_url, media_urls, contributed_by, guest_id)')) {
     const [userId, contributor, parentesco, texto] = values;
     familyNotesInserts.push({ userId, contributor, parentesco, texto });
     return Promise.resolve([]);
@@ -203,7 +203,7 @@ function fakeSql(strings, ...values) {
   if (text.includes('SELECT contributor, parentesco, texto FROM family_notes')) return Promise.resolve([]);
   if (text.includes('SELECT id, type, caption, contributor, url FROM media')) return Promise.resolve([]);
   if (text.includes('nombre, fecha_nacimiento, created_at FROM bitacoras WHERE id')) return Promise.resolve([]);
-  if (text.includes('SELECT id, nombre, relacion, detalles, padres, es_principal FROM family_members')) return Promise.resolve([]);
+  if (text.includes('SELECT fm.id, fm.nombre, fm.relacion, fm.detalles, fm.padres, fm.es_principal')) return Promise.resolve([]);
   if (text.includes('SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events')) return Promise.resolve([]);
   if (text.includes('SELECT id, title, theme, generated_text, story_ids, persona, created_at FROM chapters')) return Promise.resolve([]);
   if (text.includes('SELECT id, audio_url FROM story_log') && text.includes('audio_url IS NOT NULL')) return Promise.resolve([]);

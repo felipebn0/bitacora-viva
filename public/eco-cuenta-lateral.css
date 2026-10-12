@@ -48,3 +48,7 @@
 }
 
 #appContent .user-menu-panel[data-eco-lateral="1"] > :not(.eco-lateral-layout){display:none!important;}
+
+/* Telón oscuro detrás del panel lateral */
+.eco-lateral-backdrop{display:none;position:fixed;inset:0;z-index:9998;background:rgba(20,30,15,.44);}
+.eco-lateral-backdrop.eco-lateral-backdrop-abierto{display:block;}

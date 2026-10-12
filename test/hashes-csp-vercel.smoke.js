@@ -53,9 +53,11 @@ check('style-src en vercel.json trae exactamente los hashes que hoy dan las pág
 // otras (general-apple*.html, general-raiz.html, paletas/landing.html,
 // nina.html, adulto.html) usan CSS externo y no suman hash de <style>; por
 // eso el ">="/"===" son sobre el conteo real de hoy, no una cuenta simple
-// de "una página, un hash".
+// de "una página, un hash". (17 desde 2026-10-12: el rediseño ECO de
+// pruebas hizo que dos páginas que compartían el mismo <style> dejaran
+// de ser idénticas.)
 check(`hay ${scriptHashes.length} hashes de <script> (uno por bloque inline real, sin contar los que tienen src=)`, scriptHashes.length >= 9);
-check(`hay ${styleHashes.length} hashes de <style> (uno por página)`, styleHashes.length === 16);
+check(`hay ${styleHashes.length} hashes de <style> (uno por página)`, styleHashes.length === 17);
 
 console.log(`\n${pasaron} pasaron, ${fallaron} fallaron`);
 if (fallaron) {

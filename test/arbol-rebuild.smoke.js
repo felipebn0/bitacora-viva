@@ -82,16 +82,16 @@ function fakeSql(strings, ...values) {
     ] }]);
   }
 
-  if (text.includes('SELECT id, nombre, relacion, detalles, padres, es_principal FROM family_members')) {
+  if (text.includes('SELECT fm.id, fm.nombre, fm.relacion, fm.detalles, fm.padres, fm.es_principal')) {
     // GET /api/tree — lo que de verdad ve el navegador, con "id" y
     // "es_principal" incluidos.
-    return Promise.resolve(familyMembers.map((p) => ({ id: p.id, nombre: p.nombre, relacion: p.relacion, detalles: p.detalles, padres: p.padres, es_principal: p.es_principal })));
+    return Promise.resolve(familyMembers.map((p) => ({ id: p.id, nombre: p.nombre, relacion: p.relacion, detalles: p.detalles, padres: p.padres, es_principal: p.es_principal, notas_count: 0 })));
   }
-  if (text.includes('SELECT nombre, relacion, detalles, padres, es_principal FROM family_members')) {
+  if (text.includes('SELECT nombre, relacion, detalles, padres, es_principal, aliases FROM family_members')) {
     // personasPrevias, adentro de updateFamilyTree — refleja lo que haya
     // quedado guardado de la corrida anterior (para el test de que
     // es_principal sobrevive entre reconstrucciones).
-    return Promise.resolve(familyMembers.map((p) => ({ nombre: p.nombre, relacion: p.relacion, detalles: p.detalles, padres: p.padres, es_principal: p.es_principal })));
+    return Promise.resolve(familyMembers.map((p) => ({ nombre: p.nombre, relacion: p.relacion, detalles: p.detalles, padres: p.padres, es_principal: p.es_principal, aliases: p.aliases || null })));
   }
   if (text.includes('SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events')) {
     return Promise.resolve([]); // eventosPrevios, y la relectura final (no se usan eventos en este test)

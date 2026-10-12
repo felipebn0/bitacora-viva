@@ -1,0 +1,10 @@
+/* ECO V3: composición ligera, sin alterar formularios, scripts ni componentes */
+:root{--bg:#f7f4eb;--bg-alt:#edf0e5;--surface:#fffdf6;--surface-2:#f5f6ed;--ink:#302d25;--ink-2:#5b635a;--ink-3:#5f6659;--accent:#4d6542;--accent-press:#293d30;--accent-2:#4d6542;--accent-2-press:#293d30;--on-accent:#fffdf6;--nav-bg:rgba(247,244,235,.93);--hairline:#dadaca;--hairline-soft:#e6e9de}
+.hero-copy h1{max-width:750px;font-size:clamp(2.4rem,5.2vw,3.75rem);line-height:1.08;letter-spacing:-.026em}
+.hero-copy>p{max-width:520px;line-height:1.55}
+.problem .problem-note{max-width:560px;font-size:clamp(.91rem,1.25vw,1.04rem);line-height:1.6}
+.section-head>p{max-width:590px}
+.eco2-story,.eco2-chapter{background:#f1f3eb}
+.eco2-story .eco2-lead{max-width:555px}
+.eco2-step p{max-width:390px}
+@media(max-width:760px){.hero-copy h1{font-size:clamp(2.2rem,8vw,3.3rem)}.hero-copy>p{font-size:1rem}.problem .problem-note{line-height:1.55}}

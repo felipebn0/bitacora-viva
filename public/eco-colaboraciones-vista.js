@@ -25,8 +25,11 @@
    b.setAttribute('aria-expanded','false');
    b.setAttribute('aria-controls','colaboradoresLista');
    b.textContent='Ver colaboradores ▾';
-   if(sub)sub.insertAdjacentElement('afterend',b);
-   else if(heading)heading.insertAdjacentElement('afterend',b);
+   const btnRow=document.createElement('div');
+   btnRow.className='eco-c-colabs-btnrow';
+   if(sub)sub.insertAdjacentElement('afterend',btnRow);
+   else if(heading)heading.insertAdjacentElement('afterend',btnRow);
+   btnRow.appendChild(b);
    people.classList.add('eco-c-people-closed');
    b.addEventListener('click',()=>{
     const expanded=b.getAttribute('aria-expanded')!=='true';
@@ -34,6 +37,54 @@
     b.textContent=expanded?'Ocultar colaboradores ▴':'Ver colaboradores ▾';
     people.classList.toggle('eco-c-people-closed',!expanded);
    });
+   const invOrig=document.getElementById('invitarToggle');
+   const invPanel=document.getElementById('invitarPanel');
+   if(invOrig&&invPanel){
+    const invBtn=invOrig.cloneNode(true);
+    btnRow.appendChild(invBtn);
+    invOrig.remove();
+    const modal=document.createElement('div');
+    modal.id='ecoInvitarModal';
+    modal.className='eco-c-modal-overlay';
+    modal.setAttribute('role','dialog');
+    modal.setAttribute('aria-modal','true');
+    modal.setAttribute('aria-labelledby','ecoInvitarModalTitle');
+    modal.hidden=true;
+    const box=document.createElement('div');
+    box.className='eco-c-modal-box';
+    const mHead=document.createElement('div');
+    mHead.className='eco-c-modal-header';
+    const mTitle=document.createElement('h3');
+    mTitle.id='ecoInvitarModalTitle';
+    mTitle.textContent='Invitar familiares';
+    const mClose=document.createElement('button');
+    mClose.type='button';mClose.className='eco-c-modal-close';
+    mClose.setAttribute('aria-label','Cerrar');mClose.textContent='×';
+    mHead.append(mTitle,mClose);
+    invPanel.hidden=false;
+    box.append(mHead,invPanel);
+    modal.appendChild(box);
+    document.body.appendChild(modal);
+    const openModal=()=>{
+     invBtn.setAttribute('aria-expanded','true');
+     modal.hidden=false;
+     document.body.classList.add('eco-c-modal-open');
+     requestAnimationFrame(()=>mClose.focus());
+     if(typeof cargarInvitaciones==='function')cargarInvitaciones();
+    };
+    const closeModal=()=>{
+     invBtn.setAttribute('aria-expanded','false');
+     modal.hidden=true;
+     document.body.classList.remove('eco-c-modal-open');
+     invBtn.focus();
+    };
+    invBtn.setAttribute('aria-expanded','false');
+    invBtn.setAttribute('aria-controls','ecoInvitarModal');
+    invBtn.addEventListener('click',openModal);
+    mClose.addEventListener('click',closeModal);
+    modal.addEventListener('click',e=>{if(e.target===modal)closeModal();});
+    document.addEventListener('keydown',e=>{if(!modal.hidden&&e.key==='Escape'){e.preventDefault();closeModal();}});
+   }
   }
 
   // Vista previa por aporte. No modifica la estructura de cada tarjeta salvo añadir
@@ -74,6 +125,47 @@
   if(title)title.textContent='Aportes recibidos';
   const sub=aportes?.querySelector('p.sub');
   if(sub)sub.textContent='Selecciona una historia para leerla, escucharla o administrar sus permisos.';
+
+  // Filtro por colaborador en #aportesLista
+  const aportesListaEl=document.getElementById('aportesLista');
+  if(aportes&&aportesListaEl){
+   const filterRow=document.createElement('div');
+   filterRow.className='eco-c-filter-row';
+   const filterSel=document.createElement('select');
+   filterSel.className='eco-c-filter-sel';
+   filterSel.setAttribute('aria-label','Filtrar aportes por persona');
+   filterRow.appendChild(filterSel);
+   (sub||title)?.insertAdjacentElement('afterend',filterRow);
+
+   function rebuildFilter(){
+    const prev=filterSel.value;
+    const names=new Set();
+    for(const card of aportesListaEl.querySelectorAll('.aporte-item')){
+     const n=card.querySelector('.quien')?.textContent?.trim()||'';
+     if(n)names.add(n);
+    }
+    filterSel.innerHTML='';
+    const all=document.createElement('option');
+    all.value='';all.textContent='Listado completo';
+    filterSel.appendChild(all);
+    [...names].sort().forEach(n=>{
+     const o=document.createElement('option');
+     o.value=n;o.textContent=n;filterSel.appendChild(o);
+    });
+    if(prev&&names.has(prev))filterSel.value=prev;
+    applyFilter();
+   }
+   function applyFilter(){
+    const v=filterSel.value;
+    for(const card of aportesListaEl.querySelectorAll('.aporte-item')){
+     const n=card.querySelector('.quien')?.textContent?.trim()||'';
+     card.hidden=!!(v&&n!==v);
+    }
+   }
+   filterSel.addEventListener('change',applyFilter);
+   new MutationObserver(rebuildFilter).observe(aportesListaEl,{childList:true});
+   rebuildFilter();
+  }
  }
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();

@@ -1,0 +1,30 @@
+/* ECO Login V2 — only the standard login form, never narrador or app. */
+#loginScreen{width:min(1080px,calc(100% - 40px));max-width:none;padding:0;margin:28px auto;flex-direction:row;gap:0;align-items:stretch;overflow:hidden;border:1px solid #dadaca;border-radius:28px;background:#fffdf6;box-shadow:0 18px 65px rgba(41,61,48,.12);min-height:min(660px,calc(100vh - 75px))}
+#loginScreen .eco2-illustration{flex:1 1 0;min-width:0;padding:clamp(28px,4.6vw,58px);background:radial-gradient(circle at 95% 74%,#dfe9d8 0%,transparent 42%),linear-gradient(155deg,#edf0e5,#f7f4eb);border-right:1px solid #dadaca;display:flex;flex-direction:column;justify-content:space-between;gap:30px}
+#loginScreen .eco2-kicker{color:#4d6542;font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;font-weight:700}
+#loginScreen .eco2-illustration h2{font:600 clamp(2.2rem,3.8vw,3.6rem)/1.1 'Source Serif 4',Georgia,serif;color:#293d30;max-width:490px;margin:26px 0 18px;letter-spacing:-.025em}
+#loginScreen .eco2-illustration h2 em{font-style:italic;color:#4d6542}
+#loginScreen .eco2-illustration p{color:#586854;line-height:1.65;margin:0;max-width:370px}
+#loginScreen .eco2-memory{margin-top:30px;padding:25px;max-width:335px;border:1px solid #d5ddcd;border-radius:16px;background:#fffdf6;box-shadow:0 10px 28px rgba(41,61,48,.08);transform:rotate(-2deg)}
+#loginScreen .eco2-memory small{display:block;font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:#597353;margin-bottom:12px}
+#loginScreen .eco2-memory strong{font:600 1.35rem/1.36 'Source Serif 4',Georgia,serif;color:#293d30}
+#loginScreen .eco2-memory p{font-size:.78rem;margin-top:10px;color:#777568}
+#loginScreen .eco2-words{display:flex;gap:15px;flex-wrap:wrap;font-size:.74rem;font-weight:700;letter-spacing:.09em;color:#4d6542;text-transform:uppercase}
+#loginScreen .eco2-form{flex:1 1 0;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:16px;padding:clamp(28px,4.6vw,57px);background:#fffdf6}
+#loginScreen .login-fontsize-row{justify-content:flex-end;margin:0 0 8px;gap:8px}
+#loginScreen .login-fontsize-row button{min-height:40px;background:#f8f9f5;color:#293d30;border:1px solid #d7dfd0;padding:7px 12px;border-radius:10px}
+#loginScreen .login-fontsize-row span{font-size:.8rem;color:#6d7967}
+#loginScreen .eco2-brand{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px}
+#loginScreen .eco2-brand img{width:54px;height:54px;object-fit:contain}
+#loginScreen .eco2-brand span{font:700 1.28rem 'Source Serif 4',Georgia,serif;letter-spacing:.13em;color:#293d30}
+#loginScreen h1{color:#293d30;text-align:center;font:600 clamp(1.8rem,3vw,2.35rem)/1.12 'Source Serif 4',Georgia,serif;margin:2px 0 0}
+#loginScreen p.sub{font-size:.92rem;color:#667363;margin:0 0 6px;text-align:center}
+#loginScreen .login-field{gap:7px}
+#loginScreen .login-field label{font-size:.91rem;color:#293d30}
+#loginScreen input{min-height:52px;padding:12px 15px;background:#fff;border:1px solid #d0dacb;border-radius:11px;color:#302d25}
+#loginScreen .login-pass-row button{min-height:52px;background:#fff;color:#293d30;border:1px solid #d0dacb;border-radius:11px}
+#loginScreen #loginBtn{min-height:55px;border-radius:11px;background:#4d6542;color:#fffdf6;font-size:1rem}
+#loginScreen #loginBtn:hover{background:#293d30}
+#loginScreen p.sub a{color:#293d30;font-weight:700;text-underline-offset:3px}
+@media(max-width:760px){#loginScreen{width:min(470px,calc(100% - 26px));min-height:0;margin:18px auto;flex-direction:column;border-radius:22px}#loginScreen .eco2-illustration{display:none}#loginScreen .eco2-form{padding:25px 23px 32px;gap:14px}#loginScreen .eco2-brand img{height:48px;width:48px}}
+@media(max-width:370px){#loginScreen .eco2-form{padding:19px 15px 26px}#loginScreen .login-pass-row button{padding-inline:10px}}

@@ -1,0 +1,28 @@
+/* ECO Login V6: form only. Applied solely to #loginScreen. */
+#loginScreen {
+  width: min(460px, calc(100% - 30px)); max-width:460px;
+  min-height:0; margin:clamp(18px,5vh,55px) auto; padding:0;
+  flex-direction:column; gap:0; align-items:stretch;
+  overflow:hidden; border:1px solid #dadaca; border-radius:24px;
+  background:#fffdf6; box-shadow:0 18px 50px rgba(41,61,48,.10);
+}
+#loginScreen .eco2-form {
+  flex: 0 1 auto; width:100%; box-sizing:border-box;
+  display:flex; flex-direction:column; gap:14px;
+  padding:clamp(24px,5vw,38px); background:#fffdf6;
+}
+#loginScreen .login-fontsize-row { justify-content:flex-end; margin:0 0 5px }
+#loginScreen .eco2-brand { display:flex; flex-direction:column; align-items:center; gap:5px; margin:0 auto 5px }
+#loginScreen .eco2-brand img { display:block; height:50px; width:50px; object-fit:contain }
+#loginScreen .eco2-brand span { color:#293d30; font:700 1.12rem 'Source Serif 4', Georgia, serif; letter-spacing:.12em }
+#loginScreen h1 { color:#293d30; font:600 clamp(1.8rem,4vw,2.15rem)/1.2 'Source Serif 4',Georgia,serif; margin:0; text-align:center }
+#loginScreen p.sub { margin:0 0 5px; color:#667363; font-size:.92rem; line-height:1.5; text-align:center }
+#loginScreen .login-field { display:flex; flex-direction:column; gap:7px }
+#loginScreen .login-field label { color:#293d30; font-size:.92rem }
+#loginScreen input { width:100%; min-height:50px; padding:12px 14px; box-sizing:border-box; color:#302d25; background:white; border:1px solid #d0dacb; border-radius:11px }
+#loginScreen .login-pass-row button { min-height:50px; color:#293d30; background:#fff; border:1px solid #d0dacb; border-radius:11px }
+#loginScreen #loginBtn { min-height:53px; background:#4d6542; color:#fffdf6; border-radius:12px; font-size:1rem }
+#loginScreen #loginBtn:hover { background:#293d30 }
+#loginScreen p.sub a { color:#293d30; font-weight:700; text-underline-offset:3px }
+#loginScreen .eco2-illustration { display:none !important }
+@media(max-width:600px){#loginScreen{margin:16px auto;width:min(460px,calc(100% - 24px))}#loginScreen .eco2-form{padding:23px 19px 28px}}

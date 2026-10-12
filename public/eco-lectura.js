@@ -55,6 +55,7 @@
          audios.appendChild(copy);
        });
      }
+     overlay.dataset.chapterId=card.dataset.chapterId||'';
      overlay.hidden=false;document.body.classList.add('eco-reader-open');
      overlay.querySelector('#ecoReaderClose').focus();
    }

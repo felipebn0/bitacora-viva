@@ -72,8 +72,8 @@ function fakeSql(strings, ...values) {
   }
 
   // --- árbol ---
-  if (text.includes('SELECT nombre, relacion, detalles, padres, es_principal FROM family_members')) {
-    return Promise.resolve(familyMembers.map((p) => ({ nombre: p.nombre, relacion: p.relacion, detalles: p.detalles, padres: p.padres, es_principal: p.es_principal })));
+  if (text.includes('SELECT nombre, relacion, detalles, padres, es_principal, aliases FROM family_members')) {
+    return Promise.resolve(familyMembers.map((p) => ({ nombre: p.nombre, relacion: p.relacion, detalles: p.detalles, padres: p.padres, es_principal: p.es_principal, aliases: p.aliases || null })));
   }
   if (text.includes('SELECT nombre, relacion, detalles, padres FROM family_members') && text.includes('ORDER BY id')) {
     return Promise.resolve(familyMembers.map((p) => ({ nombre: p.nombre, relacion: p.relacion, detalles: p.detalles, padres: p.padres })));

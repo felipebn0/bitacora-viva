@@ -15,13 +15,13 @@
 <script src="/font-size.js"></script>
 <style>
   :root {
-    --bg: #F5EFE2;
-    --ink: #2B241C;
-    --ink-soft: #706551;
-    --gold: #93622A;
-    --gold-deep: #8F5A20;
-    --ring: rgba(201, 138, 60, 0.35);
-    --moss: #5B6B45;
+    --bg: var(--eco-bg, #f7f4eb);
+    --ink: var(--eco-ink, #302d25);
+    --ink-soft: var(--eco-muted, #777568);
+    --gold: var(--eco-green, #4d6542);
+    --gold-deep: var(--eco-green-deep, #293d30);
+    --ring: rgba(77, 101, 66, 0.35);
+    --moss: var(--eco-green, #4d6542);
     --bubble-user: #EFE6D1;
     --font-display: "Source Serif 4", Georgia, serif;
     --font-body: "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif;
@@ -85,7 +85,7 @@
 
   .login {
     width: min(340px, 100%);
-    background: #FBF6EA;
+    background: var(--eco-surface,#fffdf6);
     border-radius: 28px;
     box-shadow: 0 30px 60px -25px rgba(0,0,0,0.35);
     padding: 32px;
@@ -100,21 +100,21 @@
   .login-field { display: flex; flex-direction: column; gap: 5px; }
   .login-field label { font-size: 0.85rem; font-weight: 700; color: var(--ink-soft); }
   .login input {
-    border: 1px solid #E7DFCC; border-radius: 10px; padding: 12px 14px;
+    border: 1px solid var(--eco-edge,#dadaca); border-radius: 10px; padding: 12px 14px;
     font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink);
     width: 100%; box-sizing: border-box;
   }
   .login-pass-row { display: flex; gap: 8px; }
   .login-pass-row input { flex: 1; min-width: 0; }
   .login button {
-    border: none; background: var(--gold-deep); color: #FBF6EA; border-radius: 10px;
+    border: none; background: var(--gold-deep); color: var(--eco-surface,#fffdf6); border-radius: 10px;
     padding: 12px; font-weight: 700; font-size: 1rem; cursor: pointer; font-family: var(--font-body);
   }
   .login button:disabled { opacity: 0.6; cursor: default; }
   /* Va DESPUÉS de ".login button" a propósito, para pisar ese estilo (mismo
      ancho/alto que "Entrar") con uno más chico — igual que en app.html. */
   .login-pass-row button {
-    border: 1px solid #E7DFCC; background: #fff; color: var(--ink); border-radius: 10px;
+    border: 1px solid var(--eco-edge,#dadaca); background: #fff; color: var(--ink); border-radius: 10px;
     padding: 0 14px; font-weight: 700; font-size: 0.85rem; cursor: pointer;
     font-family: var(--font-body); min-height: 44px; min-width: 44px; flex: 0 0 auto;
   }
@@ -151,7 +151,7 @@
      sería redundante. */
   .sticky-context {
     position: fixed; top: 0; left: 0; right: 0; z-index: 40;
-    background: var(--bg); border-bottom: 1px solid #E7DFCC;
+    background: var(--bg); border-bottom: 1px solid var(--eco-edge,#dadaca);
     padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
     text-align: center; font-size: 0.92rem; color: var(--ink-soft);
     transform: translateY(-100%); transition: transform .22s ease;
@@ -166,11 +166,6 @@
      mismo. Ahora reusa exactamente ese mismo patrón (misma clase .volver)
      para que "volver" se vea y se sienta igual en toda la app. */
   .topbar { width: 100%; max-width: 440px; display: flex; justify-content: center; margin-bottom: 10px; }
-  a.volver {
-    color: var(--gold-deep); font-size: 0.9rem; text-decoration: none;
-    border-bottom: 1px solid var(--gold-deep); display: inline-flex; align-items: center;
-    min-height: 44px; padding: 10px 4px;
-  }
 
   /* margin:auto (no solo "0 0 18px"): sin el auto horizontal, esta caja
      quedaba pegada al borde izquierdo en pantallas anchas en vez de centrada
@@ -182,20 +177,20 @@
      algo que se usa para saltar entre las bitácoras a las que se colabora. */
   .collab-switch-list a {
     display: inline-flex; align-items: center; padding: 6px 14px; border-radius: 20px; font-size: 0.85rem;
-    text-decoration: none; color: var(--ink); background: #FBF6EA; border: 1px solid #E7DFCC;
+    text-decoration: none; color: var(--ink); background: var(--eco-surface,#fffdf6); border: 1px solid var(--eco-edge,#dadaca);
     min-height: 44px; box-sizing: border-box;
   }
-  .collab-switch-list a.active { background: var(--gold-deep); color: #FBF6EA; border-color: var(--gold-deep); font-weight: 700; }
+  .collab-switch-list a.active { background: var(--gold-deep); color: var(--eco-surface,#fffdf6); border-color: var(--gold-deep); font-weight: 700; }
   /* Dropdown en vez de burbujas cuando hay muchas colaboraciones (item 17,
      pedido de Felipe 2026-09-08) -- con pocas, las burbujas de arriba se ven
      bien; con muchas se desordenan y un selector es más claro. */
-  .collab-switch-select { width: 100%; max-width: 320px; margin: 0 auto; display: block; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 12px; font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink); }
+  .collab-switch-select { width: 100%; max-width: 320px; margin: 0 auto; display: block; border: 1px solid var(--eco-edge,#dadaca); border-radius: 10px; padding: 9px 12px; font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink); }
 
   .aportes {
     width: min(440px, 100%);
     margin: 0 auto 20px;
-    background: #FBF6EA;
-    border: 1px solid #E7DFCC;
+    background: var(--eco-surface,#fffdf6);
+    border: 1px solid var(--eco-edge,#dadaca);
     border-radius: 20px;
     padding: 22px 24px;
     display: flex;
@@ -211,7 +206,7 @@
   .aporte-bubble.a { align-self: flex-start; color: var(--ink); }
   .aporte-bubble.thinking { align-self: flex-start; color: var(--ink-soft); font-style: italic; }
 
-  .aportes hr { border: none; border-top: 1px solid #E7DFCC; margin: 4px 0; }
+  .aportes hr { border: none; border-top: 1px solid var(--eco-edge,#dadaca); margin: 4px 0; }
   .aportes .msg { font-size: 0.85rem; min-height: 1.2em; color: var(--moss); }
   .aportes .msg.error { color: #a33; }
   .aportes .lista { display: flex; flex-direction: column; gap: 10px; }
@@ -239,8 +234,8 @@
     width: 128px; height: 128px; border-radius: 50%; border: none; cursor: pointer;
     position: relative; display: grid; place-items: center;
     background: radial-gradient(circle at 35% 30%, var(--gold), var(--gold-deep));
-    color: #FBF6EA; font-family: var(--font-body); font-weight: 700; font-size: 0.92rem;
-    box-shadow: 0 10px 26px -10px rgba(168,106,38,0.55);
+    color: var(--eco-surface,#fffdf6); font-family: var(--font-body); font-weight: 700; font-size: 0.92rem;
+    box-shadow: 0 10px 26px -10px rgba(37,55,42,0.34);
     align-self: center;
   }
   .orb-zone .orb:disabled { opacity: 0.6; cursor: default; }
@@ -262,7 +257,7 @@
   }
 
   .otra-historia-btn {
-    border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px;
+    border: none; background: var(--moss); color: var(--eco-surface,#fffdf6); border-radius: 10px;
     padding: 10px 16px; font-weight: 700; cursor: pointer; font-family: var(--font-body);
     align-self: center; display: none;
   }
@@ -270,7 +265,7 @@
   .logout-row { text-align: center; margin-top: 8px; }
   /* "Borrar mi cuenta" es la única acción irreversible aquí — antes se veía
      como un link subrayado más, sin distinguirse de "cerrar sesión". */
-  .danger-zone { margin-top: 18px; padding-top: 14px; border-top: 1px solid #E7DFCC; }
+  .danger-zone { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--eco-edge,#dadaca); }
   /* min-height/min-width:44px: subir audio (35px), escribir (18px), cerrar
      sesión (20px) y borrar cuenta (21px) quedaban por debajo de la zona de
      toque mínima recomendada — mismo arreglo que en app.html. */
@@ -286,8 +281,8 @@
   /* font-size:1rem: sin esto, este campo (respuesta escrita durante el
      aporte, y "confirma tu clave" al borrar la cuenta, que reusa esta
      misma clase) disparaba el zoom automático de iOS Safari al tocarlo. */
-  .write-row input { flex: 1; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 12px; font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink); }
-  .write-row button { border: none; background: var(--moss); color: #FBF6EA; border-radius: 10px; padding: 0 14px; font-weight: 700; cursor: pointer; }
+  .write-row input { flex: 1; border: 1px solid var(--eco-edge,#dadaca); border-radius: 10px; padding: 9px 12px; font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink); }
+  .write-row button { border: none; background: var(--moss); color: var(--eco-surface,#fffdf6); border-radius: 10px; padding: 0 14px; font-weight: 700; cursor: pointer; }
 
     /* Extraído de atributos style="" inline -- ronda 4 del camino a CSP en enforce (2026-09-06).
        Nombradas por hash del valor (mismo valor => misma clase). Cada declaración lleva
@@ -310,11 +305,14 @@
 <link rel="stylesheet" href="/eco-interior.css?v=1">
 <link rel="stylesheet" href="/eco-colaborar-orbe.css?v=1">
 <script src="/eco-colaborar-orbe.js?v=1" defer></script>
-<link rel="stylesheet" href="/eco-colaborar-rediseno.css?v=2">
+<link rel="stylesheet" href="/eco-colaborar-rediseno.css?v=3">
 <script src="/eco-colaborar-rediseno.js?v=1" defer></script>
+<script src="/eco-audio-exclusivo.js" defer></script>
+<script src="/eco-audio-player.js" defer></script>
 <link rel="stylesheet" href="/eco-volver-unificado.css?v=1">
 <script src="/eco-volver-unificado.js?v=1" defer></script>
 <link rel="stylesheet" href="/eco-identidad-global.css?v=1">
+<link rel="stylesheet" href="/eco-audio-player.css">
 </head>
 <body class="eco-brand-v1 eco-page-colaborar">
   <!-- Antes de iniciar sesión (chequeando/login/invitado) tampoco había
@@ -427,6 +425,8 @@
     <div class="collab-switch pc-93b8ea5b" id="collabSwitch">
       <p class="sub">Tus colaboraciones:</p>
       <div class="collab-switch-list" id="collabSwitchList"></div>
+      <!-- ECO-COLAB-INTEGRAL-1: ruta explícita, reutiliza el formulario y servidor existentes. -->
+      <p><a href="/colaborar.html?unirme=1">Tengo un código para otra historia</a></p>
     </div>
 
     <div class="aportes">
@@ -883,7 +883,7 @@
       const resp = await fetch('/api/my-collaborations');
       if (!resp.ok) return;
       const data = await resp.json();
-      const historias = data.historias || [];
+      const historias = (data.historias || []).filter(h => !h.soloHistorial);
       if (historias.length < 2) return; // con una sola no hace falta el selector
       collabSwitchList.innerHTML = '';
       // Con muchas colaboraciones, la fila de burbujas se ve desordenada —
@@ -950,6 +950,17 @@
       // sesión abierta no se la pisa; si es otro invitado, se ofrece cambiar.
       if (invitacionUrl) { showGuestEntry({ conCuenta: !data.isGuest }); return; }
 
+      // ECO-COLAB-INTEGRAL-1: mostrar formulario para unirse, incluso
+      // si ya participaba en una o varias historias.
+      if (new URLSearchParams(location.search).get('unirme') === '1') {
+        if (data.isGuest) {
+          mostrarHub();
+          hubError.textContent = 'Para colaborar sin cuenta necesitas tu enlace personal.';
+        } else {
+          mostrarHub();
+        }
+        return;
+      }
       // Llegó por el botón "Colaborar" de app.html (nav directa, sin
       // ?owner= ni ?codigo=) — antes esto rebotaba siempre a /app.html.
       // Si esta cuenta ya colabora con alguna historia, entramos derecho
@@ -960,8 +971,9 @@
         try {
           const resp = await fetch('/api/my-collaborations');
           const historias = resp.ok ? (await resp.json()).historias || [] : [];
-          if (historias.length) {
-            activeOwnerId = historias[0].ownerId;
+          const conAcceso = historias.find(h => !h.soloHistorial);
+          if (conAcceso) {
+            activeOwnerId = conAcceso.ownerId;
             history.replaceState(null, '', location.pathname + '?owner=' + activeOwnerId);
           }
         } catch (e) {}
@@ -977,6 +989,11 @@
           if (!resp.ok) { window.location.href = '/app.html'; return; }
           const info = await resp.json();
           showApp({ username: data.username, ownerName: info.ownerName, isGuest: data.isGuest });
+          // Vincula aportes de invitado previos del usuario autenticado para
+          // que aparezcan en "Lo que yo dije de otros" sin intervención manual.
+          if (!data.isGuest) {
+            fetch(conOwner('/api/claim-guest-contributions'), { method: 'POST' }).catch(() => {});
+          }
           cargarMisColaboraciones(activeOwnerId);
           iniciarAporte();
         } catch (e) {
@@ -1015,6 +1032,7 @@
           activeOwnerId = info.ownerId;
           history.replaceState(null, '', location.pathname + '?owner=' + info.ownerId);
           showApp({ username: data.username, ownerName: info.ownerName, isGuest: false });
+          fetch(conOwner('/api/claim-guest-contributions'), { method: 'POST' }).catch(() => {});
           cargarMisColaboraciones(info.ownerId);
           iniciarAporte();
         } catch (e) {
@@ -1168,6 +1186,11 @@
   }
 
   async function enviarTurno() {
+    // Si la persona seleccionó una foto pero no tocó "Subir" todavía,
+    // la subimos ahora para que quede dentro de mediaUrlsLocal antes de
+    // armar el turno — así no se pierde aunque el envío y la selección
+    // de foto ocurran casi al mismo tiempo.
+    if (fotoPendiente) { try { await subirFotoPendiente(); } catch (e) {} }
     // Ver el comentario junto a subidaFotoEnCurso: si hay una foto
     // subiéndose todavía, esperamos a que termine antes de armar este
     // turno — así mediaUrlsLocal ya la tiene adentro.
@@ -1659,7 +1682,7 @@
     await subida;
     if (!texto) return false;
     historyLocal.push({ role: 'user', content: texto });
-    agregarBurbuja('q', texto);
+    // ECO-COLAB-V2: el reconocimiento se conserva internamente; no se muestra transcripción de voz.
     await enviarTurno();
     return true;
   }

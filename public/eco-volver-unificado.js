@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   function apply() {
-    document.querySelectorAll('body > header a.volver[href^="/app.html"], #appContent #ownTopbar a.volver[href^="/app.html"]').forEach(link => {
+    document.querySelectorAll('body > header a.volver[href^="/app.html"], #appContent #ownTopbar a.volver[href^="/app.html"], .shell > header a.volver[href^="/app.html"]').forEach(link => {
       if (link.textContent.trim() !== '← Volver a mi bitácora') {
         link.textContent = '← Volver a mi bitácora';
       }
