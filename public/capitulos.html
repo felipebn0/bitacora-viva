@@ -74,6 +74,43 @@
   }
   button.generar:disabled { opacity: 0.6; cursor: default; }
   .status { color: var(--ink-soft); font-size: 0.9rem; }
+  /* Alto #3 — feedback visual mientras genera capítulos */
+  .status[data-loading="true"] {
+    color: var(--gold-deep);
+    font-weight: 600;
+    font-size: 0.95rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .status[data-loading="true"]::before {
+    content: '';
+    display: inline-block;
+    width: 15px;
+    height: 15px;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin-status 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin-status { to { transform: rotate(360deg); } }
+  /* Estado de éxito (se quita data-loading cuando termina) */
+  .status[data-ok="true"] { color: var(--gold-deep); font-weight: 600; }
+
+  /* Medio #10: label+select siempre juntos y label claramente visible */
+  .persona-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .persona-field > label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
 
   .empty { color: var(--ink-soft); font-style: italic; margin-top: 40px; }
   /* Solo para lectores de pantalla — ver el comentario junto a
@@ -125,7 +162,18 @@
        sin esto perdía el margin-top que el inline sí forzaba). No es una clase de uso general
        para reutilizar en HTML nuevo. */
     .pc-46dcee64{margin:0 !important;}
+  /* Medio #11: en mobile el botón Cerrar queda visible sin scroll */
+  @media (max-width: 600px) {
+    .eco-editorial-topbuttons {
+      width: 100%;
+    }
+    #ecoEditorialClose {
+      order: -1;
+      margin-left: auto;
+    }
+  }
 </style>
+<link rel="stylesheet" href="/eco-mobile-base.css">
 <link rel="stylesheet" href="/eco-interior.css?v=1">
 <link rel="stylesheet" href="/eco-libro.css?v=1">
 <script src="/eco-libro.js?v=1" defer></script>
@@ -175,11 +223,14 @@
     <a class="volver" href="/historias.html">Ver mis historias →</a>
 
     <div class="toolbar">
-      <label class="sub pc-46dcee64" for="personaSelect">Narrado en</label>
+      <!-- Medio #10: label+select agrupados para que no se desasocien al wrappear -->
+      <div class="persona-field">
+        <label for="personaSelect">Voz del libro</label>
       <select id="personaSelect" aria-label="Persona narrativa de los capítulos">
         <option value="tercera">tercera persona ("contó que...")</option>
         <option value="primera">primera persona ("yo conté...")</option>
       </select>
+      </div>
       <button class="generar" id="generarBtn" type="button">Generar capítulos</button>
       <!-- role="status" aria-live: aquí se anuncia "Generando…" y, cuando
          termina, el resultado — sin esto no había forma de saber que
@@ -280,6 +331,7 @@
       }
       div.remove();
       if (!lista.children.length) renderChapters([]);
+      if (typeof showToast === 'function') showToast('Capítulo borrado.');
     } catch (e) {
       status.textContent = 'No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.';
       if (btn) btn.disabled = false;
@@ -343,6 +395,8 @@
 
   generarBtn.addEventListener('click', async () => {
     generarBtn.disabled = true;
+    status.dataset.loading = 'true';
+    status.dataset.ok = 'false';
     status.textContent = 'Generando… puede tardar un rato, no cierres esta pestaña.';
     try {
       const resp = await fetch('/api/chapters/generate', {
@@ -351,15 +405,25 @@
         body: JSON.stringify({ persona: personaSelect.value }),
       });
       const data = await resp.json();
+      status.dataset.loading = 'false';
       if (!resp.ok) {
+        status.dataset.ok = 'false';
         status.textContent = mensajeDeError(resp, data, 'No se pudieron generar los capítulos.');
       } else if (data.message) {
+        // La API devuelve un mensaje propio (ej. "sin historias nuevas")
+        status.dataset.ok = 'true';
         status.textContent = data.message;
       } else {
-        status.textContent = '';
+        const n = data.chapters?.length ?? 0;
+        status.dataset.ok = 'true';
+        status.textContent = n > 0
+          ? `✓ Listo — se ${n === 1 ? 'generó 1 capítulo' : `generaron ${n} capítulos`} nuevo${n === 1 ? '' : 's'}.`
+          : '✓ Capítulos actualizados.';
       }
       if (data.chapters) renderChapters(data.chapters);
     } catch (e) {
+      status.dataset.loading = 'false';
+      status.dataset.ok = 'false';
       status.textContent = 'No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.';
     } finally {
       generarBtn.disabled = false;
@@ -370,6 +434,7 @@
   chequearMaterialDisponible();
 })();
 </script>
+<script src="/eco-toast.js" defer></script>
 <script src="/eco-tour.js?v=1" defer></script>
 </body>
 </html>

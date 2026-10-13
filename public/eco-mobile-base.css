@@ -1,0 +1,34 @@
+/* eco-mobile-base.css — Correcciones base para móvil.
+   Medio #15: ningún texto de UI cae por debajo de 14px en pantallas pequeñas.
+   Se carga en app, colaboraciones, capitulos y arbol. */
+
+@media (max-width: 768px) {
+  /* Textos de etiqueta muy pequeños — el mínimo legible en mobile es 14px */
+  .brand-tag,
+  #orbLabel small,
+  #agregarInicioTexto,
+  .um-hint,
+  .plan-badge,
+  .um-plan-badge,
+  .eco-tour-counter,
+  .tip,
+  .meta,
+  .chapter .meta,
+  .chapter .theme,
+  .chapter .borrar,
+  .colab-card .count,
+  .invite-msg,
+  #invitarPanel label,
+  .dados-select-row label {
+    font-size: max(0.875rem, 14px) !important;
+  }
+
+  /* arbol.html: .info y botones del panel lateral */
+  .info { font-size: 14px !important; }
+  .side .side-actions .btn { font-size: 14px !important; }
+
+  /* Badges y etiquetas de estado */
+  [class*="badge"],
+  [class*="pill"],
+  .status { font-size: max(0.875rem, 14px) !important; }
+}

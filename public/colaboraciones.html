@@ -153,7 +153,31 @@
     border-bottom: 1px solid var(--gold-deep); display: inline-flex; align-items: center;
     min-height: 44px; padding: 10px 4px;
   }
+
+  /* Medio #8: skeleton loader para tabs con carga diferida */
+  @keyframes skel-shimmer {
+    from { background-position: -200% 0; }
+    to   { background-position:  200% 0; }
+  }
+  .skel-line {
+    border-radius: 6px; display: block;
+    background: linear-gradient(90deg, #EDE6D0 25%, #F7F0DF 50%, #EDE6D0 75%);
+    background-size: 200% 100%;
+    animation: skel-shimmer 1.4s ease infinite;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .skel-line {
+      background: linear-gradient(90deg, #2e2b24 25%, #3a362d 50%, #2e2b24 75%);
+      background-size: 200% 100%;
+    }
+  }
+  :root[data-theme="dark"] .skel-line {
+    background: linear-gradient(90deg, #2e2b24 25%, #3a362d 50%, #2e2b24 75%);
+    background-size: 200% 100%;
+  }
+  .skel-card { border: 1px solid #E7DFCC; border-radius: 12px; padding: 16px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px; }
 </style>
+<link rel="stylesheet" href="/eco-mobile-base.css">
 <link rel="stylesheet" href="/eco-interior.css?v=1">
 <link rel="stylesheet" href="/eco-colaboraciones.css?v=1">
 <script src="/eco-colaboraciones.js?v=1" defer></script>
@@ -244,6 +268,17 @@
 
 <script>
 (function () {
+  // Medio #8: skeleton genérico — n tarjetas animadas mientras carga
+  function skeletonHTML(n) {
+    return Array.from({ length: n }, () =>
+      '<div class="skel-card" aria-hidden="true">' +
+      '<span class="skel-line" style="height:14px;width:60%"></span>' +
+      '<span class="skel-line" style="height:12px;width:90%"></span>' +
+      '<span class="skel-line" style="height:12px;width:75%"></span>' +
+      '</div>'
+    ).join('');
+  }
+
   const colaboradoresLista = document.getElementById('colaboradoresLista');
   const colaboradoresStatus = document.getElementById('colaboradoresStatus');
   const aportesLista = document.getElementById('aportesLista');
@@ -314,7 +349,7 @@
   // --- "Lo que yo dije de otros": primero eliges la bitácora (igual que
   // el selector de colaborar.html), después se carga esa sola. ---
   async function cargarMisColaboraciones() {
-    dadosLista.innerHTML = '<p class="empty">Cargando…</p>';
+    dadosLista.innerHTML = skeletonHTML(3);
     try {
       const resp = await fetch('/api/my-collaborations');
       const data = await resp.json().catch(() => ({}));
@@ -739,8 +774,8 @@
   async function cargarTodo(ownerId, marcarVistos) {
     ownerSeleccionado = ownerId || null;
     if (!invitarPanel.hidden) cargarInvitaciones(); // cambió de bitácora: sus invitaciones
-    colaboradoresLista.innerHTML = '<p class="empty">Cargando…</p>';
-    aportesLista.innerHTML = '<p class="empty">Cargando…</p>';
+    colaboradoresLista.innerHTML = skeletonHTML(2);
+    aportesLista.innerHTML = skeletonHTML(3);
     const [colabResultado, aportesResultado] = await Promise.all([pedirColaboradores(ownerId), pedirAportes(ownerId)]);
     const colaboradoresVacios = pintarColaboradores(colabResultado);
     pintarAportes(aportesResultado, colaboradoresVacios);
@@ -789,6 +824,7 @@
 </script>
 <script src="/eco-audio-exclusivo.js" defer></script>
 <script src="/eco-audio-player.js" defer></script>
+<script src="/eco-toast.js" defer></script>
 <script src="/eco-tour.js?v=1" defer></script>
 </body>
 </html>
