@@ -31,9 +31,14 @@
     ],
     '/colaboraciones.html': [
       {
+        selector: 'a.aportar-ahora',
+        title: '🎙️ Aportar a una historia',
+        text: 'Toca aquí para grabarle un recuerdo a alguien de tu familia. Lo que cuentes queda guardado en su bitácora.'
+      },
+      {
         selector: '#tabRecibidosBtn',
         title: 'Lo que dijeron de ti',
-        text: 'Aquí ves los aportes que familiares y amigos hicieron sobre tus historias.'
+        text: 'Aquí ves los aportes que familiares y amigos hicieron sobre tus propias historias.'
       },
       {
         selector: '#invitarToggle',
@@ -44,6 +49,28 @@
         selector: '#tabDadosBtn',
         title: 'Lo que aportaste tú',
         text: 'También puedes ver las historias que tú contaste en bitácoras de otras personas.'
+      }
+    ],
+    '/arbol.html': [
+      {
+        selector: '#stage',
+        title: 'Tu árbol genealógico',
+        text: 'Aquí se dibuja tu familia. Haz clic en cualquier persona para ver sus vínculos. Puedes arrastrar las tarjetas para organizarlo.'
+      },
+      {
+        selector: '#addPerson',
+        title: 'Añadir familiar',
+        text: 'Agrega a alguien nuevo con este botón. Solo necesitas nombre y parentesco.'
+      },
+      {
+        selector: '#searchInput',
+        title: 'Buscar',
+        text: 'Escribe el nombre de cualquier familiar para encontrarlo rápido en el árbol.'
+      },
+      {
+        selector: '#treeBtn',
+        title: 'Vista de árbol / lista',
+        text: 'Alterna entre ver tu familia como árbol visual o como lista. Elige la que te resulte más cómoda.'
       }
     ],
     '/capitulos.html': [
@@ -61,6 +88,11 @@
         selector: '#personaSelect',
         title: 'Voz narrativa',
         text: 'Elige cómo se cuenta el libro: en primera persona ("yo") o en tercera ("él / ella").'
+      },
+      {
+        selector: '#ecoEditorialOpen',
+        title: 'Diseñar mi libro',
+        text: 'Aquí puedes personalizar la portada, el orden de los capítulos, agregar fotos y preparar el libro para imprimir.'
       }
     ]
   };
