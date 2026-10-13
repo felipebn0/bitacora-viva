@@ -4909,7 +4909,7 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
       // un tema nuevo"), pero pegada aquí, en el mensaje sintético de ESTE
       // turno puntual, se sigue con más consistencia (mismo criterio que
       // el resto de las instrucciones de este bloque).
-      ? '(La persona acaba de presionar el botón para empezar a charlar. Saluda a la persona por su nombre. En ese mismo saludo, sin preguntarle de forma genérica si quiere contarte algo hoy: elige tú un tema concreto para empezar —uno nuevo que todavía no esté en el resumen de abajo, o profundizando en algo que quedó pendiente ahí— y arranca directo por ese tema, en una sola pregunta abierta.)'
+      ? '(La persona acaba de presionar el botón para empezar a charlar. Saluda a la persona por su nombre. En ese mismo saludo, sin preguntarle de forma genérica si quiere contarte algo hoy: elige tú un tema completamente nuevo para empezar — algo que NO aparezca en el resumen de abajo. Todo lo que ya está en el resumen, por breve que sea su mención, YA fue contado: no lo vuelvas a tocar como arranque, ni para profundizar ni de ninguna otra forma. Arranca directo con una sola pregunta abierta sobre ese tema nuevo.)'
       : '(La persona acaba de presionar el botón para empezar a charlar. Si el resumen tiene su nombre, saluda a la persona por su nombre. Si no, saluda cálidamente y pregúntale cómo se llama.)';
     const messages = history.length ? history.slice() : [{ role: 'user', content: startPrompt }];
     // Ambos flags van pegados al final del propio último mensaje real de
