@@ -19,6 +19,11 @@ const people = [
   { id: 6, nombre: 'Tío Luis', relacion: 'Tío', padres: ['Abuelo Pedro', 'Abuela Rosa'] },
   { id: 7, nombre: 'Prima Eva', relacion: 'Prima', padres: ['Tío Luis'] },
   { id: 8, nombre: 'Abuela Lola', relacion: 'Abuela materna', padres: [] },
+  { id: 9, nombre: 'Hermano Juan', relacion: 'Hermano', padres: ['Carlos Bernal', 'Marta Nisperuza'] },
+  { id: 10, nombre: 'Paula', relacion: 'Esposa de mi hermano', padres: [] },
+  { id: 11, nombre: 'Nico', relacion: 'Sobrino', padres: ['Hermano Juan', 'Paula'] },
+  { id: 12, nombre: 'Lope', relacion: 'Esposo de mi hermana', padres: [] },
+  { id: 13, nombre: 'Hermana Ana', relacion: 'Hermana', padres: ['Carlos Bernal', 'Marta Nisperuza'] },
 ];
 // Posiciones guardadas de antes, todas mezcladas en una sola fila (como se ve hoy).
 const guardadas = {};
@@ -49,33 +54,52 @@ people.forEach((p, i) => { guardadas[p.id] = { x: 40 + i * 228, y: 55 }; });
 
   const pos = async () => page.$$eval('#nodes .person', (els) => Object.fromEntries(els.map((e) => [e.dataset.id, { x: parseInt(e.style.left, 10), y: parseInt(e.style.top, 10) }])));
   let p = await pos();
-  ok(Object.keys(p).length === 8, 'las 8 personas se dibujan');
+  ok(Object.keys(p).length === 13, 'las 13 personas se dibujan');
   ok(p[4].y < p[2].y && p[5].y < p[2].y, 'los abuelos paternos quedan arriba de su hijo (aunque lo guardado estaba en una sola fila)');
   ok(p[2].y === p[3].y && p[2].y === p[6].y, 'papá, mamá y tío en la misma fila, aunque la mamá no tenga padres registrados');
   ok(p[8].y === p[4].y, 'la abuela materna sin vínculos (relación "Abuela materna") queda en la fila de los abuelos');
   ok(p[1].y > p[2].y && p[7].y === p[1].y, 'la persona principal y su prima en la fila de los hijos');
   const filas = new Set(Object.values(p).map((q) => q.y));
-  ok(filas.size === 3, 'son 3 generaciones: abuelos, padres e hijos (' + filas.size + ')');
+  ok(filas.size === 4, 'son 4 generaciones: abuelos, padres, hijos y sobrinos (' + filas.size + ')');
   const solapes = Object.values(p).some((a, i, arr) => arr.some((b, j) => j > i && a.y === b.y && Math.abs(a.x - b.x) < 200));
   ok(!solapes, 'ninguna tarjeta tapa a otra');
   await page.screenshot({ path: process.env.ARBOL_SHOT || '/tmp/arbol-jerarquia.png' });
 
-  // Esposos: al seleccionar a uno aparece una línea punteada hacia el otro.
+  // Líneas y sombreado al seleccionar a alguien.
   const lineas = () => page.$$eval('#wires path', (ps) => ps.map((x) => ({ d: x.getAttribute('d'), punteada: !!x.getAttribute('stroke-dasharray'), pareja: x.classList.contains('eco-pareja') })));
-  ok(!(await lineas()).some((l) => l.pareja), 'con la persona principal seleccionada (sin pareja) no hay línea punteada');
+  const sombreados = () => page.$$eval('#nodes .person.eco-sombra', (els) => els.map((e) => Number(e.dataset.id)).sort((a, b) => a - b));
+  const cerca = (d, id) => { const m = d.match(/-?\d+/g).map(Number); const q = p[id]; return [[m[0], m[1]], [m[m.length - 2], m[m.length - 1]]].some(([x, y]) => x >= q.x - 2 && x <= q.x + 200 && y >= q.y && y <= q.y + 90); };
+
+  // Persona principal (Felipe) seleccionada al abrir.
+  let ls = await lineas();
+  ok(ls.length === 6, 'Felipe: 4 líneas de linaje (sus papás y sus abuelos) y 2 de pareja entre ellos (' + ls.length + ')');
+  ok(ls.filter((l) => l.punteada).length === 2 && ls.filter((l) => !l.punteada).length === 4, 'las de pareja son punteadas (papá y mamá, abuelo y abuela) y las de padres e hijos continuas');
+  ok(!ls.some((l) => cerca(l.d, 12) || cerca(l.d, 10)), 'ninguna línea llega a Lope (esposo de su hermana) ni a Paula (esposa de su hermano)');
+  ok(ls.some((l) => cerca(l.d, 4) && cerca(l.d, 2)), 'se ve la conexión de sus papás con sus abuelos (y así hacia arriba)');
+  ok(JSON.stringify(await sombreados()) === JSON.stringify([6, 7, 8, 9, 10, 11, 12, 13]), 'quien no está en su línea directa (tío, prima, hermanos, cuñados, sobrino, abuela materna sin vínculo) queda sombreado');
+
+  // Carlos (papá): hacia arriba sus papás y hacia abajo sus hijos y nietos.
   await page.click('#nodes .person[data-id="2"]');
   await page.waitForTimeout(300);
-  let ls = await lineas();
-  const pareja = ls.find((l) => l.pareja);
-  if (process.env.ARBOL_SHOT2) await page.screenshot({ path: process.env.ARBOL_SHOT2 });
-  ok(!!pareja && pareja.punteada, 'al seleccionar a Carlos, su esposa Marta (con quien tiene un hijo) se conecta con una línea punteada');
-  ok(!!pareja && /^M \d+ \d+ L \d+ \d+$/.test(pareja.d) && pareja.d.split(' ')[2] === pareja.d.split(' ')[5], 'la línea de pareja es recta y horizontal entre las dos tarjetas');
-  ok(ls.some((l) => !l.punteada), 'y las líneas de padres e hijos siguen siendo continuas');
+  ls = await lineas();
+  ok(ls.some((l) => l.pareja && l.punteada && cerca(l.d, 2) && cerca(l.d, 3)), 'Carlos: línea punteada con su esposa Marta');
+  ok(ls.some((l) => cerca(l.d, 11) && cerca(l.d, 9)), 'Carlos: se ve la conexión de su nieto Nico con su hijo Juan (hacia abajo, y así sucesivamente)');
+  ok(!ls.some((l) => cerca(l.d, 12) || cerca(l.d, 10)), 'Carlos: tampoco hay líneas hacia Lope ni Paula');
+  const sombra2 = await sombreados();
+  ok(sombra2.includes(6) && sombra2.includes(7) && sombra2.includes(12) && sombra2.includes(10) && !sombra2.includes(1) && !sombra2.includes(3) && !sombra2.includes(4) && !sombra2.includes(11), 'Carlos: quedan sin sombra su esposa, sus papás, hijos y nieto; el tío, los primos y los cuñados quedan sombreados');
   await page.click('#nodes .person[data-id="7"]');
   await page.waitForTimeout(300);
-  ok(!(await lineas()).some((l) => l.pareja), 'quien no tiene pareja no muestra línea punteada');
+  ok(!(await lineas()).some((l) => l.pareja && cerca(l.d, 7)), 'Prima Eva (sin pareja): ninguna línea punteada sale de ella (solo la de sus abuelos)');
+  await page.click('#nodes .person[data-id="9"]');
+  await page.waitForTimeout(300);
+  ls = await lineas();
+  ok(ls.some((l) => l.pareja && cerca(l.d, 9) && cerca(l.d, 10)), 'Hermano Juan: sí se conecta con su esposa Paula (comparten un hijo)');
+  ok(!(await sombreados()).includes(10), 'y Paula queda sin sombra al seleccionar a su esposo');
+  await page.click('#nodes .person[data-id="1"]');
+  await page.waitForTimeout(300);
 
   // Una tarjeta movida a mano se respeta.
+  await page.locator('#nodes .person[data-id="7"]').scrollIntoViewIfNeeded();
   const caja = await page.locator('#nodes .person[data-id="7"]').boundingBox();
   await page.mouse.move(caja.x + 40, caja.y + 20);
   await page.mouse.down();
