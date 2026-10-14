@@ -126,13 +126,22 @@ function fakeSql(strings, ...values) {
     if (bitacoras[id]) bitacoras[id].narrador_code = code || null;
     return Promise.resolve([]);
   }
-  if (text.includes('SELECT nombre, pin_hash FROM bitacoras WHERE narrador_code')) {
+  if (text.includes('SELECT nombre, pin_hash, narrador_terms_version FROM bitacoras WHERE narrador_code')) {
     const bit = Object.values(bitacoras).find((b) => b.narrador_code && b.narrador_code === values[0]);
-    return Promise.resolve(bit ? [{ nombre: bit.nombre, pin_hash: bit.pin_hash || null }] : []);
+    return Promise.resolve(bit ? [{ nombre: bit.nombre, pin_hash: bit.pin_hash || null, narrador_terms_version: bit.narrador_terms_version || null }] : []);
   }
-  if (text.includes('SELECT id, nombre, pin_hash FROM bitacoras WHERE narrador_code')) {
+  if (text.includes('SELECT id, nombre, pin_hash, narrador_terms_version FROM bitacoras WHERE narrador_code')) {
     const bit = Object.values(bitacoras).find((b) => b.narrador_code && b.narrador_code === values[0]);
-    return Promise.resolve(bit ? [{ id: bit.id, nombre: bit.nombre, pin_hash: bit.pin_hash || null }] : []);
+    return Promise.resolve(bit ? [{ id: bit.id, nombre: bit.nombre, pin_hash: bit.pin_hash || null, narrador_terms_version: bit.narrador_terms_version || null }] : []);
+  }
+  if (text.includes('UPDATE bitacoras SET narrador_terms_accepted_at')) {
+    const [version, id] = values;
+    if (bitacoras[id]) { bitacoras[id].narrador_terms_accepted_at = new Date(); bitacoras[id].narrador_terms_version = version; }
+    return Promise.resolve([]);
+  }
+  if (text.includes('INSERT INTO consentimientos')) {
+    consentimientos.push({ tipo: values[0], sujeto: values[1], owner: values[2], version: values[3] });
+    return Promise.resolve([]);
   }
   if (text.includes('UPDATE bitacoras SET pin_hash = ')) {
     const [hash, id] = values;
@@ -285,6 +294,7 @@ async function login(server, username) {
   return resp.headers['set-cookie'][0].split(';')[0];
 }
 
+const consentimientos = [];
 let pasaron = 0;
 let fallaron = 0;
 function check(nombre, cond) {
@@ -363,21 +373,31 @@ function check(nombre, cond) {
     const pinInvalido = await request(server, { path: '/api/narrador-start', method: 'POST', body: { codigo: codigoNarrador, pin: 'ab' } });
     check('una clave que no son 4 números -> 400', pinInvalido.status === 400);
 
+    check('el código del narrador avisa que aún no aceptó los términos', infoOkBody.terminosAlDia === false);
+    const narradorSinTerminos = await request(server, { path: '/api/narrador-start', method: 'POST', body: { codigo: codigoNarrador, pin: '1234' } });
+    check('sin aceptar los términos no entra -> 400 con necesitaTerminos y sin cookie', narradorSinTerminos.status === 400 && JSON.parse(narradorSinTerminos.body).necesitaTerminos === true && !narradorSinTerminos.headers['set-cookie']);
+    check('y tampoco quedó definida la clave ni la fecha de aceptación', bitacoras[papaId].pin_hash === null && !bitacoras[papaId].narrador_terms_accepted_at && !consentimientos.length);
+
     // El nombre ya no se pregunta (lo puso quien creó el subperfil) — la
     // primera vez, la clave que mande queda guardada como la suya.
-    const narradorStart = await request(server, { path: '/api/narrador-start', method: 'POST', body: { codigo: codigoNarrador, pin: '1234' } });
+    const narradorStart = await request(server, { path: '/api/narrador-start', method: 'POST', body: { codigo: codigoNarrador, pin: '1234', acceptTerms: true } });
     check('entrar como narrador con el código, define su clave -> 200', narradorStart.status === 200);
     check('la respuesta trae el nombre del subperfil (nunca preguntado)', JSON.parse(narradorStart.body).bitacoraNombre === 'Papá');
     const cookieNarrador = narradorStart.headers['set-cookie'][0].split(';')[0];
+    check('se guardó la fecha y la versión de aceptación del narrador', bitacoras[papaId].narrador_terms_accepted_at instanceof Date && /^\d{4}-\d{2}-\d{2}$/.test(bitacoras[papaId].narrador_terms_version));
+    check('queda constancia en la tabla consentimientos', consentimientos.length === 1 && consentimientos[0].tipo === 'narrador' && consentimientos[0].sujeto === String(papaId));
 
     const infoTrasDefinir = await request(server, { path: `/api/narrador-code-info?codigo=${codigoNarrador}` });
     check('ya con clave definida -> pinYaConfigurado true', JSON.parse(infoTrasDefinir.body).pinYaConfigurado === true);
+    check('ya aceptó -> el código dice terminosAlDia true (no vuelve a pedir el checkbox)', JSON.parse(infoTrasDefinir.body).terminosAlDia === true);
 
-    const pinIncorrecto = await request(server, { path: '/api/narrador-start', method: 'POST', body: { codigo: codigoNarrador, pin: '9999' } });
+    const pinIncorrecto = await request(server, { path: '/api/narrador-start', method: 'POST', body: { codigo: codigoNarrador, pin: '9999', acceptTerms: true } });
     check('con clave ya definida, un PIN incorrecto -> 401', pinIncorrecto.status === 401);
 
-    const pinCorrectoOtraVez = await request(server, { path: '/api/narrador-start', method: 'POST', body: { codigo: codigoNarrador, pin: '1234' } });
+    const pinCorrectoOtraVez = await request(server, { path: '/api/narrador-start', method: 'POST', body: { codigo: codigoNarrador, pin: '1234', acceptTerms: true } });
     check('volver a entrar con la misma clave -> 200', pinCorrectoOtraVez.status === 200);
+    const sinMarcarDeNuevo = await request(server, { path: '/api/narrador-start', method: 'POST', body: { codigo: codigoNarrador, pin: '1234' } });
+    check('con los términos al día entra sin marcarlos otra vez, y no se repite el registro', sinMarcarDeNuevo.status === 200 && consentimientos.length === 1);
 
     pushAnthropicResponse('¿Y cómo era tu barrio de niño?');
     const nextComoNarrador = await request(server, {
@@ -428,7 +448,7 @@ function check(nombre, cond) {
     const invitarTia = await request(server, { path: '/api/invitaciones', method: 'POST', body: { nombre: 'Tía Rosa', telefono: '+57 311 222 3344' } }, cookieComoMama);
     check('invitar a la tía a la bitácora de un subperfil -> 200', invitarTia.status === 200);
     const codigoTia = new URL(JSON.parse(invitarTia.body).invitacion.enlace).searchParams.get('invitacion');
-    const guestStartAportes = await request(server, { path: '/api/guest-start', method: 'POST', body: { invitacion: codigoTia } });
+    const guestStartAportes = await request(server, { path: '/api/guest-start', method: 'POST', body: { invitacion: codigoTia, acceptTerms: true } });
     check('un familiar entra como invitado con su enlace personal a un subperfil -> 200', guestStartAportes.status === 200);
     const invitarAjena = await request(server, { path: '/api/invitaciones', method: 'POST', body: { nombre: 'Intrusa', telefono: '+57 311 999 0000', owner: mamaId } }, cookieOtra);
     check('otra familia no puede invitar a la bitácora de mamá -> 403', invitarAjena.status === 403);

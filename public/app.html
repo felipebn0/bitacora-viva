@@ -666,6 +666,11 @@
     padding: 12px; font-weight: 700; font-size: 1rem; cursor: pointer; font-family: var(--font-body);
   }
   .login button:disabled { opacity: 0.6; cursor: default; }
+  .login-check { display: flex; align-items: flex-start; gap: 12px; text-align: left; }
+  .login-check[hidden] { display: none; }
+  .login .login-check input { flex: 0 0 auto; width: 28px; height: 28px; margin: 0; padding: 0; accent-color: var(--gold-deep); cursor: pointer; }
+  .login-check label { font-size: 0.875rem; color: var(--ink-soft); cursor: pointer; }
+  .login-check label a { display: inline-block; padding: 10px 0; margin: -10px 0; color: var(--gold-deep); }
   /* Botón "Mostrar/Ocultar" al lado de la clave — sin esto, la única forma
      de confirmar que se tipeó bien la clave es borrar y volver a intentar
      si el login falla. min-width en vez de un ancho fijo: el texto cambia
@@ -891,6 +896,10 @@
     <div class="login-field">
       <label for="narradorPin" id="narradorPinLabel">Tu clave de 4 números</label>
       <input type="tel" inputmode="numeric" pattern="[0-9]*" id="narradorPin" placeholder="••••" autocomplete="off" maxlength="4">
+    </div>
+    <div class="login-check" id="narradorTermsRow" hidden>
+      <input type="checkbox" id="narradorTerms">
+      <label for="narradorTerms">Acepto los <a href="/terminos.html" target="_blank" rel="noopener">Términos y Condiciones</a> y la <a href="/privacidad.html" target="_blank" rel="noopener">Política de Privacidad</a>: lo que cuente se guarda en mi bitácora.</label>
     </div>
     <button id="narradorStartBtn" type="button">Empezar</button>
     <p class="error" id="narradorError" role="alert"></p>
@@ -2260,6 +2269,8 @@
   const narradorPinLabel = document.getElementById('narradorPinLabel');
   const narradorPin = document.getElementById('narradorPin');
   const narradorStartBtn = document.getElementById('narradorStartBtn');
+  const narradorTermsRow = document.getElementById('narradorTermsRow');
+  const narradorTerms = document.getElementById('narradorTerms');
   const narradorError = document.getElementById('narradorError');
   const narradorHint = document.getElementById('narradorHint');
   const codigoNarradorUrl = new URLSearchParams(location.search).get('codigo');
@@ -2270,7 +2281,7 @@
     narradorPin.value = narradorPin.value.replace(/\D/g, '').slice(0, 4);
   });
 
-  function showNarradorScreen(bitacoraNombre, pinYaConfigurado) {
+  function showNarradorScreen(bitacoraNombre, pinYaConfigurado, terminosAlDia) {
     checkingScreen.style.display = 'none';
     loginScreen.style.display = 'none';
     appContent.style.display = 'none';
@@ -2285,20 +2296,26 @@
       narradorPinLabel.textContent = 'Elige una clave de 4 números';
       narradorHint.textContent = 'La vas a necesitar la próxima vez que entres — no hace falta crear cuenta.';
     }
+    narradorTermsRow.hidden = !!terminosAlDia;
     narradorPin.focus();
   }
 
   async function doNarradorStart() {
     const pin = narradorPin.value.trim();
     if (!/^\d{4}$/.test(pin)) { narradorError.textContent = 'La clave tiene que ser de 4 números.'; return; }
+    if (!narradorTermsRow.hidden && !narradorTerms.checked) {
+      narradorError.textContent = 'Para entrar, marca que aceptas los Términos y la Política de Privacidad.';
+      narradorTerms.focus();
+      return;
+    }
     narradorStartBtn.disabled = true;
     narradorError.textContent = '';
     try {
       const resp = await fetch('/api/narrador-start', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codigo: codigoNarradorUrl, pin }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codigo: codigoNarradorUrl, pin, acceptTerms: narradorTerms.checked }),
       });
       const data = await resp.json();
-      if (!resp.ok) { narradorError.textContent = data.error || 'No se pudo entrar.'; narradorStartBtn.disabled = false; narradorPin.focus(); return; }
+      if (!resp.ok) { if (data.necesitaTerminos) narradorTermsRow.hidden = false; narradorError.textContent = data.error || 'No se pudo entrar.'; narradorStartBtn.disabled = false; narradorPin.focus(); return; }
       // El ?codigo= ya cumplió su función (quedó guardado en la cookie de
       // sesión) — se saca de la URL antes de recargar para que un refresh
       // normal no dependa de que siga ahí.
@@ -2331,7 +2348,7 @@
       if (codigoNarradorUrl) {
         fetch(`/api/narrador-code-info?codigo=${encodeURIComponent(codigoNarradorUrl)}`)
           .then((resp) => (resp.ok ? resp.json() : Promise.reject()))
-          .then((data) => showNarradorScreen(data.bitacoraNombre, data.pinYaConfigurado))
+          .then((data) => showNarradorScreen(data.bitacoraNombre, data.pinYaConfigurado, data.terminosAlDia))
           .catch(() => showNarradorScreen(null, false));
         return;
       }

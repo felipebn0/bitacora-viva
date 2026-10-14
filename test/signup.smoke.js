@@ -28,6 +28,11 @@ let usersTable = [
   { id: 1, username: 'mama@example.com', name: 'Mamá', email: 'mama@example.com', password_hash: 'x', owner_user_id: null, token_version: 0, invite_code: 'B46NWEC7' },
 ];
 let nextId = 2;
+const consentimientos = [];
+const logs = [];
+const logOriginal = console.log;
+console.log = (...a) => { logs.push(a.join(' ')); logOriginal(...a); };
+let ultimoInsertUsers = '';
 
 function fakeSql(strings, ...values) {
   const text = strings.join('?');
@@ -44,7 +49,12 @@ function fakeSql(strings, ...values) {
     const found = usersTable.find((u) => u.invite_code === values[0]);
     return Promise.resolve(found ? [{ id: found.id }] : []);
   }
+  if (text.includes('INSERT INTO consentimientos')) {
+    consentimientos.push({ tipo: values[0], sujeto: values[1], owner: values[2], version: values[3] });
+    return Promise.resolve([]);
+  }
   if (text.includes('INSERT INTO users')) {
+    ultimoInsertUsers = text;
     const [username, name, email, phone, passwordHash, ownerUserId, signupVariant, termsVersion] = values;
     const row = { id: nextId++, username, name, email, phone, password_hash: passwordHash, owner_user_id: ownerUserId, signup_variant: signupVariant ?? null, terms_version: termsVersion ?? null, token_version: 0, invite_code: null };
     usersTable.push(row);
@@ -175,6 +185,11 @@ async function main() {
   check('acceptTerms true -> 200', rt4.status === 200);
   const conTerminos = usersTable.find((u) => u.email === 'sinaceptar@example.com');
   check('la cuenta guarda la versión de los términos que aceptó', !!conTerminos && conTerminos.terms_version === '2026-10-07');
+  check('el INSERT guarda la fecha de aceptación (terms_accepted_at = now())', /terms_accepted_at/.test(ultimoInsertUsers) && /now\(\)/.test(ultimoInsertUsers));
+  check('queda constancia en la tabla consentimientos (tipo cuenta, con su id y la versión)', consentimientos.some((c) => c.tipo === 'cuenta' && c.sujeto === String(conTerminos.id) && c.version === '2026-10-07'));
+  check('el log trae la fecha de registro', logs.some((l) => l.startsWith(`[registro] userId=${conTerminos.id} `) && /registrada=\d{4}-\d{2}-\d{2}T/.test(l)));
+  check('el log trae la aceptación de términos con fecha y versión', logs.some((l) => l.startsWith(`[consentimiento] tipo=cuenta sujeto=${conTerminos.id} `) && /version=2026-10-07 aceptado=\d{4}-\d{2}-\d{2}T/.test(l)));
+  check('los intentos rechazados no dejaron constancia (solo la cuenta aceptada)', consentimientos.filter((c) => c.tipo === 'cuenta').every((c) => c.version === '2026-10-07') && !logs.some((l) => /sinaceptar@/.test(l)));
 
   server.close();
   console.log(`\n${passed} pasaron, ${failed} fallaron`);

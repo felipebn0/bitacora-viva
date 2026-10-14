@@ -139,7 +139,7 @@ async function main() {
   const invitar = await request(server, { path: '/api/invitaciones', method: 'POST', body: { nombre: 'Invitado', telefono: '+57 300 111 2233' }, headers: { Cookie: dueñoCookie } });
   const invitacion = JSON.parse(invitar.body).invitacion;
   const codigoPersonal = new URL(invitacion.enlace).searchParams.get('invitacion');
-  const guestStart = await request(server, { path: '/api/guest-start', method: 'POST', body: { invitacion: codigoPersonal } });
+  const guestStart = await request(server, { path: '/api/guest-start', method: 'POST', body: { invitacion: codigoPersonal, acceptTerms: true } });
   check('el invitado puede entrar con su enlace personal', guestStart.status === 200);
   const guestCookie = cookieDe(guestStart);
 

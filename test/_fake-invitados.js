@@ -11,7 +11,7 @@ function crearFakeInvitados() {
       if (!text.includes('invitados')) return null;
       if (text.includes('INSERT INTO invitados')) {
         const [id, ownerId, esBitacora, nombre, telefono, codigo, creadoPor] = values;
-        const f = { id, owner_id: ownerId, owner_es_bitacora: esBitacora, nombre, telefono, codigo, creado_por: creadoPor, created_at: new Date(), ultimo_ingreso: null, revocado_at: null };
+        const f = { id, owner_id: ownerId, owner_es_bitacora: esBitacora, nombre, telefono, codigo, creado_por: creadoPor, created_at: new Date(), ultimo_ingreso: null, revocado_at: null, terms_accepted_at: null, terms_version: null };
         filas.push(f);
         return Promise.resolve([copia(f, ['id', 'nombre', 'telefono', 'codigo', 'ultimo_ingreso', 'revocado_at'])]);
       }
@@ -40,6 +40,11 @@ function crearFakeInvitados() {
         f.revocado_at = new Date();
         return Promise.resolve([{ id: f.id }]);
       }
+      if (text.includes('UPDATE invitados SET terms_accepted_at')) {
+        const f = filas.find((x) => x.id === values[1]);
+        if (f) { f.terms_accepted_at = new Date(); f.terms_version = values[0]; }
+        return Promise.resolve([]);
+      }
       if (text.includes('UPDATE invitados SET ultimo_ingreso')) {
         const f = filas.find((x) => x.id === values[0]);
         if (f) f.ultimo_ingreso = new Date();
@@ -47,7 +52,7 @@ function crearFakeInvitados() {
       }
       if (text.includes('FROM invitados WHERE codigo')) {
         const f = filas.find((x) => x.codigo === values[0] && !x.revocado_at);
-        return Promise.resolve(f ? [copia(f, ['id', 'owner_id', 'owner_es_bitacora', 'nombre'])] : []);
+        return Promise.resolve(f ? [copia(f, ['id', 'owner_id', 'owner_es_bitacora', 'nombre', 'terms_version'])] : []);
       }
       if (text.includes('SELECT 1 FROM invitados WHERE id')) {
         const f = filas.find((x) => x.id === values[0] && x.owner_id === values[1] && !x.revocado_at);

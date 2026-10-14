@@ -210,6 +210,21 @@ app.use((req, res, next) => {
 // terminos.html y public/privacidad.html). Si se cambia el texto de fondo,
 // subir esta fecha — queda guardada junto a cada aceptación.
 const TERMS_VERSION = '2026-10-07';
+
+// Deja constancia de que alguien aceptó los Términos y la Política: una fila
+// en "consentimientos" y una línea en el log. Si el registro falla no se
+// tumba la entrada — la fecha ya quedó guardada en la fila de la persona.
+async function registrarAceptacion(tipo, sujetoId, ownerId, aceptadoAt) {
+  const cuando = aceptadoAt ? new Date(aceptadoAt).toISOString() : new Date().toISOString();
+  console.log(`[consentimiento] tipo=${tipo} sujeto=${sujetoId} bitacora=${ownerId == null ? '-' : ownerId} version=${TERMS_VERSION} aceptado=${cuando}`);
+  try {
+    await sql`INSERT INTO consentimientos (tipo, sujeto_id, owner_id, version) VALUES (${tipo}, ${String(sujetoId)}, ${ownerId == null ? null : ownerId}, ${TERMS_VERSION})`;
+  } catch (err) {
+    console.error('No se pudo guardar el consentimiento en la tabla:', err);
+  }
+}
+
+const MENSAJE_TERMINOS_ENTRADA = 'Para entrar tienes que aceptar los Términos y la Política de Privacidad.';
 const AB_LANDING_COOKIE = 'bv_ab_landing';
 const AB_LANDING_MAX_AGE = 60 * 60 * 24 * 90; // 90 días
 const AB_LANDING_ARCHIVOS = {
@@ -897,6 +912,23 @@ function ensureSchema() {
       )`,
       sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_invitados_owner_telefono ON invitados(owner_id, telefono)`,
       sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_invitados_codigo ON invitados(codigo)`,
+      sql`ALTER TABLE invitados ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ`,
+      sql`ALTER TABLE invitados ADD COLUMN IF NOT EXISTS terms_version TEXT`,
+      // Registro de cada aceptación de Términos y Política de Privacidad
+      // (cuenta, invitado con enlace personal o narrador de un subperfil).
+      // Es la prueba de la autorización: no lleva nombre, correo ni teléfono,
+      // solo el tipo, el id de quien aceptó, la versión y la fecha. No se
+      // borra al borrar la cuenta o reiniciar la bitácora, a propósito: es la
+      // prueba de que hubo autorización.
+      sql`CREATE TABLE IF NOT EXISTS consentimientos (
+        id BIGSERIAL PRIMARY KEY,
+        tipo TEXT NOT NULL,
+        sujeto_id TEXT NOT NULL,
+        owner_id INT,
+        version TEXT NOT NULL,
+        aceptado_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      sql`CREATE INDEX IF NOT EXISTS idx_consentimientos_sujeto ON consentimientos(tipo, sujeto_id)`,
       sql`ALTER TABLE family_notes ADD COLUMN IF NOT EXISTS guest_id TEXT`,
       // Tablas del estudio del libro, el QR del libro y el árbol V4 (las usan
       // book-editor-routes.js, book-purchase-demo-routes.js, book-qr-routes.js y
@@ -1132,6 +1164,8 @@ function ensureSchema() {
       sql`CREATE INDEX IF NOT EXISTS idx_bitacoras_admin ON bitacoras(admin_user_id)`,
       sql`ALTER TABLE bitacoras ADD COLUMN IF NOT EXISTS tratamiento TEXT`,
       sql`ALTER TABLE bitacoras ADD COLUMN IF NOT EXISTS voz TEXT`,
+      sql`ALTER TABLE bitacoras ADD COLUMN IF NOT EXISTS narrador_terms_accepted_at TIMESTAMPTZ`,
+      sql`ALTER TABLE bitacoras ADD COLUMN IF NOT EXISTS narrador_terms_version TEXT`,
       // Contraparte de users.tree_pending_names/aportes_pending_names (las
       // campanitas de aviso) para un subperfil, que no tiene fila en "users"
       // donde vivir esas columnas — ver leerNombresPendientesArbol más abajo.
@@ -2834,6 +2868,7 @@ app.get('/api/guest-code-info', rateLimit, async (req, res) => {
 app.post('/api/guest-start', rateLimit, async (req, res) => {
   try {
     const invitacion = String((req.body && req.body.invitacion) || '').trim().slice(0, 64);
+    const acepta = !!req.body && req.body.acceptTerms === true;
     // Ya no se entra sin cuenta con el código familiar (solo con un nombre,
     // dos personas con el mismo nombre se veían los aportes). Hace falta el
     // enlace personal que crea el dueño con el nombre y el celular de cada
@@ -2842,14 +2877,20 @@ app.post('/api/guest-start', rateLimit, async (req, res) => {
       return res.status(403).json({ error: 'Para entrar sin cuenta necesitas tu enlace personal — pídele a quien te invitó que te lo mande por WhatsApp.', necesitaInvitacion: true });
     }
     await ensureSchema();
-    const rows = await sql`SELECT id, owner_id, owner_es_bitacora, nombre FROM invitados WHERE codigo = ${invitacion} AND revocado_at IS NULL`;
+    const rows = await sql`SELECT id, owner_id, owner_es_bitacora, nombre, terms_version FROM invitados WHERE codigo = ${invitacion} AND revocado_at IS NULL`;
     if (!rows.length) return res.status(404).json({ error: 'Ese enlace ya no es válido — pídele a quien te invitó que te mande uno nuevo.' });
     const inv = rows[0];
+    const terminosAlDia = inv.terms_version === TERMS_VERSION;
+    if (!terminosAlDia && !acepta) return res.status(400).json({ error: MENSAJE_TERMINOS_ENTRADA, necesitaTerminos: true });
     const owner = inv.owner_es_bitacora
       ? (await sql`SELECT id, nombre FROM bitacoras WHERE id = ${inv.owner_id} AND archived_at IS NULL`)[0]
       : (await sql`SELECT id, name, username FROM users WHERE id = ${inv.owner_id} AND owner_user_id IS NULL`)[0];
     if (!owner) return res.status(404).json({ error: 'Esa bitácora ya no está disponible.' });
     await sql`UPDATE invitados SET ultimo_ingreso = now() WHERE id = ${inv.id}`;
+    if (!terminosAlDia) {
+      await sql`UPDATE invitados SET terms_accepted_at = now(), terms_version = ${TERMS_VERSION} WHERE id = ${inv.id}`;
+      await registrarAceptacion('invitado', inv.id, inv.owner_id, null);
+    }
 
     // El token lleva guestId (no el código): requireAuth revalida contra
     // invitados en cada pedido, así que revocar la invitación corta la
@@ -2977,9 +3018,9 @@ app.get('/api/invitacion-info', rateLimit, async (req, res) => {
     const codigo = String(req.query.invitacion || '').trim().slice(0, 64);
     if (!codigo) return res.status(400).json({ error: 'Falta el enlace.' });
     await ensureSchema();
-    const rows = await sql`SELECT owner_id, owner_es_bitacora, nombre FROM invitados WHERE codigo = ${codigo} AND revocado_at IS NULL`;
+    const rows = await sql`SELECT owner_id, owner_es_bitacora, nombre, terms_version FROM invitados WHERE codigo = ${codigo} AND revocado_at IS NULL`;
     if (!rows.length) return res.status(404).json({ error: 'Ese enlace ya no es válido — pídele a quien te invitó que te mande uno nuevo.' });
-    res.json({ nombre: capitalizarNombre(rows[0].nombre), ownerName: await nombreDeLaBitacora(rows[0].owner_id, !!rows[0].owner_es_bitacora) });
+    res.json({ nombre: capitalizarNombre(rows[0].nombre), terminosAlDia: rows[0].terms_version === TERMS_VERSION, ownerName: await nombreDeLaBitacora(rows[0].owner_id, !!rows[0].owner_es_bitacora) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo verificar el enlace.' });
@@ -3340,9 +3381,9 @@ app.get('/api/narrador-code-info', rateLimit, async (req, res) => {
     const cleanCode = String(req.query.codigo || '').trim().toUpperCase();
     if (!cleanCode) return res.status(400).json({ error: 'Falta el código.' });
     await ensureSchema();
-    const rows = await sql`SELECT nombre, pin_hash FROM bitacoras WHERE narrador_code = ${cleanCode}`;
+    const rows = await sql`SELECT nombre, pin_hash, narrador_terms_version FROM bitacoras WHERE narrador_code = ${cleanCode}`;
     if (!rows.length) return res.status(404).json({ error: 'Ese código no existe.' });
-    res.json({ bitacoraNombre: capitalizarNombre(rows[0].nombre), pinYaConfigurado: !!rows[0].pin_hash });
+    res.json({ bitacoraNombre: capitalizarNombre(rows[0].nombre), pinYaConfigurado: !!rows[0].pin_hash, terminosAlDia: rows[0].narrador_terms_version === TERMS_VERSION });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo verificar el código.' });
@@ -3353,6 +3394,7 @@ app.post('/api/narrador-start', rateLimit, async (req, res) => {
   try {
     const cleanCode = String((req.body && req.body.codigo) || '').trim().toUpperCase();
     const cleanPin = String((req.body && req.body.pin) || '').trim();
+    const acepta = !!req.body && req.body.acceptTerms === true;
     if (!cleanCode) return res.status(400).json({ error: 'Falta el código.' });
     if (!/^\d{4}$/.test(cleanPin)) return res.status(400).json({ error: 'La clave tiene que ser de 4 números.' });
 
@@ -3369,9 +3411,11 @@ app.post('/api/narrador-start', rateLimit, async (req, res) => {
     }
 
     await ensureSchema();
-    const rows = await sql`SELECT id, nombre, pin_hash FROM bitacoras WHERE narrador_code = ${cleanCode}`;
+    const rows = await sql`SELECT id, nombre, pin_hash, narrador_terms_version FROM bitacoras WHERE narrador_code = ${cleanCode}`;
     if (!rows.length) return res.status(404).json({ error: 'Ese código no existe.' });
     const bit = rows[0];
+    const terminosAlDia = bit.narrador_terms_version === TERMS_VERSION;
+    if (!terminosAlDia && !acepta) return res.status(400).json({ error: MENSAJE_TERMINOS_ENTRADA, necesitaTerminos: true });
 
     if (!bit.pin_hash) {
       // Primera vez que se usa este enlace: la persona define su propia
@@ -3381,6 +3425,10 @@ app.post('/api/narrador-start', rateLimit, async (req, res) => {
     } else {
       const ok = await bcrypt.compare(cleanPin, bit.pin_hash);
       if (!ok) return res.status(401).json({ error: 'Esa clave no es correcta.' });
+    }
+    if (!terminosAlDia) {
+      await sql`UPDATE bitacoras SET narrador_terms_accepted_at = now(), narrador_terms_version = ${TERMS_VERSION} WHERE id = ${bit.id}`;
+      await registrarAceptacion('narrador', bit.id, bit.id, null);
     }
 
     // El nombre lo pone quien creó el subperfil, no quien narra — nunca se
@@ -3500,6 +3548,8 @@ app.post('/api/signup', rateLimit, async (req, res) => {
       VALUES (${cleanEmail}, ${cleanName}, ${cleanEmail}, ${cleanPhone}, ${hash}, ${ownerUserId}, ${signupVariant}, now(), ${TERMS_VERSION}, ${tratamientoValido(tratamiento)})
       RETURNING id, username, token_version
     `;
+    console.log(`[registro] userId=${rows[0].id} tipo=${ownerUserId ? 'colaboradora' : 'dueña'} variante=${signupVariant || '-'} registrada=${new Date().toISOString()}`);
+    await registrarAceptacion('cuenta', rows[0].id, ownerUserId, null);
     setSessionCookie(req, res, { userId: rows[0].id, username: rows[0].username, tokenVersion: rows[0].token_version });
     res.json({ ok: true, username: rows[0].username, isCollaborator: !!ownerUserId });
   } catch (err) {

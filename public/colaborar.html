@@ -111,6 +111,11 @@
     padding: 12px; font-weight: 700; font-size: 1rem; cursor: pointer; font-family: var(--font-body);
   }
   .login button:disabled { opacity: 0.6; cursor: default; }
+  .login-check { display: flex; align-items: flex-start; gap: 12px; text-align: left; }
+  .login-check[hidden] { display: none; }
+  .login .login-check input { flex: 0 0 auto; width: 28px; height: 28px; margin: 0; padding: 0; accent-color: var(--gold-deep); cursor: pointer; }
+  .login-check label { font-size: 0.875rem; color: var(--ink-soft); cursor: pointer; }
+  .login-check label a { display: inline-block; padding: 10px 0; margin: -10px 0; color: var(--gold-deep); }
   /* Va DESPUÉS de ".login button" a propósito, para pisar ese estilo (mismo
      ancho/alto que "Entrar") con uno más chico — igual que en app.html. */
   .login-pass-row button {
@@ -367,9 +372,12 @@
     <p class="guest-owner-name" id="guestHola"></p>
     <p class="error" id="guestError" role="alert"></p>
     <p class="sub pc-1015cafb" id="guestNotice"></p>
+    <div class="login-check" id="guestTermsRow" hidden>
+      <input type="checkbox" id="guestTerms">
+      <label for="guestTerms">Acepto los <a href="/terminos.html" target="_blank" rel="noopener">Términos y Condiciones</a> y la <a href="/privacidad.html" target="_blank" rel="noopener">Política de Privacidad</a>: lo que aporte se guarda en la bitácora de quien me invitó.</label>
+    </div>
     <button id="guestStartBtn" type="button">Empezar</button>
     <p class="sub pc-53425f7d" id="guestSinCuenta">No hace falta crear cuenta ni clave — este enlace es solo tuyo.</p>
-    <p class="sub pc-53425f7d">Al pulsar "Empezar" aceptas los <a class="pc-07135648" href="/terminos.html" target="_blank" rel="noopener">Términos</a> y la <a class="pc-07135648" href="/privacidad.html" target="_blank" rel="noopener">Política de Privacidad</a>: lo que aportes se guarda en la bitácora de quien te invitó.</p>
     <p class="sub pc-53425f7d">¿Ya tienes cuenta? <a class="pc-07135648" href="#" id="guestToLoginLink">Inicia sesión</a>.</p>
   </div>
 
@@ -510,6 +518,8 @@
   const guestNotice = document.getElementById('guestNotice');
   const guestSinCuenta = document.getElementById('guestSinCuenta');
   const guestStartBtn = document.getElementById('guestStartBtn');
+  const guestTermsRow = document.getElementById('guestTermsRow');
+  const guestTerms = document.getElementById('guestTerms');
   const guestError = document.getElementById('guestError');
   const hubScreen = document.getElementById('hubScreen');
   const hubCode = document.getElementById('hubCode');
@@ -686,6 +696,7 @@
     guestNotice.textContent = '';
     guestStartBtn.style.display = 'none';
     guestSinCuenta.style.display = 'none';
+    guestTermsRow.hidden = true;
     try {
       if (invitacionUrl) {
         const resp = await fetch('/api/invitacion-info?invitacion=' + encodeURIComponent(invitacionUrl));
@@ -699,6 +710,7 @@
         }
         guestStartBtn.style.display = '';
         guestSinCuenta.style.display = '';
+        guestTermsRow.hidden = !!data.terminosAlDia;
         guestStartBtn.focus();
         return;
       }
@@ -718,16 +730,22 @@
 
   async function doGuestStart() {
     if (!invitacionUrl) return;
+    if (!guestTermsRow.hidden && !guestTerms.checked) {
+      guestError.textContent = 'Para entrar, marca que aceptas los Términos y la Política de Privacidad.';
+      guestTerms.focus();
+      return;
+    }
     guestStartBtn.disabled = true;
     guestError.textContent = '';
     try {
       const resp = await fetch('/api/guest-start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ invitacion: invitacionUrl }),
+        body: JSON.stringify({ invitacion: invitacionUrl, acceptTerms: guestTerms.checked }),
       });
       const data = await resp.json();
       if (!resp.ok) {
+        if (data.necesitaTerminos) guestTermsRow.hidden = false;
         guestError.textContent = data.error || 'No se pudo entrar con ese enlace.';
         guestStartBtn.disabled = false;
         return;

@@ -29,6 +29,10 @@ const users = {
 };
 
 const fakeInvitados = crearFakeInvitados();
+const consentimientos = []; // filas de la tabla consentimientos
+const logs = [];
+const logOriginal = console.log;
+console.log = (...a) => { logs.push(a.join(' ')); logOriginal(...a); };
 const subidas = []; // rutas que /api/contribute-audio y /api/contribute-media mandaron a guardar
 // family_notes en memoria (solo lo que usan las rutas de aportes).
 const notas = [];
@@ -51,6 +55,10 @@ function fakeSql(strings, ...values) {
   const text = strings.join('?');
   if (text.includes('CREATE TABLE') || text.includes('ALTER TABLE') || text.includes('CREATE INDEX')) return Promise.resolve([]);
   if (text.includes('rate_limits')) return Promise.resolve([{ count: 1 }]);
+  if (text.includes('INSERT INTO consentimientos')) {
+    consentimientos.push({ tipo: values[0], sujeto: values[1], owner: values[2], version: values[3] });
+    return Promise.resolve([]);
+  }
   const deInvitados = fakeInvitados.manejar(text, values);
   if (deInvitados) return deInvitados;
 
@@ -266,11 +274,27 @@ function cookieDeSesionVieja(payload) {
     const malo = await request(server, { path: '/api/guest-start', method: 'POST', body: { invitacion: 'NOEXISTE' } });
     check('enlace inexistente -> 404', malo.status === 404);
 
-    const e1 = await request(server, { path: '/api/guest-start', method: 'POST', body: { invitacion: codigo1 } });
+    check('invitacion-info avisa que aún no aceptó los términos', JSON.parse(info.body).terminosAlDia === false);
+    const sinTerminos = await request(server, { path: '/api/guest-start', method: 'POST', body: { invitacion: codigo1 } });
+    check('sin aceptar los términos no entra -> 400 con necesitaTerminos y sin cookie', sinTerminos.status === 400 && JSON.parse(sinTerminos.body).necesitaTerminos === true && !sinTerminos.headers['set-cookie']);
+    const terminosFalsos = await request(server, { path: '/api/guest-start', method: 'POST', body: { invitacion: codigo1, acceptTerms: 'true' } });
+    check('acceptTerms tiene que ser true de verdad (no el texto "true") -> 400', terminosFalsos.status === 400);
+    check('rechazar los términos no deja ninguna fecha guardada', fakeInvitados.filas.every((x) => !x.terms_accepted_at));
+    const e1 = await request(server, { path: '/api/guest-start', method: 'POST', body: { invitacion: codigo1, acceptTerms: true } });
     check('Carlos entra con su enlace -> 200', e1.status === 200);
+    const filaCarlos = fakeInvitados.filas.find((x) => x.codigo === codigo1);
+    check('se guardó la fecha y la versión de aceptación del invitado', filaCarlos.terms_accepted_at instanceof Date && /^\d{4}-\d{2}-\d{2}$/.test(filaCarlos.terms_version));
+    check('el invitado ya tiene su fecha de registro (created_at)', filaCarlos.created_at instanceof Date);
+    check('queda constancia en la tabla consentimientos', consentimientos.some((c) => c.tipo === 'invitado' && c.sujeto === filaCarlos.id && c.owner === filaCarlos.owner_id));
+    check('queda una línea [consentimiento] en el log', logs.some((l) => l.startsWith('[consentimiento] tipo=invitado sujeto=' + filaCarlos.id)));
+    const infoDespues = await request(server, { path: `/api/invitacion-info?invitacion=${codigo1}` });
+    check('invitacion-info ya dice que aceptó (no vuelve a pedir el checkbox)', JSON.parse(infoDespues.body).terminosAlDia === true);
+    const reingreso = await request(server, { path: '/api/guest-start', method: 'POST', body: { invitacion: codigo1 } });
+    check('con los términos al día vuelve a entrar sin marcarlos de nuevo -> 200', reingreso.status === 200);
+    check('volver a entrar no repite el registro de consentimiento', consentimientos.filter((c) => c.tipo === 'invitado' && c.sujeto === filaCarlos.id).length === 1);
     check('la cookie de invitado se marca HttpOnly', e1.headers['set-cookie'][0].includes('HttpOnly'));
     const cookieCarlos1 = e1.headers['set-cookie'][0].split(';')[0];
-    const e2 = await request(server, { path: '/api/guest-start', method: 'POST', body: { invitacion: codigo2 } });
+    const e2 = await request(server, { path: '/api/guest-start', method: 'POST', body: { invitacion: codigo2, acceptTerms: true } });
     const cookieCarlos2 = e2.headers['set-cookie'][0].split(';')[0];
 
     // --- /api/me refleja la sesión de invitado ---
@@ -365,7 +389,7 @@ function cookieDeSesionVieja(payload) {
     check('con el enlace revocado no se puede volver a entrar -> 404', entrarRevocado.status === 404);
     const reactivar = await request(server, { path: `/api/invitaciones/${carlos1.id}/renovar`, method: 'POST' }, cookieFelipe);
     const nuevoCodigo1 = new URL(JSON.parse(reactivar.body).invitacion.enlace).searchParams.get('invitacion');
-    const reentra = await request(server, { path: '/api/guest-start', method: 'POST', body: { invitacion: nuevoCodigo1 } });
+    const reentra = await request(server, { path: '/api/guest-start', method: 'POST', body: { invitacion: nuevoCodigo1, acceptTerms: true } });
     const cookieReentra = reentra.headers['set-cookie'][0].split(';')[0];
     const veOtraVez = JSON.parse((await request(server, { path: '/api/contributions' }, cookieReentra)).body).notes;
     check('al reactivarlo con enlace nuevo recupera SUS aportes (mismo id)', reentra.status === 200 && veOtraVez.length === 1 && veOtraVez[0].texto.includes('terminó la historia'));
@@ -405,7 +429,7 @@ function cookieDeSesionVieja(payload) {
     const colabnesHtml = fs.readFileSync(path.resolve(__dirname, '..', 'public', 'colaboraciones.html'), 'utf8');
     check('colaboraciones.html: "Invitar familiares" despliega el formulario ahí mismo, sin mandar a la pantalla principal', /id="invitarToggle"/.test(colabnesHtml) && /id="invitarPanel"/.test(colabnesHtml) && !/class="empty-cta" href="\/app\.html#inviteToggle"/.test(colabnesHtml));
     check('colaboraciones.html: invita a la bitácora elegida (owner) y recuerda que quedó abierto', /conOwnerInv\('\/api\/invitaciones'\)/.test(colabnesHtml) && /owner: ownerSeleccionado/.test(colabnesHtml) && /colabInvitarAbierto/.test(colabnesHtml));
-    check('colaborar.html entra con ?invitacion= y ya no manda solo el nombre', /get\('invitacion'\)/.test(colabHtml) && /body: JSON\.stringify\(\{ invitacion: invitacionUrl \}\)/.test(colabHtml) && !/guest-start[\s\S]{0,200}name: nombre/.test(colabHtml));
+    check('colaborar.html entra con ?invitacion= y ya no manda solo el nombre', /get\('invitacion'\)/.test(colabHtml) && /body: JSON\.stringify\(\{ invitacion: invitacionUrl, acceptTerms: guestTerms\.checked \}\)/.test(colabHtml) && !/guest-start[\s\S]{0,200}name: nombre/.test(colabHtml));
 
     // --- Cerrar sesión de invitado (mismo /api/logout que una cuenta real) ---
     const logout = await request(server, { path: '/api/logout', method: 'POST' }, cookieCarlos2);

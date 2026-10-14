@@ -215,6 +215,17 @@ Quien aporta historias **sin cuenta** entra con un enlace personal que crea el d
 - Cerrar o actualizar un borrador de aporte (`/api/contribute-chat`, `draftId`) exige ser quien lo escribió (`contributed_by` / `guest_id`); un `draftId` ajeno no modifica nada y se guarda como aporte nuevo.
 - **Archivos (SEC-002B):** `/api/media-file` ya no deja a un colaborador o invitado abrir cualquier archivo de la familia. El dueño (y quien administra el subperfil, y el narrador de su propio enlace) ve todo; un colaborador solo ve lo que subió él. Cada subida de aporte lleva la huella de quien la hizo en la ruta (`audio/aportes/<dueño>/<huella>/…`, `media/<dueño>/<huella>/…`; `u<id>` cuenta, `g<id>` invitación personal), y los archivos de antes de las huellas se reconocen solo si aparecen en sus propios aportes. Así un aporte privado de otra persona nunca le llega a nadie más que a su autor y al dueño.
 
+## Aceptación de Términos y Política de Privacidad
+
+Todo el que entra a Eco marca un checkbox con los Términos y la Política de Privacidad, y el servidor lo exige (`acceptTerms === true`):
+
+- **Cuenta nueva** (las dos landings): `users.created_at` es la fecha de registro; `users.terms_accepted_at` y `users.terms_version` son la aceptación.
+- **Invitado con enlace personal** (`colaborar.html`): `invitados.created_at` (cuando lo invitaron), `invitados.terms_accepted_at` y `invitados.terms_version`.
+- **Narrador de un subperfil** (`app.html?codigo=`): `bitacoras.narrador_terms_accepted_at` y `bitacoras.narrador_terms_version`.
+- Cada aceptación también queda en la tabla `consentimientos` (tipo, id de quien aceptó, bitácora, versión, fecha) y como línea `[consentimiento] tipo=… sujeto=… version=… aceptado=…` en el log; el registro de una cuenta deja además `[registro] userId=… registrada=…`. La tabla no lleva nombre, correo ni teléfono, y no se borra al borrar la cuenta (es la prueba de la autorización).
+- Quien ya aceptó la versión vigente no vuelve a ver el checkbox. Para volver a pedirlo a los invitados y narradores, se cambia `TERMS_VERSION` en `server.js`.
+- Las cuentas creadas a mano con `/api/register` (clave `SETUP_KEY`) no pasan por ningún formulario, así que no tienen fecha de aceptación.
+
 ## Recordatorios (correo + WhatsApp asistido)
 
 Cada día (Vercel Cron → `GET /api/cron/reminders`, 14:00 UTC = 9:00 Colombia) la app busca a quién le toca un recordatorio para seguir contando su historia:
