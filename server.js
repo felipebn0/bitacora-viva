@@ -2881,7 +2881,7 @@ function datosDeInvitacion(req, inv, ownerNombre) {
   const nombre = capitalizarNombre(inv.nombre);
   const mensaje = `Hola ${nombre}, te invito a sumar tus recuerdos a la bitácora de ${ownerNombre || 'nuestra familia'} en Eco. Entra con tu enlace personal, no hace falta crear cuenta: ${enlace}`;
   return {
-    id: inv.id, nombre, telefono: inv.telefono, enlace,
+    id: inv.id, nombre, telefono: inv.telefono, enlace, mensaje,
     whatsapp: `https://wa.me/${inv.telefono}?text=${encodeURIComponent(mensaje)}`,
     activa: !inv.revocado_at,
     ultimoIngreso: inv.ultimo_ingreso || null,
@@ -4477,6 +4477,27 @@ async function updateFamilyTree(userId, esPropia, newExchanges) {
     if (indicePrincipal === -1) {
       indicePrincipal = personas.findIndex((p) => clasificarRolUnico(p.relacion) === 'principal');
     }
+    // Fallback: si no hay principal, auto-agregar al narrador desde su bitácora.
+    // Esto resuelve el caso donde la persona nunca se mencionó a sí misma en
+    // la charla pero sí habló de sus familiares — el árbol queda poblado pero
+    // sin nodo central, y Vista familiar muestra "No hay persona principal".
+    if (indicePrincipal === -1) {
+      try {
+        const [bitRow] = await sql`SELECT nombre FROM bitacoras WHERE id = ${userId}`;
+        const nombreNarrador = bitRow?.nombre ? capitalizarNombre(bitRow.nombre) : null;
+        if (nombreNarrador) {
+          const idxExistente = personas.findIndex((p) => normalizarNombreParaComparar(p.nombre) === normalizarNombreParaComparar(nombreNarrador));
+          if (idxExistente !== -1) {
+            indicePrincipal = idxExistente;
+          } else {
+            personas.push({ nombre: nombreNarrador, relacion: 'Persona principal', detalles: null, padres: [] });
+            indicePrincipal = personas.length - 1;
+          }
+        }
+      } catch (e) {
+        console.warn(`[arbol] no se pudo auto-agregar narrador como principal userId=${userId}:`, e.message);
+      }
+    }
     // Si lo que quedó es igual a lo que ya estaba guardado, no hay nada que
     // reescribir: se evita borrar y volver a insertar todas las filas.
     const norm = (v) => normalizarNombreParaComparar(String(v == null ? '' : v));
@@ -4654,13 +4675,30 @@ function fotoRecienSubidaPrompt(caption) {
 
 const HISTORIA_MIN_CHARS = 180; // umbral simple: una respuesta larga y elaborada = historia; un dato corto no.
 
+// Detecta si un nombre es un término de parentesco genérico (papá, madre,
+// "Padre del Entrevistado", etc.) en vez de un nombre propio real.
+const PATRON_NOMBRE_GENERICO = /^(padre|madre|papa|papá|mama|mamá|abuelo|abuela|tío|tia|tio|hermano|hermana|esposo|esposa|hijo|hija|nieto|nieta|sobrino|sobrina|primo|prima)\b/i;
+function esNombreGenerico(nombre) {
+  const sin_tildes = String(nombre || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+  return PATRON_NOMBRE_GENERICO.test(sin_tildes.trim());
+}
+
 async function loadKnownFamilyMembers(userId) {
   await ensureSchema();
   const rows = await sql`SELECT nombre, relacion, detalles FROM family_members WHERE user_id = ${userId}`;
   if (!rows.length) return '';
-  return `\n\nPersonas que ya se conocen (no vuelvas a preguntar por estas, prioriza las que faltan):\n${rows
+
+  const lista = `\n\nPersonas que ya se conocen (no vuelvas a preguntar por estas, prioriza las que faltan):\n${rows
     .map((p) => `- ${capitalizarNombre(p.nombre)} (${p.relacion})${p.detalles ? ': ' + p.detalles : ''}`)
     .join('\n')}`;
+
+  // Si algún familiar solo tiene un nombre genérico (papá, mamá, "Padre del
+  // Entrevistado"…), pedirle el nombre real en la primera oportunidad natural.
+  const sinNombre = rows.filter((p) => esNombreGenerico(p.nombre));
+  if (!sinNombre.length) return lista;
+  const pendientes = sinNombre.map((p) => p.relacion).join(', ');
+  const nota = `\n\nNombres que todavía no sabes (en la primera oportunidad natural — sin cortar el hilo de la charla y nunca como segunda pregunta en el mismo turno — pregunta el nombre real de uno a la vez): ${pendientes}.`;
+  return lista + nota;
 }
 
 // Cuenta signos de interrogación de cierre ("?") — cada pregunta real en
@@ -5008,7 +5046,7 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
       // un tema nuevo"), pero pegada aquí, en el mensaje sintético de ESTE
       // turno puntual, se sigue con más consistencia (mismo criterio que
       // el resto de las instrucciones de este bloque).
-      ? '(La persona acaba de presionar el botón para empezar a charlar. Saluda a la persona por su nombre. En ese mismo saludo, sin preguntarle de forma genérica si quiere contarte algo hoy: elige tú un tema concreto para empezar —uno nuevo que todavía no esté en el resumen de abajo, o profundizando en algo que quedó pendiente ahí— y arranca directo por ese tema, en una sola pregunta abierta.)'
+      ? '(La persona acaba de presionar el botón para empezar a charlar. Saluda a la persona por su nombre. En ese mismo saludo, sin preguntarle de forma genérica si quiere contarte algo hoy: elige tú un tema completamente nuevo para empezar — algo que NO aparezca en el resumen de abajo. Todo lo que ya está en el resumen, por breve que sea su mención, YA fue contado: no lo vuelvas a tocar como arranque, ni para profundizar ni de ninguna otra forma. Arranca directo con una sola pregunta abierta sobre ese tema nuevo.)'
       : '(La persona acaba de presionar el botón para empezar a charlar. Si el resumen tiene su nombre, saluda a la persona por su nombre. Si no, saluda cálidamente y pregúntale cómo se llama.)';
     const messages = history.length ? history.slice() : [{ role: 'user', content: startPrompt }];
     // Ambos flags van pegados al final del propio último mensaje real de
@@ -6986,13 +7024,53 @@ app.get('/api/tree', requireAuth, bloquearColaborador, async (req, res) => {
       GROUP BY fm.id
       ORDER BY fm.id
     `;
-    const people = peopleRaw.map((p) => ({
+    let people = peopleRaw.map((p) => ({
       ...p,
       nombre: capitalizarNombre(p.nombre),
       padres: parseJsonArray(p.padres).map(capitalizarNombre),
       es_principal: !!p.es_principal,
       notas_count: Number(p.notas_count) || 0,
     }));
+    // Auto-agregar al narrador si no aparece en el árbol.
+    // Cuenta propia (esPropia): nombre en users.name. Subperfil: en bitacoras.nombre.
+    try {
+      const esPropia = req.userId === req.profileUserId;
+      let nombreNarrador = null;
+      if (esPropia) {
+        const [u] = await sql`SELECT name FROM users WHERE id = ${req.profileUserId}`;
+        nombreNarrador = u?.name ? capitalizarNombre(u.name) : null;
+      } else {
+        const [b] = await sql`SELECT nombre FROM bitacoras WHERE id = ${req.profileUserId}`;
+        nombreNarrador = b?.nombre ? capitalizarNombre(b.nombre) : null;
+      }
+      if (nombreNarrador) {
+        const yaExiste = people.find((p) => p.nombre.toLowerCase() === nombreNarrador.toLowerCase());
+        const tienePrincipal = people.some((p) => p.es_principal);
+        if (!yaExiste) {
+          // Cuenta propia: es_principal=true, relacion="Yo" (es la dueña de su propio árbol).
+          // Subperfil sin principal: es_principal=true, relacion="Persona principal".
+          // Subperfil con principal ya existente: es_principal=false, relacion="Familiar".
+          const esPrincipal = esPropia || !tienePrincipal;
+          const relacion = esPropia ? 'Yo' : (esPrincipal ? 'Persona principal' : 'Familiar');
+          const [inserted] = await sql`
+            INSERT INTO family_members (user_id, nombre, relacion, padres, es_principal)
+            VALUES (${req.profileUserId}, ${nombreNarrador}, ${relacion}, ${'[]'}, ${esPrincipal})
+            RETURNING id, nombre, relacion, padres, es_principal`;
+          people.push({ ...inserted, nombre: capitalizarNombre(inserted.nombre), padres: [], es_principal: !!inserted.es_principal, notas_count: 0 });
+        } else if (esPropia && (yaExiste.relacion !== 'Yo' || !yaExiste.es_principal)) {
+          // Existe pero con datos incorrectos — corregir relación y marcar como principal.
+          await sql`UPDATE family_members SET relacion = 'Yo', es_principal = true WHERE id = ${yaExiste.id}`;
+          yaExiste.relacion = 'Yo';
+          yaExiste.es_principal = true;
+        } else if (!tienePrincipal && !esPropia) {
+          // Existe pero sin es_principal en un subperfil — marcarlo.
+          await sql`UPDATE family_members SET es_principal = true WHERE id = ${yaExiste.id}`;
+          yaExiste.es_principal = true;
+        }
+      }
+    } catch (e) {
+      console.warn('[api/tree] auto-agregar narrador:', e.message);
+    }
     const events = await sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${req.profileUserId} ORDER BY anio NULLS LAST, id`;
     res.json({ people, events });
   } catch (err) {

@@ -161,9 +161,15 @@
      revés (dorado/verde), sin ese código de color explícito. */
   .orb[data-state="listening"] { background: radial-gradient(circle at 35% 30%, #7C8F5E, var(--moss)); }
   .orb[data-state="listening"]::before { animation-duration: 1.4s; }
-  .orb[data-state="speaking"], .orb[data-state="thinking"] { background: radial-gradient(circle at 35% 30%, #E8B923, #B8860B); }
+  .orb[data-state="speaking"], .orb[data-state="thinking"] { background: radial-gradient(circle at 35% 30%, #E8B923, #B8860B); pointer-events: none; }
   .orb[data-state="paused"] { background: radial-gradient(circle at 35% 30%, #7D7050, #706551); }
   .orb[data-state="paused"]::before { animation: none; opacity: 0.3; }
+  /* Medio #7: VU meter bajo el label de estado */
+  .mic-level { display: flex; align-items: flex-end; gap: 3px; height: 20px; justify-content: center; margin-top: 4px; }
+  .mic-level[hidden] { display: none; }
+  .mic-level span { display: block; width: 4px; border-radius: 2px; background: #7C8F5E; height: 3px; transition: height 0.09s ease-out; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .mic-level span { background: #9DB07A; } }
+  :root[data-theme="dark"] .mic-level span { background: #9DB07A; }
   /* Experimento UX (rama ux-pruebas, 2026-09-08): "terminar la charla" como
      un orbe chico y rojo, pegado abajo a la derecha del principal — el
      tamaño de toque se queda en 44px mínimo aunque se vea chico. */
@@ -559,6 +565,10 @@
     cursor: pointer;
     box-shadow: 0 2px 6px -3px rgba(0,0,0,0.2);
   }
+  .icon-btn:focus-visible {
+    outline: 3px solid var(--moss);
+    outline-offset: 3px;
+  }
   .icon-badge {
     display: none;
     position: absolute;
@@ -823,6 +833,7 @@
 <link rel="stylesheet" href="/eco-identidad-global.css?v=1">
 
 <link rel="stylesheet" href="/eco-login-v6.css?v=6">
+<link rel="stylesheet" href="/eco-mobile-base.css">
 </head>
 <body class="eco-brand-v1 eco-page-inicio">
   <!-- Experimento UX (rama ux-pruebas, 2026-09-08): solo se ven en desktop
@@ -1117,7 +1128,7 @@
         pensada solo para logo+saludo+cuenta — meter aquí un texto largo la
         rompía entera, empujando el saludo a una columna angosta. -->
    <div class="acceso-directo-row" id="accesoDirectoRow">
-     <button class="icon-btn" id="agregarInicioBtn" type="button" title="Agregar a la pantalla de inicio">➕📱</button>
+     <button class="icon-btn" id="agregarInicioBtn" type="button" title="Agregar a la pantalla de inicio" aria-label="Agregar a la pantalla de inicio">➕📱</button>
      <p class="sub" id="agregarInicioTexto"></p>
    </div>
    </header>
@@ -1182,6 +1193,10 @@
                porque el texto se REEMPLAZA entero cada vez (no se agrega),
                así que conviene anunciarlo completo y no solo la diferencia. -->
           <div class="state-label" id="stateLabel" role="status" aria-live="polite" aria-atomic="true"></div>
+          <!-- Medio #7: indicador de nivel de micrófono — solo visible al escuchar -->
+          <div class="mic-level" id="micLevel" aria-hidden="true" hidden>
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
           <!-- Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe):
                "armar árbol genealógico" solo aparece mientras el árbol todavía
                no tiene ninguna base armada — apenas /api/tree devuelve al
@@ -1606,6 +1621,7 @@
       greetingName.textContent = data.name || umUsername.textContent.replace(/^Usuario:\s*/, '') || '';
       umProfileMsg.textContent = 'Perfil guardado ✓';
       umProfileSaveBtn.disabled = false;
+      if (typeof showToast === 'function') showToast('Perfil guardado.');
     } catch (e) {
       umProfileMsg.className = 'um-msg um-error';
       umProfileMsg.textContent = 'No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.';
@@ -2383,6 +2399,43 @@
   let mediaRecorder = null;
   let audioChunks = [];
   let recordingStartedAt = null;
+
+  // Medio #7: VU meter — AnalyserNode para leer nivel del micrófono
+  const micLevelEl = document.getElementById('micLevel');
+  let _micAnalyser = null, _micBuf = null, _micRafId = null;
+
+  function startMicLevel() {
+    if (!micLevelEl || !mediaStream || !window.AudioContext) return;
+    try {
+      const ctx = new AudioContext();
+      const src = ctx.createMediaStreamSource(mediaStream);
+      _micAnalyser = ctx.createAnalyser();
+      _micAnalyser.fftSize = 32;
+      _micBuf = new Uint8Array(_micAnalyser.frequencyBinCount);
+      src.connect(_micAnalyser);
+      micLevelEl.hidden = false;
+      _tickMicLevel();
+    } catch (e) {}
+  }
+
+  function _tickMicLevel() {
+    if (!_micAnalyser) return;
+    _micAnalyser.getByteTimeDomainData(_micBuf);
+    const rms = Math.sqrt(_micBuf.reduce((s, v) => s + (v - 128) * (v - 128), 0) / _micBuf.length) / 128;
+    const bars = micLevelEl.querySelectorAll('span');
+    bars.forEach((bar, i) => {
+      const dist = Math.abs(i - 2); // distancia al centro (barra 2 de 0-4)
+      const h = Math.max(3, Math.round(rms * 60 * (1 - dist * 0.18)));
+      bar.style.height = Math.min(h, 18) + 'px';
+    });
+    _micRafId = requestAnimationFrame(_tickMicLevel);
+  }
+
+  function stopMicLevel() {
+    if (_micRafId) { cancelAnimationFrame(_micRafId); _micRafId = null; }
+    _micAnalyser = null;
+    if (micLevelEl) micLevelEl.hidden = true;
+  }
   let lastRecordingDurationMs = 0;
   let lastRecordingMimeType = 'audio/webm';
   // No todo lo que se graba vale la pena guardarlo como audio (ocupa mucho
@@ -2609,8 +2662,10 @@
   }
 
   function setState(next, label) {
+    if (next !== 'listening') stopMicLevel(); // Medio #7
     state = next;
     orb.dataset.state = next;
+    orb.disabled = next === 'thinking' || next === 'speaking';
     stateLabel.textContent = label || '';
     const resting = next === 'idle' || next === 'ended';
     let orbHint = 'Presionar para comenzar la charla';
@@ -3572,6 +3627,7 @@
       return; // sin soporte: queda "prefiero escribir"
     }
     await startRecordingAudio();
+    if (mediaStream && mediaRecorder) startMicLevel(); // Medio #7
     if (!mediaStream || !mediaRecorder) {
       // no dio permiso de micrófono o falló: no nos quedamos trabados "escuchando" para siempre
       stateLabel.textContent = mensajeErrorMicrofono();
@@ -4045,5 +4101,7 @@
   });
 })();
 </script>
+<script src="/eco-toast.js" defer></script>
+<script src="/eco-tour.js?v=1" defer></script>
 </body>
 </html>

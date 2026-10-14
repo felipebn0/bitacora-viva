@@ -21,6 +21,21 @@
 #appContent .eco-colab-personas .collab-switch-list{gap:6px;justify-content:center}
 #appContent .eco-colab-personas .collab-switch-list a{font-size:.88rem;padding:7px 12px}
 #appContent .eco-colab-personas #collabSwitch p a{color:#4d6542;font-weight:700;text-underline-offset:3px}
+#appContent .eco-colab-barra>.eco-colab-codigo{display:flex;align-items:center;margin:0;padding:0 4px}
+#appContent .eco-colab-barra>.eco-colab-codigo a{color:#4d6542;font-weight:700;font-size:.88rem;text-underline-offset:3px;white-space:nowrap}
+/* Dialog "Tengo un código" */
+dialog.eco-codigo-dlg{border:none;border-radius:18px;padding:28px 24px 24px;max-width:min(380px,calc(100vw - 32px));width:100%;background:#fffdf6;box-shadow:0 8px 40px rgba(41,61,48,.18);position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);margin:0}
+dialog.eco-codigo-dlg::backdrop{background:rgba(41,61,48,.35);backdrop-filter:blur(2px)}
+dialog.eco-codigo-dlg h2{font-family:"Source Serif 4",Georgia,serif;font-size:1.25rem;color:#293d30;margin:0 0 18px;padding-right:28px}
+dialog.eco-codigo-dlg label{display:block;font-size:.85rem;color:#777568;margin:0 0 6px}
+dialog.eco-codigo-dlg input{width:100%;box-sizing:border-box;border:1px solid #dadaca;border-radius:10px;padding:10px 13px;font-family:"Atkinson Hyperlegible","Segoe UI",Arial,sans-serif;font-size:1.1rem;letter-spacing:.08em;background:#fff;color:#302d25;min-height:44px;text-transform:uppercase}
+dialog.eco-codigo-dlg input:focus{outline:3px solid #293d30;outline-offset:2px;border-color:transparent}
+dialog.eco-codigo-dlg .eco-dlg-error{margin:6px 0 0;font-size:.85rem;color:#b03a2e;min-height:1.2em}
+dialog.eco-codigo-dlg .eco-dlg-submit{display:block;width:100%;margin-top:14px;border:none;background:#293d30;color:#fbf6ea;border-radius:10px;min-height:46px;font-weight:700;font-size:1rem;cursor:pointer;transition:background .15s}
+dialog.eco-codigo-dlg .eco-dlg-submit:hover{background:#3a5040}
+dialog.eco-codigo-dlg .eco-dlg-submit:disabled{opacity:.6;cursor:default}
+dialog.eco-codigo-dlg .eco-dlg-close{position:absolute;top:12px;right:14px;border:none;background:none;font-size:1.4rem;color:#777568;cursor:pointer;line-height:1;padding:4px 6px;border-radius:6px}
+dialog.eco-codigo-dlg .eco-dlg-close:hover{color:#293d30}
 #appContent .aportes{width:100%!important;max-width:710px!important;padding:clamp(17px,3vw,25px)!important;gap:10px!important;margin-bottom:16px!important;min-height:0!important}
 #appContent .aportes>h2{text-align:center;font-size:1.4rem;margin-bottom:0}
 #appContent .orb-zone{padding:10px 0 0!important;gap:8px!important;min-height:0!important}
