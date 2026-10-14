@@ -78,8 +78,9 @@ people.forEach((p, i) => { guardadas[p.id] = { x: 40 + i * 228, y: 55 }; });
   ok(!ls.some((l) => cerca(l.d, 12) || cerca(l.d, 10)), 'ninguna línea llega a Lope (esposo de su hermana) ni a Paula (esposa de su hermano)');
   ok(ls.some((l) => cerca(l.d, 4) && cerca(l.d, 2)), 'se ve la conexión de sus papás con sus abuelos (y así hacia arriba)');
   const hermanas = ls.filter((l) => l.hermano);
-  ok(hermanas.length === 2 && hermanas.some((l) => cerca(l.d, 9)) && hermanas.some((l) => cerca(l.d, 13)), 'sus dos hermanos (Juan y Ana) se conectan con él por una línea de hermanos');
-  ok(hermanas.every((l) => l.punteada && l.color !== '#839d78' && l.color !== '#ab8059' && !l.pareja), 'la línea de hermanos tiene un estilo y color propios (no es la de padres ni la de pareja)');
+  const une = (d, id) => d.includes(`M ${p[id].x + 98} ${p[id].y} `);
+  ok(hermanas.length === 1 && une(hermanas[0].d, 1) && une(hermanas[0].d, 9) && une(hermanas[0].d, 13), 'Felipe y sus dos hermanos (Juan y Ana) quedan unidos por UNA sola línea de hermanos');
+  ok(hermanas[0].punteada && hermanas[0].color === '#8cc0dd' && !hermanas[0].pareja, 'esa línea es azul claro y distinta a la de padres y a la de pareja');
   ok(JSON.stringify(await sombreados()) === JSON.stringify([6, 7, 8, 10, 11, 12]), 'los hermanos quedan iluminados; el tío, la prima, los cuñados, el sobrino y la abuela sin vínculo quedan sombreados');
 
   // Carlos (papá): hacia arriba sus papás y hacia abajo sus hijos y nietos.
@@ -91,7 +92,7 @@ people.forEach((p, i) => { guardadas[p.id] = { x: 40 + i * 228, y: 55 }; });
   ok(!ls.some((l) => cerca(l.d, 12) || cerca(l.d, 10)), 'Carlos: tampoco hay líneas hacia Lope ni Paula');
   const sombra2 = await sombreados();
   ok(sombra2.includes(7) && sombra2.includes(12) && sombra2.includes(10) && !sombra2.includes(6) && !sombra2.includes(1) && !sombra2.includes(3) && !sombra2.includes(4) && !sombra2.includes(11), 'Carlos: quedan sin sombra su esposa, sus papás, hijos, nieto y su hermano (Tío Luis); la prima y los cuñados quedan sombreados');
-  ok(ls.some((l) => l.hermano && cerca(l.d, 2) && cerca(l.d, 6)), 'Carlos: línea de hermanos hacia su hermano Tío Luis');
+  ok(ls.filter((l) => l.hermano).length === 1 && une(ls.find((l) => l.hermano).d, 2) && une(ls.find((l) => l.hermano).d, 6), 'Carlos: una línea de hermanos que lo une con su hermano Tío Luis');
   const filasPanel = await page.$$eval('#relations .relation-row', (els) => els.map((e) => e.textContent.replace(/Quitar$/, '').trim()));
   const nombresDe = (prefijo) => ((filasPanel.find((t) => t.startsWith(prefijo)) || '').split(': ')[1] || '').split(', ').sort();
   ok(filasPanel.length === 3, 'el panel de Carlos agrupa sus relaciones en 3 filas: padres, hermanos e hijos (' + filasPanel.length + ')');
