@@ -6925,13 +6925,38 @@ app.get('/api/tree', requireAuth, bloquearColaborador, async (req, res) => {
       GROUP BY fm.id
       ORDER BY fm.id
     `;
-    const people = peopleRaw.map((p) => ({
+    let people = peopleRaw.map((p) => ({
       ...p,
       nombre: capitalizarNombre(p.nombre),
       padres: parseJsonArray(p.padres).map(capitalizarNombre),
       es_principal: !!p.es_principal,
       notas_count: Number(p.notas_count) || 0,
     }));
+    // Auto-agregar al narrador como persona principal si no existe en el árbol.
+    // Evita que la cuenta quede sin nodo central sin tener que reconstruir.
+    const tienePrincipal = people.some((p) => p.es_principal);
+    if (!tienePrincipal) {
+      try {
+        const [bit] = await sql`SELECT nombre FROM bitacoras WHERE id = ${req.profileUserId}`;
+        const nombreNarrador = bit?.nombre ? capitalizarNombre(bit.nombre) : null;
+        if (nombreNarrador) {
+          const yaExiste = people.find((p) => p.nombre.toLowerCase() === nombreNarrador.toLowerCase());
+          if (yaExiste) {
+            // Marcarla como principal si ya estaba sin el flag
+            await sql`UPDATE family_members SET es_principal = true WHERE id = ${yaExiste.id}`;
+            yaExiste.es_principal = true;
+          } else {
+            const [inserted] = await sql`
+              INSERT INTO family_members (user_id, nombre, relacion, padres, es_principal)
+              VALUES (${req.profileUserId}, ${nombreNarrador}, ${'Persona principal'}, ${'[]'}, true)
+              RETURNING id, nombre, relacion, padres, es_principal`;
+            people = [{ ...inserted, nombre: capitalizarNombre(inserted.nombre), padres: [], es_principal: true, notas_count: 0 }, ...people];
+          }
+        }
+      } catch (e) {
+        console.warn('[api/tree] no se pudo auto-agregar narrador como principal:', e.message);
+      }
+    }
     const events = await sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${req.profileUserId} ORDER BY anio NULLS LAST, id`;
     res.json({ people, events });
   } catch (err) {
