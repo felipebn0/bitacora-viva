@@ -1,6 +1,17 @@
 /* eco-mobile-base.css — Correcciones base para móvil.
    Medio #15: ningún texto de UI cae por debajo de 14px en pantallas pequeñas.
+   Bajo #16: prefers-reduced-motion para animaciones.
    Se carga en app, colaboraciones, capitulos y arbol. */
+
+/* Bajo #16 — respeta la preferencia del sistema operativo */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 
 @media (max-width: 768px) {
   /* Textos de etiqueta muy pequeños — el mínimo legible en mobile es 14px */
