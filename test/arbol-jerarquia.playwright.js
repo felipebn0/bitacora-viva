@@ -66,17 +66,21 @@ people.forEach((p, i) => { guardadas[p.id] = { x: 40 + i * 228, y: 55 }; });
   await page.screenshot({ path: process.env.ARBOL_SHOT || '/tmp/arbol-jerarquia.png' });
 
   // Líneas y sombreado al seleccionar a alguien.
-  const lineas = () => page.$$eval('#wires path', (ps) => ps.map((x) => ({ d: x.getAttribute('d'), punteada: !!x.getAttribute('stroke-dasharray'), pareja: x.classList.contains('eco-pareja') })));
+  const lineas = () => page.$$eval('#wires path', (ps) => ps.map((x) => ({ d: x.getAttribute('d'), punteada: !!x.getAttribute('stroke-dasharray'), pareja: x.classList.contains('eco-pareja'), hermano: x.classList.contains('eco-hermano'), color: x.getAttribute('stroke') })));
   const sombreados = () => page.$$eval('#nodes .person.eco-sombra', (els) => els.map((e) => Number(e.dataset.id)).sort((a, b) => a - b));
   const cerca = (d, id) => { const m = d.match(/-?\d+/g).map(Number); const q = p[id]; return [[m[0], m[1]], [m[m.length - 2], m[m.length - 1]]].some(([x, y]) => x >= q.x - 2 && x <= q.x + 200 && y >= q.y && y <= q.y + 90); };
 
   // Persona principal (Felipe) seleccionada al abrir.
   let ls = await lineas();
-  ok(ls.length === 6, 'Felipe: 4 líneas de linaje (sus papás y sus abuelos) y 2 de pareja entre ellos (' + ls.length + ')');
-  ok(ls.filter((l) => l.punteada).length === 2 && ls.filter((l) => !l.punteada).length === 4, 'las de pareja son punteadas (papá y mamá, abuelo y abuela) y las de padres e hijos continuas');
+  const sinHermanos = ls.filter((l) => !l.hermano);
+  ok(sinHermanos.length === 6, 'Felipe: 4 líneas de linaje (sus papás y sus abuelos) y 2 de pareja entre ellos (' + sinHermanos.length + ')');
+  ok(sinHermanos.filter((l) => l.punteada).length === 2 && sinHermanos.filter((l) => !l.punteada).length === 4, 'las de pareja son punteadas (papá y mamá, abuelo y abuela) y las de padres e hijos continuas');
   ok(!ls.some((l) => cerca(l.d, 12) || cerca(l.d, 10)), 'ninguna línea llega a Lope (esposo de su hermana) ni a Paula (esposa de su hermano)');
   ok(ls.some((l) => cerca(l.d, 4) && cerca(l.d, 2)), 'se ve la conexión de sus papás con sus abuelos (y así hacia arriba)');
-  ok(JSON.stringify(await sombreados()) === JSON.stringify([6, 7, 8, 9, 10, 11, 12, 13]), 'quien no está en su línea directa (tío, prima, hermanos, cuñados, sobrino, abuela materna sin vínculo) queda sombreado');
+  const hermanas = ls.filter((l) => l.hermano);
+  ok(hermanas.length === 2 && hermanas.some((l) => cerca(l.d, 9)) && hermanas.some((l) => cerca(l.d, 13)), 'sus dos hermanos (Juan y Ana) se conectan con él por una línea de hermanos');
+  ok(hermanas.every((l) => l.punteada && l.color !== '#839d78' && l.color !== '#ab8059' && !l.pareja), 'la línea de hermanos tiene un estilo y color propios (no es la de padres ni la de pareja)');
+  ok(JSON.stringify(await sombreados()) === JSON.stringify([6, 7, 8, 10, 11, 12]), 'los hermanos quedan iluminados; el tío, la prima, los cuñados, el sobrino y la abuela sin vínculo quedan sombreados');
 
   // Carlos (papá): hacia arriba sus papás y hacia abajo sus hijos y nietos.
   await page.click('#nodes .person[data-id="2"]');
@@ -86,7 +90,8 @@ people.forEach((p, i) => { guardadas[p.id] = { x: 40 + i * 228, y: 55 }; });
   ok(ls.some((l) => cerca(l.d, 11) && cerca(l.d, 9)), 'Carlos: se ve la conexión de su nieto Nico con su hijo Juan (hacia abajo, y así sucesivamente)');
   ok(!ls.some((l) => cerca(l.d, 12) || cerca(l.d, 10)), 'Carlos: tampoco hay líneas hacia Lope ni Paula');
   const sombra2 = await sombreados();
-  ok(sombra2.includes(6) && sombra2.includes(7) && sombra2.includes(12) && sombra2.includes(10) && !sombra2.includes(1) && !sombra2.includes(3) && !sombra2.includes(4) && !sombra2.includes(11), 'Carlos: quedan sin sombra su esposa, sus papás, hijos y nieto; el tío, los primos y los cuñados quedan sombreados');
+  ok(sombra2.includes(7) && sombra2.includes(12) && sombra2.includes(10) && !sombra2.includes(6) && !sombra2.includes(1) && !sombra2.includes(3) && !sombra2.includes(4) && !sombra2.includes(11), 'Carlos: quedan sin sombra su esposa, sus papás, hijos, nieto y su hermano (Tío Luis); la prima y los cuñados quedan sombreados');
+  ok(ls.some((l) => l.hermano && cerca(l.d, 2) && cerca(l.d, 6)), 'Carlos: línea de hermanos hacia su hermano Tío Luis');
   await page.click('#nodes .person[data-id="7"]');
   await page.waitForTimeout(300);
   ok(!(await lineas()).some((l) => l.pareja && cerca(l.d, 7)), 'Prima Eva (sin pareja): ninguna línea punteada sale de ella (solo la de sus abuelos)');
