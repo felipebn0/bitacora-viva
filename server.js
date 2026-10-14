@@ -6932,30 +6932,39 @@ app.get('/api/tree', requireAuth, bloquearColaborador, async (req, res) => {
       es_principal: !!p.es_principal,
       notas_count: Number(p.notas_count) || 0,
     }));
-    // Auto-agregar al narrador como persona principal si no existe en el árbol.
-    // Evita que la cuenta quede sin nodo central sin tener que reconstruir.
-    const tienePrincipal = people.some((p) => p.es_principal);
-    if (!tienePrincipal) {
-      try {
-        const [bit] = await sql`SELECT nombre FROM bitacoras WHERE id = ${req.profileUserId}`;
-        const nombreNarrador = bit?.nombre ? capitalizarNombre(bit.nombre) : null;
-        if (nombreNarrador) {
-          const yaExiste = people.find((p) => p.nombre.toLowerCase() === nombreNarrador.toLowerCase());
-          if (yaExiste) {
-            // Marcarla como principal si ya estaba sin el flag
-            await sql`UPDATE family_members SET es_principal = true WHERE id = ${yaExiste.id}`;
-            yaExiste.es_principal = true;
-          } else {
-            const [inserted] = await sql`
-              INSERT INTO family_members (user_id, nombre, relacion, padres, es_principal)
-              VALUES (${req.profileUserId}, ${nombreNarrador}, ${'Persona principal'}, ${'[]'}, true)
-              RETURNING id, nombre, relacion, padres, es_principal`;
-            people = [{ ...inserted, nombre: capitalizarNombre(inserted.nombre), padres: [], es_principal: true, notas_count: 0 }, ...people];
-          }
-        }
-      } catch (e) {
-        console.warn('[api/tree] no se pudo auto-agregar narrador como principal:', e.message);
+    // Auto-agregar al narrador si no aparece en el árbol.
+    // Cuenta propia (esPropia): nombre en users.name. Subperfil: en bitacoras.nombre.
+    try {
+      const esPropia = req.userId === req.profileUserId;
+      let nombreNarrador = null;
+      if (esPropia) {
+        const [u] = await sql`SELECT name FROM users WHERE id = ${req.profileUserId}`;
+        nombreNarrador = u?.name ? capitalizarNombre(u.name) : null;
+      } else {
+        const [b] = await sql`SELECT nombre FROM bitacoras WHERE id = ${req.profileUserId}`;
+        nombreNarrador = b?.nombre ? capitalizarNombre(b.nombre) : null;
       }
+      if (nombreNarrador) {
+        const yaExiste = people.find((p) => p.nombre.toLowerCase() === nombreNarrador.toLowerCase());
+        const tienePrincipal = people.some((p) => p.es_principal);
+        if (!yaExiste) {
+          // Para subperfil sin principal: insertar como Persona principal.
+          // Para cuenta propia (es otra persona, no el sujeto): insertar como Familiar.
+          const esPrincipal = !esPropia && !tienePrincipal;
+          const relacion = esPrincipal ? 'Persona principal' : 'Familiar';
+          const [inserted] = await sql`
+            INSERT INTO family_members (user_id, nombre, relacion, padres, es_principal)
+            VALUES (${req.profileUserId}, ${nombreNarrador}, ${relacion}, ${'[]'}, ${esPrincipal})
+            RETURNING id, nombre, relacion, padres, es_principal`;
+          people.push({ ...inserted, nombre: capitalizarNombre(inserted.nombre), padres: [], es_principal: !!inserted.es_principal, notas_count: 0 });
+        } else if (!tienePrincipal && !esPropia) {
+          // Existe pero sin es_principal en un subperfil — marcarlo.
+          await sql`UPDATE family_members SET es_principal = true WHERE id = ${yaExiste.id}`;
+          yaExiste.es_principal = true;
+        }
+      }
+    } catch (e) {
+      console.warn('[api/tree] auto-agregar narrador:', e.message);
     }
     const events = await sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${req.profileUserId} ORDER BY anio NULLS LAST, id`;
     res.json({ people, events });
