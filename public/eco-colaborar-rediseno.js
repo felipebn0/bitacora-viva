@@ -17,6 +17,9 @@ function init(){
  barra.className='eco-colab-barra';
  // Selector de bitácora compactado sin sustituir los enlaces originales.
  if(sw){
+   // Extraer el enlace "Tengo un código" antes de mover sw al acordeón.
+   const codigoEl=Array.from(sw.querySelectorAll('p')).find(p=>p.querySelector('a[href*="unirme"]'));
+   if(codigoEl)sw.removeChild(codigoEl);
    const details=document.createElement('details');
    details.className='eco-colab-personas';
    const sum=document.createElement('summary');
@@ -26,6 +29,7 @@ function init(){
    sum.appendChild(hint);
    details.append(sum,sw);
    barra.appendChild(details);
+   if(codigoEl){codigoEl.className='eco-colab-codigo';barra.appendChild(codigoEl);}
    function sync(){
      const active=sw.querySelector('.collab-switch-list a.active');
      const selected=sw.querySelector('.collab-switch-list select');
