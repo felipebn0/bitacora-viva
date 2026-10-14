@@ -29,7 +29,47 @@ function init(){
    sum.appendChild(hint);
    details.append(sum,sw);
    barra.appendChild(details);
-   if(codigoEl){codigoEl.className='eco-colab-codigo';barra.appendChild(codigoEl);}
+   if(codigoEl){
+     codigoEl.className='eco-colab-codigo';
+     barra.appendChild(codigoEl);
+     // Interceptar el enlace para mostrar un popup en vez de navegar.
+     const codigoLink=codigoEl.querySelector('a[href*="unirme"]');
+     if(codigoLink){
+       // Crear el <dialog>
+       const dlg=document.createElement('dialog');
+       dlg.className='eco-codigo-dlg';
+       dlg.innerHTML=`
+         <button type="button" class="eco-dlg-close" aria-label="Cerrar">×</button>
+         <h2>Unirme a otra historia</h2>
+         <label for="eco-codigo-inp">Código de invitación</label>
+         <input id="eco-codigo-inp" type="text" placeholder="Ej: B46NWEC7" maxlength="8" autocomplete="off" spellcheck="false">
+         <p class="eco-dlg-error" role="alert"></p>
+         <button type="button" class="eco-dlg-submit">Entrar →</button>`;
+       document.body.appendChild(dlg);
+       const inp=dlg.querySelector('#eco-codigo-inp');
+       const err=dlg.querySelector('.eco-dlg-error');
+       const submitBtn=dlg.querySelector('.eco-dlg-submit');
+       const closeBtn=dlg.querySelector('.eco-dlg-close');
+       function abrirDlg(e){e.preventDefault();err.textContent='';inp.value='';dlg.showModal();inp.focus();}
+       function cerrarDlg(){dlg.close();}
+       codigoLink.addEventListener('click',abrirDlg);
+       closeBtn.addEventListener('click',cerrarDlg);
+       dlg.addEventListener('click',(e)=>{if(e.target===dlg)cerrarDlg();});
+       async function entrar(){
+         const code=inp.value.trim().toUpperCase();
+         if(!code){err.textContent='Escribe el código de invitación.';inp.focus();return;}
+         submitBtn.disabled=true;err.textContent='';
+         try{
+           const r=await fetch('/api/join-collaboration',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
+           const d=await r.json();
+           if(!r.ok){err.textContent=d.error||'No se pudo entrar con ese código.';submitBtn.disabled=false;inp.focus();return;}
+           window.location.href=location.pathname+'?owner='+d.ownerId;
+         }catch{err.textContent='Hubo un problema para conectar.';submitBtn.disabled=false;}
+       }
+       submitBtn.addEventListener('click',entrar);
+       inp.addEventListener('keydown',(e)=>{if(e.key==='Enter')entrar();});
+     }
+   }
    function sync(){
      const active=sw.querySelector('.collab-switch-list a.active');
      const selected=sw.querySelector('.collab-switch-list select');
