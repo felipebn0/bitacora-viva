@@ -80,7 +80,7 @@ people.forEach((p, i) => { guardadas[p.id] = { x: 40 + i * 228, y: 55 }; });
   const hermanas = ls.filter((l) => l.hermano);
   const une = (d, id) => d.includes(`M ${p[id].x + 98} ${p[id].y} `);
   ok(hermanas.length === 1 && une(hermanas[0].d, 1) && une(hermanas[0].d, 9) && une(hermanas[0].d, 13), 'Felipe y sus dos hermanos (Juan y Ana) quedan unidos por UNA sola línea de hermanos');
-  ok(hermanas[0].punteada && hermanas[0].color === '#8cc0dd' && !hermanas[0].pareja, 'esa línea es azul claro y distinta a la de padres y a la de pareja');
+  ok(hermanas[0].punteada && hermanas[0].color === '#b4b4aa' && !hermanas[0].pareja, 'esa línea es gris claro y distinta a la de padres y a la de pareja');
   ok(JSON.stringify(await sombreados()) === JSON.stringify([6, 7, 8, 10, 11, 12]), 'los hermanos quedan iluminados; el tío, la prima, los cuñados, el sobrino y la abuela sin vínculo quedan sombreados');
 
   // Carlos (papá): hacia arriba sus papás y hacia abajo sus hijos y nietos.
