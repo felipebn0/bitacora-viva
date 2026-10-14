@@ -60,6 +60,21 @@ people.forEach((p, i) => { guardadas[p.id] = { x: 40 + i * 228, y: 55 }; });
   ok(!solapes, 'ninguna tarjeta tapa a otra');
   await page.screenshot({ path: process.env.ARBOL_SHOT || '/tmp/arbol-jerarquia.png' });
 
+  // Esposos: al seleccionar a uno aparece una línea punteada hacia el otro.
+  const lineas = () => page.$$eval('#wires path', (ps) => ps.map((x) => ({ d: x.getAttribute('d'), punteada: !!x.getAttribute('stroke-dasharray'), pareja: x.classList.contains('eco-pareja') })));
+  ok(!(await lineas()).some((l) => l.pareja), 'con la persona principal seleccionada (sin pareja) no hay línea punteada');
+  await page.click('#nodes .person[data-id="2"]');
+  await page.waitForTimeout(300);
+  let ls = await lineas();
+  const pareja = ls.find((l) => l.pareja);
+  if (process.env.ARBOL_SHOT2) await page.screenshot({ path: process.env.ARBOL_SHOT2 });
+  ok(!!pareja && pareja.punteada, 'al seleccionar a Carlos, su esposa Marta (con quien tiene un hijo) se conecta con una línea punteada');
+  ok(!!pareja && /^M \d+ \d+ L \d+ \d+$/.test(pareja.d) && pareja.d.split(' ')[2] === pareja.d.split(' ')[5], 'la línea de pareja es recta y horizontal entre las dos tarjetas');
+  ok(ls.some((l) => !l.punteada), 'y las líneas de padres e hijos siguen siendo continuas');
+  await page.click('#nodes .person[data-id="7"]');
+  await page.waitForTimeout(300);
+  ok(!(await lineas()).some((l) => l.pareja), 'quien no tiene pareja no muestra línea punteada');
+
   // Una tarjeta movida a mano se respeta.
   const caja = await page.locator('#nodes .person[data-id="7"]').boundingBox();
   await page.mouse.move(caja.x + 40, caja.y + 20);
