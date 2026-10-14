@@ -1,0 +1,7 @@
+/* Paleta de la landing A (ECO V5: verdes sobre crema), aplicada a la landing B (index-v2.html).
+   Son solo los colores de public/eco-v5.css: las variables, el fondo, el degradado verde del héroe,
+   el énfasis del titular y la sombra de la tarjeta. Sin las secciones ni los efectos de movimiento de A. */
+:root{--bg:#f7f4eb;--bg-alt:#edf0e5;--surface:#fffdf6;--surface-2:#f1f3ec;--ink:#302d25;--ink-2:#596557;--ink-3:#5c6a5b;--hairline:#d9dfd4;--hairline-soft:#e5e8de;--accent:#4d6542;--accent-press:#293d30;--accent-tint:rgba(77,101,66,.12);--accent-2:#4d6542;--accent-2-press:#293d30;--accent-2-tint:rgba(77,101,66,.12);--on-accent:#fffdf6;--nav-bg:rgba(247,244,235,.9);--eco5-green:#293d30}
+body{background:#f7f4eb;color:#302d25}
+.hero{position:relative;isolation:isolate}.hero:before{content:'';position:absolute;inset:0 0 0 auto;width:65%;z-index:-1;background:radial-gradient(ellipse at 70% 35%,#e4ecdf,transparent 68%);pointer-events:none}
+.hero h1 em{color:#4d6542}.hero-device-wrap{filter:drop-shadow(0 24px 35px rgba(41,61,48,.09))}
