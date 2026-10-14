@@ -11,6 +11,7 @@ module.exports = function registerTreeV4(app, { sql, ensureSchema, requireAuth, 
     if (jsonOk(source.positions)) for (const [id,pos] of Object.entries(source.positions)) {
       if (!/^\d{1,12}$/.test(id) || !jsonOk(pos) || !Number.isFinite(pos.x)||!Number.isFinite(pos.y)) continue;
       result.positions[id] = {x:Math.max(0,Math.min(30000,Math.round(pos.x))),y:Math.max(0,Math.min(30000,Math.round(pos.y)))};
+      if (pos.m === 1) result.positions[id].m = 1; // la persona movió esta tarjeta a mano: el orden automático la respeta
     }
     if (Array.isArray(source.hiddenPeople)) result.hiddenPeople = [...new Set(source.hiddenPeople.map(Number).filter(Number.isSafeInteger))].slice(0,500);
     if (Array.isArray(source.links)) for (const l of source.links.slice(0,1000)) {
