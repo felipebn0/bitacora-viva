@@ -83,6 +83,8 @@
     cursor: pointer; font-family: var(--font-body); font-size: 0.9rem; min-height: 44px;
   }
   .btn:disabled { opacity: 0.6; cursor: default; }
+  .btn[hidden], audio[hidden] { display: none; }
+  #regaloAudio { width: 100%; margin: 4px 0 8px; }
   .btn.plain { background: none; color: var(--gold-deep); text-decoration: underline; padding: 10px 4px; }
   .btn.saltar { background: none; color: var(--ink-soft); text-decoration: underline; }
 
@@ -128,6 +130,19 @@
       <div class="check">✓</div>
       <p><strong id="listoNombre"></strong> — listo, ya lo tenemos en cuenta.</p>
       <a class="btn" href="/perfiles.html">Volver a perfiles</a>
+    </div>
+
+    <div class="tarjeta" id="regaloBox" hidden>
+      <h2 class="pregunta">Un mensaje para <span id="regaloNombre">esa persona</span></h2>
+      <p>Grábale un mensaje con tu voz. Lo va a oír cuando abra su chat por primera vez, como una nota de regalo. Puede durar hasta 2 minutos.</p>
+      <audio id="regaloAudio" controls hidden></audio>
+      <p class="estado" id="regaloEstado"></p>
+      <div class="nav-row">
+        <button class="btn" id="regaloGrabar" type="button">Grabar mensaje</button>
+        <button class="btn" id="regaloGuardar" type="button" hidden>Guardar mensaje</button>
+        <button class="btn plain" id="regaloQuitar" type="button" hidden>Quitar mensaje</button>
+      </div>
+      <p class="msg" id="regaloMsg" role="status" aria-live="polite"></p>
     </div>
   </main>
 
@@ -363,5 +378,6 @@
   if (id) cargar();
 })();
 </script>
+<script src="/perfilar-regalo.js?v=1"></script>
 </body>
 </html>

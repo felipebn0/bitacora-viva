@@ -1221,6 +1221,14 @@ function ensureSchema() {
       // compilado (no JSON de preguntas sueltas) porque lo único que hace
       // falta después es pegarlo como contexto en loadFamilyContext().
       sql`ALTER TABLE bitacoras ADD COLUMN IF NOT EXISTS contexto_onboarding TEXT`,
+      // Intro de la primera vez (BACKLOG #21): mensaje de regalo grabado con la voz de quien
+      // lo regala (se oye al abrir el chat por primera vez), y la marca de que la persona
+      // ya vio la intro. Las cuentas propias guardan la marca en users.intro_vista_at.
+      sql`ALTER TABLE bitacoras ADD COLUMN IF NOT EXISTS mensaje_regalo_url TEXT`,
+      sql`ALTER TABLE bitacoras ADD COLUMN IF NOT EXISTS mensaje_regalo_de TEXT`,
+      sql`ALTER TABLE bitacoras ADD COLUMN IF NOT EXISTS mensaje_regalo_at TIMESTAMPTZ`,
+      sql`ALTER TABLE bitacoras ADD COLUMN IF NOT EXISTS intro_vista_at TIMESTAMPTZ`,
+      sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS intro_vista_at TIMESTAMPTZ`,
 
       // Las 8 tablas de contenido de arriba declaraban su "user_id" como
       // REFERENCES users(id) — correcto mientras cada bitácora era siempre
@@ -3368,6 +3376,120 @@ app.post('/api/subprofiles/:id/onboarding', requireAuth, bloquearColaborador, bl
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo guardar el onboarding.' });
+  }
+});
+
+// --- Intro de la primera vez + mensaje de regalo (BACKLOG #21) ---------------
+// Quien administra un subperfil puede dejarle un mensaje grabado con SU voz; la persona
+// lo oye la primera vez que abre su chat, antes de una explicación corta y de unas
+// pruebas de micrófono (public/eco-intro.js). El archivo queda en audio/<id del
+// subperfil>/regalo/…, así que lo pueden abrir quien administra y la persona del
+// enlace, y nadie más (ver estaAutorizadoParaVerArchivo).
+const MENSAJE_REGALO_MAX_BYTES = 3 * 1024 * 1024;
+
+function rutaDelMensaje(url) {
+  return url ? `/api/media-file?u=${encodeURIComponent(url)}` : null;
+}
+
+app.get('/api/subprofiles/:id/mensaje-regalo', requireAuth, bloquearColaborador, bloquearInvitado, async (req, res) => {
+  try {
+    await ensureSchema();
+    const id = parseInt(req.params.id, 10);
+    const bit = await bitacoraDelAdmin(id, req.userId);
+    if (!bit) return res.status(404).json({ error: 'No se encontró ese subperfil.' });
+    const r = (await sql`SELECT mensaje_regalo_url, mensaje_regalo_de, mensaje_regalo_at FROM bitacoras WHERE id = ${id}`)[0] || {};
+    res.json({ existe: !!r.mensaje_regalo_url, url: rutaDelMensaje(r.mensaje_regalo_url), de: r.mensaje_regalo_de || null, grabadoEn: r.mensaje_regalo_at || null });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo cargar el mensaje.' });
+  }
+});
+
+app.post('/api/subprofiles/:id/mensaje-regalo', requireAuth, bloquearColaborador, bloquearInvitado, rateLimit, express.raw({ type: '*/*', limit: '4mb' }), async (req, res) => {
+  try {
+    await ensureSchema();
+    const id = parseInt(req.params.id, 10);
+    const bit = await bitacoraDelAdmin(id, req.userId);
+    if (!bit) return res.status(404).json({ error: 'No se encontró ese subperfil.' });
+    if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: 'No llegó ninguna grabación.' });
+    if (req.body.length > MENSAJE_REGALO_MAX_BYTES) return res.status(413).json({ error: 'El mensaje es muy largo. Grábalo de nuevo, más corto (hasta 2 minutos).' });
+    const real = await verificarArchivoReal(req.body, AUDIO_MIME_PERMITIDOS);
+    if (!real) return res.status(400).json({ error: 'El archivo no parece ser un audio válido.' });
+    const anterior = (await sql`SELECT mensaje_regalo_url FROM bitacoras WHERE id = ${id}`)[0];
+    const { url } = await almacenarArchivo(`audio/${id}/regalo/mensaje-${Date.now()}.${real.ext}`, req.body, real.mime);
+    const quien = (await sql`SELECT name, username FROM users WHERE id = ${req.userId}`)[0] || {};
+    const de = capitalizarNombre(String(quien.name || quien.username || '').trim().split(/\s+/)[0] || '') || null;
+    // Un mensaje nuevo se vuelve a mostrar: la intro queda pendiente otra vez.
+    await sql`UPDATE bitacoras SET mensaje_regalo_url = ${url}, mensaje_regalo_de = ${de}, mensaje_regalo_at = now(), intro_vista_at = NULL WHERE id = ${id}`;
+    if (anterior && anterior.mensaje_regalo_url) await borrarArchivosBlob([anterior.mensaje_regalo_url]);
+    res.json({ ok: true, url: rutaDelMensaje(url), de });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo guardar el mensaje.' });
+  }
+});
+
+app.delete('/api/subprofiles/:id/mensaje-regalo', requireAuth, bloquearColaborador, bloquearInvitado, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    const id = parseInt(req.params.id, 10);
+    const bit = await bitacoraDelAdmin(id, req.userId);
+    if (!bit) return res.status(404).json({ error: 'No se encontró ese subperfil.' });
+    const anterior = (await sql`SELECT mensaje_regalo_url FROM bitacoras WHERE id = ${id}`)[0];
+    await sql`UPDATE bitacoras SET mensaje_regalo_url = NULL, mensaje_regalo_de = NULL, mensaje_regalo_at = NULL WHERE id = ${id}`;
+    if (anterior && anterior.mensaje_regalo_url) await borrarArchivosBlob([anterior.mensaje_regalo_url]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo quitar el mensaje.' });
+  }
+});
+
+// A quién le toca la intro: la cuenta dueña (su propia bitácora) y la persona que entra por
+// el enlace de un subperfil. Colaboradoras, invitados y quien administra un subperfil sin
+// ser esa persona no la ven. Pendiente = no la ha visto y (hay un mensaje de regalo o todavía
+// no ha charlado nunca): así quien ya usa la app no ve de pronto un tutorial. "?repetir=1"
+// la devuelve siempre (botón "Ver el tutorial otra vez").
+async function sujetoDeLaIntro(req) {
+  if (req.isGuest) return req.isNarradorLink ? { esBitacora: true, id: req.profileUserId } : null;
+  if (req.isCollaborator || !req.bitacoraEsPropia) return null;
+  return { esBitacora: false, id: req.userId };
+}
+
+app.get('/api/intro', requireAuth, async (req, res) => {
+  try {
+    const sujeto = await sujetoDeLaIntro(req);
+    if (!sujeto) return res.json({ aplica: false, pendiente: false });
+    await ensureSchema();
+    const fila = sujeto.esBitacora
+      ? (await sql`SELECT mensaje_regalo_url, mensaje_regalo_de, intro_vista_at FROM bitacoras WHERE id = ${sujeto.id}`)[0]
+      : (await sql`SELECT intro_vista_at FROM users WHERE id = ${sujeto.id}`)[0];
+    if (!fila) return res.json({ aplica: false, pendiente: false });
+    const mensaje = fila.mensaje_regalo_url ? { url: rutaDelMensaje(fila.mensaje_regalo_url), de: fila.mensaje_regalo_de || null } : null;
+    const repetir = req.query.repetir === '1';
+    let pendiente = repetir;
+    if (!pendiente && !fila.intro_vista_at) {
+      const yaCharlo = (await sql`SELECT 1 FROM sessions WHERE user_id = ${sujeto.id} LIMIT 1`).length > 0;
+      pendiente = !!mensaje || !yaCharlo;
+    }
+    res.json({ aplica: true, pendiente, mensaje });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo cargar la introducción.' });
+  }
+});
+
+app.post('/api/intro/visto', requireAuth, rateLimit, async (req, res) => {
+  try {
+    const sujeto = await sujetoDeLaIntro(req);
+    if (!sujeto) return res.json({ ok: true });
+    await ensureSchema();
+    if (sujeto.esBitacora) await sql`UPDATE bitacoras SET intro_vista_at = now() WHERE id = ${sujeto.id}`;
+    else await sql`UPDATE users SET intro_vista_at = now() WHERE id = ${sujeto.id}`;
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo guardar.' });
   }
 });
 

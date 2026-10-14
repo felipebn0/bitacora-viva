@@ -133,6 +133,10 @@
   function buildAndStart() {
     try { if (localStorage.getItem(STORAGE_KEY)) return; } catch (e) {}
 
+    // La intro de la primera vez (eco-intro.js) va antes que el recorrido por los botones.
+    const intro = document.documentElement.dataset.ecoIntro;
+    if (intro === 'consultando' || intro === 'abierto') { setTimeout(buildAndStart, 700); return; }
+
     // Cargar el CSS (hoja de estilos externa)
     const link = document.createElement('link');
     link.rel = 'stylesheet';

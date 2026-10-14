@@ -1023,6 +1023,12 @@
               profundo que Perfiles/Perfil — antes la única pista era el
               sangrado de 14px, que se confundía fácil. -->
          <div class="um-section-body um-nested-group" id="umSecAvanzadas" hidden>
+           <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecTutorial">Tutorial <span class="um-chevron" aria-hidden="true">›</span></button>
+           <div class="um-section-body" id="umSecTutorial" hidden>
+             <button class="um-btn" id="umTutorialBtn" type="button">Ver el tutorial otra vez</button>
+             <p class="um-hint">Una explicación corta de cómo hablar con Eco y una prueba de tu micrófono.</p>
+           </div>
+
            <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecVoz">Voz <span class="um-chevron" aria-hidden="true">›</span></button>
            <div class="um-section-body" id="umSecVoz" hidden>
              <select id="vozGeneroSelect" aria-label="Voz de la entrevistadora">
@@ -4119,6 +4125,7 @@
 })();
 </script>
 <script src="/eco-toast.js" defer></script>
+<script src="/eco-intro.js?v=1" defer></script>
 <script src="/eco-tour.js?v=1" defer></script>
 </body>
 </html>

@@ -226,6 +226,16 @@ Todo el que entra a Eco marca un checkbox con los Términos y la Política de Pr
 - Quien ya aceptó la versión vigente no vuelve a ver el checkbox. Para volver a pedirlo a los invitados y narradores, se cambia `TERMS_VERSION` en `server.js`.
 - Las cuentas creadas a mano con `/api/register` (clave `SETUP_KEY`) no pasan por ningún formulario, así que no tienen fecha de aceptación.
 
+## Intro de la primera vez y mensaje de regalo (BACKLOG #21)
+
+La primera vez que alguien abre su chat ve una intro (`public/eco-intro.js` + `eco-intro.css`): (1) si hay un mensaje de regalo, lo oye con la voz de quien se lo dejó; (2) qué es Eco en una frase y los dos botones (tu turno / turno de Eco); (3) dos pruebas de micrófono ("di tu nombre" y "di hola Eco", con `/api/transcribe`); (4) empezar. Se puede saltar y se repite desde `Cuenta → Opciones avanzadas → Tutorial`.
+
+- **Quién la ve:** la cuenta dueña (su propia bitácora) y la persona que entra por el enlace de un subperfil. No la ven colaboradoras ni invitados. Está *pendiente* si no la ha visto y (hay mensaje de regalo o todavía no ha charlado nunca): quien ya usa la app no ve un tutorial de pronto.
+- **Marca de vista:** `users.intro_vista_at` / `bitacoras.intro_vista_at` (`POST /api/intro/visto`); `GET /api/intro` dice si está pendiente (`?repetir=1` la devuelve siempre).
+- **Mensaje de regalo:** quien administra el subperfil lo graba con su voz en `public/perfilar.html` (hasta 2 minutos). Rutas `GET/POST/DELETE /api/subprofiles/:id/mensaje-regalo`; el audio queda en `audio/<id del subperfil>/regalo/` (lo abren quien administra y la persona del enlace, nadie más); columnas `bitacoras.mensaje_regalo_url/_de/_at`. Un mensaje nuevo vuelve a dejar la intro pendiente y borra el archivo anterior.
+- El recorrido de botones (`eco-tour.js`) espera a que termine la intro (`document.documentElement.dataset.ecoIntro`).
+- Pruebas: `test/intro-regalo.smoke.js` (rutas), `npm run test:intro` y `npm run test:perfilar-regalo` (navegador, micrófono falso).
+
 ## Recordatorios (correo + WhatsApp asistido)
 
 Cada día (Vercel Cron → `GET /api/cron/reminders`, 14:00 UTC = 9:00 Colombia) la app busca a quién le toca un recordatorio para seguir contando su historia:
