@@ -179,6 +179,9 @@
     background: linear-gradient(90deg, #2e2b24 25%, #3a362d 50%, #2e2b24 75%);
     background-size: 200% 100%;
   }
+  .skel-l1 { height: 14px; width: 60%; }
+  .skel-l2 { height: 12px; width: 90%; }
+  .skel-l3 { height: 12px; width: 75%; }
   .skel-card { border: 1px solid #E7DFCC; border-radius: 12px; padding: 16px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px; }
 </style>
 <link rel="stylesheet" href="/eco-mobile-base.css">
@@ -281,9 +284,9 @@
   function skeletonHTML(n) {
     return Array.from({ length: n }, () =>
       '<div class="skel-card" aria-hidden="true">' +
-      '<span class="skel-line" style="height:14px;width:60%"></span>' +
-      '<span class="skel-line" style="height:12px;width:90%"></span>' +
-      '<span class="skel-line" style="height:12px;width:75%"></span>' +
+      '<span class="skel-line skel-l1"></span>' +
+      '<span class="skel-line skel-l2"></span>' +
+      '<span class="skel-line skel-l3"></span>' +
       '</div>'
     ).join('');
   }

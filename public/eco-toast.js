@@ -5,49 +5,16 @@
 (() => {
   'use strict';
 
-  /* ─── CSS ────────────────────────────────────────────────────────── */
-  const CSS = `
-.eco-toast {
-  position: fixed;
-  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
-  left: 50%;
-  transform: translateX(-50%) translateY(20px);
-  background: #2B241C;
-  color: #FBF6EA;
-  padding: 12px 22px 12px 16px;
-  border-radius: 12px;
-  font-size: 0.9rem;
-  font-family: "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif;
-  box-shadow: 0 4px 24px rgba(43,36,28,0.28);
-  z-index: 99995;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.22s ease, transform 0.22s ease;
-  max-width: calc(100vw - 48px);
-  pointer-events: all;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  line-height: 1.4;
-}
-.eco-toast--in  { opacity: 1; transform: translateX(-50%) translateY(0); }
-.eco-toast--out { opacity: 0; transform: translateX(-50%) translateY(20px); }
-.eco-toast--success::before { content: '✓'; font-weight: 700; flex-shrink: 0; }
-.eco-toast--error   { background: #6B2020; }
-.eco-toast--error::before   { content: '⚠'; flex-shrink: 0; }
-.eco-toast--info::before    { content: 'ℹ'; flex-shrink: 0; }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .eco-toast        { background: #F0E8D8; color: #2B241C; }
-  :root:not([data-theme="light"]) .eco-toast--error { background: #F5D5D5; color: #6B2020; }
-}
-:root[data-theme="dark"] .eco-toast        { background: #F0E8D8; color: #2B241C; }
-:root[data-theme="dark"] .eco-toast--error { background: #F5D5D5; color: #6B2020; }
-`;
+  // Los estilos viven en /eco-toast.css (se carga como hoja de estilos, no como <style> inline,
+  // que la política de seguridad CSP bloquearía).
 
-  const style = document.createElement('style');
-  style.id = 'eco-toast-css';
-  style.textContent = CSS;
-  document.head.appendChild(style);
+  if (!document.getElementById('eco-toast-css')) {
+    const link = document.createElement('link');
+    link.id = 'eco-toast-css';
+    link.rel = 'stylesheet';
+    link.href = '/eco-toast.css';
+    document.head.appendChild(link);
+  }
 
   /* ─── Lógica ─────────────────────────────────────────────────────── */
   let current = null;

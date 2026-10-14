@@ -98,115 +98,7 @@
   };
 
   /* ─── CSS inyectado ────────────────────────────────────────────────── */
-  const CSS = `
-#eco-tour-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 99998;
-  pointer-events: none;
-}
-.eco-tour-shade {
-  position: fixed;
-  background: rgba(0,0,0,0.58);
-  pointer-events: all;
-  z-index: 99998;
-}
-.eco-tour-ring {
-  position: fixed;
-  z-index: 99999;
-  border-radius: 10px;
-  box-shadow: 0 0 0 3px #C4A96A, 0 0 0 6px rgba(196,169,106,0.3);
-  pointer-events: none;
-  transition: top .25s ease, left .25s ease, width .25s ease, height .25s ease;
-}
-.eco-tour-tip {
-  position: fixed;
-  z-index: 100000;
-  background: #FBF6EA;
-  border: 1.5px solid #E7DFCC;
-  border-radius: 16px;
-  padding: 18px 20px 14px;
-  box-shadow: 0 8px 32px rgba(43,36,28,0.18);
-  font-family: "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif;
-  max-width: 300px;
-  min-width: 240px;
-  pointer-events: all;
-  animation: eco-tip-in .2s ease;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .eco-tour-tip {
-    background: #2B241C;
-    border-color: #4A3F30;
-    color: #F5EFE2;
-  }
-}
-:root[data-theme="dark"] .eco-tour-tip {
-  background: #2B241C;
-  border-color: #4A3F30;
-  color: #F5EFE2;
-}
-@keyframes eco-tip-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-.eco-tour-counter {
-  font-size: 0.75rem;
-  color: #9B8A72;
-  letter-spacing: .04em;
-  margin-bottom: 6px;
-}
-.eco-tour-title {
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: #2B241C;
-  margin-bottom: 6px;
-  font-family: "Source Serif 4", Georgia, serif;
-}
-:root[data-theme="dark"] .eco-tour-title,
-@media (prefers-color-scheme:dark) { :root:not([data-theme="light"]) .eco-tour-title }
-{
-  color: #F5EFE2;
-}
-.eco-tour-text {
-  font-size: 0.9rem;
-  color: #5B4D3A;
-  line-height: 1.5;
-  margin-bottom: 14px;
-}
-:root[data-theme="dark"] .eco-tour-text {
-  color: #C4B49A;
-}
-.eco-tour-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.eco-tour-skip {
-  background: none;
-  border: none;
-  color: #9B8A72;
-  font-size: 0.82rem;
-  cursor: pointer;
-  padding: 6px 2px;
-  font-family: inherit;
-  text-decoration: underline;
-}
-.eco-tour-skip:hover { color: #5B4D3A; }
-.eco-tour-next {
-  background: #5B6B45;
-  color: #FBF6EA;
-  border: none;
-  border-radius: 10px;
-  padding: 9px 18px;
-  font-size: 0.9rem;
-  font-weight: 700;
-  cursor: pointer;
-  font-family: inherit;
-  transition: background .15s;
-}
-.eco-tour-next:hover { background: #4A5937; }
-`;
+  // Los estilos viven en /eco-tour.css (hoja de estilos, no <style> inline: lo bloquearía la CSP).
 
   /* ─── Estado ───────────────────────────────────────────────────────── */
   const page = location.pathname;
@@ -241,10 +133,11 @@
   function buildAndStart() {
     try { if (localStorage.getItem(STORAGE_KEY)) return; } catch (e) {}
 
-    // Inyectar CSS
-    const style = document.createElement('style');
-    style.textContent = CSS;
-    document.head.appendChild(style);
+    // Cargar el CSS (hoja de estilos externa)
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = '/eco-tour.css?v=1';
+    document.head.appendChild(link);
 
     // Contenedor principal (solo como referencia; los hijos son position:fixed)
     tourEl = document.createElement('div');
