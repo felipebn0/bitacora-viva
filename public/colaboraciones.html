@@ -58,6 +58,10 @@
   #invitarPanel .invite-send:disabled { opacity: 0.6; cursor: default; }
   #invitarPanel .sub a { color: var(--gold-deep); }
   .invite-msg { font-size: 0.85rem; color: var(--ink-soft); margin: 8px 0 0; min-height: 1.2em; }
+  #invitePreview { margin-top: 10px; }
+  #invitePreview label { display: block; font-size: 0.85rem; color: var(--ink-soft); margin: 0 0 4px; }
+  #invitePreview textarea { width: 100%; box-sizing: border-box; border: 1px solid #E7DFCC; border-radius: 10px; padding: 9px 12px; font-family: var(--font-body); font-size: 0.9rem; background: #fff; color: var(--ink); resize: vertical; min-height: 96px; line-height: 1.45; }
+  #invitePreview .invite-send { margin-top: 8px; }
   .invite-list { list-style: none; margin: 10px 0 0; padding: 0; }
   .invite-list li { border-top: 1px solid #E7DFCC; padding: 8px 0; font-size: 0.9rem; }
   .invite-list .invite-quien { font-weight: 700; }
@@ -232,6 +236,11 @@
           <input type="tel" id="invitePhone" placeholder="+57 300 123 4567" autocomplete="off">
           <button class="invite-send" id="inviteSendBtn" type="button">📲 Invitar por WhatsApp</button>
           <p class="invite-msg" id="inviteMsg" role="status" aria-live="polite"></p>
+          <div id="invitePreview" hidden>
+            <label for="inviteMsgEdit">Editar el mensaje antes de enviar</label>
+            <textarea id="inviteMsgEdit" rows="5"></textarea>
+            <button type="button" class="invite-send" id="inviteOpenWA">📲 Abrir WhatsApp →</button>
+          </div>
           <ul class="invite-list" id="inviteList"></ul>
           <p class="sub">¿Va a crear una cuenta? Comparte el código familiar desde <a href="/app.html#inviteToggle">la pantalla principal</a>.</p>
         </div>
@@ -676,6 +685,19 @@
   const inviteSendBtn = document.getElementById('inviteSendBtn');
   const inviteMsg = document.getElementById('inviteMsg');
   const inviteList = document.getElementById('inviteList');
+  const invitePreview = document.getElementById('invitePreview');
+  const inviteMsgEdit = document.getElementById('inviteMsgEdit');
+  const inviteOpenWA = document.getElementById('inviteOpenWA');
+  let _pendingPhone = null;
+
+  inviteOpenWA.addEventListener('click', () => {
+    if (!_pendingPhone) return;
+    const url = 'https://wa.me/' + _pendingPhone + '?text=' + encodeURIComponent(inviteMsgEdit.value);
+    const v = window.open(url, '_blank', 'noopener');
+    inviteMsg.textContent = v ? 'Listo. En WhatsApp solo falta tocar enviar.' : 'Listo. Abre WhatsApp manualmente si el enlace no se abrió.';
+    invitePreview.hidden = true;
+    _pendingPhone = null;
+  });
   const conOwnerInv = (path) => (ownerSeleccionado ? path + '?owner=' + encodeURIComponent(ownerSeleccionado) : path);
 
   function accion(texto, alClick) {
@@ -758,11 +780,11 @@
       if (!resp.ok) { inviteMsg.textContent = data.error || 'No se pudo crear la invitación.'; return; }
       inviteNombre.value = '';
       invitePhone.value = '';
-      // WhatsApp abre el chat con ese número y el mensaje ya escrito; solo
-      // falta tocar enviar. Si el navegador bloquea la ventana, queda el
-      // enlace "enviar de nuevo" en la lista.
-      const ventana = window.open(data.invitacion.whatsapp, '_blank', 'noopener');
-      inviteMsg.textContent = ventana ? 'Listo. En WhatsApp solo falta tocar enviar.' : 'Listo. Toca "enviar de nuevo" abajo para abrir WhatsApp.';
+      // Mostrar preview editable antes de abrir WhatsApp (Medio #9).
+      _pendingPhone = data.invitacion.telefono;
+      inviteMsgEdit.value = data.invitacion.mensaje;
+      invitePreview.hidden = false;
+      inviteMsgEdit.focus();
       cargarInvitaciones();
     } catch (e) {
       inviteMsg.textContent = 'No se pudo conectar. Intenta de nuevo.';

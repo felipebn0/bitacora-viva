@@ -2848,7 +2848,7 @@ function datosDeInvitacion(req, inv, ownerNombre) {
   const nombre = capitalizarNombre(inv.nombre);
   const mensaje = `Hola ${nombre}, te invito a sumar tus recuerdos a la bitácora de ${ownerNombre || 'nuestra familia'} en Eco. Entra con tu enlace personal, no hace falta crear cuenta: ${enlace}`;
   return {
-    id: inv.id, nombre, telefono: inv.telefono, enlace,
+    id: inv.id, nombre, telefono: inv.telefono, enlace, mensaje,
     whatsapp: `https://wa.me/${inv.telefono}?text=${encodeURIComponent(mensaje)}`,
     activa: !inv.revocado_at,
     ultimoIngreso: inv.ultimo_ingreso || null,
@@ -4426,6 +4426,27 @@ async function updateFamilyTree(userId, esPropia, newExchanges) {
     if (indicePrincipal === -1) {
       indicePrincipal = personas.findIndex((p) => clasificarRolUnico(p.relacion) === 'principal');
     }
+    // Fallback: si no hay principal, auto-agregar al narrador desde su bitácora.
+    // Esto resuelve el caso donde la persona nunca se mencionó a sí misma en
+    // la charla pero sí habló de sus familiares — el árbol queda poblado pero
+    // sin nodo central, y Vista familiar muestra "No hay persona principal".
+    if (indicePrincipal === -1) {
+      try {
+        const [bitRow] = await sql`SELECT nombre FROM bitacoras WHERE id = ${userId}`;
+        const nombreNarrador = bitRow?.nombre ? capitalizarNombre(bitRow.nombre) : null;
+        if (nombreNarrador) {
+          const idxExistente = personas.findIndex((p) => normalizarNombreParaComparar(p.nombre) === normalizarNombreParaComparar(nombreNarrador));
+          if (idxExistente !== -1) {
+            indicePrincipal = idxExistente;
+          } else {
+            personas.push({ nombre: nombreNarrador, relacion: 'Persona principal', detalles: null, padres: [] });
+            indicePrincipal = personas.length - 1;
+          }
+        }
+      } catch (e) {
+        console.warn(`[arbol] no se pudo auto-agregar narrador como principal userId=${userId}:`, e.message);
+      }
+    }
     // Si lo que quedó es igual a lo que ya estaba guardado, no hay nada que
     // reescribir: se evita borrar y volver a insertar todas las filas.
     const norm = (v) => normalizarNombreParaComparar(String(v == null ? '' : v));
@@ -4576,13 +4597,30 @@ function fotoRecienSubidaPrompt(caption) {
 
 const HISTORIA_MIN_CHARS = 180; // umbral simple: una respuesta larga y elaborada = historia; un dato corto no.
 
+// Detecta si un nombre es un término de parentesco genérico (papá, madre,
+// "Padre del Entrevistado", etc.) en vez de un nombre propio real.
+const PATRON_NOMBRE_GENERICO = /^(padre|madre|papa|papá|mama|mamá|abuelo|abuela|tío|tia|tio|hermano|hermana|esposo|esposa|hijo|hija|nieto|nieta|sobrino|sobrina|primo|prima)\b/i;
+function esNombreGenerico(nombre) {
+  const sin_tildes = String(nombre || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+  return PATRON_NOMBRE_GENERICO.test(sin_tildes.trim());
+}
+
 async function loadKnownFamilyMembers(userId) {
   await ensureSchema();
   const rows = await sql`SELECT nombre, relacion, detalles FROM family_members WHERE user_id = ${userId}`;
   if (!rows.length) return '';
-  return `\n\nPersonas que ya se conocen (no vuelvas a preguntar por estas, prioriza las que faltan):\n${rows
+
+  const lista = `\n\nPersonas que ya se conocen (no vuelvas a preguntar por estas, prioriza las que faltan):\n${rows
     .map((p) => `- ${capitalizarNombre(p.nombre)} (${p.relacion})${p.detalles ? ': ' + p.detalles : ''}`)
     .join('\n')}`;
+
+  // Si algún familiar solo tiene un nombre genérico (papá, mamá, "Padre del
+  // Entrevistado"…), pedirle el nombre real en la primera oportunidad natural.
+  const sinNombre = rows.filter((p) => esNombreGenerico(p.nombre));
+  if (!sinNombre.length) return lista;
+  const pendientes = sinNombre.map((p) => p.relacion).join(', ');
+  const nota = `\n\nNombres que todavía no sabes (en la primera oportunidad natural — sin cortar el hilo de la charla y nunca como segunda pregunta en el mismo turno — pregunta el nombre real de uno a la vez): ${pendientes}.`;
+  return lista + nota;
 }
 
 // Cuenta signos de interrogación de cierre ("?") — cada pregunta real en
