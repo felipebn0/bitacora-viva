@@ -6948,15 +6948,18 @@ app.get('/api/tree', requireAuth, bloquearColaborador, async (req, res) => {
         const yaExiste = people.find((p) => p.nombre.toLowerCase() === nombreNarrador.toLowerCase());
         const tienePrincipal = people.some((p) => p.es_principal);
         if (!yaExiste) {
-          // Para subperfil sin principal: insertar como Persona principal.
-          // Para cuenta propia (es otra persona, no el sujeto): insertar como Familiar.
+          // Para cuenta propia: "Yo". Para subperfil sin principal: "Persona principal".
           const esPrincipal = !esPropia && !tienePrincipal;
-          const relacion = esPrincipal ? 'Persona principal' : 'Familiar';
+          const relacion = esPropia ? 'Yo' : (esPrincipal ? 'Persona principal' : 'Familiar');
           const [inserted] = await sql`
             INSERT INTO family_members (user_id, nombre, relacion, padres, es_principal)
             VALUES (${req.profileUserId}, ${nombreNarrador}, ${relacion}, ${'[]'}, ${esPrincipal})
             RETURNING id, nombre, relacion, padres, es_principal`;
           people.push({ ...inserted, nombre: capitalizarNombre(inserted.nombre), padres: [], es_principal: !!inserted.es_principal, notas_count: 0 });
+        } else if (esPropia && yaExiste.relacion !== 'Yo') {
+          // Existe pero con relación incorrecta (ej: "Familiar" del commit anterior) — corregir.
+          await sql`UPDATE family_members SET relacion = 'Yo' WHERE id = ${yaExiste.id}`;
+          yaExiste.relacion = 'Yo';
         } else if (!tienePrincipal && !esPropia) {
           // Existe pero sin es_principal en un subperfil — marcarlo.
           await sql`UPDATE family_members SET es_principal = true WHERE id = ${yaExiste.id}`;
