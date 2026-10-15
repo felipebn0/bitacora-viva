@@ -1,0 +1,52 @@
+/* Mi libro: todos los botones y selectores con el mismo tamaño.
+   Alto 46px, esquinas de 13px, letra de 15px, relleno 11px 18px. Va al final de capitulos.html
+   porque las demás hojas de esta página (cada una con su medida) se cargaron por capas. */
+body>header .eco-book-btn,
+body>header .eco-book-header-tools .volver,
+body>header .eco-book-header-tools button.generar,
+body>header .eco-book-header-tools #personaSelect,
+.persona-field #personaSelect,
+.eco-editorial-open,
+#lista .eco-read-btn,
+body>main.wrap .chapter .borrar,
+#lista .borrar,
+.eco-editorial-topbuttons button,
+.eco-editorial-sidebar nav button,
+.eco-editorial-sidebar select,
+.eco-editorial-sidebar .eco-editorial-makeqr,
+.eco-editorial-sidebar .eco-editorial-revokeqr,
+.eco-book-return-controls,
+.eco-demo-main,
+.eco-demo-light {
+  box-sizing: border-box !important;
+  min-height: 46px !important;
+  padding: 11px 18px !important;
+  border-radius: 13px !important;
+  font-size: .95rem !important;
+  line-height: 1.25 !important;
+}
+
+/* El selector de la voz del libro estaba dentro de una columna con flex-basis de 290px:
+   en escritorio se estiraba a 290px de alto. */
+.persona-field #personaSelect,
+body>header .eco-book-header-tools #personaSelect {
+  flex: none !important;
+  width: min(290px, 100%) !important;
+  max-width: 100% !important;
+}
+
+/* Botones de solo un símbolo (subir, bajar, cerrar): también de 46px, cuadrados. */
+.eco-editorial-order button,
+.eco-demo-x {
+  box-sizing: border-box !important;
+  min-width: 46px !important;
+  min-height: 46px !important;
+  border-radius: 13px !important;
+  font-size: .95rem !important;
+  padding: 0 !important;
+}
+.eco-demo-x { font-size: 1.5rem !important; }
+
+.eco-editorial-revokeqr { width: 100%; margin-top: 8px; border: 1px solid #e5c4bb; background: #fff9f6; color: #8f4132; font-weight: 700; font-family: inherit; cursor: pointer; }
+.eco-editorial-revokeqr:hover { background: #fcece7; }
+.eco-editorial-revokeqr:disabled { opacity: .6; cursor: default; }
