@@ -43,6 +43,7 @@ const user = {
   resumenTexto: '', // memoria de charlas anteriores (loadMemorySummary)
   pendingFamilyNote: null, // { id, contributor, parentesco, texto } | null
   pendingMedia: null, // { id, type, caption, contributor } | null
+  diarioBebe: null, // { nombre, genero, nacio_en } | null (modo diario de un bebé)
 };
 
 let storyLogInserts = []; // para verificar que se guardó (o no) una historia larga
@@ -67,6 +68,8 @@ function fakeSql(strings, ...values) {
     if (values[0] === user.id) return Promise.resolve([{ owner_user_id: user.owner_user_id, token_version: user.token_version }]);
     return Promise.resolve([]);
   }
+
+  if (text.includes('FROM diario_bebe WHERE profile_user_id')) return Promise.resolve(user.diarioBebe ? [user.diarioBebe] : []);
 
   if (text.includes('SELECT texto FROM resumen')) {
     return Promise.resolve(user.resumenTexto ? [{ texto: user.resumenTexto }] : []);
@@ -729,6 +732,29 @@ async function main() {
   pushAnthropicResponse('Uy, qué belleza. Cuéntame más de esa casa, ¿tenía patio?');
   const sinStream = await nextForUser(server, cookie, { history: historial, mode: 'historia' });
   check('sin stream: JSON normal y messages.create', String(sinStream.headers['content-type']).includes('application/json') && capturedCalls[0].__stream !== true && JSON.parse(sinStream.body).message.startsWith('Uy, qué belleza.'));
+
+  // Modo "diario de un bebé": solo se activa si la persona lo pide Y existe el diario.
+  user.diarioBebe = { nombre: 'Rafaela', genero: 'femenino', nacio_en: null };
+  resetAnthropicMock();
+  pushAnthropicResponse('Qué lindo. ¿Cómo te has sentido hoy con Rafaela?');
+  await nextForUser(server, cookie, { history: [], mode: 'historia', modoBebe: true });
+  check('modo bebé: el system lleva el modo especial con el nombre del bebé', capturedCalls[0].system[0].text.includes('DIARIO DE UN BEBÉ') && capturedCalls[0].system[0].text.includes('Rafaela') && capturedCalls[0].system[0].text.includes('todavía no ha nacido'));
+  check('modo bebé: el arranque de la charla es sobre el bebé, no un tema nuevo del pasado', capturedCalls[0].messages[0].content.includes('modo especial del diario de su bebé'));
+  check('modo bebé: el nombre va como dato no confiable', /nombre_del_bebe/.test(capturedCalls[0].system[0].text));
+  resetAnthropicMock();
+  pushAnthropicResponse('Cuéntame, ¿cómo estuvo hoy?');
+  await nextForUser(server, cookie, { history: [], mode: 'historia' });
+  check('sin pedir el modo: la charla es la de siempre (no se menciona el bebé)', !capturedCalls[0].system[0].text.includes('DIARIO DE UN BEBÉ'));
+  user.diarioBebe = { nombre: 'Rafaela', genero: 'femenino', nacio_en: '2026-10-16' };
+  resetAnthropicMock();
+  pushAnthropicResponse('Qué bonito. ¿Cómo durmió hoy Rafaela?');
+  await nextForUser(server, cookie, { history: historial, mode: 'historia', modoBebe: true });
+  check('modo bebé, ya nació: se habla del día a día y de la fecha', capturedCalls[0].system[0].text.includes('ya nació el 2026-10-16'));
+  user.diarioBebe = null;
+  resetAnthropicMock();
+  pushAnthropicResponse('Cuéntame, ¿cómo estuvo hoy?');
+  await nextForUser(server, cookie, { history: [], mode: 'historia', modoBebe: true });
+  check('modo bebé pedido pero sin diario creado: charla normal', !capturedCalls[0].system[0].text.includes('DIARIO DE UN BEBÉ'));
 
   server.close();
   console.log = originalConsoleLog;

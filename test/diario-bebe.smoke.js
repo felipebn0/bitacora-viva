@@ -1,0 +1,165 @@
+// Diario de un bebé: la dueña lo crea y sube fotos/notas; sus familiares invitados lo VEN pero no lo
+// editan; una cuenta ajena no ve nada. Las fotos solo se entregan por el diario, nunca por la ruta del archivo.
+process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'ci-smoke-secret';
+process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgres://fake:fake@localhost/fake';
+process.env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || 'fake';
+process.env.BLOB_READ_WRITE_TOKEN = 'token-falso';
+delete process.env.R2_ENDPOINT;
+
+const path = require('path');
+const http = require('http');
+const bcrypt = require('bcryptjs');
+
+const serverPath = path.resolve(__dirname, '..', 'server.js');
+const HASH = bcrypt.hashSync('miclave123', 4);
+const users = {
+  1: { id: 1, username: 'paula', password_hash: HASH, token_version: 0, owner_user_id: null },
+  2: { id: 2, username: 'ajena', password_hash: HASH, token_version: 0, owner_user_id: null },
+  3: { id: 3, username: 'abuela', password_hash: HASH, token_version: 0, owner_user_id: null },
+};
+const colaboraciones = [{ collaborator_user_id: 3, owner_user_id: 1 }];
+let diarios = [];
+let entradas = [];
+let siguienteId = 1;
+const borrados = [];
+const subidos = {};
+const PNG_1X1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+
+function fakeSql(strings, ...v) {
+  const text = strings.join('?');
+  if (text.includes('CREATE TABLE') || text.includes('ALTER TABLE') || text.includes('CREATE INDEX')) return Promise.resolve([]);
+  if (text.includes('rate_limits')) return Promise.resolve([{ count: 1 }]);
+  if (text.includes('SELECT id, username, password_hash, token_version FROM users WHERE username')) {
+    const u = Object.values(users).find((x) => x.username === v[0]);
+    return Promise.resolve(u ? [{ id: u.id, username: u.username, password_hash: u.password_hash, token_version: u.token_version }] : []);
+  }
+  if (text.includes('SELECT owner_user_id, token_version FROM users WHERE id')) { const u = users[v[0]]; return Promise.resolve(u ? [{ owner_user_id: null, token_version: u.token_version }] : []); }
+  if (text.includes('SELECT owner_user_id FROM users WHERE id')) return Promise.resolve([{ owner_user_id: null }]);
+  if (text.includes('SELECT 1 FROM collaborations WHERE collaborator_user_id')) {
+    return Promise.resolve(colaboraciones.some((c) => c.collaborator_user_id === v[0] && c.owner_user_id === v[1]) ? [{ x: 1 }] : []);
+  }
+  if (text.includes('FROM diario_bebe WHERE profile_user_id')) { const d = diarios.find((x) => x.profile_user_id === v[0]); return Promise.resolve(d ? [d] : []); }
+  if (text.includes('INSERT INTO diario_bebe (')) {
+    const fila = { profile_user_id: v[0], nombre: v[1], genero: v[2], nacio_en: v[3] };
+    diarios = diarios.filter((x) => x.profile_user_id !== v[0]).concat(fila);
+    return Promise.resolve([]);
+  }
+  if (text.includes('INSERT INTO diario_bebe_entradas')) {
+    const fila = { id: siguienteId++, profile_user_id: v[0], texto: v[1], media_url: v[2], created_at: new Date().toISOString() };
+    entradas.push(fila);
+    return Promise.resolve([{ id: fila.id, created_at: fila.created_at }]);
+  }
+  if (text.includes('SELECT id, texto, media_url, created_at FROM diario_bebe_entradas')) return Promise.resolve(entradas.filter((e) => e.profile_user_id === v[0]).slice().reverse());
+  if (text.includes('SELECT media_url FROM diario_bebe_entradas WHERE id')) return Promise.resolve(entradas.filter((e) => e.id === v[0] && e.profile_user_id === v[1]));
+  if (text.includes('DELETE FROM diario_bebe_entradas WHERE id')) {
+    const f = entradas.filter((e) => e.id === v[0] && e.profile_user_id === v[1]);
+    entradas = entradas.filter((e) => !f.includes(e));
+    return Promise.resolve(f.map((e) => ({ media_url: e.media_url })));
+  }
+  return Promise.resolve([]);
+}
+fakeSql.transaction = (q) => Promise.all(q);
+
+function streamDe(buf) { return new ReadableStream({ start(c) { c.enqueue(new Uint8Array(buf)); c.close(); } }); }
+const cache = (mod, exports) => { require.cache[require.resolve(mod)] = { id: require.resolve(mod), filename: require.resolve(mod), loaded: true, exports }; };
+cache('@neondatabase/serverless', { neon: () => fakeSql });
+cache('@vercel/blob', {
+  put: async (pathname, cuerpo) => { subidos[pathname] = cuerpo; return { url: 'https://fake.public.blob.vercel-storage.com/' + pathname }; },
+  del: async (u) => { borrados.push(u); },
+  list: async () => ({ blobs: [], hasMore: false }),
+  get: async (clave) => {
+    if (!subidos[clave]) return null;
+    return { statusCode: 200, stream: streamDe(subidos[clave]), headers: new Headers(), blob: { contentType: 'image/png', size: subidos[clave].length } };
+  },
+});
+cache('@anthropic-ai/sdk', class { constructor() {} });
+const app = require(serverPath);
+
+function request(server, opts, cookie) {
+  return new Promise((resolve, reject) => {
+    const host = '127.0.0.1:' + server.address().port;
+    const cuerpo = opts.raw || (opts.body ? JSON.stringify(opts.body) : null);
+    const headers = Object.assign({ Origin: 'http://' + host }, opts.headers || {});
+    if (cuerpo) { headers['Content-Type'] = opts.contentType || 'application/json'; headers['Content-Length'] = Buffer.byteLength(cuerpo); }
+    if (cookie) headers.Cookie = cookie;
+    const r = http.request({ host: '127.0.0.1', port: server.address().port, path: opts.path, method: opts.method || 'GET', headers }, (res) => {
+      const ch = []; res.on('data', (x) => ch.push(x));
+      res.on('end', () => { const body = Buffer.concat(ch); let json = null; try { json = JSON.parse(body.toString()); } catch (e) { /* no es JSON */ } resolve({ status: res.statusCode, headers: res.headers, body, json }); });
+    });
+    r.on('error', reject); if (cuerpo) r.write(cuerpo); r.end();
+  });
+}
+const entrar = async (server, u) => (await request(server, { path: '/api/login', method: 'POST', body: { username: u, password: 'miclave123' } })).headers['set-cookie'][0].split(';')[0];
+
+let pasaron = 0, fallaron = 0;
+const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { fallaron++; console.error('FAIL - ' + m); } };
+
+(async () => {
+  const server = http.createServer(app).listen(0);
+  await new Promise((r) => server.once('listening', r));
+  const paula = await entrar(server, 'paula');
+  const ajena = await entrar(server, 'ajena');
+  const abuela = await entrar(server, 'abuela');
+
+  let r = await request(server, { path: '/api/bebe' });
+  ok(r.status === 401, 'sin sesión no se abre el diario (401)');
+  r = await request(server, { path: '/api/bebe' }, paula);
+  ok(r.status === 200 && r.json.config === null && r.json.puedeEditar === true, 'antes de crearlo: no hay diario y ella puede crearlo');
+
+  r = await request(server, { path: '/api/bebe', method: 'PUT', body: { nombre: '   ' } }, paula);
+  ok(r.status === 400, 'sin nombre no se crea (400)');
+  r = await request(server, { path: '/api/bebe', method: 'PUT', body: { nombre: 'Rafaela', nacioEn: '2099-01-01' } }, paula);
+  ok(r.status === 400, 'una fecha de nacimiento muy en el futuro no es válida (400)');
+  r = await request(server, { path: '/api/bebe', method: 'PUT', body: { nombre: 'Rafaela', genero: 'femenino' } }, paula);
+  ok(r.status === 200 && r.json.config.nombre === 'Rafaela' && r.json.config.estado === 'en_camino', 'crea el diario: Rafaela, en camino');
+
+  r = await request(server, { path: '/api/bebe/entradas', method: 'POST', body: {} }, paula);
+  ok(r.status === 400, 'una entrada vacía no se guarda (400)');
+  r = await request(server, { path: '/api/bebe/entradas', method: 'POST', body: { texto: 'Hoy pateó por primera vez' } }, paula);
+  ok(r.status === 200 && r.json.entrada.texto === 'Hoy pateó por primera vez', 'guarda una nota del día');
+
+  r = await request(server, { path: '/api/bebe/foto', method: 'POST', raw: Buffer.from('esto no es una foto'), contentType: 'image/png' }, paula);
+  ok(r.status === 400, 'un archivo que no es foto no se sube (400)');
+  r = await request(server, { path: '/api/bebe/foto', method: 'POST', raw: PNG_1X1, contentType: 'image/png' }, paula);
+  ok(r.status === 200 && r.json.url.includes('media/1/bebe/'), 'sube una foto a la carpeta del diario de su cuenta');
+  const fotoUrl = r.json.url;
+  r = await request(server, { path: '/api/bebe/entradas', method: 'POST', body: { texto: 'La ecografía', fotoUrl: 'https://fake.public.blob.vercel-storage.com/media/2/bebe/foto-1.png' } }, paula);
+  ok(r.status === 400, 'no acepta una foto que está en la carpeta de otra cuenta (400)');
+  r = await request(server, { path: '/api/bebe/entradas', method: 'POST', body: { fotoUrl: 'https://fake.public.blob.vercel-storage.com/audio/1/charla/user-0.webm' } }, paula);
+  ok(r.status === 400, 'tampoco un archivo de su cuenta que no sea del diario (400)');
+  r = await request(server, { path: '/api/bebe/entradas', method: 'POST', body: { texto: 'La ecografía', fotoUrl } }, paula);
+  ok(r.status === 200 && /^\/api\/bebe\/foto\/\d+\?owner=1$/.test(r.json.entrada.fotoUrl), 'guarda la foto con su nota; la foto se pide por el diario, no por la ruta del archivo');
+  const entradaFoto = r.json.entrada;
+
+  r = await request(server, { path: '/api/bebe?owner=1' }, abuela);
+  ok(r.status === 200 && r.json.config.nombre === 'Rafaela' && r.json.puedeEditar === false && r.json.entradas.length === 2, 'una familiar invitada ve el diario completo, sin poder editar');
+  r = await request(server, { path: entradaFoto.fotoUrl }, abuela);
+  ok(r.status === 200 && r.body.equals(PNG_1X1), 'y puede ver las fotos');
+  r = await request(server, { path: '/api/bebe/entradas?owner=1', method: 'POST', body: { texto: 'intento', owner: 1 } }, abuela);
+  ok(entradas.filter((e) => e.profile_user_id === 1).length === 2, 'si intenta escribir en el diario de otra persona, no cambia nada del diario de Paula');
+  r = await request(server, { path: '/api/bebe?owner=1', method: 'PUT', body: { nombre: 'Otra', owner: 1 } }, abuela);
+  ok(diarios.find((d) => d.profile_user_id === 1).nombre === 'Rafaela', 'ni el nombre del bebé de Paula');
+  r = await request(server, { path: `/api/bebe/entradas/${entradaFoto.id}?owner=1`, method: 'DELETE' }, abuela);
+  ok(r.status !== 200 && entradas.length === 2, 'ni borrar nada');
+
+  r = await request(server, { path: '/api/bebe?owner=1' }, ajena);
+  ok(r.status === 403, 'una cuenta que nadie invitó no ve el diario (403)');
+  r = await request(server, { path: entradaFoto.fotoUrl }, ajena);
+  ok(r.status === 403, 'ni sus fotos (403)');
+  r = await request(server, { path: entradaFoto.fotoUrl });
+  ok(r.status === 401, 'sin sesión tampoco se ven las fotos (401)');
+  r = await request(server, { path: '/api/bebe' }, ajena);
+  ok(r.status === 200 && r.json.config === null, 'su propio diario es otro: vacío');
+
+  r = await request(server, { path: '/api/bebe', method: 'PUT', body: { nombre: 'Rafaela', genero: 'femenino', nacioEn: new Date().toISOString().slice(0, 10) } }, paula);
+  ok(r.status === 200 && r.json.config.estado === 'nacida', 'cuando nace: el diario pasa a "ya llegó" con su fecha');
+
+  r = await request(server, { path: `/api/bebe/entradas/${entradaFoto.id}`, method: 'DELETE' }, ajena);
+  ok(r.status === 404 && entradas.length === 2, 'otra cuenta no logra borrar una entrada ajena (404)');
+  r = await request(server, { path: `/api/bebe/entradas/${entradaFoto.id}`, method: 'DELETE' }, paula);
+  ok(r.status === 200 && entradas.length === 1 && borrados.includes(fotoUrl), 'ella borra la entrada y también se borra la foto guardada');
+
+  server.close();
+  console.log(`\n${pasaron} pasaron, ${fallaron} fallaron`);
+  process.exit(fallaron ? 1 : 0);
+})().catch((e) => { console.error('ERROR EN EL SMOKE TEST DEL DIARIO:', e); process.exit(1); });

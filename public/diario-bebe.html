@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Diario de un bebé · Eco</title>
+<link rel="icon" href="/images/favicon-32.png">
+<link rel="stylesheet" href="/fonts/fonts.css">
+<link rel="stylesheet" href="/eco-bebe.css?v=1">
+<script src="/font-size.js"></script>
+</head>
+<body class="eco-bebe-pagina">
+<div class="eco-bebe-contenedor">
+  <a class="eco-bebe-volver" id="volver" href="/app.html">‹ Volver</a>
+  <header>
+    <h1 class="eco-bebe-titulo" id="titulo">Diario de un bebé</h1>
+    <p class="eco-bebe-sub" id="subtitulo"></p>
+  </header>
+  <p class="eco-bebe-msg" id="estado" role="status" aria-live="polite">Cargando…</p>
+
+  <main>
+    <section class="eco-bebe-tarjeta" id="vistaCrear" hidden aria-labelledby="crearTitulo">
+      <h2 id="crearTitulo" class="eco-bebe-sub">Crea el diario</h2>
+      <form id="formConfig" class="eco-bebe-form" novalidate>
+        <div class="eco-bebe-campo">
+          <label for="cfgNombre">Nombre del bebé</label>
+          <input id="cfgNombre" type="text" maxlength="40" autocomplete="off" placeholder="Rafaela">
+        </div>
+        <div class="eco-bebe-campo">
+          <label for="cfgGenero">Es</label>
+          <select id="cfgGenero">
+            <option value="">Prefiero no decir</option>
+            <option value="femenino">Una niña</option>
+            <option value="masculino">Un niño</option>
+          </select>
+        </div>
+        <div class="eco-bebe-fila">
+          <input id="cfgNacio" type="checkbox">
+          <label for="cfgNacio">Ya nació</label>
+        </div>
+        <div class="eco-bebe-campo" id="cfgFechaCampo" hidden>
+          <label for="cfgFecha">Fecha de nacimiento</label>
+          <input id="cfgFecha" type="date">
+        </div>
+        <button class="eco-bebe-grande" id="cfgGuardar" type="submit">Guardar</button>
+      </form>
+      <p class="eco-bebe-aviso">Las fotos y notas que subas aquí las ven solo los familiares que invitaste a tu bitácora.</p>
+    </section>
+
+    <section id="vistaDiario" hidden>
+      <div class="eco-bebe-tarjeta" id="nuevaEntrada" hidden>
+        <button class="eco-bebe-grande" id="botonFoto" type="button">Subir una foto de hoy</button>
+        <input id="inputFoto" type="file" accept="image/*" hidden aria-label="Elegir una foto">
+        <div class="eco-bebe-campo">
+          <label for="textoNota">Cuenta algo de hoy</label>
+          <textarea id="textoNota" maxlength="600" placeholder="Cómo estuvo el día, qué sentiste, qué pasó en la foto"></textarea>
+        </div>
+        <button class="eco-bebe-secundario" id="guardarNota" type="button">Guardar en el diario</button>
+      </div>
+      <ul class="eco-bebe-lista" id="lista"></ul>
+      <p class="eco-bebe-vacio" id="vacio" hidden></p>
+      <details class="eco-bebe-tarjeta" id="ajustes" hidden>
+        <summary>Cambiar los datos del bebé</summary>
+        <div id="ajustesForm"></div>
+      </details>
+      <p class="eco-bebe-aviso" id="avisoPrivacidad"></p>
+    </section>
+  </main>
+</div>
+<script src="/eco-bebe-comun.js?v=1"></script>
+<script src="/eco-bebe-diario.js?v=1"></script>
+</body>
+</html>

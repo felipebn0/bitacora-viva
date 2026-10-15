@@ -839,6 +839,7 @@
 
 <link rel="stylesheet" href="/eco-login-v6.css?v=6">
 <link rel="stylesheet" href="/eco-mobile-base.css">
+<link rel="stylesheet" href="/eco-bebe.css?v=1">
 </head>
 <body class="eco-brand-v1 eco-page-inicio">
   <!-- Experimento UX (rama ux-pruebas, 2026-09-08): solo se ven en desktop
@@ -1015,6 +1016,8 @@
               Mismo patrón visual que "Perfiles": lleva directo a su propia
               pantalla en vez de desplegar contenido aquí adentro. -->
          <a class="um-section-toggle" id="umAdminLink" href="/admin.html">Panel de consumo <span class="um-chevron" aria-hidden="true">›</span></a>
+
+         <a class="um-section-toggle" id="umBebeLink" href="/diario-bebe.html">Diario de un bebé <span class="um-chevron" aria-hidden="true">›</span></a>
 
          <button type="button" class="um-section-toggle" aria-expanded="false" aria-controls="umSecAvanzadas">Opciones avanzadas <span class="um-chevron" aria-hidden="true">›</span></button>
          <!-- Experimento UX (rama ux-pruebas, 2026-09-08, pedido de Felipe):
@@ -1383,6 +1386,7 @@
       });
       history.replaceState(null, '', location.pathname + location.hash);
     }
+    document.dispatchEvent(new CustomEvent('eco:app-lista'));
   }
 
   function showLogin() {
@@ -3337,7 +3341,7 @@
         method: 'POST',
         signal: esp.controller.signal,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stream: true, especulativo: true, history: [...history, { role: 'user', content: texto }], mode: 'historia' }),
+        body: JSON.stringify({ stream: true, especulativo: true, history: [...history, { role: 'user', content: texto }], mode: 'historia', modoBebe: !!(globalThis.EcoBebe && globalThis.EcoBebe.activo()) }),
       });
       if (!resp.ok) { esp.noEspeculable = true; return; }
       let huboFrase = false;
@@ -3412,7 +3416,7 @@
       const pedirTurno = () => fetch('/api/next', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stream: true, history, lastAudioUrl, mode: sessionMode, ofrecerPausa, interpretarRespuestaPausa, mediaUrls, fotoRecienSubida: fotoRecienSubidaAAvisar ? { caption: fotoRecienSubidaAAvisar.caption } : null }),
+        body: JSON.stringify({ stream: true, history, lastAudioUrl, mode: sessionMode, modoBebe: !!(globalThis.EcoBebe && globalThis.EcoBebe.activo()), ofrecerPausa, interpretarRespuestaPausa, mediaUrls, fotoRecienSubida: fotoRecienSubidaAAvisar ? { caption: fotoRecienSubidaAAvisar.caption } : null }),
       });
       const abrirReal = async () => {
         let resp = await pedirTurno();
@@ -4125,6 +4129,8 @@
 })();
 </script>
 <script src="/eco-toast.js" defer></script>
+<script src="/eco-bebe-comun.js?v=1" defer></script>
+<script src="/eco-bebe.js?v=1" defer></script>
 <script src="/eco-intro.js?v=1" defer></script>
 <script src="/eco-tour.js?v=1" defer></script>
 </body>
