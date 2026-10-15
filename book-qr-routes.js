@@ -1,10 +1,12 @@
-/* ECO QR v1: private authenticated voice playback. QR points to page, never blob.
+/* ECO QR: el QR impreso apunta a una página pública (/escuchar.html?t=<token>): quien lo escanea
+ * escucha las grabaciones SIN cuenta. El token (48 hex, 192 bits al azar) es la llave: se puede
+ * retirar (revoked_at) y solo sirve los audios de ese capítulo. El QR nunca apunta al archivo.
  * QRCode vendor by Kazuhiko Arase, MIT licensed; see vendor/LICENCIA.txt.
  */
 const crypto = require('crypto');
 const QRCode = require('./vendor/QRCode');
 const ECL = require('./vendor/QRCode/QRErrorCorrectLevel');
-module.exports = (app, { sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit }) => {
+module.exports = (app, { sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob }) => {
   async function ready() {
     await ensureSchema();
     await sql`CREATE TABLE IF NOT EXISTS book_audio_links (
@@ -47,15 +49,55 @@ module.exports = (app, { sql, ensureSchema, requireAuth, bloquearColaborador, ra
       res.json({ok:true,token:old.token,url:`${origin}/escuchar.html?t=${old.token}`,title:old.chapter_title,private:true});
     }catch(e){console.error('Error QR libro',e);res.status(500).json({error:'No se pudo crear el enlace del capítulo.'});}
   });
-  app.get('/api/book-qr/listen/:token', requireAuth, bloquearColaborador, async(req,res)=>{
+  // Público (sin sesión): lo que abre quien escanea el QR del libro.
+  app.get('/api/book-qr/listen/:token', rateLimitQr, async(req,res)=>{
+    res.set('Cache-Control','no-store');
+    res.set('X-Robots-Tag','noindex, nofollow');
+    if(!safeToken(req.params.token))return res.status(404).json({error:'Enlace no encontrado.'});
+    try{
+      await ready();
+      const item=(await sql`SELECT chapter_title,audio_urls FROM book_audio_links WHERE token=${req.params.token} AND revoked_at IS NULL`)[0];
+      if(!item)return res.status(404).json({error:'Este enlace ya no está disponible.'});
+      const audios=jsonArray(item.audio_urls).map((_,i)=>`/api/book-qr/audio/${req.params.token}/${i}`);
+      res.json({title:item.chapter_title,audios});
+    }catch(e){console.error('Escuchar libro QR',e);res.status(500).json({error:'No se pudo cargar el recuerdo.'});}
+  });
+  // Público: entrega UNA grabación del capítulo (por posición, nunca por URL que mande el navegador).
+  app.get('/api/book-qr/audio/:token/:n', rateLimitQr, async(req,res)=>{
+    res.set('X-Robots-Tag','noindex, nofollow');
+    if(!safeToken(req.params.token)||!/^\d{1,3}$/.test(req.params.n))return res.status(404).json({error:'Enlace no encontrado.'});
+    try{
+      await ready();
+      const item=(await sql`SELECT owner_id,audio_urls FROM book_audio_links WHERE token=${req.params.token} AND revoked_at IS NULL`)[0];
+      const guardado=item?jsonArray(item.audio_urls)[Number(req.params.n)]:null;
+      if(typeof guardado!=='string')return res.status(404).json({error:'Este enlace ya no está disponible.'});
+      // Defensa extra: el archivo tiene que ser de quien creó el enlace.
+      const datos=datosDelArchivoDeBlob(guardado);
+      if(!datos||datos.ownerId!==item.owner_id)return res.status(404).json({error:'Este enlace ya no está disponible.'});
+      await enviarArchivoAlmacenado(req,res,guardado,'private, max-age=300');
+    }catch(e){console.error('Audio libro QR',e);if(!res.headersSent)res.status(500).json({error:'No se pudo cargar la grabación.'});else res.destroy();}
+  });
+  // Solo la cuenta dueña: comprueba que un token es suyo (lo usa la importación de borradores).
+  app.get('/api/book-qr/owned/:token', requireAuth, bloquearColaborador, async(req,res)=>{
     forbidCache(res);
     if(!safeToken(req.params.token))return res.status(404).json({error:'Enlace no encontrado.'});
     try{
       await ready();
-      const item=(await sql`SELECT chapter_title,audio_urls FROM book_audio_links WHERE token=${req.params.token} AND owner_id=${req.profileUserId} AND revoked_at IS NULL`)[0];
-      if(!item)return res.status(404).json({error:'No tienes acceso a este recuerdo o el enlace fue retirado.'});
-      res.json({title:item.chapter_title,audios:jsonArray(item.audio_urls).map(u=>'/api/media-file?u='+encodeURIComponent(u))});
-    }catch(e){console.error('Escuchar libro QR',e);res.status(500).json({error:'No se pudo cargar el recuerdo.'});}
+      const item=(await sql`SELECT 1 FROM book_audio_links WHERE token=${req.params.token} AND owner_id=${req.profileUserId} AND revoked_at IS NULL`)[0];
+      if(!item)return res.status(404).json({error:'Este código QR no es de tu cuenta o ya fue retirado.'});
+      res.json({ok:true});
+    }catch(e){console.error('QR libro propio',e);res.status(500).json({error:'No se pudo comprobar el código.'});}
+  });
+  // Retira el enlace público de un capítulo: los QR ya impresos dejan de funcionar.
+  app.delete('/api/book-qr/chapters/:id', requireAuth, bloquearColaborador, rateLimit, async(req,res)=>{
+    forbidCache(res);
+    const id=Number(req.params.id);
+    if(!Number.isSafeInteger(id)||id<1)return res.status(400).json({error:'Capítulo inválido.'});
+    try{
+      await ready();
+      await sql`UPDATE book_audio_links SET revoked_at=now() WHERE owner_id=${req.profileUserId} AND chapter_id=${id} AND revoked_at IS NULL`;
+      res.json({ok:true});
+    }catch(e){console.error('Retirar QR libro',e);res.status(500).json({error:'No se pudo retirar el enlace.'});}
   });
   app.get('/api/book-qr/image/:token.svg', requireAuth, bloquearColaborador, async(req,res)=>{
     forbidCache(res);

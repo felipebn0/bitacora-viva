@@ -36,7 +36,7 @@
      const copy=document.createElement('div');
      const heading=document.createElement('strong');heading.textContent='Escucha la voz original';
      const description=document.createElement('p');
-     description.textContent='Escanea el código con un teléfono autorizado para escuchar las grabaciones originales de ECO.';
+     description.textContent='Escanea el código con tu teléfono para escuchar las grabaciones originales.';
      const url=document.createElement('a');url.href=details.url;url.textContent='Probar el enlace de escucha';
      url.target='_blank';url.rel='noopener';
      copy.append(heading,description,url);foot.append(image,copy);paper.append(foot);

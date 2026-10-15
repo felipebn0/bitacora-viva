@@ -88,7 +88,7 @@
       <ul>
         <li><strong>Tus historias son tuyas.</strong> No las vendemos, no las usamos para publicidad y no las publicamos.</li>
         <li><strong>Solo las ven quienes tú invites.</strong> Nadie puede entrar a tu bitácora sin el código o el enlace personal que tú generas.</li>
-        <li><strong>Tus audios, fotos y videos están en almacenamiento privado.</strong> No existe un enlace público para abrirlos: cada vez que se pide uno, la app comprueba primero que tienes sesión y permiso.</li>
+        <li><strong>Tus audios, fotos y videos están en almacenamiento privado.</strong> No existe un enlace público para abrirlos: cada vez que se pide uno, la app comprueba primero que tienes sesión y permiso. La única excepción son los códigos QR de tu libro, si tú decides crearlos.</li>
         <li><strong>Tu clave nunca se guarda tal cual.</strong> Solo guardamos una versión cifrada de un solo sentido, que ni nosotros podemos leer.</li>
         <li><strong>Para funcionar, tu contenido pasa por proveedores de inteligencia artificial y de voz</strong> (Anthropic y ElevenLabs, ver <a href="#compartir">sección 4</a>). Eso es necesario para que la app te haga preguntas, te transcriba y te hable.</li>
         <li><strong>Puedes descargar todo y borrarlo cuando quieras,</strong> desde el menú de Cuenta de la app o escribiéndonos.</li>
@@ -180,7 +180,7 @@
     <h2 id="seguridad">5. Cómo la cuidamos</h2>
     <ul>
       <li><strong>Conexión cifrada (HTTPS)</strong> en toda la aplicación.</li>
-      <li><strong>Archivos privados:</strong> tus audios, fotos y videos se guardan en almacenamiento privado, sin enlace público. La aplicación los entrega solo después de comprobar que iniciaste sesión y que tienes permiso sobre esa bitácora.</li>
+      <li><strong>Archivos privados:</strong> tus audios, fotos y videos se guardan en almacenamiento privado, sin enlace público. La aplicación los entrega solo después de comprobar que iniciaste sesión y que tienes permiso sobre esa bitácora. La única excepción son los códigos QR del libro (ver la <a href="#quien-ve">sección 6</a>).</li>
       <li><strong>Claves protegidas:</strong> se guardan solo como huella cifrada de un solo sentido (bcrypt).</li>
       <li><strong>Sesiones seguras:</strong> la cookie de sesión va firmada, no es legible desde scripts de la página y se puede cerrar en todos tus dispositivos a la vez.</li>
       <li><strong>Cada bitácora está aislada:</strong> las consultas siempre se limitan a la cuenta que corresponde.</li>
@@ -193,6 +193,7 @@
     <ul>
       <li><strong>Tú</strong>, desde tu cuenta.</li>
       <li><strong>Las personas a las que les compartas tu código de invitación.</strong> Pueden escuchar y leer lo guardado y sumar sus propios recuerdos. Tú decides a quién se lo das y puedes cambiar el código cuando quieras para cerrar ese acceso.</li>
+      <li><strong>Quien escanee un código QR de tu libro, si tú lo creas.</strong> Un QR del libro abre una página pública donde cualquier persona que tenga el código escucha las grabaciones originales de ese capítulo, sin cuenta. Solo existe si tú lo creas, y puedes retirar el enlace cuando quieras desde el editor del libro: los códigos ya impresos dejan de funcionar.</li>
       <li><strong>Nadie más.</strong> Crear una cuenta nueva no da acceso a la bitácora de otra persona.</li>
     </ul>
     <p>Nuestro equipo no revisa tus historias. El panel interno que usamos muestra cifras de uso y los datos de contacto necesarios para los recordatorios. Solo accederíamos a tu contenido si tú nos lo pides para ayudarte con un problema técnico, o si una autoridad competente lo exige conforme a la ley.</p>

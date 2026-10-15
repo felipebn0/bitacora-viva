@@ -128,10 +128,14 @@ function mediaPanel(){
  const title=node('h3','','Escucha este recuerdo');form.appendChild(title);
  const qr=state.qr?.[activeId];if(qr?.token){const a=node('a','eco-editorial-qr-link','Probar enlace de escucha ↗');a.href=qr.url;a.target='_blank';a.rel='noopener noreferrer';form.appendChild(a)}
  const btn=node('button','eco-editorial-makeqr',qr?'Volver a comprobar el QR':'Crear QR de voz');btn.type='button';
- const msg=node('p','eco-editorial-hint','El audio seguirá protegido: para escucharlo se necesita una sesión autorizada. Usa un dominio permanente antes de imprimir.');
+ const msg=node('p','eco-editorial-hint','Cualquier persona que escanee este QR podrá escuchar las grabaciones originales de este capítulo, sin necesidad de cuenta. Puedes retirar el enlace cuando quieras.');
  btn.addEventListener('click',async()=>{btn.disabled=true;msg.textContent='Preparando enlace de voz…';try{const r=await fetch('/api/book-qr/chapters/'+encodeURIComponent(c.id),{method:'POST',credentials:'same-origin'});const d=await r.json();if(!r.ok)throw Error(d.error||'No se pudo generar el QR');
  state.qr??={};state.qr[activeId]={token:d.token,url:d.url};persist();choose();}catch(e){msg.textContent=e.message}finally{btn.disabled=false}});
  form.append(btn,msg);
+ if(qr?.token){const quitar=node('button','eco-editorial-revokeqr','Retirar el enlace del QR');quitar.type='button';
+ quitar.addEventListener('click',async()=>{if(!confirm('Los códigos QR ya impresos de este capítulo dejarán de funcionar. ¿Retirar el enlace?'))return;quitar.disabled=true;
+ try{const r=await fetch('/api/book-qr/chapters/'+encodeURIComponent(c.id),{method:'DELETE',credentials:'same-origin'});if(!r.ok)throw Error('No se pudo retirar el enlace.');delete state.qr[activeId];persist();choose();}catch(e){msg.textContent=e.message;quitar.disabled=false}});
+ form.append(quitar)}
 }
 function appendMedia(page,c){const id=String(c.id),allowed=photoOptions(c),choice=state.media?.[id]||{},text=String(entry(c).text??c.generated_text??'');
  const paragraphs=text.split(/\n\s*\n/).filter(Boolean);
@@ -141,7 +145,7 @@ function appendMedia(page,c){const id=String(c.id),allowed=photoOptions(c),choic
  }}
  addAt(0);paragraphs.forEach((t,i)=>{page.appendChild(node('p','eco-editorial-paragraph',t));addAt(i+1)});
  const qr=state.qr?.[id];if(qr?.token&&/^[a-f0-9]{48}$/.test(qr.token)){
- const aside=node('div','eco-editorial-qr');const image=node('img');image.src='/api/book-qr/image/'+qr.token+'.svg';image.alt='QR para escuchar la voz original';const line=node('div');line.append(node('strong','','Escucha la voz original'),node('p','','Escanea con un dispositivo autorizado para escuchar la grabación.'));aside.append(image,line);page.appendChild(aside);
+ const aside=node('div','eco-editorial-qr');const image=node('img');image.src='/api/book-qr/image/'+qr.token+'.svg';image.alt='QR para escuchar la voz original';const line=node('div');line.append(node('strong','','Escucha la voz original'),node('p','','Escanea con tu teléfono para escuchar la grabación.'));aside.append(image,line);page.appendChild(aside);
  }
 }
 function edit(c,k,v){state.edits[String(c.id)]={...entry(c),[k]:v};persist();drawBook()}

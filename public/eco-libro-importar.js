@@ -84,7 +84,7 @@
   }
   for(const [id,q] of Object.entries(candidate.qr||{})){
    if(!current.has(id)||!isPlain(q)||!/^[a-f0-9]{48}$/.test(q.token||''))throw Error('QR inválido.');
-   const r=await fetch('/api/book-qr/listen/'+q.token,{credentials:'same-origin'});
+   const r=await fetch('/api/book-qr/owned/'+q.token,{credentials:'same-origin'});
    if(!r.ok)throw Error('Un QR no está autorizado para esta cuenta. No se importó.');
    qr[id]={token:q.token,url:str(q.url,500)};
   }

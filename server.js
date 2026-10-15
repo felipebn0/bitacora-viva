@@ -452,6 +452,8 @@ function crearRateLimit(prefijoClave, maximo) {
 const rateLimit = crearRateLimit('', RATE_LIMIT_MAX);
 const rateLimitVoz = crearRateLimit('voz:', RATE_LIMIT_MAX_VOZ);
 const rateLimitTurno = crearRateLimit('turno:', RATE_LIMIT_MAX_TURNO);
+// Los enlaces públicos de los QR del libro: cada audio se pide a pedacitos (rangos), así que el tope es holgado.
+const rateLimitQr = crearRateLimit('qr:', 240);
 
 // Recibe los reportes de violación de CSP que manda el navegador solo,
 // disparados por la propia política (Content-Security-Policy-Report-Only,
@@ -5805,6 +5807,33 @@ function extensionDesdeContentType(contentType) {
   return mapa[String(contentType || '').toLowerCase()] || 'bin';
 }
 
+// Entrega un archivo guardado (R2 o Blob) a quien lo pidió. Se usa desde /api/media-file (con
+// sesión) y desde los enlaces públicos de los códigos QR del libro (por token).
+async function enviarArchivoAlmacenado(req, res, valorGuardado, cacheControl) {
+  // Safari en iOS exige que el <audio>/<video> reciba soporte de rangos
+  // (Accept-Ranges + 206 Partial Content) para reproducir el archivo —
+  // una respuesta 200 completa, aunque válida, hace que falle con "Error".
+  // Por eso se reenvía el header Range del cliente hacia el origen
+  // (R2 o Blob) y se relaya el status/Content-Range que responda.
+  const rangeHeader = typeof req.headers.range === 'string' ? req.headers.range : undefined;
+
+  const abierto = await abrirArchivoAlmacenado(valorGuardado, rangeHeader);
+  if (!abierto || !abierto.stream) return res.status(404).json({ error: 'No se encontró el archivo.' });
+
+  // Nunca se confía el Content-Type del origen para algo que el navegador
+  // pueda ejecutar como HTML/JS bajo nuestro dominio: si no es un tipo de
+  // audio/imagen/video conocido, se sirve como descarga genérica.
+  res.status(abierto.status === 206 ? 206 : 200);
+  res.set('Content-Type', contentTypeSeguroDeMedia(abierto.contentType));
+  res.set('X-Content-Type-Options', 'nosniff');
+  res.set('Content-Disposition', 'inline');
+  res.set('Cache-Control', cacheControl);
+  res.set('Accept-Ranges', 'bytes');
+  if (abierto.contentRange) res.set('Content-Range', abierto.contentRange);
+  if (abierto.contentLength) res.set('Content-Length', abierto.contentLength);
+  Readable.fromWeb(abierto.stream).pipe(res);
+}
+
 app.get('/api/media-file', requireAuth, async (req, res) => {
   try {
     const valorGuardado = typeof req.query.u === 'string' ? req.query.u : '';
@@ -5814,28 +5843,7 @@ app.get('/api/media-file', requireAuth, async (req, res) => {
     const autorizado = await estaAutorizadoParaVerArchivo(req, datos);
     if (!autorizado) return res.status(403).json({ error: 'No tienes acceso a ese archivo.' });
 
-    // Safari en iOS exige que el <audio>/<video> reciba soporte de rangos
-    // (Accept-Ranges + 206 Partial Content) para reproducir el archivo —
-    // una respuesta 200 completa, aunque válida, hace que falle con "Error".
-    // Por eso se reenvía el header Range del cliente hacia el origen
-    // (R2 o Blob) y se relaya el status/Content-Range que responda.
-    const rangeHeader = typeof req.headers.range === 'string' ? req.headers.range : undefined;
-
-    const abierto = await abrirArchivoAlmacenado(valorGuardado, rangeHeader);
-    if (!abierto || !abierto.stream) return res.status(404).json({ error: 'No se encontró el archivo.' });
-
-    // Nunca se confía el Content-Type del origen para algo que el navegador
-    // pueda ejecutar como HTML/JS bajo nuestro dominio: si no es un tipo de
-    // audio/imagen/video conocido, se sirve como descarga genérica.
-    res.status(abierto.status === 206 ? 206 : 200);
-    res.set('Content-Type', contentTypeSeguroDeMedia(abierto.contentType));
-    res.set('X-Content-Type-Options', 'nosniff');
-    res.set('Content-Disposition', 'inline');
-    res.set('Cache-Control', 'private, max-age=86400');
-    res.set('Accept-Ranges', 'bytes');
-    if (abierto.contentRange) res.set('Content-Range', abierto.contentRange);
-    if (abierto.contentLength) res.set('Content-Length', abierto.contentLength);
-    Readable.fromWeb(abierto.stream).pipe(res);
+    await enviarArchivoAlmacenado(req, res, valorGuardado, 'private, max-age=86400');
   } catch (err) {
     console.error(err);
     if (!res.headersSent) res.status(500).json({ error: 'No se pudo cargar el archivo.' });
@@ -6976,7 +6984,7 @@ app.delete('/api/chapters/:id', requireAuth, bloquearColaborador, rateLimit, asy
   }
 });
 
-require('./book-qr-routes')(app, { sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit });
+require('./book-qr-routes')(app, { sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob });
 require('./book-editor-routes')(app, {
   sql,
   ensureSchema,
