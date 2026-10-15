@@ -1,7 +1,7 @@
 /* ECO · compra del libro digital, modo demostración. No procesa dinero. */
 (()=>{'use strict';
 const $=id=>document.getElementById(id);
-let approved=false,loaded=false,busy=false,dialog;
+let approved=false,loaded=false,busy=false,dialog,esperando=null;
 const request=async(path,opts)=>{
   const res=await fetch(path,{credentials:'same-origin',cache:'no-store',...opts});
   const data=await res.json().catch(()=>({}));if(!res.ok)throw Error(data.error||'No fue posible conectar con ECO.');return data;
@@ -24,7 +24,7 @@ function createModal(){
  dialog.addEventListener('click',e=>{if(e.target===dialog)close()});
  $('ecoDemoConfirm').addEventListener('click',buy);
 }
-function close(){dialog.hidden=true;const launch=$('ecoEditorialPrint');launch?.focus()}
+function close(){dialog.hidden=true;if(esperando){const r=esperando;esperando=null;r(approved)}else{const launch=$('ecoEditorialPrint');launch?.focus()}}
 function show(){createModal();$('ecoDemoMessage').textContent='';$('ecoDemoConfirm').hidden=approved;dialog.hidden=false;$('ecoDemoClose').focus()}
 async function status(){
  try{const data=await request('/api/book-demo/status');loaded=true;approved=!!data.approved;update();return approved}
@@ -42,7 +42,9 @@ async function buy(){
   const data=await request('/api/book-demo/purchase',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
   if(!data.approved)throw Error('La compra no fue aprobada.');
   approved=true;loaded=true;update();$('ecoDemoMessage').textContent='Compra de prueba aprobada. No se cobró dinero.';
-  btn.hidden=true;const cont=$('ecoDemoContinue');cont.textContent='Volver al libro y descargar';
+  // Con la compra aprobada se descarga de una vez: se cierra la ventana y sigue la exportación del PDF.
+  const quienEspera=esperando;esperando=null;dialog.hidden=true;
+  if(quienEspera)quienEspera(true);else window.dispatchEvent(new Event('eco:compra-aprobada'));
  }catch(e){$('ecoDemoMessage').textContent=e.message}
  finally{busy=false;btn.disabled=false}
 }
@@ -56,6 +58,16 @@ function attach(){
  },true);
  update();status();
 }
+// Para quien necesite estar seguro de que la compra está aprobada (el botón "Exportar en PDF" de Mi libro):
+// si ya lo está responde true; si no, abre la ventana de compra y responde cuando se aprueba (true) o se cierra (false).
+window.EcoLibroCompra={
+ async asegurar(){
+  if(!loaded)await status();
+  if(approved)return true;
+  createModal();$('ecoDemoMessage').textContent='';$('ecoDemoConfirm').hidden=false;dialog.hidden=false;$('ecoDemoClose').focus();
+  return new Promise(r=>{esperando=r});
+ }
+};
 function init(){
  const observer=new MutationObserver(()=>{if($('ecoEditorialPrint')&&!$('ecoEditorialPrint').dataset.demoPay)attach()});
  observer.observe(document.body,{childList:true,subtree:true});attach();

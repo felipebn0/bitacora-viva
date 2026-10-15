@@ -171,6 +171,10 @@ await fetch('/api/admin/migrar-blob-a-r2', { method: 'POST', headers: { 'Content
 
 Cada archivo se copia a R2 con la misma clave, se cambia la URL en todas las filas que lo usan (`story_log`, `family_notes`, `media`) y recién después se borra el original de Blob; si algo falla queda tal cual y aparece en `fallidas`. Cuando el paso 1 dé `r2PublicoAbierto: false` y 0 filas pendientes, el store de Blob puede vaciarse.
 
+## Exportar el libro en PDF
+
+El botón **Exportar en PDF** está en Mi libro (`public/eco-libro-exportar.js`). Si la compra de prueba no está aprobada, abre la ventana de pago; al darle al botón de pago se cierra sola y se abre de una vez la ventana de impresión del navegador con el libro completo ("Guardar como PDF"), sin pasos de más. Lo mismo pasa si se compra desde el botón del editor. Si ya está comprado, exporta directo. Sin capítulos no pide pago: avisa que primero hay que generarlos. Por ahora el PDF sale de la impresión del navegador (no hay un generador de PDF en el servidor). Prueba: `npm run test:libro-exportar`.
+
 ## Códigos QR del libro (públicos)
 
 Un QR del libro apunta a `/escuchar.html?t=<token>`: quien lo escanea oye las grabaciones originales de ese capítulo **sin cuenta**. El token (48 hex al azar) es la llave: la cuenta dueña lo crea (`POST /api/book-qr/chapters/:id`), lo comprueba (`GET /api/book-qr/owned/:token`) y lo retira (`DELETE /api/book-qr/chapters/:id`, desde el editor del libro; los QR ya impresos dejan de funcionar). Las rutas públicas son `GET /api/book-qr/listen/:token` y `GET /api/book-qr/audio/:token/:n`: entregan por posición y solo del dueño del enlace, con soporte de rangos (Safari), tope de 240 pedidos por minuto por IP y `noindex`. Los archivos en sí siguen privados (`/api/media-file` pide sesión). Prueba: `test/book-qr-publico.smoke.js`.
