@@ -148,6 +148,7 @@
       const datos = await resp.json();
       if (!datos.config || !datos.puedeEditar) return;
       config = datos.config;
+      C().aplicarColor(config);
       montar(datos.entradas || []);
     } catch (e) { /* sin diario: la sesión sigue igual */ }
   }

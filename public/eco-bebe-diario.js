@@ -76,6 +76,7 @@
 
   function mostrar() {
     const cfg = estado.config;
+    C.aplicarColor(cfg);
     $('vistaCrear').hidden = !!cfg || !estado.puedeEditar;
     $('vistaDiario').hidden = !cfg;
     if (!cfg) {

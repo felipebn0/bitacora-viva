@@ -1,4 +1,6 @@
-/* Diario de un bebé: paleta rosada tenue (modo en la sesión) y estilos de la página del diario. */
+/* Diario de un bebé: paleta rosada tenue (modo en la sesión) y estilos de la página del diario.
+   Si el bebé es niño, <html> lleva la clase eco-bebe-azul y los mismos tokens pasan a azul clarito
+   (al final de este archivo). */
 :root {
   --rosa-fondo: #FBEFEE;
   --rosa-papel: #FFF8F7;
@@ -109,3 +111,32 @@ html.eco-bebe-activo .greeting .sub { font-size: 1rem; }
 .eco-bebe-revoz { border: none; background: none; color: var(--rosa-hondo); text-decoration: underline; font: inherit; font-size: 0.9rem; min-height: 44px; cursor: pointer; }
 .eco-bebe-nota textarea[hidden], .eco-bebe-campo textarea[hidden] { display: none; }
 .eco-bebe-audio { display: block; width: 100%; margin: 6px 0; }
+
+/* --- Niño: la misma paleta tenue en azul clarito --- */
+html.eco-bebe-azul {
+  --rosa-fondo: #EEF5FB;
+  --rosa-papel: #F7FBFE;
+  --rosa-tinta: #21354A;
+  --rosa-suave: #50677D;
+  --rosa-claro: #D6E7F5;
+  --rosa-medio: #A9CAE6;
+  --rosa-fuerte: #8CB8DC;
+  --rosa-hondo: #3A6A92;
+}
+@media (prefers-color-scheme: dark) {
+  html.eco-bebe-azul:not([data-theme="light"]) {
+    --rosa-fondo: #152029;
+    --rosa-papel: #1D2A35;
+    --rosa-tinta: #E2EEF8;
+    --rosa-suave: #9BB4CA;
+    --rosa-claro: #263A4B;
+    --rosa-medio: #44637E;
+    --rosa-fuerte: #8CB8DC;
+    --rosa-hondo: #B2D2EE;
+  }
+}
+html.eco-bebe-azul.eco-bebe-activo .orb { box-shadow: 0 10px 26px -10px rgba(140, 184, 220, 0.65) !important; color: #13283B !important; }
+html.eco-bebe-azul.eco-bebe-activo .orb[data-state="speaking"], html.eco-bebe-azul.eco-bebe-activo .orb[data-state="thinking"] { background: #5B8BB3 !important; }
+html.eco-bebe-azul .eco-bebe-grande { color: #13283B; }
+html.eco-bebe-azul .eco-bebe-orbe { background: radial-gradient(circle at 35% 30%, #6A9BC5, #2E5675); }
+html.eco-bebe-azul .eco-bebe-voz-msg.error { color: #A3263A; }

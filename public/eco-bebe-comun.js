@@ -239,5 +239,10 @@
     };
   }
 
-  window.EcoBebeComun = { subirFoto, guardarEntrada, etiqueta, edadTexto, fechaLarga, botonVoz };
+  // Si el bebé es niño, la misma paleta tenue pero en azul clarito (clase en <html>, ver eco-bebe.css).
+  function aplicarColor(config) {
+    document.documentElement.classList.toggle('eco-bebe-azul', !!config && config.genero === 'masculino');
+  }
+
+  window.EcoBebeComun = { subirFoto, guardarEntrada, etiqueta, edadTexto, fechaLarga, botonVoz, aplicarColor };
 })();

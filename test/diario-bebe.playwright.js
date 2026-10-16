@@ -167,6 +167,24 @@ const CAPTURAS = process.env.CAPTURAS_BEBE;
   ok(!(t.estado.errores || []).length, 'la página del diario sin errores de JavaScript');
   await t.ctx.close();
 
+  // 4b) Si es niño: la misma paleta en azul clarito (sesión y página del diario)
+  t = await contexto({ config: { nombre: 'Tomás', genero: 'masculino', nacioEn: null, estado: 'en_camino' } });
+  await t.page.goto(base + '/app.html');
+  await t.page.waitForSelector('#ecoBebePill', { timeout: 8000 });
+  await t.page.click('#ecoBebePill');
+  await t.page.waitForSelector('#ecoBebePanel:not([hidden])');
+  const fondoAzul = await t.page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  ok(fondoAzul === 'rgb(238, 245, 251)', 'si es niño, el modo de la sesión es azul clarito (' + fondoAzul + ')');
+  await t.page.waitForTimeout(900); // que termine la transición de color antes de la captura
+  if (CAPTURAS) await t.page.screenshot({ path: path.join(CAPTURAS, 'sesion-azul.png') });
+  await t.page.goto(base + '/diario-bebe.html');
+  await t.page.waitForSelector('#vistaDiario:not([hidden])');
+  const fondoDiarioAzul = await t.page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  ok(fondoDiarioAzul === 'rgb(238, 245, 251)', 'y la página del diario también (' + fondoDiarioAzul + ')');
+  if (CAPTURAS) await t.page.screenshot({ path: path.join(CAPTURAS, 'diario-azul.png'), fullPage: true });
+  ok(!(t.estado.errores || []).length, 'el modo azul sin errores de JavaScript');
+  await t.ctx.close();
+
   // 5) Familiar invitada: solo ve
   t = await contexto({ config: { nombre: 'Rafaela', genero: 'femenino', nacioEn: null, estado: 'en_camino' }, puedeEditar: false, entradas: [{ id: 5, texto: 'Primera ecografía', fotoUrl: '/api/bebe/foto/5?owner=1', creadaEn: new Date().toISOString() }] });
   await t.page.goto(base + '/diario-bebe.html?owner=1');
