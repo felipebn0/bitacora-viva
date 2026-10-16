@@ -756,6 +756,26 @@ async function main() {
   await nextForUser(server, cookie, { history: [], mode: 'historia', modoBebe: true });
   check('modo bebé pedido pero sin diario creado: charla normal', !capturedCalls[0].system[0].text.includes('DIARIO DE UN BEBÉ'));
 
+  // --- Crisis: ECO marca la respuesta y la pantalla muestra los números (nunca se dice la marca) ---
+  resetAnthropicMock();
+  pushAnthropicResponse('Gracias por contármelo, Diego. Lo que sientes importa y no estás solo. En la pantalla te dejo unos números para hablar con alguien ya mismo.\n[AYUDA:suicidio]');
+  const crisis1 = await nextForUser(server, cookie, { history: [{ role: 'user', content: 'Ya no quiero vivir' }], mode: 'historia', stream: true });
+  const evCrisis = lineas(crisis1);
+  const finCrisis = evCrisis[evCrisis.length - 1];
+  const dichoCrisis = evCrisis.filter((e) => e.t === 'frase').map((e) => e.texto).join(' ') + ' ' + (finCrisis.restante || '');
+  check('crisis: el system le pide a ECO marcar un riesgo actual', capturedCalls[0].system[0].text.includes('[AYUDA:suicidio]') && capturedCalls[0].system[0].text.includes('riesgo ACTUAL'));
+  check('crisis: la respuesta avisa qué banner mostrar (ayuda = suicide)', finCrisis.t === 'fin' && finCrisis.ayuda === 'suicide');
+  check('crisis: la marca no queda en el mensaje ni en lo que se dice en voz alta', !finCrisis.message.includes('[') && !dichoCrisis.includes('[') && finCrisis.message.endsWith('ya mismo.'));
+  resetAnthropicMock();
+  pushAnthropicResponse('Eso suena muy duro. En la pantalla te dejo unos números de ayuda.\n[AYUDA:violencia]');
+  const crisis2 = await nextForUser(server, cookie, { history: [{ role: 'user', content: 'Mi esposo me está pegando' }], mode: 'historia' });
+  const jCrisis2 = JSON.parse(crisis2.body);
+  check('crisis sin streaming: ayuda = violence y sin marca en el mensaje', jCrisis2.ayuda === 'violence' && !jCrisis2.message.includes('['));
+  resetAnthropicMock();
+  pushAnthropicResponse('Qué recuerdo tan bonito. ¿Cómo se llamaba la finca?');
+  const sinCrisis = JSON.parse((await nextForUser(server, cookie, { history: historial, mode: 'historia' })).body);
+  check('sin crisis: ayuda = null', sinCrisis.ayuda === null);
+
   server.close();
   console.log = originalConsoleLog;
   console.error = originalConsoleError;

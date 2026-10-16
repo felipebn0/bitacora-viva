@@ -8,7 +8,9 @@
  *   - nada:      expresiones sin riesgo ("me mato de la risa", "se me pega") o la muerte de otra
  *                persona contada como recuerdo.
  * Sirve para lo que se escribe (cualquier <textarea>) y para lo que se dice por voz
- * (window.ecoCrisisCheck(texto, elementoCercano), que colaborar.html llama tras transcribir).
+ * (window.ecoCrisisCheck(texto, elementoCercano), que colaborar.html llama tras transcribir), y a la
+ * marca que pone el servidor cuando ECO detecta un riesgo actual (window.ecoCrisisAyuda, en app.html y
+ * colaborar.html).
  */
 (()=>{
 'use strict';
@@ -214,6 +216,21 @@ function watchTextarea(ta) {
 window.ecoCrisisCheck = function(text, nearEl){
   const anchor = nearEl || document.querySelector('.orb-zone, .aportes, main') || document.body;
   return mostrar(clasificar(text), anchor);
+};
+
+// ── Lo que responde ECO ───────────────────────────────────────────────────────
+// El servidor marca la respuesta cuando ECO detecta un riesgo actual (ayuda = 'suicide' | 'violence').
+// Respaldo: si ECO recomienda una línea de ayuda o ayuda profesional sin la marca, el banner sale igual.
+const RECOMIENDA_AYUDA = /\b(106|123|155|141)\b|\blinea (de )?(ayuda|atencion|apoyo)|\bayuda profesional\b|\bprofesional de (la )?salud mental\b|\bnumeros? de ayuda\b/;
+window.ecoCrisisAyuda = function(ayuda, textoEco, textoPersona, nearEl){
+  let tipo = ayuda === 'suicide' || ayuda === 'violence' ? ayuda : null;
+  if (!tipo && RECOMIENDA_AYUDA.test(norm(textoEco))) {
+    const r = clasificar(textoPersona);
+    tipo = r ? r.tipo : (/violencia|maltrat|agred|golpe|abus/.test(norm(textoEco)) ? 'violence' : 'suicide');
+  }
+  if (!tipo) return null;
+  const anchor = nearEl || document.querySelector('.orb-zone, .aportes, main') || document.body;
+  return mostrar({ tipo, modo: 'directo' }, anchor);
 };
 
 function init(){

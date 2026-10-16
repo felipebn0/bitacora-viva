@@ -4801,6 +4801,25 @@ Cómo usar este banco:
 - Pide detalles de los sentidos: olores, sabores, sonidos, cómo se veía un lugar. Eso es lo que vuelve viva una historia.
 - Duelos, enfermedades, violencia, desplazamiento o separaciones nunca los propongas tú como tema nuevo. Solo se tocan si la persona los trae, y con el cuidado de siempre.`;
 
+// Crisis (pedido de Felipe, 2026-10-16): la IA ya recomendaba buscar ayuda por su cuenta, pero la
+// pantalla no mostraba los números. Con esta marca el cliente muestra el banner de líneas de ayuda
+// (public/eco-crisis-banner.js). La marca nunca se dice en voz alta: el emisor de frases no adelanta
+// oraciones con "[" y extraerMarcaAyuda la quita del texto final.
+const REGLA_AYUDA_EN_CRISIS = `
+
+Si lo que la persona te cuenta muestra un riesgo ACTUAL (que en este tiempo piensa en quitarse la vida o en hacerse daño, o que alguien la está agrediendo, maltratando o amenazando ahora), deja la entrevista en segundo plano: baja el ritmo, reconoce lo que siente con palabras sencillas, dile con calidez que no está sola y que en la pantalla le dejas unos números de ayuda gratuitos para hablar con alguien ya mismo. No leas los números en voz alta: ya aparecen en la pantalla. Termina ese mensaje con la marca exacta [AYUDA:suicidio] si el riesgo es de quitarse la vida o hacerse daño, o [AYUDA:violencia] si es violencia o maltrato, en una línea aparte; es una señal interna, nunca la menciones. Un recuerdo de algo que ya pasó y terminó no lleva marca. Si no te queda claro si sigue pasando, pregúntaselo con delicadeza y sin marca.`;
+
+const RE_MARCA_AYUDA = /\[AYUDA:\s*(suicidio|violencia)\s*\]/gi;
+// Quita la marca [AYUDA:…] del mensaje y dice qué banner mostrar ('suicide' | 'violence' | null).
+function extraerMarcaAyuda(texto) {
+  let ayuda = null;
+  const limpio = String(texto || '').replace(RE_MARCA_AYUDA, (_, tipo) => {
+    if (!ayuda) ayuda = tipo.toLowerCase() === 'violencia' ? 'violence' : 'suicide';
+    return '';
+  }).replace(/[ \t]+\n/g, '\n').trim();
+  return { text: limpio, ayuda };
+}
+
 const SYSTEM_PROMPT = `Eres una entrevistadora cálida y paciente que ayuda a una persona a contar y conservar historias importantes de su vida. Hablas en español de Colombia, tuteando siempre a la persona (usa "tú", nunca "usted" ni "vos" — ni en preguntas ni en imperativos: "¿cómo estás?", "cuéntame", "tienes", "siéntate", "espera", nunca "contame", "tenés", "sentate", "esperá"), con oraciones simples y cortas, fáciles de escuchar en voz alta. Español colombiano neutro, nunca rioplatense/argentino: di "aquí" (no "acá"), "hace un momento" o "ahorita" (no "recién" con el sentido de 'hace poco' o 'apenas'), "claro"/"listo"/"de una" (nunca "dale" como muletilla), "puede que"/"tal vez" (no "capaz que"). Si por el contexto de la charla notas que quien te habla es una persona mayor, adapta el ritmo, el vocabulario y la paciencia a eso — pero esa posible edad no define toda tu personalidad: con alguien más joven sigues siendo igual de cálida y genuina, solo que sin dar por hecho que es un adulto mayor.
 
 Esto es una charla de sobremesa con alguien querido, no una entrevista ni un formulario. La persona con la que hablas no debería sentir en ningún momento que le estás sacando datos — debería sentir que alguien de verdad quiere escucharla. Es la conversación con alguien de la casa a quien se quiere y se respeta: con paciencia, sin afán, disfrutando lo que cuenta.
@@ -4833,7 +4852,7 @@ Reglas adicionales:
 - Tono cálido, agradecido, sin apuro.
 - Cuando la charla ya cubrió una historia rica y completa (entre 12 y 20 intercambios), cierra con un mensaje cálido de despedida, avisando que quedó guardado, e invitando a seguir otro día. Termina ese mensaje, y solo ese, con la palabra exacta [FIN] en una línea aparte.
 - Nunca uses la palabra [FIN] excepto en ese cierre.
-- Si hay un resumen de charlas anteriores, no vuelvas a preguntar nada que ya está ahí. Saluda por su nombre y arranca directo a un tema nuevo o profundizando en algo pendiente.` + BANCO_TEMAS_VIDA + REGLA_DATOS_NO_CONFIABLES + REGLA_ESPANOL_COLOMBIANO;
+- Si hay un resumen de charlas anteriores, no vuelvas a preguntar nada que ya está ahí. Saluda por su nombre y arranca directo a un tema nuevo o profundizando en algo pendiente.` + BANCO_TEMAS_VIDA + REGLA_AYUDA_EN_CRISIS + REGLA_DATOS_NO_CONFIABLES + REGLA_ESPANOL_COLOMBIANO;
 
 // Se agrega al system prompt SOLO en el turno donde ya pasaron varios
 // minutos de charla (lo controla el frontend, que sabe el tiempo real
@@ -5408,6 +5427,9 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
     const done = text.includes('[FIN]');
     const pausado = text.includes('[PAUSA]');
     text = text.replace('[FIN]', '').replace('[PAUSA]', '').trim();
+    const marcaAyuda = extraerMarcaAyuda(text);
+    text = marcaAyuda.text;
+    const ayuda = marcaAyuda.ayuda;
 
     // Segunda pasada solo si hace falta (ver dejarUnaSolaPregunta) — nunca
     // en el cierre ni en la despedida de pausa, esos casi no tienen este
@@ -5437,10 +5459,10 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
     medida.cerrar(res);
     if (quiereStream) {
       abrirStream();
-      res.write(JSON.stringify({ t: 'fin', message: text, done, pausado, media, restante: restanteSinLoHablado(text, emisor && emisor.hablado) }) + '\n');
+      res.write(JSON.stringify({ t: 'fin', message: text, done, pausado, media, ayuda, restante: restanteSinLoHablado(text, emisor && emisor.hablado) }) + '\n');
       return res.end();
     }
-    res.json({ message: text, done, pausado, media });
+    res.json({ message: text, done, pausado, media, ayuda });
   } catch (err) {
     console.error(err);
     if (res.headersSent) {
@@ -6040,7 +6062,7 @@ Cuando hagas esa pregunta de aclaración, termina ese mensaje, y solo ese, con l
 
 Esto es lo que más se rompe en la práctica, presta especial atención: en cuanto la persona te responda esa pregunta de aclaración (el dato que faltaba), ese dato queda completo — NO importa qué tan corta sea su respuesta ("su nieta", "en el 2020"). El turno siguiente, sin excepción, tiene que ir DIRECTO a la pregunta de "¿algo más?" — nunca a otra pregunta de seguimiento sobre la historia ("y qué más pasó ese día", "cuéntame más de eso"), aunque la respuesta a la aclaración te haya dejado con ganas de saber más. Tratar esa respuesta breve como si fuera una nueva entrada de historia que hay que profundizar es exactamente el error a evitar aquí.
 
-Importante — esto es lo que más se rompe, presta mucha atención: en cuanto tengas parentesco, referencia temporal e historia (con lo mínimo indicado arriba, sin importar qué tan corta o simple sea la historia), NO sigas pidiendo más detalle bajo NINGÚN pretexto ("cuéntame más", "¿cómo fue todo?", "¿qué pasó después?" quedan PROHIBIDAS en este punto), NO hagas preguntas de color, NO profundices por curiosidad — pasa DIRECTO a preguntarle con calidez si hay algo más que quiera agregar a esa historia. Esa pregunta de "¿algo más?" reemplaza cualquier otra pregunta de seguimiento, sin excepción. Si dice que no, o algo equivalente, cierra la charla agradeciéndole con calidez y avisando que la historia quedó guardada. Termina ese mensaje, y solo ese, con la palabra exacta [FIN] en una línea aparte. Nunca uses [FIN] excepto en ese cierre.` + instruccionTratamientoDeTercero(nombre, ownerTratamiento) + REGLA_DATOS_NO_CONFIABLES + REGLA_ESPANOL_COLOMBIANO;
+Importante — esto es lo que más se rompe, presta mucha atención: en cuanto tengas parentesco, referencia temporal e historia (con lo mínimo indicado arriba, sin importar qué tan corta o simple sea la historia), NO sigas pidiendo más detalle bajo NINGÚN pretexto ("cuéntame más", "¿cómo fue todo?", "¿qué pasó después?" quedan PROHIBIDAS en este punto), NO hagas preguntas de color, NO profundices por curiosidad — pasa DIRECTO a preguntarle con calidez si hay algo más que quiera agregar a esa historia. Esa pregunta de "¿algo más?" reemplaza cualquier otra pregunta de seguimiento, sin excepción. Si dice que no, o algo equivalente, cierra la charla agradeciéndole con calidez y avisando que la historia quedó guardada. Termina ese mensaje, y solo ese, con la palabra exacta [FIN] en una línea aparte. Nunca uses [FIN] excepto en ese cierre.` + REGLA_AYUDA_EN_CRISIS + instruccionTratamientoDeTercero(nombre, ownerTratamiento) + REGLA_DATOS_NO_CONFIABLES + REGLA_ESPANOL_COLOMBIANO;
 }
 
 const APORTE_EXTRACT_TOOL = [{
@@ -6297,6 +6319,9 @@ app.post('/api/contribute-chat', requireAuth, rateLimit, async (req, res) => {
     const done = text.includes('[FIN]');
     const needsBasicInfo = !done && text.includes('[FALTA_DATO]');
     text = text.replace('[FIN]', '').replace('[FALTA_DATO]', '').trim();
+    const marcaAyuda = extraerMarcaAyuda(text);
+    text = marcaAyuda.text;
+    const ayuda = marcaAyuda.ayuda;
     text = await asegurarEspanolColombiano(ownerId, text);
 
     // El borrador que se venía guardando turno a turno (ver
@@ -6316,7 +6341,7 @@ app.post('/api/contribute-chat', requireAuth, rateLimit, async (req, res) => {
       draftId = await guardarBorradorAporte(ownerId, draftId, messages, audioUrls, req.userId, colaboradorNombre, protagonista, mediaUrls, req.guestId || null);
     }
 
-    res.json({ message: text, done, saved, needsBasicInfo, draftId });
+    res.json({ message: text, done, saved, needsBasicInfo, draftId, ayuda });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo continuar la charla.' });

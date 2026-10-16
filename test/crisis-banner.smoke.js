@@ -49,6 +49,11 @@ espera('', null, null);
 const colaborar = fs.readFileSync(path.resolve(__dirname, '..', 'public', 'colaborar.html'), 'utf8');
 ok(/window\.ecoCrisisCheck\(texto,/.test(colaborar) && /eco-crisis-banner\.js/.test(colaborar), 'colaborar.html revisa lo que se dice por voz tras transcribir');
 
+// La respuesta de ECO también muestra el banner (marca del servidor o recomendación de una línea).
+const app = fs.readFileSync(path.resolve(__dirname, '..', 'public', 'app.html'), 'utf8');
+ok(/eco-crisis-banner\.js/.test(app) && /window\.ecoCrisisAyuda\(data\.ayuda/.test(app), 'app.html (la charla principal) carga el banner y lo muestra con la respuesta de ECO');
+ok(/window\.ecoCrisisAyuda\(data\.ayuda/.test(colaborar), 'colaborar.html también lo muestra con la respuesta de ECO');
+
 // Los números de las líneas son los verificados (195 no es la Línea Púrpura; 192 opción 4 sin confirmar).
 const js = fs.readFileSync(path.resolve(__dirname, '..', 'public', 'eco-crisis-banner.js'), 'utf8');
 ok(/018000112137/.test(js) && !/num:'195'/.test(js) && !/192 opci/.test(js), 'líneas verificadas: Línea Púrpura 018000112137, sin 195 ni 192 opción 4');
