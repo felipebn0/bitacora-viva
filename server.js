@@ -4954,7 +4954,7 @@ const INICIO_MODO_BEBE = '(La persona acaba de presionar el botón para charlar 
 
 // Cuando la charla del modo bebé arranca porque la persona acaba de subir una foto desde el panel
 // (eco-bebe.js): el saludo va directo a esa foto, no a "cómo te fue hoy".
-const INICIO_MODO_BEBE_FOTO = '(La persona acaba de subir una foto de hoy al diario de su bebé y la charla arrancó para que cuente la historia de esa foto. Salúdala brevemente por su nombre si lo sabes y, en el mismo mensaje, pregúntale con calidez qué pasó en esa foto o quiénes aparecen. Una sola pregunta. No describas la foto: no la puedes ver.)';
+const INICIO_MODO_BEBE_FOTO = '(La persona acaba de subir una foto de hoy al diario de su bebé y la charla arrancó para que cuente la historia de esa foto. Saluda brevemente a la persona por su nombre si lo sabes y, en el mismo mensaje, pregunta con calidez qué pasó en esa foto o quiénes aparecen. Una sola pregunta. No describas la foto: no la puedes ver.)';
 
 const HISTORIA_MIN_CHARS = 180; // umbral simple: una respuesta larga y elaborada = historia; un dato corto no.
 
