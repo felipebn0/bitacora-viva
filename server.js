@@ -1511,6 +1511,8 @@ function ensureSchema() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`,
       sql`CREATE INDEX IF NOT EXISTS idx_diario_bebe_entradas_perfil ON diario_bebe_entradas(profile_user_id, created_at)`,
+      // Notas de voz originales del diario (JSON array de URLs en media/<id>/bebe/).
+      sql`ALTER TABLE diario_bebe_entradas ADD COLUMN IF NOT EXISTS audio_urls TEXT`,
     ]).catch((err) => {
       // Si la transacción falla, no dejamos una promesa rota memoizada para
       // siempre — el próximo intento (esta misma instancia tibia, no hace
@@ -3812,7 +3814,7 @@ app.post('/api/reset-bitacora', requireAuth, bloquearColaborador, bloquearInvita
     // que ese "RETURNING" hubiera traído.
     const borradorLibro = await sql`SELECT draft FROM book_editor_drafts WHERE owner_id = ${req.userId}`;
     const fotosDelLibro = urlsDeFotosDelLibro(borradorLibro[0] && borradorLibro[0].draft, req.userId);
-    const fotosDelDiarioBebe = (await sql`SELECT media_url FROM diario_bebe_entradas WHERE profile_user_id = ${req.userId} AND media_url IS NOT NULL`).map((f) => f.media_url);
+    const fotosDelDiarioBebe = (await sql`SELECT media_url, audio_urls FROM diario_bebe_entradas WHERE profile_user_id = ${req.userId}`).flatMap((f) => [f.media_url, ...parseJsonArray(f.audio_urls)]).filter((u) => typeof u === 'string' && u);
     const [, s, r, n, m, fm, te, sl, ch] = await sql.transaction([
       sql`DELETE FROM historia_versiones WHERE tabla = 'family_members' AND registro_id IN (SELECT id FROM family_members WHERE user_id = ${req.userId})`,
       sql`DELETE FROM sessions WHERE user_id = ${req.userId} RETURNING id`,
@@ -3929,7 +3931,7 @@ app.post('/api/delete-account', requireAuth, rateLimit, async (req, res) => {
     // solo al final, con nada más apuntándole, la fila de "users" en sí.
     const borradorLibro = await sql`SELECT draft FROM book_editor_drafts WHERE owner_id = ${req.userId}`;
     const fotosDelLibro = urlsDeFotosDelLibro(borradorLibro[0] && borradorLibro[0].draft, req.userId);
-    const fotosDelDiarioBebe = (await sql`SELECT media_url FROM diario_bebe_entradas WHERE profile_user_id = ${req.userId} AND media_url IS NOT NULL`).map((f) => f.media_url);
+    const fotosDelDiarioBebe = (await sql`SELECT media_url, audio_urls FROM diario_bebe_entradas WHERE profile_user_id = ${req.userId}`).flatMap((f) => [f.media_url, ...parseJsonArray(f.audio_urls)]).filter((u) => typeof u === 'string' && u);
     const results = await sql.transaction([
       sql`DELETE FROM historia_versiones WHERE tabla = 'family_members' AND registro_id IN (SELECT id FROM family_members WHERE user_id = ${req.userId})`,
       sql`DELETE FROM sessions WHERE user_id = ${req.userId}`,
@@ -7041,7 +7043,7 @@ app.delete('/api/chapters/:id', requireAuth, bloquearColaborador, rateLimit, asy
 });
 
 require('./book-qr-routes')(app, { sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob });
-require('./bebe-routes')(app, { sql, ensureSchema, requireAuth, rateLimit, bloquearEscritura: [bloquearColaborador, bloquearSiNoPuedeNarrar, bloquearSiReadOnly], resolveProfileUserId, almacenarArchivo, verificarArchivoReal, MEDIA_MIME_PERMITIDOS, enviarArchivoAlmacenado, datosDelArchivoDeBlob, borrarArchivosBlob });
+require('./bebe-routes')(app, { sql, ensureSchema, requireAuth, rateLimit, bloquearEscritura: [bloquearColaborador, bloquearSiNoPuedeNarrar, bloquearSiReadOnly], resolveProfileUserId, almacenarArchivo, verificarArchivoReal, MEDIA_MIME_PERMITIDOS, AUDIO_MIME_PERMITIDOS, enviarArchivoAlmacenado, datosDelArchivoDeBlob, borrarArchivosBlob });
 require('./book-editor-routes')(app, {
   sql,
   ensureSchema,
@@ -8373,7 +8375,7 @@ function stmtsBorrarContenidoDe(id) {
     sql`DELETE FROM timeline_events WHERE user_id = ${id}`,
     sql`DELETE FROM story_log WHERE user_id = ${id} RETURNING audio_url, audio_urls, media_urls`,
     sql`DELETE FROM chapters WHERE user_id = ${id}`,
-    sql`DELETE FROM diario_bebe_entradas WHERE profile_user_id = ${id} RETURNING media_url AS url`,
+    sql`DELETE FROM diario_bebe_entradas WHERE profile_user_id = ${id} RETURNING media_url AS url, audio_urls`,
     sql`DELETE FROM diario_bebe WHERE profile_user_id = ${id}`,
     sql`DELETE FROM usage_events WHERE user_id = ${id}`,
     sql`DELETE FROM notification_preferences WHERE user_id = ${id}`,

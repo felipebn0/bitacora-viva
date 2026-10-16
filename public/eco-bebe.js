@@ -67,11 +67,15 @@
     texto.maxLength = 600;
     texto.placeholder = 'Qué pasó en esta foto (opcional)';
     texto.setAttribute('aria-label', 'Qué pasó en esta foto');
-    const invitacion = E('p', 'eco-bebe-invitacion', 'Cuéntale a ECO qué pasó en esta foto (si quieres).');
-    const voz = C().botonVoz(texto, 600);
-    const guardar = E('button', 'eco-bebe-grande', 'Guardar en el diario');
-    guardar.type = 'button';
-    nota.append(invitacion, voz.caja, texto, guardar);
+    const invitacion = E('p', 'eco-bebe-invitacion', 'Foto guardada. Cuéntale a ECO qué pasó (si quieres).');
+    let enCurso = null; // la entrada de la foto recién subida, que la voz va completando
+    const reemplazar = (entrada) => {
+      const i = entradas.findIndex((x) => x.id === entrada.id);
+      if (i >= 0) entradas[i] = entrada; else entradas.unshift(entrada);
+      enCurso = entrada;
+    };
+    const voz = C().botonVoz(texto, { entrada: () => enCurso, alGuardar: reemplazar });
+    nota.append(invitacion, voz.caja, texto);
     const hablar = E('button', 'eco-bebe-secundario', 'Contar mi día con ' + config.nombre);
     hablar.type = 'button';
     hablar.id = 'ecoBebeHablar';
@@ -82,37 +86,33 @@
     msg.setAttribute('aria-live', 'polite');
     panel.append(chip, pregunta, tira, foto, input, nota, hablar, ver, msg);
 
-    let elegida = null;
     const aviso = (t, error) => { msg.textContent = t; msg.classList.toggle('error', !!error); };
 
-    foto.addEventListener('click', () => input.click());
-    input.addEventListener('change', () => {
-      elegida = input.files && input.files[0];
-      input.value = '';
-      if (!elegida) return;
-      voz.reiniciar();
-      nota.hidden = false;
-      aviso('');
-      invitacion.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    });
-    guardar.addEventListener('click', async () => {
-      if (!elegida) return;
+    foto.addEventListener('click', () => {
       if (voz.ocupado()) { aviso('Termina de contar primero: toca el botón de ECO.', true); return; }
-      const archivo = elegida;
-      guardar.disabled = foto.disabled = true;
-      aviso('Subiendo…');
+      input.click();
+    });
+    // La foto se guarda en el diario apenas se elige; la nota por voz se le suma después.
+    input.addEventListener('change', async () => {
+      const archivo = input.files && input.files[0];
+      input.value = '';
+      if (!archivo) return;
+      foto.disabled = true;
+      nota.hidden = true;
+      aviso('Guardando la foto…');
       try {
-        const entrada = await C().subirFoto(archivo, texto.value.trim());
-        entradas.unshift(entrada);
+        const entrada = await C().subirFoto(archivo, '');
+        enCurso = null;
+        reemplazar(entrada);
         pintarTira(entradas);
-        elegida = null;
         voz.reiniciar();
-        nota.hidden = true;
-        aviso('Guardada en el diario.');
+        nota.hidden = false;
+        aviso('');
+        invitacion.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       } catch (e) {
         aviso(e.message || 'No se pudo subir la foto. Intenta de nuevo.', true);
       }
-      guardar.disabled = foto.disabled = false;
+      foto.disabled = false;
     });
     hablar.addEventListener('click', () => {
       const orbe = document.getElementById('orb');

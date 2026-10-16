@@ -59,10 +59,36 @@
     try { return new Date(iso).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); } catch (e) { return ''; }
   }
 
-  // Botón redondo de ECO para contar la nota de voz en vez de escribirla: graba, transcribe con
-  // /api/transcribe y va dejando lo que se entendió en el textarea (que queda escondido y solo se
-  // muestra si este aparato no puede usar el micrófono).
-  function botonVoz(texto, max) {
+  async function subirAudio(blob) {
+    const r = await fetch('/api/bebe/audio', { method: 'POST', headers: { 'Content-Type': blob.type || 'audio/webm' }, body: blob });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'No se pudo guardar la nota de voz.');
+    return d.url;
+  }
+
+  async function transcribir(blob, ms) {
+    const r = await fetch('/api/transcribe', { method: 'POST', headers: { 'Content-Type': blob.type || 'audio/webm', 'X-Audio-Duration-Ms': String(ms) }, body: blob });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'No pude entender el audio.');
+    return String(d.text || '').trim();
+  }
+
+  async function actualizarEntrada(id, cuerpo) {
+    const r = await fetch('/api/bebe/entradas/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || 'No se pudo guardar.');
+    return d.entrada;
+  }
+
+  // Botón redondo de ECO para contar la nota por voz. Al terminar de hablar, sube la grabación
+  // original y su transcripción, y la deja guardada sola en el diario: en la entrada que diga
+  // entrada() (por ejemplo la foto que se acaba de subir) o, si no hay ninguna, en una nueva.
+  // La caja de texto queda escondida y solo aparece si este aparato no puede usar el micrófono
+  // (ahí se guarda sola al salir de la caja).
+  //   opciones.entrada()        -> la entrada a completar, o null
+  //   opciones.alGuardar(e)     -> avisa la entrada creada o actualizada
+  function botonVoz(texto, opciones) {
+    const max = 600;
     const E = (tag, clase, contenido) => { const x = document.createElement(tag); if (clase) x.className = clase; if (contenido !== undefined) x.textContent = contenido; return x; };
     const caja = E('div', 'eco-bebe-voz');
     const boton = E('button', 'eco-bebe-orbe');
@@ -80,32 +106,47 @@
 
     let estado = 'listo';
     let mic = null;
+    let teclado = false;
     const pintar = () => {
       boton.classList.toggle('grabando', estado === 'grabando');
       boton.disabled = estado === 'procesando';
       boton.textContent = estado === 'grabando' ? 'Te escucho… toca para terminar'
-        : estado === 'procesando' ? 'Un momento…'
+        : estado === 'procesando' ? 'Guardando…'
         : texto.value.trim() ? 'Toca para contar más' : 'Toca y cuéntalo';
-      const hay = !!texto.value.trim();
+      const hay = !!texto.value.trim() && !teclado;
       dicho.hidden = borrar.hidden = !hay;
       dicho.textContent = hay ? '«' + texto.value.trim() + '»' : '';
     };
     const avisar = (t, error) => { msg.textContent = t || ''; msg.classList.toggle('error', !!error); };
     const usarTeclado = (t) => {
+      teclado = true;
       avisar(t, true);
       texto.hidden = false;
       boton.hidden = true;
-      dicho.hidden = borrar.hidden = true;
+      pintar();
     };
     function soltarMic() {
       if (mic) { try { mic.stream.getTracks().forEach((t) => t.stop()); } catch (e) { /* nada */ } }
       mic = null;
     }
 
+    // Guarda en el diario: completa la entrada en curso o crea una nueva.
+    async function guardar(cuerpo) {
+      const actual = opciones.entrada();
+      let entrada;
+      if (actual) {
+        entrada = await actualizarEntrada(actual.id, cuerpo);
+      } else {
+        entrada = await guardarEntrada({ texto: cuerpo.texto || '', audioUrl: cuerpo.agregarAudio || null });
+      }
+      opciones.alGuardar(entrada);
+      return entrada;
+    }
+
     boton.addEventListener('click', async () => {
       if (estado === 'procesando') return;
       if (estado === 'listo') {
-        if (!window.MediaRecorder || !navigator.mediaDevices) { usarTeclado('Este navegador no puede grabar. Escribe la nota aquí abajo.'); return; }
+        if (!window.MediaRecorder || !navigator.mediaDevices) { usarTeclado('Este navegador no puede grabar. Escribe la nota aquí abajo y se guarda sola.'); return; }
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
           let rec;
@@ -120,7 +161,7 @@
         } catch (err) {
           const n = (err && err.name) || '';
           if (n === 'NotAllowedError' || n === 'PermissionDeniedError' || n === 'SecurityError') avisar('El micrófono está bloqueado. Permítelo en el candado junto a la dirección de la página y vuelve a tocar.', true);
-          else usarTeclado('No pude usar el micrófono. Escribe la nota aquí abajo.');
+          else usarTeclado('No pude usar el micrófono. Escribe la nota aquí abajo y se guarda sola.');
         }
         return;
       }
@@ -140,25 +181,48 @@
         return;
       }
       try {
-        const r = await fetch('/api/transcribe', { method: 'POST', headers: { 'Content-Type': grabacion.blob.type || 'audio/webm', 'X-Audio-Duration-Ms': String(grabacion.ms) }, body: grabacion.blob });
-        const d = await r.json().catch(() => ({}));
-        const nuevo = String(d.text || '').trim();
-        if (r.ok && nuevo) {
-          texto.value = (texto.value.trim() ? texto.value.trim() + ' ' : '') + nuevo;
-          texto.value = texto.value.slice(0, max || 600);
-          avisar('');
-        } else if (r.ok) {
-          avisar('No entendí nada. Acércate un poco al micrófono e intenta otra vez.', true);
-        } else {
-          avisar(d.error || 'No pude entender el audio. Intenta otra vez.', true);
-        }
+        // El audio original se guarda aunque la transcripción falle o salga vacía.
+        const [audioUrl, nuevo] = await Promise.all([
+          subirAudio(grabacion.blob),
+          transcribir(grabacion.blob, grabacion.ms).catch(() => ''),
+        ]);
+        const completo = ((texto.value.trim() ? texto.value.trim() + ' ' : '') + nuevo).trim().slice(0, max);
+        await guardar({ texto: completo, agregarAudio: audioUrl });
+        texto.value = completo;
+        avisar(nuevo ? 'Guardado en el diario.' : 'Guardé tu nota de voz, pero no alcancé a entender las palabras.', !nuevo);
       } catch (e) {
-        avisar('No hay conexión. Revisa tu internet e intenta otra vez.', true);
+        avisar(e.message || 'No se pudo guardar. Revisa tu internet e intenta otra vez.', true);
       }
       estado = 'listo';
       pintar();
     });
-    borrar.addEventListener('click', () => { texto.value = ''; avisar(''); pintar(); });
+
+    borrar.addEventListener('click', async () => {
+      const actual = opciones.entrada();
+      if (!actual) { texto.value = ''; pintar(); return; }
+      borrar.disabled = true;
+      try {
+        await guardar({ texto: '', borrarAudios: true });
+        texto.value = '';
+        avisar('Listo, cuéntalo otra vez.');
+      } catch (e) {
+        avisar(e.message || 'No se pudo borrar. Intenta otra vez.', true);
+      }
+      borrar.disabled = false;
+      pintar();
+    });
+
+    texto.addEventListener('change', async () => {
+      if (!teclado) return;
+      const valor = texto.value.trim().slice(0, max);
+      if (!valor && !opciones.entrada()) return;
+      try {
+        await guardar({ texto: valor });
+        avisar('Guardado en el diario.');
+      } catch (e) {
+        avisar(e.message || 'No se pudo guardar.', true);
+      }
+    });
     pintar();
 
     return {

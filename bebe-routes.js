@@ -2,16 +2,19 @@
  * La persona guarda el nombre del bebé, sube fotos y escribe notas del día; los familiares que
  * invitó (colaboradores o invitados con enlace) pueden VER ese diario, nunca editarlo.
  * Lo que se conversa por voz en este modo va al libro de siempre y no se publica en el diario.
+ * Las notas del diario se cuentan por voz: se guarda el audio original (audio_urls) y su
+ * transcripción (texto), y la entrada se va completando sola (PATCH) a medida que se habla.
  */
 const express = require('express');
 
 const MAX_NOMBRE = 40;
 const MAX_NOTA = 600;
+const MAX_AUDIOS = 10;
 const GENEROS = new Set(['femenino', 'masculino']);
 
 module.exports = (app, {
   sql, ensureSchema, requireAuth, rateLimit, bloquearEscritura, resolveProfileUserId,
-  almacenarArchivo, verificarArchivoReal, MEDIA_MIME_PERMITIDOS, enviarArchivoAlmacenado,
+  almacenarArchivo, verificarArchivoReal, MEDIA_MIME_PERMITIDOS, AUDIO_MIME_PERMITIDOS, enviarArchivoAlmacenado,
   datosDelArchivoDeBlob, borrarArchivosBlob,
 }) => {
   const sinCache = (res) => res.set('Cache-Control', 'private, no-store');
@@ -25,6 +28,22 @@ module.exports = (app, {
     if (t > hoy + 3 * 86400000 || t < hoy - 3 * 365 * 86400000) return undefined;
     return valor;
   };
+
+  const leerAudios = (raw) => {
+    try { const v = JSON.parse(raw || '[]'); return Array.isArray(v) ? v.filter((u) => typeof u === 'string') : []; } catch (e) { return []; }
+  };
+  // Un archivo subido por esta misma bitácora a su carpeta del diario (foto o nota de voz).
+  const esArchivoDelDiario = (url, pid) => {
+    const datos = typeof url === 'string' && datosDelArchivoDeBlob(url);
+    return !!datos && datos.ownerId === pid && datos.pathname.startsWith(`media/${pid}/bebe/`);
+  };
+  const formatearEntrada = (f, pid) => ({
+    id: f.id,
+    texto: f.texto || '',
+    fotoUrl: f.media_url ? `/api/bebe/foto/${f.id}?owner=${pid}` : null,
+    audios: leerAudios(f.audio_urls).map((_, i) => `/api/bebe/audio/${f.id}/${i}?owner=${pid}`),
+    creadaEn: f.created_at,
+  });
 
   const formatearConfig = (fila) => fila ? {
     nombre: fila.nombre,
@@ -46,19 +65,14 @@ module.exports = (app, {
       await ensureSchema();
       const config = formatearConfig(await leerConfig(pid));
       const filas = config
-        ? await sql`SELECT id, texto, media_url, created_at FROM diario_bebe_entradas WHERE profile_user_id = ${pid} ORDER BY created_at DESC, id DESC LIMIT 200`
+        ? await sql`SELECT id, texto, media_url, audio_urls, created_at FROM diario_bebe_entradas WHERE profile_user_id = ${pid} ORDER BY created_at DESC, id DESC LIMIT 200`
         : [];
       const puedeEditar = !req.isCollaborator && !req.isGuest && pid === req.profileUserId;
       res.json({
         config,
         puedeEditar,
         dueno: pid,
-        entradas: filas.map((f) => ({
-          id: f.id,
-          texto: f.texto || '',
-          fotoUrl: f.media_url ? `/api/bebe/foto/${f.id}?owner=${pid}` : null,
-          creadaEn: f.created_at,
-        })),
+        entradas: filas.map((f) => formatearEntrada(f, pid)),
       });
     } catch (err) {
       console.error(err);
@@ -102,6 +116,74 @@ module.exports = (app, {
     }
   });
 
+  // Nota de voz original del diario: se guarda tal cual, aparte de su transcripción.
+  app.post('/api/bebe/audio', requireAuth, ...bloquearEscritura, rateLimit, express.raw({ type: '*/*', limit: '4mb' }), async (req, res) => {
+    sinCache(res);
+    try {
+      if (!req.body || !req.body.length) return res.status(400).json({ error: 'Falta el audio.' });
+      const real = await verificarArchivoReal(req.body, AUDIO_MIME_PERMITIDOS);
+      if (!real) return res.status(400).json({ error: 'El archivo no parece ser un audio válido.' });
+      await ensureSchema();
+      if (!(await leerConfig(req.profileUserId))) return res.status(409).json({ error: 'Primero crea el diario.' });
+      const sufijo = Math.random().toString(36).slice(2, 8);
+      const { url } = await almacenarArchivo(`media/${req.profileUserId}/bebe/voz-${Date.now()}-${sufijo}.${real.ext}`, req.body, real.mime);
+      res.json({ ok: true, url });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'No se pudo guardar la nota de voz.' });
+    }
+  });
+
+  // Completa una entrada ya guardada: cambia el texto, suma una nota de voz o borra todas las notas
+  // de voz (para "borrar y volver a contar").
+  app.patch('/api/bebe/entradas/:id', requireAuth, ...bloquearEscritura, rateLimit, async (req, res) => {
+    sinCache(res);
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: 'Entrada inválida.' });
+      const cuerpo = req.body || {};
+      const agregar = cuerpo.agregarAudio;
+      if (agregar !== undefined && agregar !== null && !esArchivoDelDiario(agregar, req.profileUserId)) return res.status(400).json({ error: 'Esa nota de voz no se puede usar.' });
+      await ensureSchema();
+      const filas = await sql`SELECT id, texto, media_url, audio_urls, created_at FROM diario_bebe_entradas WHERE id = ${id} AND profile_user_id = ${req.profileUserId}`;
+      if (!filas.length) return res.status(404).json({ error: 'No se encontró.' });
+      const fila = filas[0];
+      let audios = leerAudios(fila.audio_urls);
+      const sobran = [];
+      if (cuerpo.borrarAudios === true) { sobran.push(...audios); audios = []; }
+      if (agregar) {
+        if (audios.length >= MAX_AUDIOS) return res.status(400).json({ error: 'Esta nota ya tiene muchas grabaciones. Empieza una nota nueva.' });
+        audios.push(agregar);
+      }
+      const texto = typeof cuerpo.texto === 'string' ? cuerpo.texto.trim().slice(0, MAX_NOTA) : (fila.texto || '');
+      const actualizadas = await sql`UPDATE diario_bebe_entradas SET texto = ${texto || null}, audio_urls = ${audios.length ? JSON.stringify(audios) : null}
+        WHERE id = ${id} AND profile_user_id = ${req.profileUserId} RETURNING id, texto, media_url, audio_urls, created_at`;
+      if (sobran.length) await borrarArchivosBlob(sobran);
+      res.json({ ok: true, entrada: formatearEntrada(actualizadas[0], req.profileUserId) });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'No se pudo guardar.' });
+    }
+  });
+
+  app.get('/api/bebe/audio/:id/:n', requireAuth, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const n = Number(req.params.n);
+      if (!Number.isSafeInteger(id) || id < 1 || !Number.isSafeInteger(n) || n < 0) return res.status(400).json({ error: 'Audio inválido.' });
+      const pid = await resolveProfileUserId(req);
+      if (!pid) return res.status(403).json({ error: 'No tienes acceso a este audio.' });
+      await ensureSchema();
+      const filas = await sql`SELECT audio_urls FROM diario_bebe_entradas WHERE id = ${id} AND profile_user_id = ${pid}`;
+      const url = filas.length ? leerAudios(filas[0].audio_urls)[n] : null;
+      if (!url || !esArchivoDelDiario(url, pid)) return res.status(404).json({ error: 'No se encontró.' });
+      await enviarArchivoAlmacenado(req, res, url, 'private, max-age=300');
+    } catch (err) {
+      console.error(err);
+      if (!res.headersSent) res.status(500).json({ error: 'No se pudo abrir el audio.' });
+    }
+  });
+
   app.post('/api/bebe/entradas', requireAuth, ...bloquearEscritura, rateLimit, async (req, res) => {
     sinCache(res);
     try {
@@ -109,25 +191,15 @@ module.exports = (app, {
       let fotoUrl = req.body && req.body.fotoUrl;
       if (fotoUrl !== undefined && fotoUrl !== null && typeof fotoUrl !== 'string') return res.status(400).json({ error: 'Foto inválida.' });
       fotoUrl = fotoUrl || null;
-      if (fotoUrl) {
-        const datos = datosDelArchivoDeBlob(fotoUrl);
-        if (!datos || datos.ownerId !== req.profileUserId || !datos.pathname.startsWith(`media/${req.profileUserId}/bebe/`)) {
-          return res.status(400).json({ error: 'Esa foto no se puede usar.' });
-        }
-      }
-      if (!texto && !fotoUrl) return res.status(400).json({ error: 'Sube una foto o escribe una nota.' });
+      if (fotoUrl && !esArchivoDelDiario(fotoUrl, req.profileUserId)) return res.status(400).json({ error: 'Esa foto no se puede usar.' });
+      const audioUrl = req.body && req.body.audioUrl;
+      if (audioUrl !== undefined && audioUrl !== null && !esArchivoDelDiario(audioUrl, req.profileUserId)) return res.status(400).json({ error: 'Esa nota de voz no se puede usar.' });
+      const audios = audioUrl ? [audioUrl] : [];
+      if (!texto && !fotoUrl && !audios.length) return res.status(400).json({ error: 'Sube una foto o cuenta algo.' });
       await ensureSchema();
       if (!(await leerConfig(req.profileUserId))) return res.status(409).json({ error: 'Primero crea el diario.' });
-      const filas = await sql`INSERT INTO diario_bebe_entradas (profile_user_id, texto, media_url) VALUES (${req.profileUserId}, ${texto || null}, ${fotoUrl}) RETURNING id, created_at`;
-      res.json({
-        ok: true,
-        entrada: {
-          id: filas[0].id,
-          texto,
-          fotoUrl: fotoUrl ? `/api/bebe/foto/${filas[0].id}?owner=${req.profileUserId}` : null,
-          creadaEn: filas[0].created_at,
-        },
-      });
+      const filas = await sql`INSERT INTO diario_bebe_entradas (profile_user_id, texto, media_url, audio_urls) VALUES (${req.profileUserId}, ${texto || null}, ${fotoUrl}, ${audios.length ? JSON.stringify(audios) : null}) RETURNING id, texto, media_url, audio_urls, created_at`;
+      res.json({ ok: true, entrada: formatearEntrada(filas[0], req.profileUserId) });
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: 'No se pudo guardar.' });
@@ -140,9 +212,10 @@ module.exports = (app, {
       const id = Number(req.params.id);
       if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: 'Entrada inválida.' });
       await ensureSchema();
-      const filas = await sql`DELETE FROM diario_bebe_entradas WHERE id = ${id} AND profile_user_id = ${req.profileUserId} RETURNING media_url`;
+      const filas = await sql`DELETE FROM diario_bebe_entradas WHERE id = ${id} AND profile_user_id = ${req.profileUserId} RETURNING media_url, audio_urls`;
       if (!filas.length) return res.status(404).json({ error: 'No se encontró.' });
-      if (filas[0].media_url) await borrarArchivosBlob([filas[0].media_url]);
+      const archivos = [filas[0].media_url, ...leerAudios(filas[0].audio_urls)].filter(Boolean);
+      if (archivos.length) await borrarArchivosBlob(archivos);
       res.json({ ok: true });
     } catch (err) {
       console.error(err);

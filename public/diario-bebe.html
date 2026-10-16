@@ -7,7 +7,7 @@
 <title>Diario de un bebé · Eco</title>
 <link rel="icon" href="/images/favicon-32.png">
 <link rel="stylesheet" href="/fonts/fonts.css">
-<link rel="stylesheet" href="/eco-bebe.css?v=2">
+<link rel="stylesheet" href="/eco-bebe.css?v=3">
 <script src="/font-size.js"></script>
 </head>
 <body class="eco-bebe-pagina">
@@ -53,10 +53,10 @@
         <button class="eco-bebe-grande" id="botonFoto" type="button">Subir una foto de hoy</button>
         <input id="inputFoto" type="file" accept="image/*" hidden aria-label="Elegir una foto">
         <div class="eco-bebe-campo" id="campoNota">
-          <p class="eco-bebe-invitacion">Cuéntale a ECO cómo estuvo el día, qué sentiste, qué pasó en la foto.</p>
+          <p class="eco-bebe-invitacion">Cuéntale a ECO cómo estuvo el día, qué sentiste, qué pasó en la foto. Se guarda solo.</p>
           <textarea id="textoNota" maxlength="600" aria-label="Cuenta algo de hoy" placeholder="Cómo estuvo el día, qué sentiste, qué pasó en la foto"></textarea>
         </div>
-        <button class="eco-bebe-secundario" id="guardarNota" type="button">Guardar en el diario</button>
+        <button class="eco-bebe-revoz" id="otraNota" type="button" hidden>Empezar otra nota</button>
       </div>
       <ul class="eco-bebe-lista" id="lista"></ul>
       <p class="eco-bebe-vacio" id="vacio" hidden></p>
@@ -68,7 +68,7 @@
     </section>
   </main>
 </div>
-<script src="/eco-bebe-comun.js?v=2"></script>
-<script src="/eco-bebe-diario.js?v=2"></script>
+<script src="/eco-bebe-comun.js?v=3"></script>
+<script src="/eco-bebe-diario.js?v=3"></script>
 </body>
 </html>

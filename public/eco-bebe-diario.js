@@ -24,6 +24,14 @@
       }
       const cuerpo = E('div', 'cuerpo');
       if (x.texto) cuerpo.appendChild(E('p', '', x.texto));
+      (x.audios || []).forEach((src, i, todos) => {
+        const audio = E('audio', 'eco-bebe-audio');
+        audio.controls = true;
+        audio.preload = 'none';
+        audio.src = src;
+        audio.setAttribute('aria-label', todos.length > 1 ? 'Nota de voz ' + (i + 1) : 'Nota de voz');
+        cuerpo.appendChild(audio);
+      });
       cuerpo.appendChild(E('span', 'eco-bebe-fecha', C.fechaLarga(x.creadaEn)));
       if (estado.puedeEditar) {
         const b = E('button', 'eco-bebe-borrar', 'Borrar');
@@ -37,7 +45,7 @@
     const vacio = $('vacio');
     vacio.hidden = estado.entradas.length > 0;
     vacio.textContent = estado.puedeEditar
-      ? 'Todavía no hay nada. Sube la primera foto o escribe cómo fue hoy.'
+      ? 'Todavía no hay nada. Sube la primera foto o cuéntale a ECO cómo fue hoy.'
       : 'Todavía no hay nada en el diario. Cuando se suba algo, lo verás aquí.';
   }
 
@@ -126,33 +134,44 @@
     $('cfgGuardar').disabled = false;
   });
 
-  const voz = C.botonVoz($('textoNota'), 600);
+  // La foto se guarda apenas se elige; la voz completa esa misma entrada (o crea una nueva si no
+  // hay foto). "Empezar otra nota" cierra la entrada en curso para que lo siguiente vaya aparte.
+  let enCurso = null;
+  const alGuardar = (entrada) => {
+    const i = estado.entradas.findIndex((x) => x.id === entrada.id);
+    if (i >= 0) estado.entradas[i] = entrada; else estado.entradas.unshift(entrada);
+    enCurso = entrada;
+    $('otraNota').hidden = false;
+    pintarEntradas();
+  };
+  const voz = C.botonVoz($('textoNota'), { entrada: () => enCurso, alGuardar });
   $('campoNota').insertBefore(voz.caja, $('textoNota'));
 
-  $('botonFoto').addEventListener('click', () => $('inputFoto').click());
-  let fotoElegida = null;
-  $('inputFoto').addEventListener('change', () => {
-    fotoElegida = $('inputFoto').files && $('inputFoto').files[0];
-    $('inputFoto').value = '';
-    if (fotoElegida) $('botonFoto').textContent = 'Foto lista: ' + fotoElegida.name.slice(0, 30);
+  $('otraNota').addEventListener('click', () => {
+    if (voz.ocupado()) { aviso('Termina de contar primero: toca el botón de ECO.', true); return; }
+    enCurso = null;
+    voz.reiniciar();
+    $('otraNota').hidden = true;
+    aviso('');
   });
 
-  $('guardarNota').addEventListener('click', async () => {
+  $('botonFoto').addEventListener('click', () => {
     if (voz.ocupado()) { aviso('Termina de contar primero: toca el botón de ECO.', true); return; }
-    const texto = $('textoNota').value.trim();
-    if (!fotoElegida && !texto) { aviso('Sube una foto o cuéntale algo a ECO.', true); return; }
-    $('guardarNota').disabled = $('botonFoto').disabled = true;
-    aviso('Guardando…');
+    $('inputFoto').click();
+  });
+  $('inputFoto').addEventListener('change', async () => {
+    const archivo = $('inputFoto').files && $('inputFoto').files[0];
+    $('inputFoto').value = '';
+    if (!archivo) return;
+    $('botonFoto').disabled = true;
+    aviso('Guardando la foto…');
     try {
-      const entrada = fotoElegida ? await C.subirFoto(fotoElegida, texto) : await C.guardarEntrada({ texto });
-      estado.entradas.unshift(entrada);
-      fotoElegida = null;
+      const entrada = await C.subirFoto(archivo, '');
       voz.reiniciar();
-      $('botonFoto').textContent = 'Subir una foto de hoy';
-      pintarEntradas();
-      aviso('Guardado en el diario.');
-    } catch (e) { aviso(e.message || 'No se pudo guardar.', true); }
-    $('guardarNota').disabled = $('botonFoto').disabled = false;
+      alGuardar(entrada);
+      aviso('Foto guardada. Cuéntale a ECO qué pasó, si quieres.');
+    } catch (e) { aviso(e.message || 'No se pudo subir la foto.', true); }
+    $('botonFoto').disabled = false;
   });
 
   cargar();

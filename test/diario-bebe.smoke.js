@@ -45,16 +45,24 @@ function fakeSql(strings, ...v) {
     return Promise.resolve([]);
   }
   if (text.includes('INSERT INTO diario_bebe_entradas')) {
-    const fila = { id: siguienteId++, profile_user_id: v[0], texto: v[1], media_url: v[2], created_at: new Date().toISOString() };
+    const fila = { id: siguienteId++, profile_user_id: v[0], texto: v[1], media_url: v[2], audio_urls: v[3], created_at: new Date().toISOString() };
     entradas.push(fila);
-    return Promise.resolve([{ id: fila.id, created_at: fila.created_at }]);
+    return Promise.resolve([Object.assign({}, fila)]);
   }
-  if (text.includes('SELECT id, texto, media_url, created_at FROM diario_bebe_entradas')) return Promise.resolve(entradas.filter((e) => e.profile_user_id === v[0]).slice().reverse());
+  if (text.includes('SELECT id, texto, media_url, audio_urls, created_at FROM diario_bebe_entradas WHERE profile_user_id')) return Promise.resolve(entradas.filter((e) => e.profile_user_id === v[0]).slice().reverse());
+  if (text.includes('SELECT id, texto, media_url, audio_urls, created_at FROM diario_bebe_entradas WHERE id')) return Promise.resolve(entradas.filter((e) => e.id === v[0] && e.profile_user_id === v[1]));
+  if (text.includes('UPDATE diario_bebe_entradas SET texto')) {
+    const f = entradas.find((e) => e.id === v[2] && e.profile_user_id === v[3]);
+    if (!f) return Promise.resolve([]);
+    f.texto = v[0]; f.audio_urls = v[1];
+    return Promise.resolve([Object.assign({}, f)]);
+  }
   if (text.includes('SELECT media_url FROM diario_bebe_entradas WHERE id')) return Promise.resolve(entradas.filter((e) => e.id === v[0] && e.profile_user_id === v[1]));
+  if (text.includes('SELECT audio_urls FROM diario_bebe_entradas WHERE id')) return Promise.resolve(entradas.filter((e) => e.id === v[0] && e.profile_user_id === v[1]));
   if (text.includes('DELETE FROM diario_bebe_entradas WHERE id')) {
     const f = entradas.filter((e) => e.id === v[0] && e.profile_user_id === v[1]);
     entradas = entradas.filter((e) => !f.includes(e));
-    return Promise.resolve(f.map((e) => ({ media_url: e.media_url })));
+    return Promise.resolve(f.map((e) => ({ media_url: e.media_url, audio_urls: e.audio_urls })));
   }
   return Promise.resolve([]);
 }
@@ -131,8 +139,49 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
   ok(r.status === 200 && /^\/api\/bebe\/foto\/\d+\?owner=1$/.test(r.json.entrada.fotoUrl), 'guarda la foto con su nota; la foto se pide por el diario, no por la ruta del archivo');
   const entradaFoto = r.json.entrada;
 
+  // --- Notas de voz: se guarda el audio original junto a su transcripción ---
+  // WAV mínimo pero real (cabecera RIFF/WAVE + 100 muestras en silencio), para pasar la verificación de bytes.
+  const WEBM = (() => {
+    const datos = Buffer.alloc(200);
+    const h = Buffer.alloc(44);
+    h.write('RIFF', 0); h.writeUInt32LE(36 + datos.length, 4); h.write('WAVE', 8);
+    h.write('fmt ', 12); h.writeUInt32LE(16, 16); h.writeUInt16LE(1, 20); h.writeUInt16LE(1, 22);
+    h.writeUInt32LE(8000, 24); h.writeUInt32LE(16000, 28); h.writeUInt16LE(2, 32); h.writeUInt16LE(16, 34);
+    h.write('data', 36); h.writeUInt32LE(datos.length, 40);
+    return Buffer.concat([h, datos]);
+  })();
+  r = await request(server, { path: '/api/bebe/audio', method: 'POST', raw: Buffer.from('esto no es audio'), contentType: 'audio/webm' }, paula);
+  ok(r.status === 400, 'un archivo que no es audio no se sube como nota de voz (400)');
+  r = await request(server, { path: '/api/bebe/audio', method: 'POST', raw: WEBM, contentType: 'audio/wav' }, paula);
+  ok(r.status === 200 && /media\/1\/bebe\/voz-.+\.wav$/.test(r.json.url), 'sube la nota de voz original a la carpeta del diario');
+  const voz1 = r.json.url;
+  r = await request(server, { path: '/api/bebe/audio', method: 'POST', raw: WEBM, contentType: 'audio/wav' }, paula);
+  const voz2 = r.json.url;
+  r = await request(server, { path: `/api/bebe/entradas/${entradaFoto.id}`, method: 'PATCH', body: { texto: 'Se rió con la canción', agregarAudio: voz1 } }, paula);
+  ok(r.status === 200 && r.json.entrada.texto === 'Se rió con la canción' && r.json.entrada.audios.length === 1 && /^\/api\/bebe\/audio\/\d+\/0\?owner=1$/.test(r.json.entrada.audios[0]), 'la foto ya guardada se completa sola con lo dicho y su audio');
+  r = await request(server, { path: `/api/bebe/entradas/${entradaFoto.id}`, method: 'PATCH', body: { texto: 'Se rió con la canción. Y después se durmió', agregarAudio: voz2 } }, paula);
+  ok(r.status === 200 && r.json.entrada.audios.length === 2 && r.json.entrada.texto.endsWith('se durmió'), '"contar más" suma otra grabación a la misma nota');
+  r = await request(server, { path: `/api/bebe/entradas/${entradaFoto.id}`, method: 'PATCH', body: { agregarAudio: 'https://fake.public.blob.vercel-storage.com/media/2/bebe/voz-1.webm' } }, paula);
+  ok(r.status === 400, 'no acepta una nota de voz de otra cuenta (400)');
+  r = await request(server, { path: `/api/bebe/entradas/${entradaFoto.id}`, method: 'PATCH', body: { texto: 'hackeo' } }, ajena);
+  ok(r.status === 404 && entradas.find((e) => e.id === entradaFoto.id).texto !== 'hackeo', 'otra cuenta no puede cambiar la nota (404)');
+  r = await request(server, { path: `/api/bebe/audio/${entradaFoto.id}/0` }, paula);
+  ok(r.status === 200 && r.body.equals(WEBM), 'la nota de voz original se puede escuchar');
+  r = await request(server, { path: `/api/bebe/audio/${entradaFoto.id}/0?owner=1` }, ajena);
+  ok(r.status === 403, 'una cuenta ajena no la escucha (403)');
+  r = await request(server, { path: `/api/bebe/audio/${entradaFoto.id}/0` });
+  ok(r.status === 401, 'sin sesión tampoco (401)');
+  r = await request(server, { path: '/api/bebe/entradas', method: 'POST', body: { texto: 'Hoy dormimos la siesta juntas', audioUrl: voz1 } }, paula);
+  ok(r.status === 200 && r.json.entrada.audios.length === 1, 'una nota de voz sin foto crea su propia entrada con el audio');
+  const entradaVoz = r.json.entrada;
+  r = await request(server, { path: `/api/bebe/entradas/${entradaVoz.id}`, method: 'PATCH', body: { texto: '', borrarAudios: true } }, paula);
+  ok(r.status === 200 && r.json.entrada.audios.length === 0 && r.json.entrada.texto === '' && borrados.includes(voz1), '"borrar y volver a contar" quita el texto y borra los audios guardados');
+  await request(server, { path: `/api/bebe/entradas/${entradaVoz.id}`, method: 'DELETE' }, paula);
+
   r = await request(server, { path: '/api/bebe?owner=1' }, abuela);
   ok(r.status === 200 && r.json.config.nombre === 'Rafaela' && r.json.puedeEditar === false && r.json.entradas.length === 2, 'una familiar invitada ve el diario completo, sin poder editar');
+  r = await request(server, { path: `/api/bebe/audio/${entradaFoto.id}/1?owner=1` }, abuela);
+  ok(r.status === 200 && r.body.equals(WEBM), 'y escucha las notas de voz');
   r = await request(server, { path: entradaFoto.fotoUrl }, abuela);
   ok(r.status === 200 && r.body.equals(PNG_1X1), 'y puede ver las fotos');
   r = await request(server, { path: '/api/bebe/entradas?owner=1', method: 'POST', body: { texto: 'intento', owner: 1 } }, abuela);
@@ -157,7 +206,7 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
   r = await request(server, { path: `/api/bebe/entradas/${entradaFoto.id}`, method: 'DELETE' }, ajena);
   ok(r.status === 404 && entradas.length === 2, 'otra cuenta no logra borrar una entrada ajena (404)');
   r = await request(server, { path: `/api/bebe/entradas/${entradaFoto.id}`, method: 'DELETE' }, paula);
-  ok(r.status === 200 && entradas.length === 1 && borrados.includes(fotoUrl), 'ella borra la entrada y también se borra la foto guardada');
+  ok(r.status === 200 && entradas.length === 1 && borrados.includes(fotoUrl) && borrados.includes(voz2), 'ella borra la entrada y también se borran la foto y las notas de voz guardadas');
 
   server.close();
   console.log(`\n${pasaron} pasaron, ${fallaron} fallaron`);

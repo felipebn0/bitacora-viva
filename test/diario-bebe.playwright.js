@@ -23,7 +23,7 @@ const CAPTURAS = process.env.CAPTURAS_BEBE;
     // El tour de bienvenida de ECO tapa los botones: aquí se da por visto.
     await ctx.addInitScript(() => { try { localStorage.setItem('eco_tour_done__app_html', '1'); localStorage.setItem('eco_tour_done__diario_bebe_html', '1'); } catch (e) { /* nada */ } });
     const page = await ctx.newPage();
-    const estado = { config, entradas: entradas.slice(), subidas: [], notas: [], pidioNext: [], guardados: [] };
+    const estado = { config, entradas: entradas.slice(), subidas: [], notas: [], audios: [], cambios: [], pidioNext: [], guardados: [] };
     page.on('pageerror', (e) => (estado.errores = (estado.errores || []).concat(e.message)));
     await page.route('**/api/**', (route) => {
       const req = route.request();
@@ -40,8 +40,18 @@ const CAPTURAS = process.env.CAPTURAS_BEBE;
       if (u.pathname === '/api/bebe/foto') { estado.subidas.push(req.postDataBuffer().length); return json({ ok: true, url: 'https://x.test/media/1/bebe/foto-1.png' }); }
       if (u.pathname === '/api/bebe/entradas' && req.method() === 'POST') {
         const b = JSON.parse(req.postData());
-        const e = { id: 100 + estado.notas.length, texto: b.texto || '', fotoUrl: b.fotoUrl ? '/api/bebe/foto/9?owner=1' : null, creadaEn: new Date().toISOString() };
+        const e = { id: 100 + estado.notas.length, texto: b.texto || '', fotoUrl: b.fotoUrl ? '/api/bebe/foto/9?owner=1' : null, audios: b.audioUrl ? ['/api/bebe/audio/' + (100 + estado.notas.length) + '/0?owner=1'] : [], creadaEn: new Date().toISOString() };
         estado.notas.push(b);
+        estado.ultima = e;
+        return json({ ok: true, entrada: e });
+      }
+      if (u.pathname === '/api/bebe/audio' && req.method() === 'POST') { estado.audios.push(req.postDataBuffer().length); return json({ ok: true, url: 'https://x.test/media/1/bebe/voz-' + estado.audios.length + '.webm' }); }
+      if (/^\/api\/bebe\/entradas\/\d+$/.test(u.pathname) && req.method() === 'PATCH') {
+        const b = JSON.parse(req.postData());
+        estado.cambios.push(b);
+        const e = Object.assign({}, estado.ultima, { id: Number(u.pathname.split('/').pop()), texto: b.texto });
+        e.audios = b.borrarAudios ? [] : (estado.ultima.audios || []).concat(b.agregarAudio ? ['/api/bebe/audio/' + e.id + '/' + (estado.ultima.audios || []).length + '?owner=1'] : []);
+        estado.ultima = e;
         return json({ ok: true, entrada: e });
       }
       if (u.pathname === '/api/transcribe') return json({ text: estado.dictado || '' });
@@ -83,17 +93,27 @@ const CAPTURAS = process.env.CAPTURAS_BEBE;
   // subir foto del día con nota
   await p.setInputFiles('#ecoBebePanel input[type=file]', { name: 'hoy.png', mimeType: 'image/png', buffer: PNG });
   await p.waitForSelector('.eco-bebe-nota:not([hidden])');
-  ok(await p.isHidden('.eco-bebe-nota textarea') && await p.isVisible('.eco-bebe-nota .eco-bebe-orbe'), 'la nota se cuenta por voz: botón de ECO en vez de caja de texto');
+  ok(t.estado.subidas.length === 1 && t.estado.notas.length === 1 && t.estado.notas[0].fotoUrl, 'la foto se guarda en el diario apenas se elige, sin otro botón');
+  ok(await p.isHidden('.eco-bebe-nota textarea') && await p.isVisible('.eco-bebe-nota .eco-bebe-orbe') && await p.locator('.eco-bebe-nota .eco-bebe-grande').count() === 0, 'la nota se cuenta por voz: botón de ECO, sin caja de texto ni botón de guardar');
   t.estado.dictado = 'Mi barriga a las 30 semanas';
   await p.click('.eco-bebe-nota .eco-bebe-orbe');
   await p.waitForSelector('.eco-bebe-nota .eco-bebe-orbe.grabando');
   await p.waitForTimeout(700);
   await p.click('.eco-bebe-nota .eco-bebe-orbe', { force: true }); // late mientras graba
   await p.waitForSelector('.eco-bebe-nota .eco-bebe-dicho:not([hidden])');
-  ok((await p.textContent('.eco-bebe-nota .eco-bebe-dicho')) === '«Mi barriga a las 30 semanas»', 'lo que dijo aparece escrito antes de guardar');
-  await p.click('.eco-bebe-nota .eco-bebe-grande');
-  await p.waitForFunction(() => /Guardada en el diario/.test(document.querySelector('.eco-bebe-msg').textContent));
-  ok(t.estado.subidas.length === 1 && t.estado.notas[0].texto === 'Mi barriga a las 30 semanas' && t.estado.notas[0].fotoUrl, 'sube la foto y la guarda en el diario con su nota');
+  ok((await p.textContent('.eco-bebe-nota .eco-bebe-dicho')) === '«Mi barriga a las 30 semanas»', 'lo que dijo aparece escrito');
+  ok(/Guardado en el diario/.test(await p.textContent('.eco-bebe-nota .eco-bebe-voz-msg')), 'y avisa que quedó guardado solo');
+  ok(t.estado.audios.length === 1 && t.estado.audios[0] > 0 && t.estado.cambios.length === 1 && t.estado.cambios[0].texto === 'Mi barriga a las 30 semanas' && /voz-1\.webm$/.test(t.estado.cambios[0].agregarAudio), 'se sube el audio original y se pega, con lo dicho, a la entrada de la foto');
+  t.estado.dictado = 'y pateó';
+  await p.click('.eco-bebe-nota .eco-bebe-orbe');
+  await p.waitForSelector('.eco-bebe-nota .eco-bebe-orbe.grabando');
+  await p.waitForTimeout(700);
+  await p.click('.eco-bebe-nota .eco-bebe-orbe', { force: true });
+  await p.waitForFunction(() => /pateó/.test(document.querySelector('.eco-bebe-nota .eco-bebe-dicho').textContent));
+  ok(t.estado.cambios.length === 2 && t.estado.cambios[1].texto === 'Mi barriga a las 30 semanas y pateó' && t.estado.notas.length === 1, '"contar más" suma a la misma entrada, con su propio audio');
+  await p.click('.eco-bebe-nota .eco-bebe-revoz');
+  await p.waitForFunction(() => document.querySelector('.eco-bebe-nota .eco-bebe-dicho').hidden);
+  ok(t.estado.cambios.at(-1).borrarAudios === true && t.estado.cambios.at(-1).texto === '', '"borrar y volver a contar" limpia la nota guardada y sus audios');
   ok(await p.locator('.eco-bebe-tira img').count() === 2, 'la foto nueva aparece en la tira');
 
   // charla con el modo activo
@@ -135,9 +155,9 @@ const CAPTURAS = process.env.CAPTURAS_BEBE;
   await t.page.waitForTimeout(700);
   await t.page.click('#campoNota .eco-bebe-orbe', { force: true }); // late mientras graba
   await t.page.waitForSelector('#campoNota .eco-bebe-dicho:not([hidden])');
-  await t.page.click('#guardarNota');
   await t.page.waitForSelector('.eco-bebe-entrada');
-  ok((await t.page.textContent('.eco-bebe-entrada p')) === 'Hoy escuché su corazón', 'cuenta por voz una nota del día y aparece en el diario');
+  ok((await t.page.textContent('.eco-bebe-entrada p')) === 'Hoy escuché su corazón' && t.estado.notas.at(-1).audioUrl, 'cuenta por voz una nota del día y aparece sola en el diario, con su audio');
+  ok(await t.page.locator('.eco-bebe-entrada audio').count() === 1, 'la nota de voz original se puede escuchar en el diario');
   await t.page.click('#ajustes summary');
   await t.page.check('#cfgNacio');
   await t.page.click('#cfgGuardar');
