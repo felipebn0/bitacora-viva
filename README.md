@@ -89,11 +89,11 @@ Todo se guarda en la nube (Postgres + Vercel Blob), no en archivos locales — a
 
 Copia `DATABASE_URL` y `BLOB_READ_WRITE_TOKEN` desde **Storage** en el dashboard de Vercel (click en cada base → **.env.local** o **Quickstart**) y pegalos en tu `.env` local. Sin esto, `npm run dev` sigue prendiendo pero las charlas no se van a poder guardar.
 
-### Almacenamiento de archivos: Cloudflare R2 (opcional, recomendado a partir de cierto uso)
+### Almacenamiento de archivos: Cloudflare R2
 
-Los audios, fotos y videos van a Vercel Blob por defecto. El plan gratis de Vercel Blob tiene un cupo bajo de **operaciones** (2.000/mes) que se topa rápido — cada subida y **cada lectura** de un archivo cuenta. Cloudflare R2 da 10 millones de operaciones/mes gratis y **no cobra transferencia nunca**.
+Los audios, fotos y videos viven en **Cloudflare R2** (desde el 2026-10-16 no queda ningún archivo en Vercel Blob: ver "Privacidad de los archivos"). R2 da 10 millones de operaciones/mes gratis y **no cobra transferencia nunca**; Vercel Blob, en cambio, tiene un cupo bajo de operaciones (2.000/mes en el plan gratis) y cada lectura cuenta.
 
-Si se definen estas 5 variables de entorno, la app usa R2 para todo lo nuevo (lo que ya está en Vercel Blob se sigue leyendo de ahí, se detecta por la URL):
+La app usa R2 cuando están definidas estas 5 variables de entorno. Si falta alguna, las subidas nuevas caen a Vercel Blob, así que **no hay que quitar ninguna**:
 
 | Variable | De dónde sale |
 |---|---|
@@ -102,7 +102,7 @@ Si se definen estas 5 variables de entorno, la app usa R2 para todo lo nuevo (lo
 | `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | Cloudflare → R2 → **Manage R2 API Tokens** → **Create API Token** (permiso *Object Read & Write*, alcance ese bucket). El secret solo se muestra una vez. |
 | `R2_PUBLIC_URL` | En el bucket → **Settings** → **Public access** → activa **R2.dev subdomain** (o conecta un dominio propio). Es la URL `https://<algo>.r2.dev`, sin barra al final. |
 
-Con las 5 puestas y un Redeploy, las subidas nuevas van a R2. Si falta alguna, sigue todo por Vercel Blob como antes. No hay que migrar los archivos viejos.
+Con las 5 puestas y un Redeploy, las subidas van a R2. Las URL que empiezan por `*.blob.vercel-storage.com` todavía se saben leer (se detecta por la URL), pero ya no queda ninguna en la base.
 
 ## Velocidad del turno (de que la persona calla a que la IA habla)
 
@@ -157,7 +157,7 @@ Todo lo que la app *dice o escribe* va en español de Colombia con tuteo: nunca 
 
 ## Privacidad de los archivos (audios, fotos, videos)
 
-La landing promete que los archivos son privados y que no existe un enlace público. Para que sea verdad hacen falta **dos pasos que no se pueden hacer desde el código**:
+La landing promete que los archivos son privados y que no existe un enlace público. Para que sea verdad hacen falta **dos pasos que no se pueden hacer desde el código**. Los dos **ya se hicieron el 2026-10-16**: el bucket de R2 está cerrado al público y lo viejo de Vercel Blob se migró a R2 (el dry run dio 0 filas en todas las tablas y `r2PublicoAbierto: false`). Quedan pendientes vaciar el store de Vercel Blob y borrar la rama de respaldo que se sacó en Neon antes de migrar. Los pasos quedan aquí por si hay que repetirlos (por ejemplo, si alguna vez faltan las variables `R2_*` y algo vuelve a caer en Blob):
 
 1. **Apagar el acceso público del bucket de R2.** Cloudflare → R2 → el bucket → **Settings** → **Public access** → en *R2.dev subdomain* pulsar **Disable** (y no tener ningún *Custom Domain* conectado). La app no necesita ese acceso: lee y borra siempre con sus llaves (`aws4fetch`, firmado), y solo entrega un archivo por `/api/media-file` después de comprobar sesión y permiso. **No** borrar `R2_PUBLIC_URL` de Vercel: se sigue usando para armar la URL que se guarda en la base.
 2. **Pasar lo viejo de Vercel Blob (público) a R2.** Todo lo subido antes de activar R2 vive en un store de Blob público de verdad. Con la sesión de un admin abierta en la app, desde la consola del navegador:

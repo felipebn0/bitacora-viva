@@ -60,7 +60,9 @@ Cosas que se pidieron pero se decidió posponer, con suficiente detalle para ret
 
 **Para retomarlo:** descomentar las dos líneas marcadas en `/api/login` cerca de `limitePorClave(\`login:...\`)`. Antes de reactivarlo, considerar un tiempo de espera más corto o un mensaje que aclare cuánto falta, para que no vuelva a pasar lo mismo.
 
-## 9. Terminar de verdad la migración a Blob privado (hoy vuelto a público)
+## 9. ~~Terminar de verdad la migración a Blob privado (hoy vuelto a público)~~ — hecho
+
+> **Hecho el 2026-10-16:** Felipe cerró el acceso público del bucket de R2 y corrió `POST /api/admin/migrar-blob-a-r2` hasta que el dry run dio 0 filas en las 7 tablas (`story_log` 85, `family_notes` 24 y `media` 2 al empezar) y `r2PublicoAbierto: false`. Antes de correrla se amplió la ruta para que también cubriera el diario del bebé, el mensaje de regalo, las fotos del libro y `book_audio_links` (las copias de audio de los QR, que si no quedaban apuntando a originales borrados). Antes se sacó una rama de respaldo en Neon. **Pendiente, en unos días si todo sigue bien:** vaciar el store de Vercel Blob y borrar esa rama de respaldo.
 
 > **Actualización 2026-10-07:** se resolvió por otro camino, sin store privado de Blob. Lo nuevo ya va a Cloudflare R2 y lo viejo se migra con `POST /api/admin/migrar-blob-a-r2` (dry run por defecto, con test). Falta que Felipe **apague el acceso público del bucket en Cloudflare** y corra la migración — pasos exactos en el README, sección "Privacidad de los archivos". Lo de abajo queda solo como contexto histórico.
 
