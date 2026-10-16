@@ -49,8 +49,8 @@ function fakeSql(strings, ...v) {
     entradas.push(fila);
     return Promise.resolve([Object.assign({}, fila)]);
   }
-  if (text.includes('SELECT id, texto, media_url, audio_urls, created_at FROM diario_bebe_entradas WHERE profile_user_id')) return Promise.resolve(entradas.filter((e) => e.profile_user_id === v[0]).slice().reverse());
-  if (text.includes('SELECT id, texto, media_url, audio_urls, created_at FROM diario_bebe_entradas WHERE id')) return Promise.resolve(entradas.filter((e) => e.id === v[0] && e.profile_user_id === v[1]));
+  if (text.includes('SELECT id, texto, media_url, audio_urls, origen, created_at FROM diario_bebe_entradas WHERE profile_user_id')) return Promise.resolve(entradas.filter((e) => e.profile_user_id === v[0]).slice().reverse());
+  if (text.includes('SELECT id, texto, media_url, audio_urls, origen, created_at FROM diario_bebe_entradas WHERE id')) return Promise.resolve(entradas.filter((e) => e.id === v[0] && e.profile_user_id === v[1]));
   if (text.includes('UPDATE diario_bebe_entradas SET texto')) {
     const f = entradas.find((e) => e.id === v[2] && e.profile_user_id === v[3]);
     if (!f) return Promise.resolve([]);
@@ -177,6 +177,22 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
   r = await request(server, { path: `/api/bebe/entradas/${entradaVoz.id}`, method: 'PATCH', body: { texto: '', borrarAudios: true } }, paula);
   ok(r.status === 200 && r.json.entrada.audios.length === 0 && r.json.entrada.texto === '' && borrados.includes(voz1), '"borrar y volver a contar" quita el texto y borra los audios guardados');
   await request(server, { path: `/api/bebe/entradas/${entradaVoz.id}`, method: 'DELETE' }, paula);
+
+  // --- Entrada "de la charla" (modo bebé): su grabación es la misma del libro ---
+  const AUDIO_CHARLA = 'https://fake.public.blob.vercel-storage.com/audio/1/sesion-9/user-2.webm';
+  subidos['audio/1/sesion-9/user-2.webm'] = WEBM;
+  const filaCharla = { id: siguienteId++, profile_user_id: 1, texto: 'Hoy durmió toda la noche', media_url: null, audio_urls: JSON.stringify([AUDIO_CHARLA]), origen: 'charla', created_at: new Date().toISOString() };
+  entradas.push(filaCharla);
+  r = await request(server, { path: '/api/bebe' }, paula);
+  const vistaCharla = r.json.entradas.find((e) => e.id === filaCharla.id);
+  ok(vistaCharla && vistaCharla.deCharla === true && vistaCharla.audios.length === 1, 'la entrada que viene de la charla se marca "de la charla" y trae su grabación');
+  r = await request(server, { path: vistaCharla.audios[0] }, paula);
+  ok(r.status === 200, 'la grabación de la charla se escucha desde el diario');
+  const borradosAntes = borrados.length;
+  r = await request(server, { path: `/api/bebe/entradas/${filaCharla.id}`, method: 'DELETE' }, paula);
+  ok(r.status === 200 && !borrados.slice(borradosAntes).includes(AUDIO_CHARLA), 'borrar esa entrada del diario NO borra la grabación (sigue en el libro)');
+  r = await request(server, { path: '/api/bebe/audio/1/0', method: 'GET' }, ajena);
+  ok(r.status !== 200, 'una cuenta ajena no escucha grabaciones del diario');
 
   r = await request(server, { path: '/api/bebe?owner=1' }, abuela);
   ok(r.status === 200 && r.json.config.nombre === 'Rafaela' && r.json.puedeEditar === false && r.json.entradas.length === 2, 'una familiar invitada ve el diario completo, sin poder editar');

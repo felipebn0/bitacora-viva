@@ -1513,6 +1513,8 @@ function ensureSchema() {
       sql`CREATE INDEX IF NOT EXISTS idx_diario_bebe_entradas_perfil ON diario_bebe_entradas(profile_user_id, created_at)`,
       // Notas de voz originales del diario (JSON array de URLs en media/<id>/bebe/).
       sql`ALTER TABLE diario_bebe_entradas ADD COLUMN IF NOT EXISTS audio_urls TEXT`,
+      // 'charla' = lo que la persona contó en la charla del modo bebé (también queda en su libro).
+      sql`ALTER TABLE diario_bebe_entradas ADD COLUMN IF NOT EXISTS origen TEXT`,
     ]).catch((err) => {
       // Si la transacción falla, no dejamos una promesa rota memoizada para
       // siempre — el próximo intento (esta misma instancia tibia, no hace
@@ -5165,6 +5167,33 @@ async function guardarHistoriaDelTurno(profileUserId, history, audioUrlCrudo, me
   }
 }
 
+// Modo bebé: lo que la persona cuenta en la charla queda en su libro (guardarHistoriaDelTurno) y
+// TAMBIÉN en el diario del bebé, como una entrada "de la charla" con sus palabras. El umbral es más
+// bajo que el del libro: en el diario lo valioso son cosas cortas ("hoy durmió toda la noche").
+// La grabación se suma después (/api/story-log/audio) y es la MISMA del libro: por eso borrar la
+// entrada del diario nunca borra ese audio (ver bebe-routes.js).
+const DIARIO_CHARLA_MIN_CHARS = 25;
+async function guardarTurnoEnDiarioBebe(profileUserId, history, audioUrlCrudo) {
+  const ultima = [...history].reverse().find((m) => m.role === 'user' && !/^\(.*\)$/.test(String(m.content || '').trim()));
+  if (!ultima || ultima.content.trim().length < DIARIO_CHARLA_MIN_CHARS) return;
+  const texto = capitalizarInicio(ultima.content.trim()).slice(0, 4000);
+  const datos = typeof audioUrlCrudo === 'string' ? datosDelArchivoDeBlob(audioUrlCrudo.slice(0, 1000)) : null;
+  const audioUrl = datos && datos.ownerId === profileUserId ? audioUrlCrudo.slice(0, 1000) : null;
+  try {
+    if (!(await leerConfigBebe(profileUserId))) return;
+    const previa = await sql`SELECT id, audio_urls FROM diario_bebe_entradas WHERE profile_user_id = ${profileUserId} AND origen = 'charla' AND texto = ${texto} AND created_at > now() - interval '10 minutes' ORDER BY created_at DESC LIMIT 1`;
+    if (previa.length) {
+      if (audioUrl && !parseJsonArray(previa[0].audio_urls).includes(audioUrl)) {
+        await sql`UPDATE diario_bebe_entradas SET audio_urls = ${JSON.stringify([...parseJsonArray(previa[0].audio_urls), audioUrl])} WHERE id = ${previa[0].id}`;
+      }
+      return;
+    }
+    await sql`INSERT INTO diario_bebe_entradas (profile_user_id, texto, audio_urls, origen) VALUES (${profileUserId}, ${texto}, ${audioUrl ? JSON.stringify([audioUrl]) : null}, 'charla')`;
+  } catch (err) {
+    console.error('No se pudo guardar el turno en el diario del bebé:', err);
+  }
+}
+
 // --- Respuesta en streaming de /api/next (pedido de Felipe, 2026-10-08) ---
 // Con { stream: true } la ruta contesta línea por línea (JSON por línea):
 //   {"t":"frase","texto":"...","media":...}  una o más oraciones ya listas para
@@ -5485,6 +5514,7 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
     // tampoco: se guarda recién cuando el cliente lo confirma (/api/next/guardar).
     if (mode === 'historia' && !especulativo) {
       await guardarHistoriaDelTurno(req.profileUserId, history, req.body.lastAudioUrl, req.body.mediaUrls);
+      if (configBebe) await guardarTurnoEnDiarioBebe(req.profileUserId, history, req.body.lastAudioUrl);
     }
 
     // Si este turno fue la introducción de una foto/video pendiente (sola,
@@ -5523,6 +5553,7 @@ app.post('/api/next/guardar', requireAuth, bloquearColaborador, bloquearSiNoPued
       if (m.content.length > 4000) m.content = m.content.slice(0, 4000);
     }
     await guardarHistoriaDelTurno(req.profileUserId, history, req.body.lastAudioUrl, req.body.mediaUrls);
+    if (req.body.modoBebe === true) await guardarTurnoEnDiarioBebe(req.profileUserId, history, req.body.lastAudioUrl);
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -5721,6 +5752,13 @@ app.post('/api/story-log/audio', requireAuth, bloquearColaborador, bloquearSiNoP
         ORDER BY created_at DESC LIMIT 1
       )
       RETURNING id`;
+    // Si ese mismo turno quedó también en el diario del bebé (modo bebé), se le suma la grabación.
+    const enDiario = await sql`SELECT id, audio_urls FROM diario_bebe_entradas
+      WHERE profile_user_id = ${req.profileUserId} AND origen = 'charla' AND texto = ${textoAGuardar} AND created_at > now() - interval '10 minutes'
+      ORDER BY created_at DESC LIMIT 1`;
+    if (enDiario.length && !parseJsonArray(enDiario[0].audio_urls).includes(audioUrl)) {
+      await sql`UPDATE diario_bebe_entradas SET audio_urls = ${JSON.stringify([...parseJsonArray(enDiario[0].audio_urls), audioUrl])} WHERE id = ${enDiario[0].id}`;
+    }
     res.json({ ok: true, enlazado: actualizadas.length > 0 });
   } catch (err) {
     console.error(err);

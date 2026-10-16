@@ -122,8 +122,9 @@ const CAPTURAS = process.env.CAPTURAS_BEBE;
   ok(t.estado.cambios.at(-1).borrarAudios === true && t.estado.cambios.at(-1).texto === '', '"borrar y volver a contar" limpia la nota guardada y sus audios');
   ok(await p.locator('.eco-bebe-tira img').count() === 2, 'la foto nueva aparece en la tira');
 
-  // charla con el modo activo
-  await p.click('#ecoBebeHablar');
+  // charla con el modo activo: se usa el botón grande de ECO (ya no hay "Contar mi día con…", hacía lo mismo)
+  ok(await p.locator('#ecoBebeHablar').count() === 0, 'ya no está el botón "Contar mi día con…" (hacía lo mismo que el botón grande)');
+  await p.click('#orb');
   await p.waitForFunction(() => true);
   const t0 = Date.now();
   while (!t.estado.pidioNext.length && Date.now() - t0 < 8000) await p.waitForTimeout(100);
@@ -209,10 +210,12 @@ const CAPTURAS = process.env.CAPTURAS_BEBE;
   await t.ctx.close();
 
   // 5) Familiar invitada: solo ve
-  t = await contexto({ config: { nombre: 'Rafaela', genero: 'femenino', nacioEn: null, estado: 'en_camino' }, puedeEditar: false, entradas: [{ id: 5, texto: 'Primera ecografía', fotoUrl: '/api/bebe/foto/5?owner=1', creadaEn: new Date().toISOString() }] });
+  t = await contexto({ config: { nombre: 'Rafaela', genero: 'femenino', nacioEn: null, estado: 'en_camino' }, puedeEditar: false, entradas: [{ id: 5, texto: 'Primera ecografía', fotoUrl: '/api/bebe/foto/5?owner=1', creadaEn: new Date().toISOString() }, { id: 6, texto: 'Hoy le armamos la cuna con mi papá', fotoUrl: null, audios: [], deCharla: true, creadaEn: new Date().toISOString() }] });
   await t.page.goto(base + '/diario-bebe.html?owner=1');
   await t.page.waitForSelector('.eco-bebe-entrada');
   ok(await t.page.isHidden('#nuevaEntrada') && await t.page.isHidden('#ajustes') && await t.page.locator('.eco-bebe-borrar').count() === 0, 'una familiar invitada ve las fotos y notas, sin poder subir ni borrar');
+  ok(await t.page.locator('.eco-bebe-origen').count() === 1 && (await t.page.textContent('.eco-bebe-origen')) === 'De la charla con ECO', 'lo que se contó en la charla aparece en el diario marcado "De la charla con ECO"');
+  if (CAPTURAS) await t.page.screenshot({ path: path.join(CAPTURAS, 'diario-charla.png'), fullPage: true });
   await t.ctx.close();
 
   await browser.close();

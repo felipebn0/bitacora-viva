@@ -839,7 +839,7 @@
 
 <link rel="stylesheet" href="/eco-login-v6.css?v=6">
 <link rel="stylesheet" href="/eco-mobile-base.css">
-<link rel="stylesheet" href="/eco-bebe.css?v=7">
+<link rel="stylesheet" href="/eco-bebe.css?v=8">
 <link rel="stylesheet" href="/eco-crisis-banner.css?v=3">
 </head>
 <body class="eco-brand-v1 eco-page-inicio">
@@ -3444,7 +3444,7 @@
         ? fetch('/api/next/guardar', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ history, lastAudioUrl, mediaUrls }),
+            body: JSON.stringify({ history, lastAudioUrl, mediaUrls, modoBebe: !!(globalThis.EcoBebe && globalThis.EcoBebe.activo()) }),
           }).catch(() => {})
         : null;
       // La respuesta llega por eventos (ver el comentario de streaming en
@@ -4138,7 +4138,7 @@
 </script>
 <script src="/eco-toast.js" defer></script>
 <script src="/eco-bebe-comun.js?v=5" defer></script>
-<script src="/eco-bebe.js?v=8" defer></script>
+<script src="/eco-bebe.js?v=9" defer></script>
 <script src="/eco-crisis-banner.js?v=3" defer></script>
 <script src="/eco-intro.js?v=1" defer></script>
 <script src="/eco-tour.js?v=1" defer></script>

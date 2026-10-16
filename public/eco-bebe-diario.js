@@ -23,6 +23,7 @@
         li.appendChild(img);
       }
       const cuerpo = E('div', 'cuerpo');
+      if (x.deCharla) cuerpo.appendChild(E('span', 'eco-bebe-origen', 'De la charla con ECO'));
       if (x.texto) cuerpo.appendChild(E('p', '', x.texto));
       (x.audios || []).forEach((src, i, todos) => {
         const audio = E('audio', 'eco-bebe-audio');
@@ -89,7 +90,7 @@
     $('nuevaEntrada').hidden = !estado.puedeEditar;
     $('ajustes').hidden = !estado.puedeEditar;
     $('avisoPrivacidad').textContent = estado.puedeEditar
-      ? 'Lo que subes aquí lo ven solo los familiares que invitaste a tu bitácora. Lo que cuentas por voz va a tu libro y no se publica en el diario.'
+      ? 'Lo que subes aquí lo ven solo los familiares que invitaste a tu bitácora. Lo que cuentas en la charla con ECO queda en tu libro y también aquí.'
       : 'Este diario lo comparte contigo su familia. No lo reenvíes sin permiso.';
     if (estado.puedeEditar) {
       $('ajustesForm').appendChild($('formConfig'));

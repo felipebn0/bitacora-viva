@@ -154,3 +154,6 @@ html.eco-bebe-azul.eco-bebe-activo .orb[data-state="speaking"], html.eco-bebe-az
 html.eco-bebe-azul .eco-bebe-grande { color: #13283B; }
 html.eco-bebe-azul .eco-bebe-orbe { background: radial-gradient(circle at 35% 30%, #6A9BC5, #2E5675); }
 html.eco-bebe-azul .eco-bebe-voz-msg.error { color: #A3263A; }
+
+/* Entradas del diario que vienen de la charla del modo bebé (también están en el libro). */
+.eco-bebe-origen { display: inline-block; align-self: flex-start; font-size: 0.75rem; font-weight: 700; color: var(--rosa-hondo); background: var(--rosa-claro); border-radius: 999px; padding: 2px 10px; margin-bottom: 4px; }

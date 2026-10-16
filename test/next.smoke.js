@@ -47,6 +47,7 @@ const user = {
 };
 
 let storyLogInserts = []; // para verificar que se guardó (o no) una historia larga
+const diarioCharla = []; // entradas del diario del bebé que vienen de la charla
 let storyLogRows = []; // { id, userId, texto, audioUrl } — simula la tabla real para el chequeo de duplicados
 let storyLogUpdates = []; // ids a los que se les completó el audio_url
 let storyLogMediaUpdates = []; // ids a los que se les completó el media_urls
@@ -133,6 +134,18 @@ function fakeSql(strings, ...values) {
     const fila = storyLogRows.find((r) => r.id === id);
     if (fila) fila.mediaUrls = mediaUrls;
     storyLogMediaUpdates.push(id);
+    return Promise.resolve([]);
+  }
+  if (text.includes("FROM diario_bebe_entradas WHERE profile_user_id") && text.includes("origen = 'charla'")) {
+    return Promise.resolve(diarioCharla.filter((e) => e.texto === values[1]).slice(-1));
+  }
+  if (text.includes('INSERT INTO diario_bebe_entradas')) {
+    diarioCharla.push({ id: diarioCharla.length + 1, profileUserId: values[0], texto: values[1], audio_urls: values[2], origen: 'charla' });
+    return Promise.resolve([]);
+  }
+  if (text.includes('UPDATE diario_bebe_entradas SET audio_urls')) {
+    const f = diarioCharla.find((e) => e.id === values[1]);
+    if (f) f.audio_urls = values[0];
     return Promise.resolve([]);
   }
   if (text.includes('INSERT INTO story_log')) {
@@ -795,6 +808,32 @@ async function main() {
   pushAnthropicResponse('¡Qué alegría!\n[NACIO:2099-01-01]');
   const nacioFuturo = JSON.parse((await nextForUser(server, cookie, { history: [{ role: 'user', content: 'ya nació' }], mode: 'historia', modoBebe: true })).body);
   check('modo bebé: una fecha en el futuro no cambia el diario', user.diarioBebe.nacio_en === null && nacioFuturo.bebe === null && !nacioFuturo.message.includes('['));
+  // --- Modo bebé: lo que se cuenta queda en el libro Y en el diario del bebé ---
+  user.diarioBebe = { nombre: 'Roma', genero: 'femenino', nacio_en: null };
+  diarioCharla.length = 0;
+  const AUDIO_TURNO = 'https://fake.public.blob.vercel-storage.com/audio/' + user.id + '/sesion-1/user-3.webm';
+  resetAnthropicMock();
+  pushAnthropicResponse('Qué bonito. ¿Y cómo te sentiste tú?');
+  await nextForUser(server, cookie, { history: [{ role: 'user', content: 'Hoy le armamos la cuna a Roma con mi papá' }], mode: 'historia', modoBebe: true, lastAudioUrl: AUDIO_TURNO });
+  check('modo bebé: lo que cuenta queda también en el diario de Roma, marcado como de la charla, con su grabación', diarioCharla.length === 1 && diarioCharla[0].texto === 'Hoy le armamos la cuna a Roma con mi papá' && JSON.parse(diarioCharla[0].audio_urls || '[]')[0] === AUDIO_TURNO);
+  resetAnthropicMock();
+  pushAnthropicResponse('Qué bonito. ¿Y cómo te sentiste tú?');
+  await nextForUser(server, cookie, { history: [{ role: 'user', content: 'Hoy le armamos la cuna a Roma con mi papá' }], mode: 'historia', modoBebe: true, lastAudioUrl: AUDIO_TURNO });
+  check('modo bebé: el mismo turno repetido no se duplica en el diario', diarioCharla.length === 1);
+  resetAnthropicMock();
+  pushAnthropicResponse('Listo.');
+  await nextForUser(server, cookie, { history: [{ role: 'user', content: 'sí' }], mode: 'historia', modoBebe: true });
+  check('modo bebé: una respuesta muy corta ("sí") no se vuelve entrada del diario', diarioCharla.length === 1);
+  resetAnthropicMock();
+  pushAnthropicResponse('Qué recuerdo tan bonito. ¿Cómo se llamaba la finca?');
+  await nextForUser(server, cookie, { history: [{ role: 'user', content: 'Cuando era niño íbamos a la finca de mi abuelo' }], mode: 'historia' });
+  check('fuera del modo bebé, la charla no se guarda en el diario', diarioCharla.length === 1);
+  const guardarEsp = await new Promise((resolve, reject) => {
+    const body = JSON.stringify({ history: [{ role: 'user', content: 'Hoy Roma se movió muchísimo después del almuerzo' }], modoBebe: true });
+    const r = http.request({ host: '127.0.0.1', port: server.address().port, path: '/api/next/guardar', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), Cookie: cookie, Origin: 'http://127.0.0.1:' + server.address().port } }, (res) => { res.resume(); res.on('end', () => resolve(res.statusCode)); });
+    r.on('error', reject); r.write(body); r.end();
+  });
+  check('modo bebé: un turno especulativo confirmado (/api/next/guardar) también queda en el diario', guardarEsp === 200 && diarioCharla.length === 2);
   user.diarioBebe = null;
 
   // --- Crisis: ECO marca la respuesta y la pantalla muestra los números (nunca se dice la marca) ---

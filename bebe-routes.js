@@ -37,8 +37,16 @@ module.exports = (app, {
     const datos = typeof url === 'string' && datosDelArchivoDeBlob(url);
     return !!datos && datos.ownerId === pid && datos.pathname.startsWith(`media/${pid}/bebe/`);
   };
+  // La grabación de una entrada "de la charla" es la misma del libro (audio/<id>/…): se puede
+  // escuchar desde el diario, pero nunca se borra desde aquí.
+  const esAudioDeLaCharla = (url, pid) => {
+    const datos = typeof url === 'string' && datosDelArchivoDeBlob(url);
+    return !!datos && datos.ownerId === pid && datos.pathname.startsWith(`audio/${pid}/`);
+  };
+  const soloDelDiario = (urls, pid) => urls.filter((u) => esArchivoDelDiario(u, pid));
   const formatearEntrada = (f, pid) => ({
     id: f.id,
+    deCharla: f.origen === 'charla',
     texto: f.texto || '',
     fotoUrl: f.media_url ? `/api/bebe/foto/${f.id}?owner=${pid}` : null,
     audios: leerAudios(f.audio_urls).map((_, i) => `/api/bebe/audio/${f.id}/${i}?owner=${pid}`),
@@ -65,7 +73,7 @@ module.exports = (app, {
       await ensureSchema();
       const config = formatearConfig(await leerConfig(pid));
       const filas = config
-        ? await sql`SELECT id, texto, media_url, audio_urls, created_at FROM diario_bebe_entradas WHERE profile_user_id = ${pid} ORDER BY created_at DESC, id DESC LIMIT 200`
+        ? await sql`SELECT id, texto, media_url, audio_urls, origen, created_at FROM diario_bebe_entradas WHERE profile_user_id = ${pid} ORDER BY created_at DESC, id DESC LIMIT 200`
         : [];
       const puedeEditar = !req.isCollaborator && !req.isGuest && pid === req.profileUserId;
       res.json({
@@ -145,7 +153,7 @@ module.exports = (app, {
       const agregar = cuerpo.agregarAudio;
       if (agregar !== undefined && agregar !== null && !esArchivoDelDiario(agregar, req.profileUserId)) return res.status(400).json({ error: 'Esa nota de voz no se puede usar.' });
       await ensureSchema();
-      const filas = await sql`SELECT id, texto, media_url, audio_urls, created_at FROM diario_bebe_entradas WHERE id = ${id} AND profile_user_id = ${req.profileUserId}`;
+      const filas = await sql`SELECT id, texto, media_url, audio_urls, origen, created_at FROM diario_bebe_entradas WHERE id = ${id} AND profile_user_id = ${req.profileUserId}`;
       if (!filas.length) return res.status(404).json({ error: 'No se encontró.' });
       const fila = filas[0];
       let audios = leerAudios(fila.audio_urls);
@@ -157,8 +165,9 @@ module.exports = (app, {
       }
       const texto = typeof cuerpo.texto === 'string' ? cuerpo.texto.trim().slice(0, MAX_NOTA) : (fila.texto || '');
       const actualizadas = await sql`UPDATE diario_bebe_entradas SET texto = ${texto || null}, audio_urls = ${audios.length ? JSON.stringify(audios) : null}
-        WHERE id = ${id} AND profile_user_id = ${req.profileUserId} RETURNING id, texto, media_url, audio_urls, created_at`;
-      if (sobran.length) await borrarArchivosBlob(sobran);
+        WHERE id = ${id} AND profile_user_id = ${req.profileUserId} RETURNING id, texto, media_url, audio_urls, origen, created_at`;
+      const borrables = soloDelDiario(sobran, req.profileUserId);
+      if (borrables.length) await borrarArchivosBlob(borrables);
       res.json({ ok: true, entrada: formatearEntrada(actualizadas[0], req.profileUserId) });
     } catch (err) {
       console.error(err);
@@ -176,7 +185,7 @@ module.exports = (app, {
       await ensureSchema();
       const filas = await sql`SELECT audio_urls FROM diario_bebe_entradas WHERE id = ${id} AND profile_user_id = ${pid}`;
       const url = filas.length ? leerAudios(filas[0].audio_urls)[n] : null;
-      if (!url || !esArchivoDelDiario(url, pid)) return res.status(404).json({ error: 'No se encontró.' });
+      if (!url || !(esArchivoDelDiario(url, pid) || esAudioDeLaCharla(url, pid))) return res.status(404).json({ error: 'No se encontró.' });
       await enviarArchivoAlmacenado(req, res, url, 'private, max-age=300');
     } catch (err) {
       console.error(err);
@@ -198,7 +207,7 @@ module.exports = (app, {
       if (!texto && !fotoUrl && !audios.length) return res.status(400).json({ error: 'Sube una foto o cuenta algo.' });
       await ensureSchema();
       if (!(await leerConfig(req.profileUserId))) return res.status(409).json({ error: 'Primero crea el diario.' });
-      const filas = await sql`INSERT INTO diario_bebe_entradas (profile_user_id, texto, media_url, audio_urls) VALUES (${req.profileUserId}, ${texto || null}, ${fotoUrl}, ${audios.length ? JSON.stringify(audios) : null}) RETURNING id, texto, media_url, audio_urls, created_at`;
+      const filas = await sql`INSERT INTO diario_bebe_entradas (profile_user_id, texto, media_url, audio_urls) VALUES (${req.profileUserId}, ${texto || null}, ${fotoUrl}, ${audios.length ? JSON.stringify(audios) : null}) RETURNING id, texto, media_url, audio_urls, origen, created_at`;
       res.json({ ok: true, entrada: formatearEntrada(filas[0], req.profileUserId) });
     } catch (err) {
       console.error(err);
@@ -214,7 +223,8 @@ module.exports = (app, {
       await ensureSchema();
       const filas = await sql`DELETE FROM diario_bebe_entradas WHERE id = ${id} AND profile_user_id = ${req.profileUserId} RETURNING media_url, audio_urls`;
       if (!filas.length) return res.status(404).json({ error: 'No se encontró.' });
-      const archivos = [filas[0].media_url, ...leerAudios(filas[0].audio_urls)].filter(Boolean);
+      // Solo lo que vive en la carpeta del diario: la grabación de la charla sigue en el libro.
+      const archivos = soloDelDiario([filas[0].media_url, ...leerAudios(filas[0].audio_urls)].filter(Boolean), req.profileUserId);
       if (archivos.length) await borrarArchivosBlob(archivos);
       res.json({ ok: true });
     } catch (err) {

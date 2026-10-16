@@ -114,15 +114,12 @@
     };
     const voz = C().botonVoz(texto, { entrada: () => enCurso, alGuardar: reemplazar });
     nota.append(invitacion, voz.caja, texto);
-    const hablar = E('button', 'eco-bebe-secundario', 'Contar mi día con ' + config.nombre);
-    hablar.type = 'button';
-    hablar.id = 'ecoBebeHablar';
     const ver = E('a', 'eco-bebe-enlace', 'Ver el diario completo');
     ver.href = '/diario-bebe.html';
     const msg = E('p', 'eco-bebe-msg');
     msg.setAttribute('role', 'status');
     msg.setAttribute('aria-live', 'polite');
-    panel.append(tira, foto, input, nota, hablar, ver, msg);
+    panel.append(tira, foto, input, nota, ver, msg);
 
     const aviso = (t, error) => { msg.textContent = t; msg.classList.toggle('error', !!error); };
 
@@ -151,12 +148,6 @@
         aviso(e.message || 'No se pudo subir la foto. Intenta de nuevo.', true);
       }
       foto.disabled = false;
-    });
-    hablar.addEventListener('click', () => {
-      const orbe = document.getElementById('orb');
-      if (!orbe) return;
-      if (orbe.dataset.state === 'idle') orbe.click();
-      else orbe.scrollIntoView({ block: 'center', behavior: 'smooth' });
     });
     pintarTira(entradas);
   }
