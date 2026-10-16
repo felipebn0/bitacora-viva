@@ -1,7 +1,8 @@
 // Smoke test de POST /api/admin/migrar-blob-a-r2 (archivos viejos de Vercel
 // Blob público -> R2). Cubre: solo admin; sin confirmar no toca nada; con
 // confirmar copia a R2 con la misma clave, cambia la URL en TODAS las filas
-// que la usan (story_log, family_notes, media), borra el original de Blob
+// que la usan (story_log, family_notes, media, diario del bebé, mensaje de
+// regalo, copias de audio de los QR del libro y fotos del libro), borra el original de Blob
 // recién después, y si la copia falla deja la URL vieja y el original intactos.
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'ci-smoke-secret';
 process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgres://fake:fake@localhost/fake';
@@ -27,6 +28,9 @@ const users = {
 const BUENA = 'https://tienda1.public.blob.vercel-storage.com/audio/1/uno-abc123.webm';
 const MALA = 'https://tienda1.public.blob.vercel-storage.com/audio/1/dos-def456.webm';
 const FOTO = 'https://tienda1.public.blob.vercel-storage.com/media/1/foto-ghi789.jpg';
+const BEBE = 'https://tienda1.public.blob.vercel-storage.com/media/1/bebe/foto-1.jpg';
+const REGALO = 'https://tienda1.public.blob.vercel-storage.com/audio/7/regalo/mensaje-1.webm';
+const LIBRO = 'https://tienda1.public.blob.vercel-storage.com/media/libros/1/abc.jpg';
 const R2URL = (k) => 'https://pub-abc123.r2.dev/' + k;
 
 // Base en memoria.
@@ -35,6 +39,12 @@ const db = {
               { id: 2, audio_url: MALA, audio_urls: null, media_urls: null }],
   family_notes: [{ id: 1, audio_url: null, audio_urls: JSON.stringify([BUENA]), media_urls: null }],
   media: [{ id: 1, url: FOTO }],
+  diario_bebe_entradas: [{ id: 1, media_url: BEBE, audio_urls: null }],
+  bitacoras: [{ id: 7, mensaje_regalo_url: REGALO }],
+  // El QR del libro guarda una COPIA del audio de la historia: si no se cambia, queda apuntando al
+  // original que la migración borra.
+  book_audio_links: [{ token: 'qr1', audio_urls: JSON.stringify([BUENA]) }],
+  book_editor_drafts: [{ owner_id: 1, draft: JSON.stringify({ bookPhotos: { 3: [{ url: LIBRO, caption: 'x' }] } }) }],
 };
 const contiene = (v) => typeof v === 'string' && v.includes('.blob.vercel-storage.com/');
 
@@ -59,6 +69,19 @@ function fakeSql(strings, ...values) {
   if (text.includes('count(*)::int AS n FROM story_log')) return Promise.resolve([{ n: db.story_log.filter((r) => contiene(r.audio_url) || contiene(r.audio_urls) || contiene(r.media_urls)).length }]);
   if (text.includes('count(*)::int AS n FROM family_notes')) return Promise.resolve([{ n: db.family_notes.filter((r) => contiene(r.audio_url) || contiene(r.audio_urls) || contiene(r.media_urls)).length }]);
   if (text.includes('count(*)::int AS n FROM media')) return Promise.resolve([{ n: db.media.filter((r) => contiene(r.url)).length }]);
+  if (text.startsWith('SELECT id, media_url, audio_urls FROM diario_bebe_entradas')) return Promise.resolve(db.diario_bebe_entradas.filter((r) => contiene(r.media_url) || contiene(r.audio_urls)));
+  if (text.startsWith('SELECT id, mensaje_regalo_url FROM bitacoras')) return Promise.resolve(db.bitacoras.filter((r) => contiene(r.mensaje_regalo_url)));
+  if (text.startsWith('SELECT token, audio_urls FROM book_audio_links')) return Promise.resolve(db.book_audio_links.filter((r) => contiene(r.audio_urls)));
+  if (text.startsWith('SELECT owner_id, draft::text AS draft FROM book_editor_drafts')) return Promise.resolve(db.book_editor_drafts.filter((r) => contiene(r.draft)));
+  if (text.includes('count(*)::int AS n FROM diario_bebe_entradas')) return Promise.resolve([{ n: db.diario_bebe_entradas.filter((r) => contiene(r.media_url) || contiene(r.audio_urls)).length }]);
+  if (text.includes('count(*)::int AS n FROM bitacoras')) return Promise.resolve([{ n: db.bitacoras.filter((r) => contiene(r.mensaje_regalo_url)).length }]);
+  if (text.includes('count(*)::int AS n FROM book_audio_links')) return Promise.resolve([{ n: db.book_audio_links.filter((r) => contiene(r.audio_urls)).length }]);
+  if (text.includes('count(*)::int AS n FROM book_editor_drafts')) return Promise.resolve([{ n: db.book_editor_drafts.filter((r) => contiene(r.draft)).length }]);
+  const reemplazar = (vals) => { const [vieja, nueva] = vals; return (v) => (typeof v === 'string' ? v.split(vieja).join(nueva) : v); };
+  if (text.startsWith('UPDATE diario_bebe_entradas SET media_url = replace')) { const rep = reemplazar(values); db.diario_bebe_entradas.forEach((r) => { r.media_url = rep(r.media_url); r.audio_urls = rep(r.audio_urls); }); return Promise.resolve([]); }
+  if (text.startsWith('UPDATE bitacoras SET mensaje_regalo_url = replace')) { const rep = reemplazar(values); db.bitacoras.forEach((r) => { r.mensaje_regalo_url = rep(r.mensaje_regalo_url); }); return Promise.resolve([]); }
+  if (text.startsWith('UPDATE book_audio_links SET audio_urls = replace')) { const rep = reemplazar(values); db.book_audio_links.forEach((r) => { r.audio_urls = rep(r.audio_urls); }); return Promise.resolve([]); }
+  if (text.startsWith('UPDATE book_editor_drafts SET draft = replace')) { const rep = reemplazar(values); db.book_editor_drafts.forEach((r) => { r.draft = rep(r.draft); }); return Promise.resolve([]); }
   if (text.includes('UNION ALL SELECT url AS u FROM media')) {
     const all = [...db.story_log.map((r) => r.audio_url), ...db.media.map((r) => r.url)].filter((u) => typeof u === 'string' && u.startsWith('https://pub-abc123.r2.dev/'));
     return Promise.resolve(all.length ? [{ u: all[0] }] : []);
@@ -156,12 +179,13 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
   const r1 = await llamar(server, 'POST', URL_MIG, {}, admin);
   ok(r1.status === 200 && r1.json.dryRun === true, 'sin confirmar -> dry run');
   ok(r1.json.filasConArchivoViejo.story_log === 2 && r1.json.filasConArchivoViejo.family_notes === 1 && r1.json.filasConArchivoViejo.media === 1, 'el dry run cuenta las filas con archivos viejos');
-  ok(r1.json.archivosEnEsteLote === 3, 'el dry run cuenta 3 archivos distintos (la misma URL en varias filas cuenta una vez)');
+  ok(r1.json.filasConArchivoViejo.diario_bebe_entradas === 1 && r1.json.filasConArchivoViejo.bitacoras === 1 && r1.json.filasConArchivoViejo.book_audio_links === 1 && r1.json.filasConArchivoViejo.book_editor_drafts === 1, 'también cuenta el diario del bebé, el mensaje de regalo, los QR y las fotos del libro');
+  ok(r1.json.archivosEnEsteLote === 6, 'el dry run cuenta 6 archivos distintos (la misma URL en varias filas cuenta una vez)');
   ok(JSON.stringify(db) === antes && !borradosDeBlob.length && !Object.keys(subidosAR2).length, 'el dry run no toca la base, ni R2, ni Blob');
 
   const r2 = await llamar(server, 'POST', URL_MIG, { confirmar: true }, admin);
   ok(r2.status === 200 && r2.json.dryRun === false, 'con confirmar -> ejecuta');
-  ok(r2.json.migradas === 2, 'migra los 2 archivos que se pudieron copiar');
+  ok(r2.json.migradas === 5, 'migra los 5 archivos que se pudieron copiar');
   ok(r2.json.fallidas.length === 1 && r2.json.fallidas[0].url === MALA, 'el que falló en R2 queda listado como fallido');
 
   const claveBuena = 'audio/1/uno-abc123.webm';
@@ -171,11 +195,15 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
   ok(db.story_log[0].media_urls === JSON.stringify([R2URL(claveFoto)]), 'story_log.media_urls: foto reemplazada');
   ok(db.family_notes[0].audio_urls === JSON.stringify([R2URL(claveBuena)]), 'family_notes: la MISMA URL también se reemplazó en otra tabla');
   ok(db.media[0].url === R2URL(claveFoto), 'media.url reemplazada');
+  ok(db.book_audio_links[0].audio_urls === JSON.stringify([R2URL(claveBuena)]), 'el QR del libro queda apuntando a la copia en R2 (no al original borrado)');
+  ok(db.diario_bebe_entradas[0].media_url === R2URL('media/1/bebe/foto-1.jpg'), 'diario del bebé: foto reemplazada');
+  ok(db.bitacoras[0].mensaje_regalo_url === R2URL('audio/7/regalo/mensaje-1.webm'), 'mensaje de regalo reemplazado');
+  ok(JSON.parse(db.book_editor_drafts[0].draft).bookPhotos[3][0].url === R2URL('media/libros/1/abc.jpg'), 'foto del libro reemplazada dentro del borrador (JSON)');
   ok(borradosDeBlob.includes(BUENA) && borradosDeBlob.includes(FOTO), 'los originales se borran de Blob solo después de reemplazar');
   ok(db.story_log[1].audio_url === MALA && !borradosDeBlob.includes(MALA), 'el que falló: URL vieja intacta y el original NO se borra');
 
   const r3 = await llamar(server, 'POST', URL_MIG, {}, admin);
-  ok(r3.json.filasConArchivoViejo.story_log === 1 && r3.json.filasConArchivoViejo.family_notes === 0 && r3.json.filasConArchivoViejo.media === 0, 'el dry run posterior solo ve lo que falló');
+  ok(r3.json.filasConArchivoViejo.story_log === 1 && Object.entries(r3.json.filasConArchivoViejo).every(([k, n]) => k === 'story_log' || n === 0), 'el dry run posterior solo ve lo que falló');
   ok(r3.json.r2PublicoAbierto === false, 'detecta que el bucket de R2 ya NO responde en público (403)');
 
   server.close();

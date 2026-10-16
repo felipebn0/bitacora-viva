@@ -169,7 +169,7 @@ await fetch('/api/admin/migrar-blob-a-r2', { method: 'POST', headers: { 'Content
 await fetch('/api/admin/migrar-blob-a-r2', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirmar: true, limite: 10 }) }).then(r => r.json())
 ```
 
-Cada archivo se copia a R2 con la misma clave, se cambia la URL en todas las filas que lo usan (`story_log`, `family_notes`, `media`) y recién después se borra el original de Blob; si algo falla queda tal cual y aparece en `fallidas`. Cuando el paso 1 dé `r2PublicoAbierto: false` y 0 filas pendientes, el store de Blob puede vaciarse.
+Cada archivo se copia a R2 con la misma clave, se cambia la URL en todas las filas que lo usan (`story_log`, `family_notes`, `media`, `diario_bebe_entradas`, `bitacoras.mensaje_regalo_url`, `book_audio_links` —las copias de audio de los QR del libro— y las fotos dentro de `book_editor_drafts`) y recién después se borra el original de Blob; si algo falla queda tal cual y aparece en `fallidas`. Cuando el paso 1 dé `r2PublicoAbierto: false` y 0 filas pendientes, el store de Blob puede vaciarse.
 
 ## Exportar el libro en PDF
 

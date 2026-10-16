@@ -9193,7 +9193,8 @@ async function resumenBlobDePerfil(profileId) {
 // Todo lo que se subió antes de usar R2 vive en un store de Vercel Blob que
 // es PÚBLICO de verdad (cualquiera con la URL larga puede abrirlo, sin
 // sesión). Esta ruta copia cada archivo a R2 con la MISMA clave, cambia la
-// URL guardada en la base y recién entonces borra el original de Blob.
+// URL guardada en la base (en TODAS las tablas que la usan) y recién
+// entonces borra el original de Blob.
 // Para que lo copiado quede realmente privado, además hay que apagar el
 // acceso público del bucket en Cloudflare (ver README → "Privacidad de los
 // archivos"): la app lee R2 siempre con sus llaves, nunca por la URL
@@ -9237,18 +9238,34 @@ app.post('/api/admin/migrar-blob-a-r2', requireAuth, requireAdmin, rateLimit, as
     const sl = await sql`SELECT id, audio_url, audio_urls, media_urls FROM story_log WHERE audio_url LIKE ${LIKE_BLOB} OR audio_urls LIKE ${LIKE_BLOB} OR media_urls LIKE ${LIKE_BLOB} ORDER BY id LIMIT ${limite}`;
     const fn = await sql`SELECT id, audio_url, audio_urls, media_urls FROM family_notes WHERE audio_url LIKE ${LIKE_BLOB} OR audio_urls LIKE ${LIKE_BLOB} OR media_urls LIKE ${LIKE_BLOB} ORDER BY id LIMIT ${limite}`;
     const md = await sql`SELECT id, url FROM media WHERE url LIKE ${LIKE_BLOB} ORDER BY id LIMIT ${limite}`;
+    // Lugares que se sumaron después (diario del bebé, mensaje de regalo, fotos del libro y las
+    // copias de los audios para los QR del libro): sin ellos, migrar una historia dejaba el QR
+    // apuntando a un original ya borrado de Blob.
+    const db_ = await sql`SELECT id, media_url, audio_urls FROM diario_bebe_entradas WHERE media_url LIKE ${LIKE_BLOB} OR audio_urls LIKE ${LIKE_BLOB} ORDER BY id LIMIT ${limite}`;
+    const bt = await sql`SELECT id, mensaje_regalo_url FROM bitacoras WHERE mensaje_regalo_url LIKE ${LIKE_BLOB} ORDER BY id LIMIT ${limite}`;
+    const ba = await sql`SELECT token, audio_urls FROM book_audio_links WHERE audio_urls LIKE ${LIKE_BLOB} ORDER BY token LIMIT ${limite}`;
+    const be = await sql`SELECT owner_id, draft::text AS draft FROM book_editor_drafts WHERE draft::text LIKE ${LIKE_BLOB} ORDER BY owner_id LIMIT ${limite}`;
 
     const pendientes = new Set();
     sl.forEach((r) => urlsDeBlobEn(r.audio_url, r.audio_urls, r.media_urls).forEach((u) => pendientes.add(u)));
     fn.forEach((r) => urlsDeBlobEn(r.audio_url, r.audio_urls, r.media_urls).forEach((u) => pendientes.add(u)));
     md.forEach((r) => urlsDeBlobEn(r.url).forEach((u) => pendientes.add(u)));
+    db_.forEach((r) => urlsDeBlobEn(r.media_url, r.audio_urls).forEach((u) => pendientes.add(u)));
+    bt.forEach((r) => urlsDeBlobEn(r.mensaje_regalo_url).forEach((u) => pendientes.add(u)));
+    ba.forEach((r) => urlsDeBlobEn(r.audio_urls).forEach((u) => pendientes.add(u)));
+    be.forEach((r) => urlsDeBlobEn(r.draft).forEach((u) => pendientes.add(u)));
     const lote = [...pendientes].slice(0, limite);
 
     const filas = {
       story_log: (await sql`SELECT count(*)::int AS n FROM story_log WHERE audio_url LIKE ${LIKE_BLOB} OR audio_urls LIKE ${LIKE_BLOB} OR media_urls LIKE ${LIKE_BLOB}`)[0].n,
       family_notes: (await sql`SELECT count(*)::int AS n FROM family_notes WHERE audio_url LIKE ${LIKE_BLOB} OR audio_urls LIKE ${LIKE_BLOB} OR media_urls LIKE ${LIKE_BLOB}`)[0].n,
       media: (await sql`SELECT count(*)::int AS n FROM media WHERE url LIKE ${LIKE_BLOB}`)[0].n,
+      diario_bebe_entradas: (await sql`SELECT count(*)::int AS n FROM diario_bebe_entradas WHERE media_url LIKE ${LIKE_BLOB} OR audio_urls LIKE ${LIKE_BLOB}`)[0].n,
+      bitacoras: (await sql`SELECT count(*)::int AS n FROM bitacoras WHERE mensaje_regalo_url LIKE ${LIKE_BLOB}`)[0].n,
+      book_audio_links: (await sql`SELECT count(*)::int AS n FROM book_audio_links WHERE audio_urls LIKE ${LIKE_BLOB}`)[0].n,
+      book_editor_drafts: (await sql`SELECT count(*)::int AS n FROM book_editor_drafts WHERE draft::text LIKE ${LIKE_BLOB}`)[0].n,
     };
+    const totalFilas = Object.values(filas).reduce((a, n) => a + n, 0);
 
     if (!confirmar) {
       return res.json({
@@ -9287,6 +9304,10 @@ app.post('/api/admin/migrar-blob-a-r2', requireAuth, requireAdmin, rateLimit, as
           sql`UPDATE story_log SET audio_url = replace(audio_url, ${vieja}, ${nueva}), audio_urls = replace(audio_urls, ${vieja}, ${nueva}), media_urls = replace(media_urls, ${vieja}, ${nueva}) WHERE audio_url LIKE ${like} OR audio_urls LIKE ${like} OR media_urls LIKE ${like}`,
           sql`UPDATE family_notes SET audio_url = replace(audio_url, ${vieja}, ${nueva}), audio_urls = replace(audio_urls, ${vieja}, ${nueva}), media_urls = replace(media_urls, ${vieja}, ${nueva}) WHERE audio_url LIKE ${like} OR audio_urls LIKE ${like} OR media_urls LIKE ${like}`,
           sql`UPDATE media SET url = replace(url, ${vieja}, ${nueva}) WHERE url LIKE ${like}`,
+          sql`UPDATE diario_bebe_entradas SET media_url = replace(media_url, ${vieja}, ${nueva}), audio_urls = replace(audio_urls, ${vieja}, ${nueva}) WHERE media_url LIKE ${like} OR audio_urls LIKE ${like}`,
+          sql`UPDATE bitacoras SET mensaje_regalo_url = replace(mensaje_regalo_url, ${vieja}, ${nueva}) WHERE mensaje_regalo_url LIKE ${like}`,
+          sql`UPDATE book_audio_links SET audio_urls = replace(audio_urls, ${vieja}, ${nueva}) WHERE audio_urls LIKE ${like}`,
+          sql`UPDATE book_editor_drafts SET draft = replace(draft::text, ${vieja}, ${nueva})::jsonb WHERE draft::text LIKE ${like}`,
         ]);
         let originalBorrado = true;
         try { await del(vieja); } catch (e) { originalBorrado = false; }
@@ -9300,7 +9321,7 @@ app.post('/api/admin/migrar-blob-a-r2', requireAuth, requireAdmin, rateLimit, as
       migradas: migradas.length,
       fallidas,
       sinBorrarEnBlob: migradas.filter((m) => !m.originalBorrado).length,
-      quedanFilasPorMigrar: filas.story_log + filas.family_notes + filas.media > 0 ? 'repite el pedido hasta que el dry run diga 0 en todo' : 'ninguna',
+      quedanFilasPorMigrar: totalFilas > 0 ? 'repite el pedido hasta que el dry run diga 0 en todo' : 'ninguna',
     });
   } catch (err) {
     console.error(err);
