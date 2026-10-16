@@ -70,6 +70,17 @@
       boton.addEventListener('click',()=>mostrarVista(id));
     });
 
+    // El diario de un bebé lleva a su propia página, así que va como una
+    // tarjeta más del menú (si no, quedaba escondido con el menú viejo).
+    const bebe=panel.querySelector('#umBebeLink');
+    if(bebe){
+      bebe.className='eco-lateral-item';
+      bebe.innerHTML='<span class="eco-lateral-item-name"></span><small></small><span class="eco-lateral-chevron" aria-hidden="true">›</span>';
+      bebe.querySelector('.eco-lateral-item-name').textContent='Diario de un bebé';
+      bebe.querySelector('small').textContent='Fotos y momentos del día';
+      nav.appendChild(bebe);
+    }
+
     function moverSeccion(id,destino) {
       const el=document.getElementById(id);
       if(!el) return;

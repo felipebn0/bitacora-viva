@@ -23,6 +23,7 @@
 #appContent .eco-lateral-identidad .um-username{margin:0;color:#4d6542;font-weight:700;overflow-wrap:anywhere;}
 #appContent .eco-lateral-nav{display:grid;gap:9px;}
 #appContent .eco-lateral-item{width:100%;position:relative;text-align:left;border:1px solid #dadaca;border-radius:17px;background:#fffdf6;min-height:73px;padding:12px 36px 12px 16px;display:flex;flex-direction:column;justify-content:center;gap:3px;cursor:pointer;font-family:inherit;color:#293d30;}
+#appContent a.eco-lateral-item{text-decoration:none;}
 #appContent .eco-lateral-item:hover,#appContent .eco-lateral-item:focus-visible{background:#edf0e5;border-color:#8c9e82;}
 #appContent .eco-lateral-item-name{font-size:1rem;font-weight:800;}
 #appContent .eco-lateral-item small{font-size:.8rem;color:#777568;}
