@@ -5,9 +5,9 @@
 // ── Líneas de atención ────────────────────────────────────────────────────────
 const LINES_SUICIDE = [
   { num:'106',           label:'Salud Mental',       desc:'24/7 · gratuita · nacional' },
-  { num:'192 opción 4',  label:'Min. Salud',          desc:'24/7 · gratuita · nacional' },
-  // { num:'XXXX', label:'Línea Calma', desc:'...' }, // TODO: confirmar número
-  { num:'123',           label:'Emergencias',         desc:'peligro inmediato' },
+  { num:'192 opción 4',    label:'Min. Salud',          desc:'24/7 · gratuita · nacional' },
+  { num:'018000423614',   label:'Línea Calma',         desc:'hombres · apoyo emocional · Bogotá' },
+  { num:'123',            label:'Emergencias',         desc:'peligro inmediato' },
 ];
 const LINES_VIOLENCE = [
   { num:'155',           label:'Violencia de género', desc:'24/7 · gratuita · nacional' },
