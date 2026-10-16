@@ -1,0 +1,90 @@
+/* ECO · Banner de recursos de crisis — no intrusivo, cálido, descartable */
+.eco-crisis-banner {
+  position: relative;
+  width: 100%;
+  max-width: 710px;
+  margin: 0 auto 16px;
+  box-sizing: border-box;
+  background: #fdf8ee;
+  border: 1.5px solid #d4c9a8;
+  border-left: 4px solid #7a9e6e;
+  border-radius: 14px;
+  padding: 18px 44px 18px 20px;
+  animation: eco-crisis-in .25s ease;
+}
+@keyframes eco-crisis-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.eco-crisis-banner.eco-crisis-violence {
+  border-left-color: #9e6e7a;
+  background: #fdf0f3;
+  border-color: #d4a8b2;
+}
+.eco-crisis-close {
+  position: absolute;
+  top: 10px; right: 12px;
+  border: none; background: none;
+  font-size: 1.25rem; color: #999; cursor: pointer;
+  line-height: 1; padding: 4px 6px; border-radius: 6px;
+}
+.eco-crisis-close:hover { color: #444; }
+.eco-crisis-msg {
+  font-size: .92rem;
+  color: #3d3a2e;
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+.eco-crisis-lines {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.eco-crisis-lines li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: .88rem;
+}
+.eco-crisis-num {
+  font-weight: 700;
+  color: #293d30;
+  font-size: .95rem;
+  white-space: nowrap;
+}
+.eco-crisis-label {
+  color: #3d3a2e;
+}
+.eco-crisis-desc {
+  color: #888;
+  font-size: .82rem;
+}
+.eco-crisis-banner.eco-crisis-violence .eco-crisis-num { color: #5c2d3a; }
+.eco-crisis-eco-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: #293d30;
+  color: #fbf6ea;
+  border-radius: 10px;
+  padding: 9px 16px;
+  font-size: .88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .15s;
+}
+.eco-crisis-eco-btn:hover { background: #3a5040; }
+.eco-crisis-banner.eco-crisis-violence .eco-crisis-eco-btn {
+  background: #5c2d3a;
+}
+.eco-crisis-banner.eco-crisis-violence .eco-crisis-eco-btn:hover {
+  background: #7a3d4e;
+}
+@media (max-width: 600px) {
+  .eco-crisis-banner { border-radius: 12px; padding: 14px 38px 14px 14px; }
+  .eco-crisis-lines li { flex-wrap: wrap; gap: 4px; }
+}
