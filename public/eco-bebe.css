@@ -43,10 +43,24 @@ html.eco-bebe-activo .greeting .sub { font-size: 1rem; }
 }
 .eco-bebe-pill[aria-pressed="true"] { background: var(--rosa-claro); border-color: var(--rosa-fuerte); }
 .eco-bebe-pill[hidden], .eco-bebe-panel[hidden] { display: none; }
+.eco-bebe-fila { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.eco-bebe-chip[hidden] { display: none; }
+/* Edad en días, arriba a la derecha de la tarjeta (solo cuando ya nació). */
+html.eco-bebe-activo .device { position: relative; }
+.eco-bebe-edad {
+  position: absolute; top: 14px; right: 16px; z-index: 2;
+  display: grid; justify-items: center; gap: 0; min-width: 58px; padding: 6px 10px;
+  border-radius: 14px; background: var(--rosa-claro); color: var(--rosa-hondo); line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.eco-bebe-edad[hidden] { display: none; }
+.eco-bebe-fila.con-edad { padding-inline: 76px; }
+.eco-bebe-edad-label { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.eco-bebe-edad-num { font-size: 1.35rem; font-weight: 800; }
+.eco-bebe-edad-unidad { font-size: 0.72rem; font-weight: 700; }
 
 .eco-bebe-panel { display: flex; flex-direction: column; gap: 12px; width: 100%; text-align: center; }
 .eco-bebe-chip { align-self: center; margin: 0; background: var(--rosa-claro); color: var(--rosa-hondo); border-radius: 999px; padding: 4px 14px; font-size: 0.9rem; font-weight: 700; }
-.eco-bebe-pregunta { margin: 0; color: var(--rosa-tinta); font-size: 1.1rem; line-height: 1.4; }
 .eco-bebe-tira { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0; padding: 0; list-style: none; }
 .eco-bebe-tira li { aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: var(--rosa-claro); }
 .eco-bebe-tira img { width: 100%; height: 100%; object-fit: cover; display: block; }

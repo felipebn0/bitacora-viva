@@ -46,6 +46,16 @@
     return meses === 1 ? '1 mes' : meses + ' meses';
   }
 
+  // Días de vida desde la fecha de nacimiento (0 el día que nace), contados en la fecha local.
+  function diasDeVida(nacioEn) {
+    if (!nacioEn) return null;
+    const hoy = new Date();
+    const hoyUTC = Date.UTC(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+    const [a, m, d] = String(nacioEn).split('-').map(Number);
+    const dias = Math.round((hoyUTC - Date.UTC(a, m - 1, d)) / 86400000);
+    return Number.isFinite(dias) && dias >= 0 ? dias : null;
+  }
+
   function etiqueta(config) {
     if (!config) return '';
     if (config.estado === 'nacida') {
@@ -244,5 +254,5 @@
     document.documentElement.classList.toggle('eco-bebe-azul', !!config && config.genero === 'masculino');
   }
 
-  window.EcoBebeComun = { subirFoto, guardarEntrada, etiqueta, edadTexto, fechaLarga, botonVoz, aplicarColor };
+  window.EcoBebeComun = { subirFoto, guardarEntrada, etiqueta, edadTexto, fechaLarga, botonVoz, aplicarColor, diasDeVida };
 })();

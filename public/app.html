@@ -839,7 +839,7 @@
 
 <link rel="stylesheet" href="/eco-login-v6.css?v=6">
 <link rel="stylesheet" href="/eco-mobile-base.css">
-<link rel="stylesheet" href="/eco-bebe.css?v=4">
+<link rel="stylesheet" href="/eco-bebe.css?v=7">
 <link rel="stylesheet" href="/eco-crisis-banner.css?v=3">
 </head>
 <body class="eco-brand-v1 eco-page-inicio">
@@ -3503,6 +3503,8 @@
         const ultimaDeLaPersona = [...history].reverse().find((m) => m.role === 'user' && !/^\(/.test(m.content || ''));
         window.ecoCrisisAyuda(data.ayuda, data.message, ultimaDeLaPersona ? ultimaDeLaPersona.content : '', orb.closest('.orb-wrap'));
       }
+      // Si en el modo bebé contó que ya nació, el diario ya cambió a "ya nació" en el servidor.
+      if (data.bebe && window.EcoBebe && window.EcoBebe.actualizar) window.EcoBebe.actualizar(data.bebe);
       const logEntry = { role: 'assistant', content: data.message, timestamp: new Date().toISOString() };
       sessionLog.push(logEntry);
       mostrarMediaDelTurno(data.media);
@@ -4135,8 +4137,8 @@
 })();
 </script>
 <script src="/eco-toast.js" defer></script>
-<script src="/eco-bebe-comun.js?v=4" defer></script>
-<script src="/eco-bebe.js?v=5" defer></script>
+<script src="/eco-bebe-comun.js?v=5" defer></script>
+<script src="/eco-bebe.js?v=8" defer></script>
 <script src="/eco-crisis-banner.js?v=3" defer></script>
 <script src="/eco-intro.js?v=1" defer></script>
 <script src="/eco-tour.js?v=1" defer></script>

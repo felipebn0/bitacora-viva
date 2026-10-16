@@ -70,6 +70,10 @@ function fakeSql(strings, ...values) {
   }
 
   if (text.includes('FROM diario_bebe WHERE profile_user_id')) return Promise.resolve(user.diarioBebe ? [user.diarioBebe] : []);
+  if (text.includes('UPDATE diario_bebe SET nacio_en')) {
+    if (user.diarioBebe && !user.diarioBebe.nacio_en) user.diarioBebe.nacio_en = values[0];
+    return Promise.resolve([]);
+  }
 
   if (text.includes('SELECT texto FROM resumen')) {
     return Promise.resolve(user.resumenTexto ? [{ texto: user.resumenTexto }] : []);
@@ -755,6 +759,43 @@ async function main() {
   pushAnthropicResponse('Cuéntame, ¿cómo estuvo hoy?');
   await nextForUser(server, cookie, { history: [], mode: 'historia', modoBebe: true });
   check('modo bebé pedido pero sin diario creado: charla normal', !capturedCalls[0].system[0].text.includes('DIARIO DE UN BEBÉ'));
+
+  // --- Modo bebé: papá o mamá según el trato, y "ya nació" desde la charla ---
+  user.diarioBebe = { nombre: 'Roma', genero: 'femenino', nacio_en: null };
+  resetAnthropicMock();
+  pushAnthropicResponse('Qué emoción. ¿Cómo va el cuarto de Roma?');
+  await nextForUser(server, cookie, { history: historial, mode: 'historia', modoBebe: true });
+  const sysBebe = capturedCalls[0].system[0].text;
+  check('modo bebé: si la persona pidió trato masculino, ECO la trata como el papá', sysBebe.includes('es el PAPÁ de este bebé') && !sysBebe.includes('es la MAMÁ'));
+  check('modo bebé sin nacer: le dice cómo marcar el nacimiento y la fecha de hoy', sysBebe.includes('[NACIO:AAAA-MM-DD]') && /Hoy es \d{4}-\d{2}-\d{2}/.test(sysBebe));
+  const tratoAntes = user.tratamiento;
+  user.tratamiento = 'femenino';
+  resetAnthropicMock();
+  pushAnthropicResponse('Qué emoción. ¿Cómo te has sentido?');
+  await nextForUser(server, cookie, { history: historial, mode: 'historia', modoBebe: true });
+  check('modo bebé: con trato femenino, la mamá', capturedCalls[0].system[0].text.includes('es la MAMÁ de este bebé'));
+  user.tratamiento = null;
+  resetAnthropicMock();
+  pushAnthropicResponse('Qué emoción. ¿Cómo va todo?');
+  await nextForUser(server, cookie, { history: historial, mode: 'historia', modoBebe: true });
+  check('modo bebé: sin trato definido no asume papá ni mamá', capturedCalls[0].system[0].text.includes('No sabes si la persona es la mamá o el papá'));
+  user.tratamiento = tratoAntes;
+
+  const ayerColombia = new Date(Date.parse(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date()) + 'T12:00:00Z') - 86400000).toISOString().slice(0, 10);
+  resetAnthropicMock();
+  pushAnthropicResponse('¡Qué alegría tan grande, bienvenida Roma! Qué bonito que ya esté con ustedes.\n[NACIO:' + ayerColombia + ']');
+  const nacio = await nextForUser(server, cookie, { history: [{ role: 'user', content: 'Roma nació ayer' }], mode: 'historia', modoBebe: true, stream: true });
+  const evNacio = lineas(nacio);
+  const finNacio = evNacio[evNacio.length - 1];
+  const dichoNacio = evNacio.filter((e) => e.t === 'frase').map((e) => e.texto).join(' ') + ' ' + (finNacio.restante || '');
+  check('modo bebé: al contar que ya nació, el diario pasa a "ya nació" con esa fecha', user.diarioBebe.nacio_en === ayerColombia && finNacio.bebe && finNacio.bebe.estado === 'nacida' && finNacio.bebe.nacioEn === ayerColombia);
+  check('modo bebé: la marca del nacimiento nunca se dice ni se muestra', !finNacio.message.includes('[') && !dichoNacio.includes('['));
+  user.diarioBebe = { nombre: 'Roma', genero: 'femenino', nacio_en: null };
+  resetAnthropicMock();
+  pushAnthropicResponse('¡Qué alegría!\n[NACIO:2099-01-01]');
+  const nacioFuturo = JSON.parse((await nextForUser(server, cookie, { history: [{ role: 'user', content: 'ya nació' }], mode: 'historia', modoBebe: true })).body);
+  check('modo bebé: una fecha en el futuro no cambia el diario', user.diarioBebe.nacio_en === null && nacioFuturo.bebe === null && !nacioFuturo.message.includes('['));
+  user.diarioBebe = null;
 
   // --- Crisis: ECO marca la respuesta y la pantalla muestra los números (nunca se dice la marca) ---
   resetAnthropicMock();

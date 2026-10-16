@@ -86,6 +86,11 @@ const CAPTURAS = process.env.CAPTURAS_BEBE;
   ok(fondoRosa !== fondoNormal && fondoRosa === 'rgb(251, 239, 238)', 'al tocarlo, los colores cambian a rosado tenue (' + fondoRosa + ')');
   ok((await p.textContent('#ecoBebePill')) === 'Paula' && (await p.getAttribute('#ecoBebePill', 'aria-label')) === 'Volver al perfil de Paula', 'dentro del modo, el botón dice el nombre de la persona principal para volver a su perfil');
   ok((await p.textContent('.eco-bebe-chip')) === 'Rafaela, en camino', 'la etiqueta dice "Rafaela, en camino"');
+  const cajaPill = await p.locator('#ecoBebePill').boundingBox();
+  const cajaChip = await p.locator('.eco-bebe-chip').boundingBox();
+  ok(Math.abs((cajaPill.y + cajaPill.height / 2) - (cajaChip.y + cajaChip.height / 2)) < 6 && cajaChip.x > cajaPill.x, 'el estado del bebé va al lado del botón, en la misma fila');
+  ok(await p.isHidden('.eco-bebe-edad'), 'mientras está "en camino" no se muestra la edad');
+  ok(await p.locator('.eco-bebe-pregunta').count() === 0 && !/Cuéntame cómo te sientes hoy/.test(await p.textContent('#ecoBebePanel')), 'ya no aparece "Cuéntame cómo te sientes hoy"');
   ok((await p.textContent('#ecoBebeFoto')) === 'Subir una foto de hoy' && await p.locator('.eco-bebe-tira img').count() === 1, 'el botón grande es subir una foto de hoy, con la tira de fotos recientes');
   ok(await p.evaluate(() => window.EcoBebe.activo()), 'el modo queda activo para la charla');
   await p.waitForTimeout(900);
@@ -123,6 +128,22 @@ const CAPTURAS = process.env.CAPTURAS_BEBE;
   const t0 = Date.now();
   while (!t.estado.pidioNext.length && Date.now() - t0 < 8000) await p.waitForTimeout(100);
   ok(t.estado.pidioNext.length > 0 && t.estado.pidioNext[0].modoBebe === true, 'la charla le avisa al servidor que está en el modo de Rafaela');
+
+  // Si en la charla contó que ya nació, el servidor avisa (data.bebe) y el estado cambia solo.
+  await p.evaluate(() => window.EcoBebe.actualizar({ nombre: 'Rafaela', genero: 'femenino', nacioEn: new Date().toISOString().slice(0, 10), estado: 'nacida' }));
+  ok((await p.textContent('.eco-bebe-chip')) === 'Rafaela, ya llegó', 'al contar en la charla que ya nació, el estado cambia a "ya llegó" sin recargar');
+  ok(await p.isVisible('.eco-bebe-edad') && (await p.textContent('.eco-bebe-edad')).replace(/\s+/g, '') === 'EdadHoynació', 'el día que nace, arriba a la derecha dice "Edad · Hoy nació"');
+  const hace21 = (() => { const d = new Date(); d.setDate(d.getDate() - 21); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })();
+  await p.evaluate((f) => window.EcoBebe.actualizar({ nacioEn: f }), hace21);
+  const cajaEdad = await p.locator('.eco-bebe-edad').boundingBox();
+  const cajaTarjeta = await p.locator('.device').boundingBox();
+  ok((await p.textContent('.eco-bebe-edad .eco-bebe-edad-num')) === '21' && (await p.textContent('.eco-bebe-edad .eco-bebe-edad-unidad')) === 'días', 'a las 3 semanas dice "Edad 21 días"');
+  ok(cajaEdad.x + cajaEdad.width > cajaTarjeta.x + cajaTarjeta.width - 40 && cajaEdad.y < cajaTarjeta.y + 40, 'la edad va en la esquina superior derecha de la tarjeta');
+  const cajaChip2 = await p.locator('.eco-bebe-chip').boundingBox();
+  const cajaPill2 = await p.locator('#ecoBebePill').boundingBox();
+  const seCruzan = (r1, r2) => r1.x < r2.x + r2.width && r2.x < r1.x + r1.width && r1.y < r2.y + r2.height && r2.y < r1.y + r1.height;
+  ok(!seCruzan(cajaEdad, cajaChip2) && !seCruzan(cajaEdad, cajaPill2), 'la edad no se monta sobre el nombre ni el estado');
+  if (CAPTURAS) await p.screenshot({ path: path.join(CAPTURAS, 'sesion-edad.png') });
 
   // apagar el modo
   await p.click('#ecoBebePill');
