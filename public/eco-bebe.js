@@ -71,26 +71,10 @@
     pintarEstado();
   }
 
-  function pintarTira(entradas) {
-    const tira = panel.querySelector('.eco-bebe-tira');
-    tira.textContent = '';
-    entradas.filter((x) => x.fotoUrl).slice(0, 4).forEach((x) => {
-      const li = E('li');
-      const img = E('img');
-      img.src = x.fotoUrl;
-      img.alt = x.texto ? 'Foto: ' + x.texto.slice(0, 80) : 'Foto del diario';
-      img.loading = 'lazy';
-      li.appendChild(img);
-      tira.appendChild(li);
-    });
-    tira.hidden = !tira.children.length;
-  }
-
   function armarPanel(entradas) {
     panel = E('section', 'eco-bebe-panel');
     panel.id = 'ecoBebePanel';
     panel.setAttribute('aria-label', 'Diario de ' + config.nombre);
-    const tira = E('ul', 'eco-bebe-tira');
     const foto = E('button', 'eco-bebe-grande', 'Subir una foto de hoy');
     foto.type = 'button';
     foto.id = 'ecoBebeFoto';
@@ -104,7 +88,9 @@
     const msg = E('p', 'eco-bebe-msg');
     msg.setAttribute('role', 'status');
     msg.setAttribute('aria-live', 'polite');
-    panel.append(tira, foto, input, ver, msg);
+    // Sin fila de fotos arriba (ahorra espacio): la foto recién subida se ve dentro del círculo de
+    // ECO mientras se cuenta, y todas quedan en el diario completo.
+    panel.append(foto, input, ver, msg);
 
     const aviso = (t, error) => { msg.textContent = t; msg.classList.toggle('error', !!error); };
 
@@ -125,7 +111,6 @@
       try {
         const entrada = await C().subirFoto(archivo, '');
         entradas.unshift(entrada);
-        pintarTira(entradas);
         aviso('Foto guardada. Cuéntale a ECO qué pasó.');
         if (window.ecoFotoDelDiario) window.ecoFotoDelDiario(entrada.id, entrada.fotoUrl);
       } catch (e) {
@@ -133,7 +118,6 @@
       }
       foto.disabled = false;
     });
-    pintarTira(entradas);
   }
 
   function montar(entradas) {

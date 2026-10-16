@@ -61,9 +61,6 @@ html.eco-bebe-activo .device { position: relative; }
 
 .eco-bebe-panel { display: flex; flex-direction: column; gap: 12px; width: 100%; text-align: center; }
 .eco-bebe-chip { align-self: center; margin: 0; background: var(--rosa-claro); color: var(--rosa-hondo); border-radius: 999px; padding: 4px 14px; font-size: 0.9rem; font-weight: 700; }
-.eco-bebe-tira { display: grid; grid-template-columns: repeat(auto-fit, minmax(64px, 120px)); justify-content: center; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.eco-bebe-tira li { aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: var(--rosa-claro); }
-.eco-bebe-tira img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .eco-bebe-grande, .eco-bebe-secundario {
   border-radius: 14px; font: inherit; font-weight: 700; font-size: 1rem; min-height: 50px; padding: 12px 16px; cursor: pointer; width: 100%;
 }
