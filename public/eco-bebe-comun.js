@@ -59,5 +59,121 @@
     try { return new Date(iso).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); } catch (e) { return ''; }
   }
 
-  window.EcoBebeComun = { subirFoto, guardarEntrada, etiqueta, edadTexto, fechaLarga };
+  // Botón redondo de ECO para contar la nota de voz en vez de escribirla: graba, transcribe con
+  // /api/transcribe y va dejando lo que se entendió en el textarea (que queda escondido y solo se
+  // muestra si este aparato no puede usar el micrófono).
+  function botonVoz(texto, max) {
+    const E = (tag, clase, contenido) => { const x = document.createElement(tag); if (clase) x.className = clase; if (contenido !== undefined) x.textContent = contenido; return x; };
+    const caja = E('div', 'eco-bebe-voz');
+    const boton = E('button', 'eco-bebe-orbe');
+    boton.type = 'button';
+    const dicho = E('p', 'eco-bebe-dicho');
+    dicho.hidden = true;
+    const borrar = E('button', 'eco-bebe-revoz', 'Borrar y volver a contar');
+    borrar.type = 'button';
+    borrar.hidden = true;
+    const msg = E('p', 'eco-bebe-voz-msg');
+    msg.setAttribute('role', 'status');
+    msg.setAttribute('aria-live', 'polite');
+    caja.append(boton, msg, dicho, borrar);
+    texto.hidden = true;
+
+    let estado = 'listo';
+    let mic = null;
+    const pintar = () => {
+      boton.classList.toggle('grabando', estado === 'grabando');
+      boton.disabled = estado === 'procesando';
+      boton.textContent = estado === 'grabando' ? 'Te escucho… toca para terminar'
+        : estado === 'procesando' ? 'Un momento…'
+        : texto.value.trim() ? 'Toca para contar más' : 'Toca y cuéntalo';
+      const hay = !!texto.value.trim();
+      dicho.hidden = borrar.hidden = !hay;
+      dicho.textContent = hay ? '«' + texto.value.trim() + '»' : '';
+    };
+    const avisar = (t, error) => { msg.textContent = t || ''; msg.classList.toggle('error', !!error); };
+    const usarTeclado = (t) => {
+      avisar(t, true);
+      texto.hidden = false;
+      boton.hidden = true;
+      dicho.hidden = borrar.hidden = true;
+    };
+    function soltarMic() {
+      if (mic) { try { mic.stream.getTracks().forEach((t) => t.stop()); } catch (e) { /* nada */ } }
+      mic = null;
+    }
+
+    boton.addEventListener('click', async () => {
+      if (estado === 'procesando') return;
+      if (estado === 'listo') {
+        if (!window.MediaRecorder || !navigator.mediaDevices) { usarTeclado('Este navegador no puede grabar. Escribe la nota aquí abajo.'); return; }
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          let rec;
+          try { rec = new MediaRecorder(stream, { audioBitsPerSecond: 40000 }); } catch (e) { rec = new MediaRecorder(stream); }
+          const trozos = [];
+          rec.ondataavailable = (e) => { if (e.data && e.data.size > 0) trozos.push(e.data); };
+          rec.start();
+          mic = { stream, rec, trozos, inicio: Date.now() };
+          estado = 'grabando';
+          avisar('');
+          pintar();
+        } catch (err) {
+          const n = (err && err.name) || '';
+          if (n === 'NotAllowedError' || n === 'PermissionDeniedError' || n === 'SecurityError') avisar('El micrófono está bloqueado. Permítelo en el candado junto a la dirección de la página y vuelve a tocar.', true);
+          else usarTeclado('No pude usar el micrófono. Escribe la nota aquí abajo.');
+        }
+        return;
+      }
+      estado = 'procesando';
+      pintar();
+      const m = mic;
+      const grabacion = await new Promise((ok) => {
+        if (!m || m.rec.state === 'inactive') { ok(null); return; }
+        const tipo = m.rec.mimeType || 'audio/webm';
+        m.rec.onstop = () => ok({ blob: new Blob(m.trozos, { type: tipo }), ms: Date.now() - m.inicio });
+        m.rec.stop();
+      });
+      soltarMic();
+      if (!grabacion || !grabacion.blob.size || grabacion.ms < 500) {
+        estado = 'listo'; pintar();
+        avisar('No alcancé a oírte. Intenta otra vez, un poco más largo.', true);
+        return;
+      }
+      try {
+        const r = await fetch('/api/transcribe', { method: 'POST', headers: { 'Content-Type': grabacion.blob.type || 'audio/webm', 'X-Audio-Duration-Ms': String(grabacion.ms) }, body: grabacion.blob });
+        const d = await r.json().catch(() => ({}));
+        const nuevo = String(d.text || '').trim();
+        if (r.ok && nuevo) {
+          texto.value = (texto.value.trim() ? texto.value.trim() + ' ' : '') + nuevo;
+          texto.value = texto.value.slice(0, max || 600);
+          avisar('');
+        } else if (r.ok) {
+          avisar('No entendí nada. Acércate un poco al micrófono e intenta otra vez.', true);
+        } else {
+          avisar(d.error || 'No pude entender el audio. Intenta otra vez.', true);
+        }
+      } catch (e) {
+        avisar('No hay conexión. Revisa tu internet e intenta otra vez.', true);
+      }
+      estado = 'listo';
+      pintar();
+    });
+    borrar.addEventListener('click', () => { texto.value = ''; avisar(''); pintar(); });
+    pintar();
+
+    return {
+      caja,
+      ocupado: () => estado !== 'listo',
+      reiniciar() {
+        if (mic && mic.rec.state !== 'inactive') { try { mic.rec.stop(); } catch (e) { /* nada */ } }
+        soltarMic();
+        estado = 'listo';
+        texto.value = '';
+        avisar('');
+        pintar();
+      },
+    };
+  }
+
+  window.EcoBebeComun = { subirFoto, guardarEntrada, etiqueta, edadTexto, fechaLarga, botonVoz };
 })();

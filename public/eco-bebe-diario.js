@@ -126,24 +126,28 @@
     $('cfgGuardar').disabled = false;
   });
 
+  const voz = C.botonVoz($('textoNota'), 600);
+  $('campoNota').insertBefore(voz.caja, $('textoNota'));
+
   $('botonFoto').addEventListener('click', () => $('inputFoto').click());
   let fotoElegida = null;
   $('inputFoto').addEventListener('change', () => {
     fotoElegida = $('inputFoto').files && $('inputFoto').files[0];
     $('inputFoto').value = '';
-    if (fotoElegida) { $('botonFoto').textContent = 'Foto lista: ' + fotoElegida.name.slice(0, 30); $('textoNota').focus(); }
+    if (fotoElegida) $('botonFoto').textContent = 'Foto lista: ' + fotoElegida.name.slice(0, 30);
   });
 
   $('guardarNota').addEventListener('click', async () => {
+    if (voz.ocupado()) { aviso('Termina de contar primero: toca el botón de ECO.', true); return; }
     const texto = $('textoNota').value.trim();
-    if (!fotoElegida && !texto) { aviso('Sube una foto o escribe algo.', true); return; }
+    if (!fotoElegida && !texto) { aviso('Sube una foto o cuéntale algo a ECO.', true); return; }
     $('guardarNota').disabled = $('botonFoto').disabled = true;
     aviso('Guardando…');
     try {
       const entrada = fotoElegida ? await C.subirFoto(fotoElegida, texto) : await C.guardarEntrada({ texto });
       estado.entradas.unshift(entrada);
       fotoElegida = null;
-      $('textoNota').value = '';
+      voz.reiniciar();
       $('botonFoto').textContent = 'Subir una foto de hoy';
       pintarEntradas();
       aviso('Guardado en el diario.');

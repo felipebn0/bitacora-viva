@@ -91,3 +91,20 @@ html.eco-bebe-activo .greeting .sub { font-size: 1rem; }
 .eco-bebe-pagina :focus-visible, .eco-bebe-panel :focus-visible, .eco-bebe-pill:focus-visible { outline: 3px solid var(--rosa-hondo); outline-offset: 2px; }
 
 .eco-bebe-enlace-familia { display: inline-block; margin: 4px 0 10px; padding: 8px 16px; border-radius: 999px; background: var(--rosa-claro); color: var(--rosa-hondo); border: 1px solid var(--rosa-medio); font-weight: 700; text-decoration: none; }
+
+/* Nota por voz: el botón redondo de ECO reemplaza la caja de texto (la caja solo aparece si no hay micrófono). */
+.eco-bebe-invitacion { margin: 4px 0 0; text-align: center; color: var(--rosa-suave); font-size: 0.95rem; }
+.eco-bebe-voz { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 4px 0 6px; }
+.eco-bebe-orbe { display: flex; align-items: center; justify-content: center; width: 128px; height: 128px; padding: 10px; border: none; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #b8697a, #7d3a48); color: #fff; font: inherit; font-size: 1rem; font-weight: 700; line-height: 1.2; text-align: center; cursor: pointer; box-shadow: 0 0 0 6px var(--rosa-claro); }
+.eco-bebe-orbe:focus-visible { outline: 3px solid var(--rosa-hondo); outline-offset: 4px; }
+.eco-bebe-orbe:disabled { opacity: 0.65; cursor: default; }
+.eco-bebe-orbe[hidden] { display: none; }
+.eco-bebe-orbe.grabando { animation: eco-bebe-latido 1.1s ease-in-out infinite; box-shadow: 0 0 0 12px var(--rosa-medio); }
+@keyframes eco-bebe-latido { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+@media (prefers-reduced-motion: reduce) { .eco-bebe-orbe.grabando { animation: none; } }
+.eco-bebe-voz-msg { margin: 0; min-height: 1.2em; text-align: center; font-size: 0.9rem; color: var(--rosa-suave); }
+.eco-bebe-voz-msg.error { color: #A3263A; }
+.eco-bebe-dicho { margin: 0; padding: 10px 12px; width: 100%; border-radius: 12px; background: var(--rosa-papel); border: 1px solid var(--rosa-medio); color: var(--rosa-tinta); font-style: italic; overflow-wrap: anywhere; }
+.eco-bebe-dicho[hidden], .eco-bebe-revoz[hidden] { display: none; }
+.eco-bebe-revoz { border: none; background: none; color: var(--rosa-hondo); text-decoration: underline; font: inherit; font-size: 0.9rem; min-height: 44px; cursor: pointer; }
+.eco-bebe-nota textarea[hidden], .eco-bebe-campo textarea[hidden] { display: none; }

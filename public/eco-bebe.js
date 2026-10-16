@@ -67,9 +67,11 @@
     texto.maxLength = 600;
     texto.placeholder = 'Qué pasó en esta foto (opcional)';
     texto.setAttribute('aria-label', 'Qué pasó en esta foto');
+    const invitacion = E('p', 'eco-bebe-invitacion', 'Cuéntale a ECO qué pasó en esta foto (si quieres).');
+    const voz = C().botonVoz(texto, 600);
     const guardar = E('button', 'eco-bebe-grande', 'Guardar en el diario');
     guardar.type = 'button';
-    nota.append(texto, guardar);
+    nota.append(invitacion, voz.caja, texto, guardar);
     const hablar = E('button', 'eco-bebe-secundario', 'Contar mi día con ' + config.nombre);
     hablar.type = 'button';
     hablar.id = 'ecoBebeHablar';
@@ -88,13 +90,14 @@
       elegida = input.files && input.files[0];
       input.value = '';
       if (!elegida) return;
-      texto.value = '';
+      voz.reiniciar();
       nota.hidden = false;
       aviso('');
-      texto.focus();
+      invitacion.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     });
     guardar.addEventListener('click', async () => {
       if (!elegida) return;
+      if (voz.ocupado()) { aviso('Termina de contar primero: toca el botón de ECO.', true); return; }
       const archivo = elegida;
       guardar.disabled = foto.disabled = true;
       aviso('Subiendo…');
@@ -103,6 +106,7 @@
         entradas.unshift(entrada);
         pintarTira(entradas);
         elegida = null;
+        voz.reiniciar();
         nota.hidden = true;
         aviso('Guardada en el diario.');
       } catch (e) {

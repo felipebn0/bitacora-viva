@@ -20,6 +20,8 @@ const CAPTURAS = process.env.CAPTURAS_BEBE;
 
   async function contexto({ config, puedeEditar = true, entradas = [], esquema = 'light' }) {
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, permissions: ['microphone'], colorScheme: esquema });
+    // El tour de bienvenida de ECO tapa los botones: aquí se da por visto.
+    await ctx.addInitScript(() => { try { localStorage.setItem('eco_tour_done__app_html', '1'); localStorage.setItem('eco_tour_done__diario_bebe_html', '1'); } catch (e) { /* nada */ } });
     const page = await ctx.newPage();
     const estado = { config, entradas: entradas.slice(), subidas: [], notas: [], pidioNext: [], guardados: [] };
     page.on('pageerror', (e) => (estado.errores = (estado.errores || []).concat(e.message)));
@@ -42,6 +44,7 @@ const CAPTURAS = process.env.CAPTURAS_BEBE;
         estado.notas.push(b);
         return json({ ok: true, entrada: e });
       }
+      if (u.pathname === '/api/transcribe') return json({ text: estado.dictado || '' });
       if (u.pathname.startsWith('/api/bebe/foto/')) return route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
       if (u.pathname === '/api/next') {
         estado.pidioNext.push(JSON.parse(req.postData()));
@@ -80,8 +83,15 @@ const CAPTURAS = process.env.CAPTURAS_BEBE;
   // subir foto del día con nota
   await p.setInputFiles('#ecoBebePanel input[type=file]', { name: 'hoy.png', mimeType: 'image/png', buffer: PNG });
   await p.waitForSelector('.eco-bebe-nota:not([hidden])');
-  await p.fill('.eco-bebe-nota textarea', 'Mi barriga a las 30 semanas');
-  await p.click('.eco-bebe-nota button');
+  ok(await p.isHidden('.eco-bebe-nota textarea') && await p.isVisible('.eco-bebe-nota .eco-bebe-orbe'), 'la nota se cuenta por voz: botón de ECO en vez de caja de texto');
+  t.estado.dictado = 'Mi barriga a las 30 semanas';
+  await p.click('.eco-bebe-nota .eco-bebe-orbe');
+  await p.waitForSelector('.eco-bebe-nota .eco-bebe-orbe.grabando');
+  await p.waitForTimeout(700);
+  await p.click('.eco-bebe-nota .eco-bebe-orbe', { force: true }); // late mientras graba
+  await p.waitForSelector('.eco-bebe-nota .eco-bebe-dicho:not([hidden])');
+  ok((await p.textContent('.eco-bebe-nota .eco-bebe-dicho')) === '«Mi barriga a las 30 semanas»', 'lo que dijo aparece escrito antes de guardar');
+  await p.click('.eco-bebe-nota .eco-bebe-grande');
   await p.waitForFunction(() => /Guardada en el diario/.test(document.querySelector('.eco-bebe-msg').textContent));
   ok(t.estado.subidas.length === 1 && t.estado.notas[0].texto === 'Mi barriga a las 30 semanas' && t.estado.notas[0].fotoUrl, 'sube la foto y la guarda en el diario con su nota');
   ok(await p.locator('.eco-bebe-tira img').count() === 2, 'la foto nueva aparece en la tira');
@@ -119,10 +129,15 @@ const CAPTURAS = process.env.CAPTURAS_BEBE;
   await t.page.click('#cfgGuardar');
   await t.page.waitForSelector('#vistaDiario:not([hidden])');
   ok((await t.page.textContent('#titulo')) === 'Diario de Rafaela' && (await t.page.textContent('#subtitulo')) === 'Rafaela, en camino', 'crea el diario: "Diario de Rafaela, en camino"');
-  await t.page.fill('#textoNota', 'Hoy escuché su corazón');
+  t.estado.dictado = 'Hoy escuché su corazón';
+  await t.page.click('#campoNota .eco-bebe-orbe');
+  await t.page.waitForSelector('#campoNota .eco-bebe-orbe.grabando');
+  await t.page.waitForTimeout(700);
+  await t.page.click('#campoNota .eco-bebe-orbe', { force: true }); // late mientras graba
+  await t.page.waitForSelector('#campoNota .eco-bebe-dicho:not([hidden])');
   await t.page.click('#guardarNota');
   await t.page.waitForSelector('.eco-bebe-entrada');
-  ok((await t.page.textContent('.eco-bebe-entrada p')) === 'Hoy escuché su corazón', 'escribe una nota del día y aparece en el diario');
+  ok((await t.page.textContent('.eco-bebe-entrada p')) === 'Hoy escuché su corazón', 'cuenta por voz una nota del día y aparece en el diario');
   await t.page.click('#ajustes summary');
   await t.page.check('#cfgNacio');
   await t.page.click('#cfgGuardar');
