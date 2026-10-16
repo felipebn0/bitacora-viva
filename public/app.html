@@ -839,7 +839,7 @@
 
 <link rel="stylesheet" href="/eco-login-v6.css?v=6">
 <link rel="stylesheet" href="/eco-mobile-base.css">
-<link rel="stylesheet" href="/eco-bebe.css?v=9">
+<link rel="stylesheet" href="/eco-bebe.css?v=10">
 <link rel="stylesheet" href="/eco-crisis-banner.css?v=3">
 </head>
 <body class="eco-brand-v1 eco-page-inicio">
@@ -2412,6 +2412,27 @@
   // Foto del diario que debe avisarse en el PRIMER turno de una charla que arranca por ella
   // (startSession limpia fotoRecienSubida; esta la respeta).
   let fotoAlArrancar = null;
+  // La foto del diario se muestra DENTRO del círculo de ECO mientras se cuenta su historia y se
+  // quita apenas termina la primera respuesta de la persona (ver handleAnswer).
+  let fotoEnOrbe = false;
+  function ponerFotoEnOrbe(src) {
+    let img = orb.querySelector('.orb-foto');
+    if (!img) {
+      img = document.createElement('img');
+      img.className = 'orb-foto';
+      img.alt = '';
+      img.setAttribute('aria-hidden', 'true');
+      orb.prepend(img);
+    }
+    img.src = src;
+    orb.classList.add('con-foto');
+    fotoEnOrbe = true;
+  }
+  function quitarFotoDelOrbe() {
+    if (!fotoEnOrbe) return;
+    orb.classList.remove('con-foto');
+    fotoEnOrbe = false;
+  }
   let sessionKey = null;  // carpeta de audio de esta charla
   let currentSessionDbId = null;  // fila de "sessions" de esta charla, para actualizar en vez de duplicar
   let sessionMode = 'historia';  // 'historia' (charla normal) o 'arbol' (armar árbol genealógico)
@@ -3479,7 +3500,7 @@
       const mostrarMediaDelTurno = (media) => {
         if (mediaMostrada) return;
         mediaMostrada = true;
-        mostrarMediaMomento(media || (fotoRecienSubidaAAvisar ? { url: fotoRecienSubidaAAvisar.url, type: fotoRecienSubidaAAvisar.type } : null));
+        mostrarMediaMomento(media || (fotoRecienSubidaAAvisar && !fotoRecienSubidaAAvisar.enOrbe ? { url: fotoRecienSubidaAAvisar.url, type: fotoRecienSubidaAAvisar.type } : null));
       };
       const fuente = esp ? fuenteEspeculada(esp, abrirReal) : await abrirReal();
       for await (const evento of fuente) {
@@ -3546,6 +3567,7 @@
   }
 
   async function endConversation() {
+    quitarFotoDelOrbe();
     cancelarEspeculacion();
     stopVoiceActivityDetection();
     if (fallbackRecognition) { try { fallbackRecognition.abort(); } catch (e) {} }
@@ -3692,6 +3714,7 @@
   // 'thinking') quien pida la pregunta nueva solo cuando de verdad vuelve.
   async function handleAnswer(text, audioBlob, { seguir = true, especulacion: esp = null } = {}) {
     if (!text || !text.trim()) return;
+    quitarFotoDelOrbe(); // ya contó: el círculo vuelve a ser el botón normal
     finalizacionesVacias = 0; // hubo una respuesta de verdad: se reinicia el contador de intentos vacíos
     if (audioBlob === undefined && mediaRecorder && mediaRecorder.state !== 'inactive') {
       stopVoiceActivityDetection();
@@ -3978,7 +4001,8 @@
   // si no estaba en curso. Si ya estaba, el aviso va con el próximo turno.
   window.ecoFotoDelDiario = (entradaId, fotoUrl) => {
     bebeFotoId = Number.isSafeInteger(entradaId) ? entradaId : null;
-    const aviso = { url: fotoUrl, type: 'image', caption: '' };
+    const aviso = { url: fotoUrl, type: 'image', caption: '', enOrbe: true };
+    ponerFotoEnOrbe(fotoUrl);
     if (state === 'idle' || state === 'ended') { fotoAlArrancar = aviso; handleOrbPress(); return; }
     fotoRecienSubida = aviso;
     if (state === 'paused') { unlockMicAudioContext(); resumeConversation(); }

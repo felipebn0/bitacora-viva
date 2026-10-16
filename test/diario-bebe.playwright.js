@@ -114,8 +114,14 @@ const CAPTURAS = process.env.CAPTURAS_BEBE;
   const primerTurno = t.estado.pidioNext[0] || {};
   ok(primerTurno.modoBebe === true, 'la charla grande arranca sola, en el modo de Rafaela');
   await p.waitForTimeout(600);
-  ok(await p.evaluate(() => { const img = document.querySelector('#mediaMomentoImg, .media-momento img'); return !!img && !img.hidden && img.getAttribute('src').startsWith('/api/bebe/foto/') && img.naturalWidth > 0; }), 'la foto se ve encima del botón de ECO mientras cuenta su historia (sin imagen rota)');
+  ok(await p.evaluate(() => { const o = document.getElementById('orb'); const img = o.querySelector('.orb-foto'); return o.classList.contains('con-foto') && !!img && img.getAttribute('src').startsWith('/api/bebe/foto/') && img.naturalWidth > 0 && getComputedStyle(o.querySelector('.orb-logo')).visibility === 'hidden'; }), 'la foto se ve DENTRO del círculo de ECO, sin el logo ni la animación encima');
+  ok(await p.isHidden('#mediaMomento'), 'y no se repite encima del círculo');
   ok(primerTurno.fotoRecienSubida && primerTurno.bebeFotoId === 100, 'y ECO sabe que acaba de subir esa foto (para preguntar por ella y pegarle lo que cuente)');
+  await p.evaluate(() => document.getElementById('writeInput').closest('.write-row').classList.add('visible'));
+  await p.fill('#writeInput', 'Fue la ecografía de las 30 semanas');
+  await p.press('#writeInput', 'Enter');
+  await p.waitForFunction(() => !document.getElementById('orb').classList.contains('con-foto'), null, { timeout: 5000 }).catch(() => {});
+  ok(await p.evaluate(() => !document.getElementById('orb').classList.contains('con-foto')), 'apenas termina su primera respuesta, el círculo vuelve a ser el botón normal');
 
   // Si en la charla contó que ya nació, el servidor avisa (data.bebe) y el estado cambia solo.
   await p.evaluate(() => window.EcoBebe.actualizar({ nombre: 'Rafaela', genero: 'femenino', nacioEn: new Date().toISOString().slice(0, 10), estado: 'nacida' }));
