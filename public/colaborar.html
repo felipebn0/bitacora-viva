@@ -311,9 +311,9 @@
 <link rel="stylesheet" href="/eco-colaborar-orbe.css?v=1">
 <script src="/eco-colaborar-orbe.js?v=1" defer></script>
 <link rel="stylesheet" href="/eco-colaborar-rediseno.css?v=3">
-<link rel="stylesheet" href="/eco-crisis-banner.css">
+<link rel="stylesheet" href="/eco-crisis-banner.css?v=2">
 <script src="/eco-colaborar-rediseno.js?v=1" defer></script>
-<script src="/eco-crisis-banner.js" defer></script>
+<script src="/eco-crisis-banner.js?v=2" defer></script>
 <script src="/eco-audio-exclusivo.js" defer></script>
 <script src="/eco-audio-player.js" defer></script>
 <link rel="stylesheet" href="/eco-volver-unificado.css?v=1">
@@ -1701,6 +1701,8 @@
 
     await subida;
     if (!texto) return false;
+    // Si lo que contó suena a una crisis ahora, o lo menciona y hay que preguntar (eco-crisis-banner.js).
+    if (window.ecoCrisisCheck) window.ecoCrisisCheck(texto, orb.closest('.orb-zone'));
     historyLocal.push({ role: 'user', content: texto });
     // ECO-COLAB-V2: el reconocimiento se conserva internamente; no se muestra transcripción de voz.
     await enviarTurno();

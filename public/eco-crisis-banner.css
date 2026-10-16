@@ -88,3 +88,30 @@
   .eco-crisis-banner { border-radius: 12px; padding: 14px 38px 14px 14px; }
   .eco-crisis-lines li { flex-wrap: wrap; gap: 4px; }
 }
+
+/* Pregunta previa ("¿te está pasando ahora?") cuando lo que se contó suena a pasado o es ambiguo. */
+.eco-crisis-check {
+  width: 100%;
+  max-width: 710px;
+  margin: 0 auto 16px;
+  box-sizing: border-box;
+  background: #fbf8f0;
+  border: 1.5px solid #d4c9a8;
+  border-radius: 14px;
+  padding: 16px 20px;
+}
+.eco-crisis-check-botones { display: flex; flex-wrap: wrap; gap: 10px; }
+.eco-crisis-recuerdo {
+  border: 1.5px solid #b9b39b;
+  background: transparent;
+  color: #3d3a2e;
+  border-radius: 10px;
+  padding: 9px 16px;
+  font-size: .88rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.eco-crisis-recuerdo:hover { background: #f1ecdd; }
+.eco-crisis-banner button:focus-visible, .eco-crisis-check button:focus-visible { outline: 3px solid #9b6734; outline-offset: 2px; }
+.eco-crisis-close { color: #6f6a5a; }
+@media (prefers-reduced-motion: reduce) { .eco-crisis-banner { animation: none; } }
