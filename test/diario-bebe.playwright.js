@@ -96,39 +96,26 @@ const CAPTURAS = process.env.CAPTURAS_BEBE;
   await p.waitForTimeout(900);
   if (CAPTURAS) await p.screenshot({ path: path.join(CAPTURAS, 'sesion-rosa.png') });
 
-  // subir foto del día con nota
-  await p.setInputFiles('#ecoBebePanel input[type=file]', { name: 'hoy.png', mimeType: 'image/png', buffer: PNG });
-  await p.waitForSelector('.eco-bebe-nota:not([hidden])');
-  ok(t.estado.subidas.length === 1 && t.estado.notas.length === 1 && t.estado.notas[0].fotoUrl, 'la foto se guarda en el diario apenas se elige, sin otro botón');
-  ok(await p.isHidden('.eco-bebe-nota textarea') && await p.isVisible('.eco-bebe-nota .eco-bebe-orbe') && await p.locator('.eco-bebe-nota .eco-bebe-grande').count() === 0, 'la nota se cuenta por voz: botón de ECO, sin caja de texto ni botón de guardar');
-  t.estado.dictado = 'Mi barriga a las 30 semanas';
-  await p.click('.eco-bebe-nota .eco-bebe-orbe');
-  await p.waitForSelector('.eco-bebe-nota .eco-bebe-orbe.grabando');
-  await p.waitForTimeout(700);
-  await p.click('.eco-bebe-nota .eco-bebe-orbe', { force: true }); // late mientras graba
-  await p.waitForSelector('.eco-bebe-nota .eco-bebe-dicho:not([hidden])');
-  ok((await p.textContent('.eco-bebe-nota .eco-bebe-dicho')) === '«Mi barriga a las 30 semanas»', 'lo que dijo aparece escrito');
-  ok(/Guardado en el diario/.test(await p.textContent('.eco-bebe-nota .eco-bebe-voz-msg')), 'y avisa que quedó guardado solo');
-  ok(t.estado.audios.length === 1 && t.estado.audios[0] > 0 && t.estado.cambios.length === 1 && t.estado.cambios[0].texto === 'Mi barriga a las 30 semanas' && /voz-1\.webm$/.test(t.estado.cambios[0].agregarAudio), 'se sube el audio original y se pega, con lo dicho, a la entrada de la foto');
-  t.estado.dictado = 'y pateó';
-  await p.click('.eco-bebe-nota .eco-bebe-orbe');
-  await p.waitForSelector('.eco-bebe-nota .eco-bebe-orbe.grabando');
-  await p.waitForTimeout(700);
-  await p.click('.eco-bebe-nota .eco-bebe-orbe', { force: true });
-  await p.waitForFunction(() => /pateó/.test(document.querySelector('.eco-bebe-nota .eco-bebe-dicho').textContent));
-  ok(t.estado.cambios.length === 2 && t.estado.cambios[1].texto === 'Mi barriga a las 30 semanas y pateó' && t.estado.notas.length === 1, '"contar más" suma a la misma entrada, con su propio audio');
-  await p.click('.eco-bebe-nota .eco-bebe-revoz');
-  await p.waitForFunction(() => document.querySelector('.eco-bebe-nota .eco-bebe-dicho').hidden);
-  ok(t.estado.cambios.at(-1).borrarAudios === true && t.estado.cambios.at(-1).texto === '', '"borrar y volver a contar" limpia la nota guardada y sus audios');
-  ok(await p.locator('.eco-bebe-tira img').count() === 2, 'la foto nueva aparece en la tira');
-
-  // charla con el modo activo: se usa el botón grande de ECO (ya no hay "Contar mi día con…", hacía lo mismo)
+  // subir foto del día: se guarda sola, queda en el centro y arranca la charla grande para contar su historia
   ok(await p.locator('#ecoBebeHablar').count() === 0, 'ya no está el botón "Contar mi día con…" (hacía lo mismo que el botón grande)');
-  await p.click('#orb');
-  await p.waitForFunction(() => true);
+  await p.click('#ecoBebeFoto', { noWaitAfter: true }).catch(() => {});
+  await p.setInputFiles('#ecoBebePanel input[type=file]', { name: 'hoy.png', mimeType: 'image/png', buffer: PNG });
+  await p.waitForFunction(() => /Foto guardada/.test(document.querySelector('.eco-bebe-msg').textContent));
+  ok(t.estado.subidas.length === 1 && t.estado.notas.length === 1 && t.estado.notas[0].fotoUrl, 'la foto se guarda en el diario apenas se elige, sin otro botón');
+  ok(await p.locator('#ecoBebePanel .eco-bebe-orbe, #ecoBebePanel textarea').count() === 0, 'en el panel ya no está el botón redondo pequeño ni la caja de texto');
+  ok(await p.locator('.eco-bebe-tira img').count() === 2, 'la foto nueva aparece en la tira');
+  const cajaTira = await p.locator('.eco-bebe-tira').boundingBox();
+  const fotos = await p.locator('.eco-bebe-tira li').evaluateAll((lis) => lis.map((li) => { const r = li.getBoundingClientRect(); return [r.left, r.right]; }));
+  const izq = Math.min(...fotos.map((f) => f[0])) - cajaTira.x;
+  const der = cajaTira.x + cajaTira.width - Math.max(...fotos.map((f) => f[1]));
+  ok(Math.abs(izq - der) < 4, 'las fotos quedan centradas');
   const t0 = Date.now();
   while (!t.estado.pidioNext.length && Date.now() - t0 < 8000) await p.waitForTimeout(100);
-  ok(t.estado.pidioNext.length > 0 && t.estado.pidioNext[0].modoBebe === true, 'la charla le avisa al servidor que está en el modo de Rafaela');
+  const primerTurno = t.estado.pidioNext[0] || {};
+  ok(primerTurno.modoBebe === true, 'la charla grande arranca sola, en el modo de Rafaela');
+  await p.waitForTimeout(600);
+  ok(await p.evaluate(() => { const img = document.querySelector('#mediaMomentoImg, .media-momento img'); return !!img && !img.hidden && img.getAttribute('src').startsWith('/api/bebe/foto/') && img.naturalWidth > 0; }), 'la foto se ve encima del botón de ECO mientras cuenta su historia (sin imagen rota)');
+  ok(primerTurno.fotoRecienSubida && primerTurno.bebeFotoId === 100, 'y ECO sabe que acaba de subir esa foto (para preguntar por ella y pegarle lo que cuente)');
 
   // Si en la charla contó que ya nació, el servidor avisa (data.bebe) y el estado cambia solo.
   await p.evaluate(() => window.EcoBebe.actualizar({ nombre: 'Rafaela', genero: 'femenino', nacioEn: new Date().toISOString().slice(0, 10), estado: 'nacida' }));

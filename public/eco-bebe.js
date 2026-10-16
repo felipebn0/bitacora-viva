@@ -99,51 +99,35 @@
     input.accept = 'image/*';
     input.hidden = true;
     input.setAttribute('aria-label', 'Elegir una foto');
-    const nota = E('div', 'eco-bebe-nota');
-    nota.hidden = true;
-    const texto = E('textarea');
-    texto.maxLength = 600;
-    texto.placeholder = 'Qué pasó en esta foto (opcional)';
-    texto.setAttribute('aria-label', 'Qué pasó en esta foto');
-    const invitacion = E('p', 'eco-bebe-invitacion', 'Foto guardada. Cuéntale a ECO qué pasó (si quieres).');
-    let enCurso = null; // la entrada de la foto recién subida, que la voz va completando
-    const reemplazar = (entrada) => {
-      const i = entradas.findIndex((x) => x.id === entrada.id);
-      if (i >= 0) entradas[i] = entrada; else entradas.unshift(entrada);
-      enCurso = entrada;
-    };
-    const voz = C().botonVoz(texto, { entrada: () => enCurso, alGuardar: reemplazar });
-    nota.append(invitacion, voz.caja, texto);
     const ver = E('a', 'eco-bebe-enlace', 'Ver el diario completo');
     ver.href = '/diario-bebe.html';
     const msg = E('p', 'eco-bebe-msg');
     msg.setAttribute('role', 'status');
     msg.setAttribute('aria-live', 'polite');
-    panel.append(tira, foto, input, nota, ver, msg);
+    panel.append(tira, foto, input, ver, msg);
 
     const aviso = (t, error) => { msg.textContent = t; msg.classList.toggle('error', !!error); };
 
     foto.addEventListener('click', () => {
-      if (voz.ocupado()) { aviso('Termina de contar primero: toca el botón de ECO.', true); return; }
+      // Se aprovecha el toque para habilitar el audio y el micrófono: la charla arranca sola
+      // cuando la foto termina de subir, y el celular solo deja sonar audio tras un toque.
+      if (window.ecoPrepararAudio) window.ecoPrepararAudio();
       input.click();
     });
-    // La foto se guarda en el diario apenas se elige; la nota por voz se le suma después.
+    // La foto se guarda en el diario apenas se elige y la charla grande de ECO arranca sola para
+    // contar la historia de esa foto (lo que se cuente queda en el libro y pegado a esa foto).
     input.addEventListener('change', async () => {
       const archivo = input.files && input.files[0];
       input.value = '';
       if (!archivo) return;
       foto.disabled = true;
-      nota.hidden = true;
       aviso('Guardando la foto…');
       try {
         const entrada = await C().subirFoto(archivo, '');
-        enCurso = null;
-        reemplazar(entrada);
+        entradas.unshift(entrada);
         pintarTira(entradas);
-        voz.reiniciar();
-        nota.hidden = false;
-        aviso('');
-        invitacion.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        aviso('Foto guardada. Cuéntale a ECO qué pasó.');
+        if (window.ecoFotoDelDiario) window.ecoFotoDelDiario(entrada.id, entrada.fotoUrl);
       } catch (e) {
         aviso(e.message || 'No se pudo subir la foto. Intenta de nuevo.', true);
       }

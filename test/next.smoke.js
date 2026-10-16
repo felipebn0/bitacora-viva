@@ -47,6 +47,7 @@ const user = {
 };
 
 let storyLogInserts = []; // para verificar que se guardó (o no) una historia larga
+const fotosDiario = []; // fotos del diario del bebé subidas desde el modo (bebeFotoId)
 const diarioCharla = []; // entradas del diario del bebé que vienen de la charla
 let storyLogRows = []; // { id, userId, texto, audioUrl } — simula la tabla real para el chequeo de duplicados
 let storyLogUpdates = []; // ids a los que se les completó el audio_url
@@ -138,6 +139,14 @@ function fakeSql(strings, ...values) {
   }
   if (text.includes("FROM diario_bebe_entradas WHERE profile_user_id") && text.includes("origen = 'charla'")) {
     return Promise.resolve(diarioCharla.filter((e) => e.texto === values[1]).slice(-1));
+  }
+  if (text.includes('FROM diario_bebe_entradas WHERE id') && text.includes('media_url IS NOT NULL')) {
+    return Promise.resolve(fotosDiario.filter((f) => f.id === values[0] && f.profileUserId === values[1]));
+  }
+  if (text.includes('UPDATE diario_bebe_entradas SET texto')) {
+    const f = fotosDiario.find((x) => x.id === values[2]);
+    if (f) { f.texto = values[0]; f.audio_urls = values[1]; f.origen = 'charla'; }
+    return Promise.resolve([]);
   }
   if (text.includes('INSERT INTO diario_bebe_entradas')) {
     diarioCharla.push({ id: diarioCharla.length + 1, profileUserId: values[0], texto: values[1], audio_urls: values[2], origen: 'charla' });
@@ -834,6 +843,28 @@ async function main() {
     r.on('error', reject); r.write(body); r.end();
   });
   check('modo bebé: un turno especulativo confirmado (/api/next/guardar) también queda en el diario', guardarEsp === 200 && diarioCharla.length === 2);
+
+  resetAnthropicMock();
+  pushAnthropicResponse('Hola, Diego. ¿Qué pasó en esa foto?');
+  await nextForUser(server, cookie, { history: [], mode: 'historia', modoBebe: true, fotoRecienSubida: { caption: '' } });
+  check('modo bebé: si la charla arranca por una foto, el saludo va directo a la foto', capturedCalls[0].messages[0].content.includes('acaba de subir una foto de hoy al diario de su bebé'));
+
+  // Foto recién subida desde el modo: lo que cuenta en la charla queda pegado a ESA foto en el diario.
+  fotosDiario.length = 0;
+  fotosDiario.push({ id: 77, profileUserId: user.id, texto: null, audio_urls: null });
+  const antesCharla = diarioCharla.length;
+  resetAnthropicMock();
+  pushAnthropicResponse('Qué foto tan linda. ¿Quiénes estaban ese día?');
+  await nextForUser(server, cookie, { history: [{ role: 'user', content: 'Esta es la foto del baby shower de Roma con mis amigos' }], mode: 'historia', modoBebe: true, bebeFotoId: 77, lastAudioUrl: AUDIO_TURNO });
+  check('modo bebé con foto: lo que cuenta queda pegado a la foto en el diario (con su grabación), no como entrada aparte', fotosDiario[0].texto === 'Esta es la foto del baby shower de Roma con mis amigos' && JSON.parse(fotosDiario[0].audio_urls)[0] === AUDIO_TURNO && fotosDiario[0].origen === 'charla' && diarioCharla.length === antesCharla);
+  resetAnthropicMock();
+  pushAnthropicResponse('Qué bonito. ¿Y qué regalos le dieron?');
+  await nextForUser(server, cookie, { history: [{ role: 'user', content: 'Estaban mis amigos del colegio y la familia de mi esposa' }], mode: 'historia', modoBebe: true, bebeFotoId: 77 });
+  check('modo bebé con foto: lo siguiente que cuenta se suma a la misma foto', fotosDiario[0].texto === 'Esta es la foto del baby shower de Roma con mis amigos\n\nEstaban mis amigos del colegio y la familia de mi esposa');
+  resetAnthropicMock();
+  pushAnthropicResponse('Qué bonito.');
+  await nextForUser(server, cookie, { history: [{ role: 'user', content: 'Estaban mis amigos del colegio y la familia de mi esposa' }], mode: 'historia', modoBebe: true, bebeFotoId: 77 });
+  check('modo bebé con foto: el mismo turno repetido no se suma dos veces', fotosDiario[0].texto.split('Estaban mis amigos').length === 2);
   user.diarioBebe = null;
 
   // --- Crisis: ECO marca la respuesta y la pantalla muestra los números (nunca se dice la marca) ---

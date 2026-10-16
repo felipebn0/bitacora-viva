@@ -839,7 +839,7 @@
 
 <link rel="stylesheet" href="/eco-login-v6.css?v=6">
 <link rel="stylesheet" href="/eco-mobile-base.css">
-<link rel="stylesheet" href="/eco-bebe.css?v=8">
+<link rel="stylesheet" href="/eco-bebe.css?v=9">
 <link rel="stylesheet" href="/eco-crisis-banner.css?v=3">
 </head>
 <body class="eco-brand-v1 eco-page-inicio">
@@ -2406,6 +2406,12 @@
   // limpia ahí mismo; url/type se quedan del lado del cliente no más, para
   // no ocultar la foto en pantalla mientras la IA pregunta por ella.
   let fotoRecienSubida = null;
+  // Diario de un bebé: la entrada de la foto que se acaba de subir desde el panel del modo. Lo que
+  // se cuente en la charla queda pegado a esa foto en el diario (ver guardarTurnoEnDiarioBebe).
+  let bebeFotoId = null;
+  // Foto del diario que debe avisarse en el PRIMER turno de una charla que arranca por ella
+  // (startSession limpia fotoRecienSubida; esta la respeta).
+  let fotoAlArrancar = null;
   let sessionKey = null;  // carpeta de audio de esta charla
   let currentSessionDbId = null;  // fila de "sessions" de esta charla, para actualizar en vez de duplicar
   let sessionMode = 'historia';  // 'historia' (charla normal) o 'arbol' (armar árbol genealógico)
@@ -3229,7 +3235,8 @@
       mediaMomentoVideo.removeAttribute('src');
       return;
     }
-    const src = '/api/media-file?u=' + encodeURIComponent(media.url);
+    // Las fotos del diario de un bebé ya vienen con su propia ruta (/api/bebe/foto/…): se usan tal cual.
+    const src = media.url.startsWith('/api/') ? media.url : '/api/media-file?u=' + encodeURIComponent(media.url);
     if (media.type === 'video') {
       mediaMomentoImg.hidden = true;
       mediaMomentoVideo.src = src;
@@ -3417,7 +3424,7 @@
       const pedirTurno = () => fetch('/api/next', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stream: true, history, lastAudioUrl, mode: sessionMode, modoBebe: !!(globalThis.EcoBebe && globalThis.EcoBebe.activo()), ofrecerPausa, interpretarRespuestaPausa, mediaUrls, fotoRecienSubida: fotoRecienSubidaAAvisar ? { caption: fotoRecienSubidaAAvisar.caption } : null }),
+        body: JSON.stringify({ stream: true, history, lastAudioUrl, mode: sessionMode, modoBebe: !!(globalThis.EcoBebe && globalThis.EcoBebe.activo()), bebeFotoId, ofrecerPausa, interpretarRespuestaPausa, mediaUrls, fotoRecienSubida: fotoRecienSubidaAAvisar ? { caption: fotoRecienSubidaAAvisar.caption } : null }),
       });
       const abrirReal = async () => {
         let resp = await pedirTurno();
@@ -3444,7 +3451,7 @@
         ? fetch('/api/next/guardar', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ history, lastAudioUrl, mediaUrls, modoBebe: !!(globalThis.EcoBebe && globalThis.EcoBebe.activo()) }),
+            body: JSON.stringify({ history, lastAudioUrl, mediaUrls, modoBebe: !!(globalThis.EcoBebe && globalThis.EcoBebe.activo()), bebeFotoId }),
           }).catch(() => {})
         : null;
       // La respuesta llega por eventos (ver el comentario de streaming en
@@ -3916,7 +3923,8 @@
     greeting.style.display = 'none';
     mostrarMediaMomento(null);
     mediaUrlsLocal = [];
-    fotoRecienSubida = null;
+    fotoRecienSubida = fotoAlArrancar;
+    fotoAlArrancar = null;
     fotoCaptionRow.classList.remove('visible');
     history = [];
     sessionLog = [];
@@ -3962,6 +3970,19 @@
   });
 
   orb.addEventListener('click', handleOrbPress);
+
+  // Lo llama el panel del diario de un bebé (eco-bebe.js) en el toque de "Subir una foto de hoy":
+  // el celular solo deja sonar audio y abrir el micrófono después de un toque.
+  window.ecoPrepararAudio = () => { unlockAudioPlayback(); unlockMicAudioContext(); };
+  // Y cuando la foto termina de subir: ECO pregunta por ella en la charla grande, que arranca sola
+  // si no estaba en curso. Si ya estaba, el aviso va con el próximo turno.
+  window.ecoFotoDelDiario = (entradaId, fotoUrl) => {
+    bebeFotoId = Number.isSafeInteger(entradaId) ? entradaId : null;
+    const aviso = { url: fotoUrl, type: 'image', caption: '' };
+    if (state === 'idle' || state === 'ended') { fotoAlArrancar = aviso; handleOrbPress(); return; }
+    fotoRecienSubida = aviso;
+    if (state === 'paused') { unlockMicAudioContext(); resumeConversation(); }
+  };
 
   // Botón físico: el encoder USB de arcade manda una tecla al presionarlo.
   // Cambia BUTTON_KEY por la tecla que detectes en el paso de prueba (ver README).
@@ -4138,7 +4159,7 @@
 </script>
 <script src="/eco-toast.js" defer></script>
 <script src="/eco-bebe-comun.js?v=5" defer></script>
-<script src="/eco-bebe.js?v=9" defer></script>
+<script src="/eco-bebe.js?v=10" defer></script>
 <script src="/eco-crisis-banner.js?v=3" defer></script>
 <script src="/eco-intro.js?v=1" defer></script>
 <script src="/eco-tour.js?v=1" defer></script>
