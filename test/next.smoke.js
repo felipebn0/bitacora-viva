@@ -789,6 +789,7 @@ async function main() {
   await nextForUser(server, cookie, { history: historial, mode: 'historia', modoBebe: true });
   const sysBebe = capturedCalls[0].system[0].text;
   check('modo bebé: si la persona pidió trato masculino, ECO la trata como el papá', sysBebe.includes('es el PAPÁ de este bebé') && !sysBebe.includes('es la MAMÁ'));
+  check('modo bebé: todo gira en torno al bebé; de los papás solo en relación con el bebé, y vuelve al bebé si se desvían', sysBebe.includes('TODO ESTE MODO GIRA EN TORNO AL BEBÉ') && sysBebe.includes('siempre en relación con el bebé') && sysBebe.includes('vuelve con suavidad al bebé') && sysBebe.includes('NO uses el banco de temas') && sysBebe.includes('NO aplican las reglas generales de buscar siempre el recuerdo antiguo ni la de volver al pasado'));
   check('modo bebé sin nacer: le dice cómo marcar el nacimiento y la fecha de hoy', sysBebe.includes('[NACIO:AAAA-MM-DD]') && /Hoy es \d{4}-\d{2}-\d{2}/.test(sysBebe));
   const tratoAntes = user.tratamiento;
   user.tratamiento = 'femenino';
