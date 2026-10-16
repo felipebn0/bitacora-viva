@@ -17,9 +17,23 @@
   function leerGuardado() { try { return localStorage.getItem(CLAVE) === '1'; } catch (e) { return false; } }
   function recordar(v) { try { localStorage.setItem(CLAVE, v ? '1' : '0'); } catch (e) { /* nada */ } }
 
+  // Nombre de la persona principal (el del saludo), para volver a su perfil desde el modo del bebé.
+  function nombrePrincipal() {
+    const el = document.getElementById('greetingName');
+    const completo = (el && el.textContent || '').trim();
+    return completo ? completo.split(/\s+/)[0] : '';
+  }
+
+  // Fuera del modo, el botón lleva el nombre del bebé (entrar a su modo); dentro, el de la persona
+  // principal (volver a su perfil).
   function pintarEstado() {
     html.classList.toggle('eco-bebe-activo', activo);
     pill.setAttribute('aria-pressed', activo ? 'true' : 'false');
+    const principal = nombrePrincipal();
+    pill.textContent = activo ? (principal || 'Volver a mi perfil') : config.nombre;
+    pill.setAttribute('aria-label', activo
+      ? (principal ? 'Volver al perfil de ' + principal : 'Volver a mi perfil')
+      : 'Entrar al diario de ' + config.nombre);
     panel.hidden = !activo;
   }
 

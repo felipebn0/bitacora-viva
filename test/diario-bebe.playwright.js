@@ -84,6 +84,7 @@ const CAPTURAS = process.env.CAPTURAS_BEBE;
   await p.waitForSelector('#ecoBebePanel:not([hidden])');
   const fondoRosa = await p.evaluate(() => getComputedStyle(document.body).backgroundColor);
   ok(fondoRosa !== fondoNormal && fondoRosa === 'rgb(251, 239, 238)', 'al tocarlo, los colores cambian a rosado tenue (' + fondoRosa + ')');
+  ok((await p.textContent('#ecoBebePill')) === 'Paula' && (await p.getAttribute('#ecoBebePill', 'aria-label')) === 'Volver al perfil de Paula', 'dentro del modo, el botón dice el nombre de la persona principal para volver a su perfil');
   ok((await p.textContent('.eco-bebe-chip')) === 'Rafaela, en camino', 'la etiqueta dice "Rafaela, en camino"');
   ok((await p.textContent('#ecoBebeFoto')) === 'Subir una foto de hoy' && await p.locator('.eco-bebe-tira img').count() === 1, 'el botón grande es subir una foto de hoy, con la tira de fotos recientes');
   ok(await p.evaluate(() => window.EcoBebe.activo()), 'el modo queda activo para la charla');
@@ -126,6 +127,7 @@ const CAPTURAS = process.env.CAPTURAS_BEBE;
   // apagar el modo
   await p.click('#ecoBebePill');
   ok(await p.isHidden('#ecoBebePanel') && await p.evaluate(() => !document.documentElement.classList.contains('eco-bebe-activo') && !window.EcoBebe.activo()), 'tocar de nuevo el botón vuelve a la sesión normal');
+  ok((await p.textContent('#ecoBebePill')) === 'Rafaela', 'y el botón vuelve a decir el nombre del bebé');
   ok(!(t.estado.errores || []).length, 'sin errores de JavaScript' + ((t.estado.errores || []).length ? ': ' + t.estado.errores.join(' | ') : ''));
   await t.ctx.close();
 
