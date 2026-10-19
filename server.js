@@ -101,7 +101,7 @@ app.use((req, res, next) => {
 // CSP en absoluto). Si se cambia CSP_POLICY aquí, hay que copiar el cambio
 // a vercel.json también — no hay forma de compartir el string entre los
 // dos archivos.
-const CSP_MODE_ENFORCE = false;
+const CSP_MODE_ENFORCE = true;
 // Ruta relativa (no una URL absoluta): report-uri la resuelve contra el
 // origen de la propia página, así que sirve igual para una página servida
 // por Express (/api/*) o por el build estático de Vercel (public/**) — el
