@@ -89,8 +89,8 @@ async function main() {
   const home = await request(server, { path: '/index.html' });
   check(home.headers['x-frame-options'] === 'DENY', 'X-Frame-Options: DENY presente');
   check(home.headers['x-content-type-options'] === 'nosniff', 'X-Content-Type-Options: nosniff presente');
-  check(!!home.headers['content-security-policy-report-only'], 'CSP Report-Only presente');
-  check(!home.headers['content-security-policy'], 'CSP enforce todavía apagada (a propósito)');
+  check(!!home.headers['content-security-policy'], 'CSP enforce presente');
+  check(!home.headers['content-security-policy-report-only'], 'CSP Report-Only apagada (modo enforce activo)');
 
   // Auth: rutas protegidas rechazan sin sesión.
   const me = await request(server, { path: '/api/me' });

@@ -3922,15 +3922,16 @@
     if (sessionMode === 'arbol') comprobarSiArbolTieneBase();
   }
 
-  function startSession(mode) {
+  async function startSession(mode) {
     if (state !== 'idle' && state !== 'ended' && state !== 'save-failed') return;
-    
+
     // Si hay datos pendientes, pedir confirmación
     if (pendingSessionLog.length > 0 && state !== 'ended') {
-      const shouldDiscard = confirm(
+      const shouldDiscard = await window.ecoConfirm(
         `Hay ${pendingSessionLog.length} mensajes sin guardar en la charla anterior. ` +
         `¿Descartar y empezar nueva charla?\n\n` +
-        `(Si tocas "Cancelar", vuelves a la opción de reintentar guardado)`
+        `Si cancelas, vuelves a la opción de reintentar guardado.`,
+        { confirmText: 'Descartar y empezar', danger: true }
       );
       if (!shouldDiscard) return;
     }
@@ -3965,11 +3966,11 @@
     fetchNext();
   }
 
-  function handleOrbPress() {
+  async function handleOrbPress() {
     if (state === 'idle' || state === 'ended') {
       unlockAudioPlayback();
       unlockMicAudioContext();
-      startSession();
+      await startSession();
     } else if (state === 'error') {
       // Reintenta el turno que falló, sin tocar history/sessionLog (ver
       // el comentario en el catch de fetchNext()).
@@ -3986,10 +3987,10 @@
 
   endBtn.addEventListener('click', endConversation);
 
-  treeModeBtn.addEventListener('click', () => {
+  treeModeBtn.addEventListener('click', async () => {
     unlockAudioPlayback();
     unlockMicAudioContext();
-    startSession('arbol');
+    await startSession('arbol');
   });
 
   orb.addEventListener('click', handleOrbPress);
