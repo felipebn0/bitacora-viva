@@ -1,0 +1,82 @@
+/* eco-confirm.css — Diálogo de confirmación accesible.
+   Sustituye window.confirm() en toda la app. */
+.eco-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(43,36,28,0.55);
+  z-index: 99990;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px))
+           max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+.eco-confirm-overlay--in { opacity: 1; }
+
+.eco-confirm-box {
+  background: #FFFDF6;
+  color: #293d30;
+  border-radius: 16px;
+  padding: 28px 24px 20px;
+  max-width: 360px;
+  width: 100%;
+  box-shadow: 0 8px 40px rgba(43,36,28,0.28);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  transform: translateY(12px);
+  transition: transform 0.18s ease;
+}
+.eco-confirm-overlay--in .eco-confirm-box { transform: translateY(0); }
+
+.eco-confirm-msg {
+  font-family: "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif;
+  font-size: 1rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.eco-confirm-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.eco-confirm-actions button {
+  min-height: 44px;
+  padding: 8px 20px;
+  border-radius: 10px;
+  border: none;
+  font-family: "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.eco-confirm-cancel {
+  background: #EDE9DD;
+  color: #293d30;
+}
+.eco-confirm-cancel:hover { background: #DDD9CD; }
+
+.eco-confirm-ok {
+  background: #4d6542;
+  color: #FBF6EA;
+}
+.eco-confirm-ok:hover { background: #3a4e32; }
+.eco-confirm-ok--danger {
+  background: #7a2020;
+  color: #FBF6EA;
+}
+.eco-confirm-ok--danger:hover { background: #5e1818; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .eco-confirm-box { background: #2B241C; color: #F0E8D8; }
+  :root:not([data-theme="light"]) .eco-confirm-cancel { background: #3d3428; color: #F0E8D8; }
+  :root:not([data-theme="light"]) .eco-confirm-cancel:hover { background: #4d4438; }
+}
+:root[data-theme="dark"] .eco-confirm-box { background: #2B241C; color: #F0E8D8; }
+:root[data-theme="dark"] .eco-confirm-cancel { background: #3d3428; color: #F0E8D8; }
+:root[data-theme="dark"] .eco-confirm-cancel:hover { background: #4d4438; }

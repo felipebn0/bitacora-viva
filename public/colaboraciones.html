@@ -123,8 +123,9 @@
      para grabar un aporte nuevo y dos pestañas para separar "lo que me
      dijeron" de "lo que yo dije en otras bitácoras". */
   .aportar-ahora {
-    display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;
-    text-decoration: none; background: var(--gold-deep); color: #FBF6EA; border-radius: 10px;
+    /* Alto #2 — botón CTA de ancho completo para facilitar el toque en móvil */
+    display: flex; align-items: center; justify-content: center; box-sizing: border-box;
+    width: 100%; text-decoration: none; background: var(--gold-deep); color: #FBF6EA; border-radius: 10px;
     padding: 12px 20px; font-weight: 700; font-family: var(--font-body); font-size: 0.95rem;
     min-height: 44px; margin-bottom: 24px;
   }
@@ -557,7 +558,7 @@
   }
 
   async function archivarAporte(id) {
-    if (!confirm('¿Archivar este aporte? Deja de verse (tuyo y de quien lo mandó) — no se borra nada.')) return;
+    if (!await window.ecoConfirm('¿Archivar este aporte? Deja de verse — no se borra nada.', { confirmText: 'Archivar' })) return;
     try {
       await fetch(`/api/contributions/${id}/archive`, { method: 'POST' });
     } catch (e) {}
@@ -731,13 +732,13 @@
         reenviar.textContent = 'enviar de nuevo';
         acciones.appendChild(reenviar);
         acciones.appendChild(accion('quitar acceso', async () => {
-          if (!confirm('¿Quitarle el acceso a ' + inv.nombre + '? Deja de poder entrar con su enlace; lo que ya aportó se queda.')) return;
+          if (!await window.ecoConfirm('¿Quitarle el acceso a ' + inv.nombre + '? Lo que ya aportó se queda.', { danger: true, confirmText: 'Quitar acceso' })) return;
           try { await fetch(conOwnerInv('/api/invitaciones/' + encodeURIComponent(inv.id) + '/revocar'), { method: 'POST' }); } catch (e) {}
           cargarInvitaciones();
         }));
       }
       acciones.appendChild(accion(inv.activa ? 'enlace nuevo' : 'volver a invitar', async () => {
-        if (inv.activa && !confirm('¿Generar un enlace nuevo para ' + inv.nombre + '? El anterior deja de servir.')) return;
+        if (inv.activa && !await window.ecoConfirm('¿Generar un enlace nuevo para ' + inv.nombre + '? El anterior deja de servir.', { confirmText: 'Generar nuevo' })) return;
         try {
           const resp = await fetch(conOwnerInv('/api/invitaciones/' + encodeURIComponent(inv.id) + '/renovar'), { method: 'POST' });
           const data = await resp.json();
@@ -850,6 +851,7 @@
 <script src="/eco-audio-exclusivo.js" defer></script>
 <script src="/eco-audio-player.js" defer></script>
 <script src="/eco-toast.js" defer></script>
+<script src="/eco-confirm.js" defer></script>
 <script src="/eco-tour.js?v=1" defer></script>
 </body>
 </html>

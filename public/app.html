@@ -1864,7 +1864,7 @@
   async function reiniciarBitacora() {
     const password = umResetPassword.value;
     if (!password) return;
-    if (!confirm('¿Seguro que quieres reiniciar tu bitácora? Se borran todas tus charlas, el resumen, el árbol genealógico, los capítulos y los aportes de tu círculo (con sus audios y fotos) — tu usuario y clave siguen sirviendo, pero no se puede deshacer.')) return;
+    if (!await window.ecoConfirm('¿Reiniciar tu bitácora? Se borran charlas, árbol, capítulos y aportes — no se puede deshacer.', { danger: true, confirmText: 'Reiniciar' })) return;
     umResetConfirm.disabled = true;
     umResetError.textContent = '';
     try {
@@ -1913,7 +1913,7 @@
   async function borrarCuenta() {
     const password = umDeletePassword.value;
     if (!password) return;
-    if (!confirm('¿Seguro que quieres borrar tu cuenta para siempre? Se borra toda tu bitácora (charlas, árbol, capítulos, audios) y no se puede deshacer.')) return;
+    if (!await window.ecoConfirm('¿Borrar tu cuenta para siempre? Se borra toda tu bitácora y no se puede deshacer.', { danger: true, confirmText: 'Borrar cuenta' })) return;
     umDeleteConfirm.disabled = true;
     umDeleteError.textContent = '';
     try {
@@ -1984,13 +1984,13 @@
         reenviar.textContent = 'enviar de nuevo';
         acciones.appendChild(reenviar);
         acciones.appendChild(boton('quitar acceso', async () => {
-          if (!confirm('¿Quitarle el acceso a ' + inv.nombre + '? Deja de poder entrar con su enlace; lo que ya aportó se queda.')) return;
+          if (!await window.ecoConfirm('¿Quitarle el acceso a ' + inv.nombre + '? Lo que ya aportó se queda.', { danger: true, confirmText: 'Quitar acceso' })) return;
           try { await fetch('/api/invitaciones/' + encodeURIComponent(inv.id) + '/revocar', { method: 'POST' }); } catch (e) {}
           cargarInvitaciones();
         }));
       }
       acciones.appendChild(boton(inv.activa ? 'enlace nuevo' : 'volver a invitar', async () => {
-        if (inv.activa && !confirm('¿Generar un enlace nuevo para ' + inv.nombre + '? El anterior deja de servir.')) return;
+        if (inv.activa && !await window.ecoConfirm('¿Generar un enlace nuevo para ' + inv.nombre + '? El anterior deja de servir.', { confirmText: 'Generar nuevo' })) return;
         try {
           const resp = await fetch('/api/invitaciones/' + encodeURIComponent(inv.id) + '/renovar', { method: 'POST' });
           const data = await resp.json();
@@ -2082,7 +2082,7 @@
 
   const inviteRegenBtn = document.getElementById('inviteRegenBtn');
   inviteRegenBtn.addEventListener('click', async () => {
-    if (!confirm('¿Generar un código nuevo? El código actual deja de funcionar — los familiares que ya se unieron no se ven afectados, pero si compartiste este código con alguien que todavía no entró, va a necesitar el nuevo.')) return;
+    if (!await window.ecoConfirm('¿Generar un código nuevo? El código actual deja de funcionar.', { confirmText: 'Generar nuevo' })) return;
     inviteRegenBtn.disabled = true;
     try {
       const resp = await fetch('/api/invite-code/regenerate', { method: 'POST' });
@@ -4182,6 +4182,7 @@
 })();
 </script>
 <script src="/eco-toast.js" defer></script>
+<script src="/eco-confirm.js" defer></script>
 <script src="/eco-bebe-comun.js?v=5" defer></script>
 <script src="/eco-bebe.js?v=11" defer></script>
 <script src="/eco-crisis-banner.js?v=3" defer></script>

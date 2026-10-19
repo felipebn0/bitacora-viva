@@ -355,7 +355,7 @@
     }
     const regenId = Number(e.target.dataset.regenerar);
     if (regenId) {
-      if (!confirm('¿Generar un enlace nuevo? El que ya compartiste deja de servir.')) return;
+      if (!await window.ecoConfirm('¿Generar un enlace nuevo? El que ya compartiste deja de servir.', { confirmText: 'Generar nuevo' })) return;
       try {
         const resp = await fetch(`/api/subprofiles/${regenId}/narrador-link/regenerate`, { method: 'POST' });
         const data = await resp.json();
@@ -365,7 +365,7 @@
     }
     const revokId = Number(e.target.dataset.revocar);
     if (revokId) {
-      if (!confirm('¿Quitarle el acceso a ese enlace? Podrás generar uno nuevo cuando quieras.')) return;
+      if (!await window.ecoConfirm('¿Quitar el acceso a ese enlace? Podrás generar uno nuevo.', { danger: true, confirmText: 'Quitar acceso' })) return;
       try {
         await fetch(`/api/subprofiles/${revokId}/narrador-link/revoke`, { method: 'POST' });
         enlaceAbiertoId = null;
@@ -377,7 +377,7 @@
     if (archivarId) {
       const perfil = perfilesCache.find((p) => p.id === archivarId);
       const nombre = (perfil && perfil.nombre) || 'este perfil';
-      if (!confirm(`¿Archivar la bitácora de ${nombre}? Deja de aparecer aquí y se corta su enlace de narrador — sus historias y su árbol quedan guardados, no se borra nada.`)) return;
+      if (!await window.ecoConfirm(`¿Archivar la bitácora de ${nombre}? Sus historias y árbol quedan guardados.`, { confirmText: 'Archivar' })) return;
       try {
         const resp = await fetch(`/api/subprofiles/${archivarId}/archive`, { method: 'POST' });
         const data = await resp.json().catch(() => ({}));
@@ -440,5 +440,6 @@
 })();
 </script>
 <script src="/eco-volver-unificado.js" defer></script>
+<script src="/eco-confirm.js" defer></script>
 </body>
 </html>

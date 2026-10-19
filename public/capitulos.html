@@ -319,7 +319,7 @@
   }
 
   async function borrarCapitulo(id, div, btn) {
-    if (!confirm('¿Borrar este capítulo? No se puede deshacer.')) return;
+    if (!await window.ecoConfirm('¿Borrar este capítulo? No se puede deshacer.', { danger: true, confirmText: 'Borrar' })) return;
     // Sin esto, un segundo click mientras el primer borrado todavía está en
     // camino podía disparar dos DELETE para el mismo capítulo.
     if (btn) btn.disabled = true;
@@ -437,6 +437,7 @@
 })();
 </script>
 <script src="/eco-toast.js" defer></script>
+<script src="/eco-confirm.js" defer></script>
 <script src="/eco-tour.js?v=1" defer></script>
 </body>
 </html>

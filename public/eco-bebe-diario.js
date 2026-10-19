@@ -51,7 +51,7 @@
   }
 
   async function borrar(x) {
-    if (!window.confirm('¿Borrar esto del diario? No se puede deshacer.')) return;
+    if (!await window.ecoConfirm('¿Borrar esto del diario? No se puede deshacer.', { danger: true, confirmText: 'Borrar' })) return;
     const r = await fetch('/api/bebe/entradas/' + x.id, { method: 'DELETE' });
     if (!r.ok) { aviso('No se pudo borrar. Intenta de nuevo.', true); return; }
     estado.entradas = estado.entradas.filter((y) => y.id !== x.id);

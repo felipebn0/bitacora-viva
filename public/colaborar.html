@@ -314,6 +314,8 @@
 <link rel="stylesheet" href="/eco-crisis-banner.css?v=3">
 <script src="/eco-colaborar-rediseno.js?v=1" defer></script>
 <script src="/eco-crisis-banner.js?v=3" defer></script>
+<script src="/eco-toast.js" defer></script>
+<script src="/eco-confirm.js" defer></script>
 <script src="/eco-audio-exclusivo.js" defer></script>
 <script src="/eco-audio-player.js" defer></script>
 <link rel="stylesheet" href="/eco-volver-unificado.css?v=1">
@@ -654,6 +656,9 @@
       return;
     }
     hubSubmitBtn.disabled = true;
+    // Alto #5 — indicar carga mientras verifica el código
+    const hubBtnOrig = hubSubmitBtn.textContent;
+    hubSubmitBtn.textContent = 'Verificando…';
     hubError.textContent = '';
     try {
       // Un invitado sin cuenta (ej. el narrador de un subperfil) no puede
@@ -662,6 +667,7 @@
       if (sesionEsGuest) {
         hubError.textContent = 'Para colaborar con otra bitácora sin cuenta necesitas tu enlace personal — pídeselo a quien te invitó.';
         hubSubmitBtn.disabled = false;
+        hubSubmitBtn.textContent = hubBtnOrig;
         return;
       }
       const resp = await fetch('/api/join-collaboration', {
@@ -673,12 +679,14 @@
       if (!resp.ok) {
         hubError.textContent = data.error || 'No se pudo entrar con ese código.';
         hubSubmitBtn.disabled = false;
+        hubSubmitBtn.textContent = hubBtnOrig;
         return;
       }
       window.location.href = location.pathname + '?owner=' + data.ownerId;
     } catch (e) {
       hubError.textContent = 'Hubo un problema para conectar.';
       hubSubmitBtn.disabled = false;
+      hubSubmitBtn.textContent = hubBtnOrig;
     }
   }
   hubSubmitBtn.addEventListener('click', unirseDesdeHub);
@@ -867,7 +875,7 @@
   async function borrarCuenta() {
     const password = deleteAccountPassword.value;
     if (!password) return;
-    if (!confirm('¿Seguro que quieres borrar tu cuenta para siempre? No se puede deshacer.')) return;
+    if (!await window.ecoConfirm('¿Borrar tu cuenta para siempre? No se puede deshacer.', { danger: true, confirmText: 'Borrar cuenta' })) return;
     deleteAccountConfirm.disabled = true;
     deleteAccountError.textContent = '';
     try {
@@ -1180,6 +1188,10 @@
       recStatus.textContent = '';
       aporteMsg.classList.toggle('error', !data.saved);
       aporteMsg.textContent = data.saved ? '✓ Historia guardada. Gracias.' : '⚠️ La charla terminó, pero hubo un problema para guardarla.';
+      // Alto #4 — toast de confirmación al guardar
+      if (typeof window.showToast === 'function') {
+        window.showToast(data.saved ? '✓ Historia guardada. Gracias.' : '⚠️ Hubo un problema para guardar.', data.saved ? 'success' : 'error');
+      }
       otraHistoriaBtn.style.display = 'inline-block';
       if (data.saved) { cargarAportes(); }
     } else if (interaccionReal) {
@@ -1796,12 +1808,19 @@
     }
     subirAudioBtn.disabled = true;
     orb.disabled = true;
+    // Alto #1 — mostrar estado "thinking" en el orbe mientras procesa el archivo
+    orb.dataset.state = 'thinking';
+    orb.innerHTML = 'Un<br>momento…';
+    orb.setAttribute('aria-label', 'Procesando el audio');
     recStatus.textContent = 'Procesando el audio…';
     const ok = await procesarAudio(file, file.type || 'audio/mp4');
     if (!ok) {
       recStatus.textContent = 'No se pudo entender el audio. Intenta de nuevo.';
       subirAudioBtn.disabled = false;
       orb.disabled = false;
+      orb.dataset.state = 'idle';
+      orb.innerHTML = 'Presiona<br>para hablar';
+      orb.setAttribute('aria-label', 'Presiona para grabar tu historia');
     }
     // ok=true: mismo motivo que en terminarGrabacion() — procesarAudio() ya
     // dejó todo resuelto (hablando/escuchando de nuevo, o la charla
@@ -1869,11 +1888,15 @@
           const data = await resp.json();
           if (data.url) mediaUrlsLocal.push({ url: data.url, type: data.type, caption });
           recStatus.textContent = '✓ Se agregó a esta historia.';
+          // Alto #4 — toast de éxito al subir foto/video
+          if (typeof window.showToast === 'function') window.showToast('✓ Archivo agregado a esta historia.', 'success');
         } else {
           recStatus.textContent = 'No se pudo subir el archivo. Intenta de nuevo.';
+          if (typeof window.showToast === 'function') window.showToast('No se pudo subir el archivo.', 'error');
         }
       } catch (e) {
         recStatus.textContent = 'Hubo un problema para conectar.';
+        if (typeof window.showToast === 'function') window.showToast('Hubo un problema para conectar.', 'error');
       }
       subirFotoBtn.disabled = false;
     })();
