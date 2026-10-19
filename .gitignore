@@ -7,3 +7,12 @@ bitacora.json
 resumen.json
 audio/
 test-artifacts/
+
+# Backups — never commitear
+*.bak
+*.bak2
+*.before-integral.bak
+*.pre-*.bak
+*.v4-backup
+*-backup
+ruta_confirmacion_v4.txt
