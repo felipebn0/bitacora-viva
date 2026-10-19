@@ -232,12 +232,39 @@ const AB_LANDING_ARCHIVOS = {
   v2: path.join(__dirname, 'public', 'index-v2.html'),
 };
 
+// Robots de buscadores y escáneres visitan sin cookie: contarlos despertaba la
+// base de datos (Neon cobra por el tiempo que está encendida) y ensuciaba la
+// prueba A/B. A un robot se le sirve la versión 1 sin tocar la base.
+const PATRON_ROBOT = /bot\b|bot[\/ ;)]|crawl|spider|slurp|preview|monitor|uptime|curl\/|wget|python|axios|headless|facebookexternalhit|lighthouse|go-http-client|java\//i;
+function pareceRobot(req) {
+  const ua = String(req.headers['user-agent'] || '');
+  return !ua || PATRON_ROBOT.test(ua);
+}
+
+// Primero se intenta el conteo directo: la revisión completa de tablas
+// (ensureSchema) solo hace falta si la tabla todavía no existe (42P01).
+async function contarAsignacionAbLanding(variante) {
+  const contar = () => sql`
+    INSERT INTO ab_landing_counters (variant, asignados) VALUES (${variante}, 1)
+    ON CONFLICT (variant) DO UPDATE SET asignados = ab_landing_counters.asignados + 1
+  `;
+  try {
+    await contar();
+  } catch (err) {
+    if (!err || err.code !== '42P01') throw err;
+    await ensureSchema();
+    await contar();
+  }
+}
+
 app.get('/', async (req, res, next) => {
   try {
     const cookies = parseCookies(req.headers.cookie);
     const yaAsignada = cookies[AB_LANDING_COOKIE];
     let variante = yaAsignada === 'v1' || yaAsignada === 'v2' ? yaAsignada : null;
-    if (!variante) {
+    if (!variante && pareceRobot(req)) {
+      variante = 'v1';
+    } else if (!variante) {
       variante = Math.random() < 0.5 ? 'v1' : 'v2';
       const secure = cookieEsSegura(req) ? '; Secure' : '';
       res.setHeader('Set-Cookie', `${AB_LANDING_COOKIE}=${variante}; Max-Age=${AB_LANDING_MAX_AGE}; Path=/; HttpOnly; SameSite=Lax${secure}`);
@@ -245,11 +272,7 @@ app.get('/', async (req, res, next) => {
       // falla acá, igual se sirve la página (fallar cerrado dejaría a
       // alguien sin poder ver la landing por un problema de métricas).
       try {
-        await ensureSchema();
-        await sql`
-          INSERT INTO ab_landing_counters (variant, asignados) VALUES (${variante}, 1)
-          ON CONFLICT (variant) DO UPDATE SET asignados = ab_landing_counters.asignados + 1
-        `;
+        await contarAsignacionAbLanding(variante);
       } catch (err) {
         console.error('No se pudo contar la asignación de A/B de la landing:', err);
       }
