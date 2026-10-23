@@ -161,6 +161,34 @@
         <p class="msg" id="crearMsg" role="status" aria-live="polite" aria-atomic="true"></p>
       </div>
     </section>
+
+    <section id="mascotaSection">
+      <h2>Agregar una mascota</h2>
+      <p class="sub">Tú cuentas su vida: cómo llegó, sus travesuras, sus costumbres. Eco te pregunta por ella. Si quieres, compartes un enlace para que la familia sume sus recuerdos.</p>
+      <div class="form-nueva">
+        <label for="mascotaNombre">Nombre</label>
+        <input type="text" id="mascotaNombre" placeholder="Ej: Roma" maxlength="100">
+        <label for="mascotaEspecie">¿Qué es?</label>
+        <select id="mascotaEspecie">
+          <option value="perro">Perro</option>
+          <option value="gato">Gato</option>
+          <option value="otro">Otro</option>
+        </select>
+        <input type="text" id="mascotaEspecieOtro" placeholder="¿Cuál?" maxlength="40" hidden>
+        <label for="mascotaRaza">Raza (opcional)</label>
+        <input type="text" id="mascotaRaza" placeholder="Ej: Criollo, Labrador" maxlength="60">
+        <label for="mascotaSexo">¿Es macho o hembra?</label>
+        <select id="mascotaSexo">
+          <option value="">Elige una opción</option>
+          <option value="masculino">Macho</option>
+          <option value="femenino">Hembra</option>
+        </select>
+        <label for="mascotaFecha">Fecha de nacimiento o de llegada (opcional)</label>
+        <input type="date" id="mascotaFecha" aria-label="Fecha de nacimiento o de llegada (opcional)">
+        <button class="btn" id="mascotaBtn" type="button">+ Agregar mascota</button>
+        <p class="msg" id="mascotaMsg" role="status" aria-live="polite" aria-atomic="true"></p>
+      </div>
+    </section>
   </main>
 
 <script>
@@ -210,8 +238,11 @@
   function filaPerfil(p) {
     const esActivo = p.esPropia ? !activaId : activaId === p.id;
     const inicial = (p.nombre || '?').trim().charAt(0).toUpperCase();
+    const esMascota = p.tipo === 'mascota';
     const tagPrincipal = p.esPropia
       ? `<span class="principal-tag">Usuario principal</span>`
+      : esMascota
+      ? `<span class="principal-tag">${escaparHtml(p.especie || 'Mascota')}${p.raza ? ' · ' + escaparHtml(p.raza) : ''}</span>`
       : (p.relacion ? `<span class="principal-tag">${escaparHtml(p.relacion)}</span>` : '');
     const cambiarBtn = esActivo
       ? `<span class="activo-tag">Bitácora activa ahora</span>`
@@ -219,14 +250,14 @@
     const enlaceToggleBtn = p.esPropia ? '' : `<button class="btn small plain" data-enlace="${p.id}" type="button">${enlaceAbiertoId === p.id ? 'Ocultar enlace' : 'Compartir enlace'}</button>`;
     // Onboarding hablado (item 15, pedido de Felipe 2026-09-08): contarle
     // a la IA gustos/contexto de esta persona antes de su primera charla.
-    const onboardingBtn = p.esPropia ? '' : `<a class="btn small plain" href="/perfilar.html?id=${p.id}">${p.tieneOnboarding ? 'Editar lo que sabemos de esta persona' : 'Contarle a la IA sobre esta persona'}</a>`;
+    const onboardingBtn = (p.esPropia || esMascota) ? '' : `<a class="btn small plain" href="/perfilar.html?id=${p.id}">${p.tieneOnboarding ? 'Editar lo que sabemos de esta persona' : 'Contarle a la IA sobre esta persona'}</a>`;
     // Archivar (pedido de Felipe, 2026-09-08): no borra nada, solo lo saca
     // de esta lista y corta sus enlaces — ver POST /api/subprofiles/:id/archive.
     // No se ofrece para "tú" (esPropia) ni para el perfil activo ahora
     // mismo (el servidor lo rechazaría igual, pero es más claro no
     // ofrecer un botón que va a fallar).
     const archivarBtn = (!p.esPropia && !esActivo) ? `<button class="btn small plain warn" data-archivar="${p.id}" type="button">Archivar</button>` : '';
-    const tratoFila = p.esPropia ? '' : `<label class="trato-fila">Cómo quiere que lo traten:<select data-tratamiento="${p.id}" aria-label="Cómo quiere que lo traten"><option value=""${p.tratamiento ? '' : ' selected'}>Sin elegir</option><option value="masculino"${p.tratamiento === 'masculino' ? ' selected' : ''}>En masculino (él)</option><option value="femenino"${p.tratamiento === 'femenino' ? ' selected' : ''}>En femenino (ella)</option></select></label>`;
+    const tratoFila = (p.esPropia || esMascota) ? '' : `<label class="trato-fila">Cómo quiere que lo traten:<select data-tratamiento="${p.id}" aria-label="Cómo quiere que lo traten"><option value=""${p.tratamiento ? '' : ' selected'}>Sin elegir</option><option value="masculino"${p.tratamiento === 'masculino' ? ' selected' : ''}>En masculino (él)</option><option value="femenino"${p.tratamiento === 'femenino' ? ' selected' : ''}>En femenino (ella)</option></select></label>`;
     const enlaceBox = enlaceAbiertoId === p.id ? `<div class="enlace-box" id="enlaceBox-${p.id}"><p class="msg">Cargando…</p></div>` : '';
     return `<div class="perfil-card">
       <div class="fila-principal">
@@ -390,6 +421,12 @@
     }
   });
 
+  window.addEventListener('eco:perfil-creado', async (ev) => {
+    enlaceAbiertoId = ev.detail.id;
+    await cargarPerfiles();
+    await cargarYMostrarEnlace(ev.detail.id);
+  });
+
   crearBtn.addEventListener('click', async () => {
     const nombre = nuevoNombre.value.trim();
     if (!nombre) { crearMsg.textContent = 'Falta el nombre.'; crearMsg.classList.remove('error'); return; }
@@ -440,5 +477,6 @@
 })();
 </script>
 <script src="/eco-volver-unificado.js" defer></script>
+<script src="/perfiles-mascota.js?v=1" defer></script>
 </body>
 </html>

@@ -27,6 +27,7 @@
     "test:arbol-colab-link": "node test/arbol-colaboraciones-link.playwright.js",
     "eval:conversacion": "node test/eval-conversacion.js",
     "test:portadas": "npx playwright test test/portadas-audiencia.playwright.js",
+    "test:perfil-mascota": "node test/perfil-mascota.playwright.js",
     "test:diario-bebe": "node test/diario-bebe.playwright.js",
     "test:admin": "node test/admin-routes.smoke.js"
   },

@@ -2257,7 +2257,14 @@
       return;
     }
     window.bitacoraActivaId = data.bitacoraActiva ? data.bitacoraActiva.id : null;
-    if (data.bitacoraActiva) {
+    if (data.bitacoraActiva && data.bitacoraActiva.tipo === 'mascota') {
+      // Una mascota no puede hablar: quien la administra cuenta su vida, así que
+      // el botón de hablar sigue visible; el aviso solo recuerda de quién es.
+      subperfilBannerTexto.textContent = `Estás contando la vida de ${data.bitacoraActiva.nombre || 'tu mascota'}. Habla tú: ${data.bitacoraActiva.nombre || 'tu mascota'} es la protagonista.`;
+      subperfilBanner.style.display = 'flex';
+      orbZone.style.display = '';
+      if (greetingBox) greetingBox.style.display = '';
+    } else if (data.bitacoraActiva) {
       // Pedido de Felipe (2026-09-08): texto más directo — "puedo
       // administrar pero no puedo contar su historia".
       subperfilBannerTexto.textContent = `Puedes administrar la bitácora de ${data.bitacoraActiva.nombre || 'esa persona'}, pero no puedes contar su historia en su nombre.`;

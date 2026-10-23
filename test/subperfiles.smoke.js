@@ -79,9 +79,24 @@ function fakeSql(strings, ...values) {
   }
 
   // --- requireAuth: revalidación del subperfil activo en cada request ---
-  if (text.includes('SELECT id, admin_user_id FROM bitacoras WHERE id')) {
+  if (text.includes('SELECT id, admin_user_id, tipo FROM bitacoras WHERE id')) {
     const bit = bitacoras[values[0]];
-    return Promise.resolve(bit ? [{ id: bit.id, admin_user_id: bit.admin_user_id }] : []);
+    return Promise.resolve(bit ? [{ id: bit.id, admin_user_id: bit.admin_user_id, tipo: bit.tipo || null }] : []);
+  }
+  // Mascotas: ¿es una mascota? / perfil de la bitácora activa
+  if (text.includes('SELECT especie, raza FROM bitacoras WHERE id')) {
+    const bit = bitacoras[values[0]];
+    return Promise.resolve(bit && bit.tipo === 'mascota' ? [{ especie: bit.especie, raza: bit.raza }] : []);
+  }
+  if (text.includes('contexto_onboarding, tratamiento, voz FROM bitacoras WHERE id') && bitacoras[values[0]] && bitacoras[values[0]].tipo === 'mascota') {
+    const bit = bitacoras[values[0]];
+    return Promise.resolve([{ nombre: bit.nombre, fecha_nacimiento: bit.fecha_nacimiento, created_at: null, contexto_onboarding: null, tratamiento: bit.tratamiento, voz: null }]);
+  }
+  if (text.includes('INSERT INTO bitacoras (admin_user_id, nombre, fecha_nacimiento, tratamiento, tipo, especie, raza)')) {
+    const [adminUserId, nombre, fechaNacimiento, tratamiento, especie, raza] = values;
+    const id = nextBitacoraId++;
+    bitacoras[id] = { id, admin_user_id: adminUserId, nombre, fecha_nacimiento: fechaNacimiento, relacion: null, tratamiento: tratamiento || null, tipo: 'mascota', especie, raza, narrador_code: null, invite_code: null, archived_at: null, created_at: new Date() };
+    return Promise.resolve([{ id }]);
   }
 
   // --- /api/subprofiles ---
@@ -91,9 +106,9 @@ function fakeSql(strings, ...values) {
     bitacoras[id] = { id, admin_user_id: adminUserId, nombre, fecha_nacimiento: fechaNacimiento, relacion: relacion || null, tratamiento: tratamiento || null, narrador_code: null, invite_code: null, aportes_pending_names: null, pin_hash: null, contexto_onboarding: null };
     return Promise.resolve([{ id }]);
   }
-  if (text.includes('SELECT id, nombre, relacion, contexto_onboarding, tratamiento FROM bitacoras WHERE admin_user_id')) {
+  if (text.includes('SELECT id, nombre, relacion, contexto_onboarding, tratamiento, tipo, especie, raza FROM bitacoras WHERE admin_user_id')) {
     const lista = Object.values(bitacoras).filter((b) => b.admin_user_id === values[0]);
-    return Promise.resolve(lista.map((b) => ({ id: b.id, nombre: b.nombre, relacion: b.relacion || null, contexto_onboarding: b.contexto_onboarding || null, tratamiento: b.tratamiento || null })));
+    return Promise.resolve(lista.map((b) => ({ id: b.id, nombre: b.nombre, relacion: b.relacion || null, contexto_onboarding: b.contexto_onboarding || null, tratamiento: b.tratamiento || null, tipo: b.tipo || null, especie: b.especie || null, raza: b.raza || null })));
   }
   if (text.includes('SELECT id FROM bitacoras WHERE id') && text.includes('admin_user_id')) {
     const bit = bitacoras[values[0]];
@@ -251,6 +266,7 @@ require.cache[require.resolve('@vercel/blob')] = {
 // vez de la clase vacía del smoke original, para poder ejercitar /api/next
 // de verdad (narrar como el subperfil).
 let responseQueue = [];
+const llamadasAnthropic = [];
 function pushAnthropicResponse(text) { responseQueue.push(text); }
 require.cache[require.resolve('@anthropic-ai/sdk')] = {
   id: require.resolve('@anthropic-ai/sdk'), filename: require.resolve('@anthropic-ai/sdk'), loaded: true,
@@ -258,7 +274,8 @@ require.cache[require.resolve('@anthropic-ai/sdk')] = {
     constructor() {}
     get messages() {
       return {
-        create: async () => {
+        create: async (opts) => {
+          llamadasAnthropic.push(opts);
           if (!responseQueue.length) throw new Error('FakeAnthropic: sin respuesta programada.');
           return { content: [{ type: 'text', text: responseQueue.shift() }] };
         },
@@ -466,6 +483,41 @@ function check(nombre, cond) {
     const aportesPending = await request(server, { path: '/api/aportes/pending' }, cookieComoMama);
     const nombresPendientes = JSON.parse(aportesPending.body).names;
     check('la campanita de aportes del subperfil se prendió con el nombre de la tía', Array.isArray(nombresPendientes) && nombresPendientes.includes('Tía Rosa'));
+
+    // --- Mascotas: la familia cuenta su vida; quien la administra SÍ puede narrar ---
+    const crearMascota = await request(server, { path: '/api/subprofiles', method: 'POST', body: { tipo: 'mascota', nombre: 'roma', especie: 'perro', raza: 'Criolla', tratamiento: 'femenino' } }, cookieFelipe);
+    check('crear el perfil de una mascota -> 200', crearMascota.status === 200);
+    const { id: romaId } = JSON.parse(crearMascota.body);
+    check('queda guardado como mascota, con especie y raza', bitacoras[romaId].tipo === 'mascota' && bitacoras[romaId].especie === 'perro' && bitacoras[romaId].raza === 'Criolla');
+    const crearSinEspecie = await request(server, { path: '/api/subprofiles', method: 'POST', body: { tipo: 'mascota', nombre: 'Luna', tratamiento: 'femenino' } }, cookieFelipe);
+    check('si no dice qué animal es, se asume perro', bitacoras[JSON.parse(crearSinEspecie.body).id].especie === 'perro');
+    const listaConMascota = JSON.parse((await request(server, { path: '/api/subprofiles' }, cookieFelipe)).body).perfiles;
+    const filaRoma = listaConMascota.find((p) => p.id === romaId);
+    check('la lista marca a Roma como mascota (perro, Criolla)', filaRoma && filaRoma.tipo === 'mascota' && filaRoma.especie === 'perro' && filaRoma.raza === 'Criolla');
+    check('y las personas no llevan ese marcador', !('tipo' in listaConMascota.find((p) => p.id === papaId)));
+
+    const switchRoma = await request(server, { path: '/api/subprofiles/switch', method: 'POST', body: { id: romaId } }, cookieFelipe);
+    const cookieComoRoma = switchRoma.headers['set-cookie'][0].split(';')[0];
+    const meRoma = JSON.parse((await request(server, { path: '/api/me' }, cookieComoRoma)).body);
+    check('/api/me avisa que la bitácora activa es una mascota y que sí se puede narrar', meRoma.puedeNarrar === true && meRoma.bitacoraActiva.tipo === 'mascota' && meRoma.bitacoraActiva.nombre === 'Roma');
+    llamadasAnthropic.length = 0;
+    pushAnthropicResponse('¡Qué lindo! ¿Cómo llegó Roma a su casa?');
+    const nextRoma = await request(server, { path: '/api/next', method: 'POST', body: { history: [], mode: 'historia' } }, cookieComoRoma);
+    check('quien administra a la mascota puede narrar su vida (no hay 403)', nextRoma.status === 200);
+    const sistemaRoma = llamadasAnthropic[0] && llamadasAnthropic[0].system[0].text;
+    check('la entrevistadora sabe que habla de una mascota, no de una persona', /BITÁCORA DE UNA MASCOTA/.test(sistemaRoma || '') && /Roma, perro, raza Criolla/.test(sistemaRoma || ''));
+    check('sabe que es hembra', /es hembra/.test(sistemaRoma || ''));
+    check('y no le aplica el trato de una persona', !/TRATO DE LA PERSONA/.test(sistemaRoma || ''));
+    check('el arranque es sobre la mascota, no una prueba de micrófono', /sobre su mascota/.test(llamadasAnthropic[0].messages[0].content) && !/micrófono/.test(llamadasAnthropic[0].messages[0].content));
+    const nombreEnDato = /<datos_no_confiables[^>]*>[^<]*Roma, perro/.test(sistemaRoma || '') || /datos_de_la_mascota/.test(sistemaRoma || '');
+    check('el nombre, la especie y la raza van como dato no confiable', nombreEnDato);
+
+    // Una persona (papá) sigue sin poder narrar desde la cuenta administradora.
+    const cookieComoPapa2 = (await request(server, { path: '/api/subprofiles/switch', method: 'POST', body: { id: papaId } }, cookieFelipe)).headers['set-cookie'][0].split(';')[0];
+    const nextPapa = await request(server, { path: '/api/next', method: 'POST', body: { history: [], mode: 'historia' } }, cookieComoPapa2);
+    check('el perfil de una persona sigue sin poder narrarse desde la cuenta administradora (403)', nextPapa.status === 403);
+    const meFelipe = JSON.parse((await request(server, { path: '/api/me' }, cookieFelipe)).body);
+    check('la propia bitácora no es mascota', !meFelipe.bitacoraActiva);
   } finally {
     server.close();
   }
