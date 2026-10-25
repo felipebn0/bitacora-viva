@@ -1538,6 +1538,7 @@ function ensureSchema() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`,
       sql`CREATE INDEX IF NOT EXISTS idx_diario_bebe_entradas_perfil ON diario_bebe_entradas(profile_user_id, created_at)`,
+
       // Notas de voz originales del diario (JSON array de URLs en media/<id>/bebe/).
       sql`ALTER TABLE diario_bebe_entradas ADD COLUMN IF NOT EXISTS audio_urls TEXT`,
       // 'charla' = lo que la persona contó en la charla del modo bebé (también queda en su libro).
@@ -7240,6 +7241,7 @@ app.delete('/api/chapters/:id', requireAuth, bloquearColaborador, rateLimit, asy
 });
 
 require('./book-qr-routes')(app, { sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob });
+require('./recuperar-clave-routes')(app, { sql, ensureSchema, rateLimit, limitePorClave, claveDemasiadoLarga });
 require('./bebe-routes')(app, { sql, ensureSchema, requireAuth, rateLimit, bloquearEscritura: [bloquearColaborador, bloquearSiNoPuedeNarrar, bloquearSiReadOnly], resolveProfileUserId, almacenarArchivo, verificarArchivoReal, MEDIA_MIME_PERMITIDOS, AUDIO_MIME_PERMITIDOS, enviarArchivoAlmacenado, datosDelArchivoDeBlob, borrarArchivosBlob });
 require('./book-editor-routes')(app, {
   sql,

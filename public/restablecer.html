@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Restablecer la clave · Eco</title>
+<link rel="icon" href="/images/favicon-32.png">
+<link rel="stylesheet" href="/fonts/fonts.css">
+<link rel="stylesheet" href="/restablecer.css?v=2">
+<script src="/font-size.js"></script>
+</head>
+<body class="restablecer">
+<main class="rest-caja">
+  <a class="rest-logo" href="/app.html"><img src="/images/logo-icon.png" alt="" width="36" height="36"><span>ECO</span></a>
+
+  <section id="vistaNueva">
+    <h1>Crea tu clave nueva</h1>
+    <p class="rest-sub">Escribe tu correo o usuario y la clave nueva dos veces.</p>
+    <form id="formNueva" novalidate>
+      <label for="usuario">Correo o usuario</label>
+      <input id="usuario" type="text" autocomplete="username" placeholder="Correo o usuario">
+      <label for="clave">Clave nueva</label>
+      <div class="rest-fila">
+        <input id="clave" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres">
+        <button type="button" class="rest-ver" id="verClave" aria-pressed="false" aria-label="Mostrar las claves">Mostrar</button>
+      </div>
+      <label for="clave2">Repite la clave nueva</label>
+      <input id="clave2" type="password" autocomplete="new-password" placeholder="Repite la clave">
+      <button id="btnNueva" type="submit">Guardar la clave nueva</button>
+    </form>
+  </section>
+
+  <section id="vistaListo" hidden>
+    <h1>Listo, tu clave cambió</h1>
+    <p class="rest-sub">Ya puedes entrar con la clave nueva.</p>
+    <a class="rest-boton" href="/app.html">Entrar a mi bitácora</a>
+  </section>
+
+  <p class="rest-msg" id="msg" role="status" aria-live="polite"></p>
+  <a class="rest-volver" id="volver" href="/app.html">‹ Volver a entrar</a>
+</main>
+<script src="/restablecer.js?v=2"></script>
+</body>
+</html>

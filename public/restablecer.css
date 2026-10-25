@@ -1,0 +1,23 @@
+:root { --fondo: #F5EFE2; --papel: #FBF6EA; --tinta: #2B241C; --suave: #706551; --musgo: #4F5D3A; --borde: #E7DFCC; --error: #A83A2E; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --fondo: #1E1B16; --papel: #2A261F; --tinta: #F1EADB; --suave: #BDB29A; --musgo: #8FA36B; --borde: #4A4336; --error: #F29A8E; }
+}
+body.restablecer { margin: 0; background: var(--fondo); color: var(--tinta); font-family: "Atkinson Hyperlegible", "Segoe UI", Arial, sans-serif; line-height: 1.5; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px 16px; box-sizing: border-box; }
+.rest-caja { width: min(420px, 100%); background: var(--papel); border: 1px solid var(--borde); border-radius: 22px; padding: 28px 24px; display: flex; flex-direction: column; gap: 14px; box-sizing: border-box; }
+.rest-logo { display: flex; align-items: center; gap: 8px; justify-content: center; text-decoration: none; color: var(--musgo); font-weight: 700; letter-spacing: 0.12em; }
+.restablecer h1 { font-family: "Source Serif 4", Georgia, serif; font-size: 1.6rem; margin: 0; text-align: center; }
+.rest-sub { margin: 0; color: var(--suave); text-align: center; }
+.restablecer section { display: flex; flex-direction: column; gap: 12px; }
+.restablecer section[hidden] { display: none; }
+.restablecer form { display: flex; flex-direction: column; gap: 8px; }
+.restablecer label { font-weight: 700; font-size: 0.95rem; }
+.restablecer input { width: 100%; box-sizing: border-box; border: 1px solid var(--borde); border-radius: 12px; background: var(--fondo); color: var(--tinta); font: inherit; padding: 12px 14px; min-height: 48px; }
+.rest-fila { display: flex; gap: 8px; }
+.rest-fila input { flex: 1; min-width: 0; }
+.rest-ver { border: 1px solid var(--borde); background: transparent; color: var(--musgo); border-radius: 12px; font: inherit; font-weight: 700; padding: 0 14px; min-height: 48px; cursor: pointer; }
+.restablecer button[type="submit"], .rest-boton { margin-top: 6px; border: none; background: var(--musgo); color: #fff; border-radius: 12px; font: inherit; font-weight: 700; padding: 13px 16px; min-height: 50px; cursor: pointer; text-align: center; text-decoration: none; display: block; box-sizing: border-box; }
+.restablecer button:disabled { opacity: 0.6; cursor: default; }
+.rest-msg { margin: 0; min-height: 1.3em; text-align: center; color: var(--suave); }
+.rest-msg.error { color: var(--error); }
+.rest-volver { text-align: center; color: var(--musgo); font-weight: 700; text-decoration: none; padding: 6px; }
+.restablecer :focus-visible { outline: 3px solid var(--musgo); outline-offset: 2px; }
