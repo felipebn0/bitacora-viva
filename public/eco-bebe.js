@@ -56,7 +56,7 @@
     html.classList.toggle('eco-bebe-activo', activo);
     pill.setAttribute('aria-pressed', activo ? 'true' : 'false');
     const principal = nombrePrincipal();
-    pill.textContent = activo ? (principal || 'Volver a mi perfil') : config.nombre;
+    pill.textContent = activo ? (principal || 'Volver a mi perfil') : C().emojiBebe(config.genero) + ' ' + config.nombre;
     pill.setAttribute('aria-label', activo
       ? (principal ? 'Volver al perfil de ' + principal : 'Volver a mi perfil')
       : 'Entrar al diario de ' + config.nombre);
@@ -123,7 +123,7 @@
   function montar(entradas) {
     const area = document.querySelector('.body-area');
     if (!area || pill) return;
-    pill = E('button', 'eco-bebe-pill', config.nombre);
+    pill = E('button', 'eco-bebe-pill', C().emojiBebe(config.genero) + ' ' + config.nombre);
     pill.type = 'button';
     pill.id = 'ecoBebePill';
     pill.setAttribute('aria-pressed', 'false');
@@ -139,7 +139,7 @@
     (area.closest('.device') || area).appendChild(edad);
     armarPanel(entradas);
     const saludo = document.getElementById('greeting');
-    area.insertBefore(fila, area.firstChild);
+    (C().filaEspecial() || area).appendChild(fila);
     area.insertBefore(panel, saludo ? saludo.nextSibling : fila.nextSibling);
     // En el perfil de un bebé el modo está siempre activo (no hay botón para entrar ni salir).
     const esPerfilBebe = window.bitacoraActivaTipo === 'bebe';

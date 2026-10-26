@@ -254,5 +254,25 @@
     document.documentElement.classList.toggle('eco-bebe-azul', !!config && config.genero === 'masculino');
   }
 
-  window.EcoBebeComun = { subirFoto, guardarEntrada, etiqueta, edadTexto, fechaLarga, botonVoz, aplicarColor, diasDeVida };
+  // Emoji de cada perfil especial: bebé según su sexo, mascota según el animal.
+  const emojiBebe = (genero) => (genero === 'femenino' ? '👧' : genero === 'masculino' ? '👦' : '👶');
+  const emojiMascota = (especie) => {
+    const e = String(especie || '').toLowerCase();
+    return e === 'perro' ? '🐶' : e === 'gato' ? '🐱' : '🐾';
+  };
+
+  // Una sola fila arriba de la pantalla principal para los botones de bebés y mascotas: así van uno al lado del otro.
+  function filaEspecial() {
+    const area = document.querySelector('.body-area');
+    if (!area) return null;
+    let fila = area.querySelector(':scope > .eco-especiales');
+    if (!fila) {
+      fila = document.createElement('div');
+      fila.className = 'eco-especiales';
+      area.insertBefore(fila, area.firstChild);
+    }
+    return fila;
+  }
+
+  window.EcoBebeComun = { subirFoto, guardarEntrada, etiqueta, edadTexto, fechaLarga, botonVoz, aplicarColor, diasDeVida, emojiBebe, emojiMascota, filaEspecial };
 })();

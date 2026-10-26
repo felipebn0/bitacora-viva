@@ -17,6 +17,7 @@ const CAPTURAS = process.env.CAPTURAS_COLAB;
   const browser = await chromium.launch();
   const page = await (await browser.newContext({ viewport: { width: 420, height: 900 } })).newPage();
   const errores = [];
+  await page.addInitScript(() => { try { localStorage.setItem('eco_tour_done__colaboraciones_html', '1'); localStorage.setItem('eco_tour_done__colaborar_html', '1'); } catch (e) { /* nada */ } });
   page.on('pageerror', (e) => errores.push(e.message));
   let enviada = null;
   const pedidos = [];
@@ -40,11 +41,14 @@ const CAPTURAS = process.env.CAPTURAS_COLAB;
   ok(!pedidos.includes('/api/tree/colaboradores'), 'ni se pide esa lista al servidor');
   ok((await page.textContent('.aportar-ahora')).trim() === 'Aportar a una historia', 'el botón dice "Aportar a una historia"');
   const verde = await page.evaluate(() => {
-    const c = (sel) => getComputedStyle(document.querySelector(sel)).backgroundColor;
-    return { cta: c('.aportar-ahora'), invitar: c('.eco-c-colabs-btnrow button'), tabActivo: c('.tab-btn.active') };
+    const c = (sel, prop) => getComputedStyle(document.querySelector(sel))[prop];
+    return { cta: c('.aportar-ahora', 'backgroundColor'), invitar: c('.eco-c-colabs-btnrow button', 'color'), invitarBorde: c('.eco-c-colabs-btnrow button', 'borderTopColor'), tab: c('.tab-btn.active', 'borderBottomColor') };
   });
-  ok(verde.cta === 'rgb(77, 101, 66)' && verde.invitar === 'rgb(77, 101, 66)' && verde.tabActivo === 'rgb(77, 101, 66)', 'los botones clickeables están en verde');
-  ok(await page.locator('.tabs-row .tab-btn').count() === 2 && /dijeron de mí/.test(await page.textContent('.tabs-row')) && /yo dije de otros/.test(await page.textContent('.tabs-row')), '"Lo que dijeron de mí" y "Lo que yo dije de otros" quedan juntos como un menú');
+  const VERDE = 'rgb(77, 101, 66)';
+  ok(verde.cta === VERDE && verde.invitar === VERDE && verde.invitarBorde === VERDE && verde.tab === VERDE, 'lo clickeable va en verde: "Aportar a una historia" (lleno), "Invitar familiares" (contorno) y la pestaña activa (subrayado)');
+  ok(await page.evaluate(() => { const cta = document.querySelector('.aportar-ahora').getBoundingClientRect(); const menu = document.querySelector('.eco-c-menu').getBoundingClientRect(); return menu.top > cta.bottom + 12; }) && /Historias/i.test(await page.textContent('.eco-c-rotulo')), 'aportar y mirar son cosas distintas: el botón arriba y debajo la sección "Historias" con su menú');
+  ok(await page.locator('.eco-c-menu .tab-btn').count() === 2 && /dijeron de mí/.test(await page.textContent('.eco-c-menu')) && /yo dije de otros/.test(await page.textContent('.eco-c-menu')), '"Lo que dijeron de mí" y "Lo que yo dije de otros" quedan juntos como un menú');
+  await page.waitForTimeout(500);
   if (CAPTURAS) await page.screenshot({ path: path.join(CAPTURAS, 'colaboracion.png'), fullPage: true });
 
   await page.click('.eco-c-colabs-btnrow button');

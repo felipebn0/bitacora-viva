@@ -28,6 +28,7 @@
     "eval:conversacion": "node test/eval-conversacion.js",
     "test:portadas": "npx playwright test test/portadas-audiencia.playwright.js",
     "test:colaboracion": "node test/colaboracion.playwright.js",
+    "test:libro-fotos": "node test/libro-fotos.playwright.js",
     "test:libro-qr": "node test/libro-qr-defecto.playwright.js",
     "test:restablecer": "node test/restablecer-clave.playwright.js",
     "test:perfil-mascota": "node test/perfil-mascota.playwright.js",

@@ -77,7 +77,7 @@ const CAPTURAS = process.env.CAPTURAS_BEBE;
   const p = t.page;
   await p.goto(base + '/app.html');
   await p.waitForSelector('#ecoBebePill', { timeout: 8000 });
-  ok((await p.textContent('#ecoBebePill')) === 'Rafaela', 'el botón dentro de la sesión lleva el nombre: Rafaela');
+  ok((await p.textContent('#ecoBebePill')) === '👧 Rafaela', 'el botón dentro de la sesión lleva el nombre con su emoji: 👧 Rafaela');
   ok(await p.isHidden('#ecoBebePanel') && await p.evaluate(() => !document.documentElement.classList.contains('eco-bebe-activo')), 'al entrar todavía no cambia nada: sigue la sesión normal');
   const fondoNormal = await p.evaluate(() => getComputedStyle(document.body).backgroundColor);
   await p.click('#ecoBebePill');
@@ -137,7 +137,7 @@ const CAPTURAS = process.env.CAPTURAS_BEBE;
   // apagar el modo
   await p.click('#ecoBebePill');
   ok(await p.isHidden('#ecoBebePanel') && await p.evaluate(() => !document.documentElement.classList.contains('eco-bebe-activo') && !window.EcoBebe.activo()), 'tocar de nuevo el botón vuelve a la sesión normal');
-  ok((await p.textContent('#ecoBebePill')) === 'Rafaela', 'y el botón vuelve a decir el nombre del bebé');
+  ok((await p.textContent('#ecoBebePill')) === '👧 Rafaela', 'y el botón vuelve a decir el nombre del bebé');
   ok(!(t.estado.errores || []).length, 'sin errores de JavaScript' + ((t.estado.errores || []).length ? ': ' + t.estado.errores.join(' | ') : ''));
   await t.ctx.close();
 

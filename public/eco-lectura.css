@@ -20,7 +20,7 @@ body.eco-reader-open{overflow:hidden}
 .eco-reader-kicker{text-transform:uppercase;letter-spacing:.13em;color:#58744d;font-weight:700;font-size:.81rem;text-align:center}
 .eco-reader-page h2{text-align:center;font:700 clamp(2rem,5vw,3.1rem)/1.15 "Source Serif 4",Georgia,serif;color:#293d30;margin:14px 0}
 .eco-reader-meta{text-align:center;color:#817b70;font-size:.82rem;margin:0 0 42px}
-.eco-reader-text{white-space:pre-wrap;overflow-wrap:anywhere;font-family:"Source Serif 4",Georgia,serif;font-size:19px;line-height:1.85;color:#302d25;max-width:68ch;margin:auto}
+.eco-reader-text{overflow-wrap:anywhere;font-family:"Source Serif 4",Georgia,serif;font-size:19px;line-height:1.85;color:#302d25;max-width:68ch;margin:auto}
 .eco-reader-audios{margin-top:44px;border-top:1px solid #dadaca;padding-top:22px}
 .eco-reader-audios:empty{display:none}
 .eco-reader-audios h3{font:700 1.2rem "Source Serif 4",Georgia,serif;color:#293d30}
@@ -29,3 +29,6 @@ body.eco-reader-open{overflow:hidden}
 .eco-reader-overlay :focus-visible{outline:3px solid #986736;outline-offset:3px}
 @media(max-width:650px){#lista{grid-template-columns:1fr;gap:12px}#lista .chapter{padding:21px!important}.eco-reader-overlay{padding:0;align-items:stretch}.eco-reader{width:100%;height:100dvh;max-height:100dvh;border-radius:0}.eco-reader-page{padding:27px 21px 45px}.eco-reader-meta{margin-bottom:27px}.eco-reader-toolbar{padding:10px 14px}}
 @media(prefers-reduced-motion:reduce){.eco-reader *{scroll-behavior:auto!important}}
+
+.eco-reader-par{margin:0 0 1.1em;white-space:pre-wrap}
+.eco-reader-text::after{content:'';display:block;clear:both}

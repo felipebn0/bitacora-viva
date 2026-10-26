@@ -202,6 +202,14 @@ En **Perfiles** hay una sección "Agregar una mascota" (nombre, perro/gato/otro,
 
 En **Perfiles → Agregar un perfil** hay un selector (Familiar, Mascota, Bebé) que muestra las opciones de cada tipo. Un bebé es un subperfil con `bitacoras.tipo = 'bebe'` y su diario en `diario_bebe` con el mismo id (se crean juntos en `POST /api/subprofiles` con `tipo: 'bebe'`, `tratamiento` = niña/niño y `nacioEn` si ya nació). Como la mascota, quien lo administra SÍ puede narrar (`puedeNarrar`); dentro del perfil el modo del diario (paleta rosada o azul, subir fotos, charla del día a día) está siempre activo y el servidor lo aplica aunque el cliente no lo pida (`esPerfilBebe` en `/api/next`). El trato niña/niño es del bebé: a quien habla se le trata según el trato de su propia cuenta. En la pantalla principal sale un botón por cada bebé y mascota sin archivar (`public/eco-mascotas-inicio.js`). Un diario creado antes dentro de la propia bitácora (menú) sigue funcionando y aparece en Perfiles; los nuevos se crean solo desde Perfiles. Pruebas: `test/subperfiles.smoke.js` y `npm run test:perfil-mascota`.
 
+## Mi libro: barra de botones, fotos y lo diseñado (octubre 2026)
+
+- **Barra de Mi libro** (`public/eco-libro.js`, `eco-libro-barra.css`): dos grupos, "Tu libro" (Ver mis historias, Diseñar mi libro, Exportar en PDF) y "Armar capítulos" (voz del libro + Generar capítulos). Los botones que otros scripts agregan después se llevan solos al grupo del libro.
+- **Fotos del libro** (`public/eco-libro-fotos.js` y `.css`): una sola manera de colocarlas, igual en el estudio, la vista del libro y "Leer capítulo": la primera foto arriba a la derecha dentro del texto (el texto la rodea y luego sigue normal), las demás repartidas en partes iguales por el capítulo, con su pie de foto editable. Ya no hay tamaño ni posición por foto; solo "Incluir" y el pie. `pos: 'hide'` en `state.media` sigue significando "no incluir". El QR existente se deja ver; "Volver a comprobar el QR" ya no existe (queda "Crear QR de voz" solo si no hay QR).
+- **Lo diseñado se ve en Mi libro** (`public/eco-lectura.js`): la lista de capítulos sigue el orden y los títulos del borrador, y "Leer capítulo" muestra el texto editado y las fotos. Prueba: `npm run test:libro-fotos`.
+- **Colaboración**: "Aportar a una historia" es un botón aparte (con su nota) y debajo la sección "Historias" con un menú de dos pestañas subrayadas (lo que dijeron de mí / lo que yo dije de otros).
+- **Pantalla principal**: los botones de bebés y mascotas van en una sola fila (`.eco-especiales`), con emoji (bebé: 👧 👦 👶 según el sexo; mascota: 🐶 perro, 🐱 gato, 🐾 otra).
+
 ## Panel de consumo (`/admin.html`)
 
 Reporte de uso y costo estimado por perfil (cuenta dueña o subperfil): tokens de Claude (incluida la parte de prompt caching), caracteres de voz (ElevenLabs/Azure), tiempo hablado, y espacio ocupado en la base de datos. Pensado para los dueños del producto, no para cuentas normales.

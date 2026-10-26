@@ -8,11 +8,21 @@
   const tabs=main.querySelector('.tabs-row');
   if(!cta||!tabs)return;
   main.dataset.ecoVistaCompacta='1';
+  // Dos cosas distintas: ACTUAR (aportar a una historia) y MIRAR (lo que dijeron de mí / lo que yo dije de otros).
   const bar=document.createElement('div');
   bar.className='eco-c-actionbar';
   tabs.parentNode.insertBefore(bar,tabs);
-  bar.append(cta,tabs);
+  const nota=document.createElement('p');
+  nota.className='eco-c-cta-nota';
+  nota.textContent='Cuenta un recuerdo en la bitácora de otra persona.';
+  bar.append(cta,nota);
   cta.textContent='Aportar a una historia';
+  tabs.classList.add('eco-c-menu');
+  tabs.setAttribute('aria-label','Historias');
+  const rotulo=document.createElement('h2');
+  rotulo.className='eco-c-rotulo';
+  rotulo.textContent='Historias';
+  tabs.parentNode.insertBefore(rotulo,tabs);
 
   // Familiares: "Quiénes han colaborado" es lo mismo que "Aportes recibidos", así que solo queda
   // el botón de invitar.

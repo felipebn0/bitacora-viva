@@ -1,0 +1,23 @@
+/* Mi libro: la barra de botones en dos grupos claros.
+   "Tu libro" (ver historias, diseñar, exportar) y "Armar capítulos" (voz del libro + generar).
+   Va al final de capitulos.html, después de las demás hojas de esta página. */
+body>header { display: block !important; }
+body>header .eco-book-header-tools { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; max-width: 100%; margin-top: 20px; }
+.eco-book-grupo { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; justify-content: flex-start; max-width: 100%; }
+.eco-book-grupo-capitulos { width: fit-content; max-width: min(100%, 620px); padding: 12px 14px; background: #fffdf6; border: 1px solid #dadaca; border-radius: 16px; }
+.eco-book-grupo-capitulos .persona-field { display: flex; flex-direction: column; gap: 4px; }
+.eco-book-grupo-capitulos .eco-book-narration-label { margin: 0; line-height: 1.2; }
+.eco-book-grupo-capitulos #status { flex: 0 0 100%; max-width: none !important; margin: 0; min-height: 0; text-align: left; }
+.eco-book-grupo-capitulos #status:empty { display: none; }
+.eco-book-grupo .eco-libro-exportar { margin: 0 !important; }
+.eco-book-grupo .eco-libro-exportar-msg { flex: 0 0 100%; text-align: left; }
+.eco-book-grupo-libro .eco-book-btn { margin: 0; }
+@media (max-width: 820px) {
+  body>header .eco-book-header-tools { align-items: stretch; }
+  .eco-book-grupo { justify-content: flex-start; }
+  .eco-book-grupo-libro > * { flex: 1 1 140px; }
+  .eco-book-grupo-capitulos { align-items: flex-end; }
+  .eco-book-grupo-capitulos .persona-field { flex: 1 1 220px; }
+  .eco-book-grupo-capitulos #personaSelect { width: 100% !important; }
+  .eco-book-grupo-capitulos .generar { flex: 1 1 160px; }
+}

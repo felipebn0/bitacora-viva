@@ -1,0 +1,6 @@
+/* Fotos del libro: arriba a la derecha dentro del texto; el texto la rodea y, al terminar la foto, sigue normal. */
+.eco-foto-flota { float: right; width: 42%; max-width: 90mm; margin: 4px 0 12px 20px; padding: 0; break-inside: avoid; page-break-inside: avoid; }
+.eco-foto-flota img { display: block; width: 100%; height: auto; max-height: 110mm; object-fit: contain; border-radius: 6px; background: #ede9df; }
+.eco-foto-flota figcaption { font: italic 0.82rem/1.45 "Source Serif 4", Georgia, serif; color: #777568; margin-top: 5px; text-align: left; }
+.eco-foto-fin { clear: both; }
+@media (max-width: 520px) { .eco-foto-flota { width: 46%; margin-left: 14px; } }

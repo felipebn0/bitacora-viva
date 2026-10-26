@@ -8,20 +8,19 @@
     hecho = true;
     // Solo en tu propia bitácora: dentro del perfil de otra persona o de una mascota no se muestra.
     if (window.bitacoraActivaId) return;
-    const area = document.querySelector('.body-area');
-    if (!area) return;
     try {
       const resp = await fetch('/api/subprofiles', { credentials: 'same-origin' });
       if (!resp.ok) return;
       const mascotas = ((await resp.json()).perfiles || []).filter((p) => p.tipo === 'mascota' || p.tipo === 'bebe');
       if (!mascotas.length) return;
-      const fila = document.createElement('div');
-      fila.className = 'eco-mascotas-fila';
+      const C = window.EcoBebeComun;
+      const fila = C.filaEspecial();
+      if (!fila) return;
       mascotas.forEach((m) => {
         const b = document.createElement('button');
         b.type = 'button';
         b.className = 'eco-bebe-pill ' + (m.tipo === 'bebe' ? 'eco-bebe-pill-bebe' : 'eco-mascota-pill');
-        b.textContent = m.nombre + ' ›';
+        b.textContent = (m.tipo === 'bebe' ? C.emojiBebe(m.tratamiento) : C.emojiMascota(m.especie)) + ' ' + m.nombre;
         b.setAttribute('aria-label', 'Contar la vida de ' + m.nombre);
         b.addEventListener('click', async () => {
           b.disabled = true;
@@ -33,7 +32,6 @@
         });
         fila.appendChild(b);
       });
-      area.insertBefore(fila, area.firstChild);
     } catch (e) { /* sin mascotas: la pantalla sigue igual */ }
   }
 
