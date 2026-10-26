@@ -3327,11 +3327,11 @@ app.get('/api/subprofiles', requireAuth, bloquearColaborador, bloquearInvitado, 
     const propia = await sql`SELECT name FROM users WHERE id = ${req.userId}`;
     const nombrePropio = capitalizarNombre((propia[0] && propia[0].name) || '') || req.username;
     const subperfiles = await sql`SELECT id, nombre, relacion, contexto_onboarding, tratamiento, tipo, especie, raza FROM bitacoras WHERE admin_user_id = ${req.userId} AND archived_at IS NULL ORDER BY created_at ASC`;
-    const diario = (await sql`SELECT nombre, to_char(nacio_en, 'YYYY-MM-DD') AS nacio_en FROM diario_bebe WHERE profile_user_id = ${req.userId} AND archived_at IS NULL`)[0];
+    const diario = (await sql`SELECT nombre, genero, to_char(nacio_en, 'YYYY-MM-DD') AS nacio_en FROM diario_bebe WHERE profile_user_id = ${req.userId} AND archived_at IS NULL`)[0];
     const diariosDeBebes = await sql`SELECT d.profile_user_id AS id, to_char(d.nacio_en, 'YYYY-MM-DD') AS nacio_en FROM diario_bebe d JOIN bitacoras b ON b.id = d.profile_user_id WHERE b.admin_user_id = ${req.userId} AND b.tipo = 'bebe'`;
     const estadoDeBebe = new Map(diariosDeBebes.map((d) => [d.id, d.nacio_en ? 'nacida' : 'en_camino']));
     res.json({
-      diarioBebe: diario ? { nombre: diario.nombre, estado: diario.nacio_en ? 'nacida' : 'en_camino' } : null,
+      diarioBebe: diario ? { nombre: diario.nombre, genero: diario.genero || null, estado: diario.nacio_en ? 'nacida' : 'en_camino' } : null,
       perfiles: [
         { id: req.userId, nombre: nombrePropio, esPropia: true },
         ...subperfiles.map((s) => ({ id: s.id, nombre: capitalizarNombre(s.nombre), relacion: s.relacion || null, tratamiento: tratamientoValido(s.tratamiento), tieneOnboarding: !!s.contexto_onboarding, esPropia: false, ...(s.tipo === 'mascota' ? { tipo: 'mascota', especie: s.especie || 'perro', raza: s.raza || null } : {}), ...(s.tipo === 'bebe' ? { tipo: 'bebe', estado: estadoDeBebe.get(s.id) || 'en_camino' } : {}) })),

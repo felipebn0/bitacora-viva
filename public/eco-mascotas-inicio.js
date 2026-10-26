@@ -15,14 +15,35 @@
     try {
       const resp = await fetch('/api/subprofiles', { credentials: 'same-origin' });
       if (!resp.ok) return;
-      const perfiles = (await resp.json()).perfiles || [];
+      const datos = await resp.json();
+      const perfiles = datos.perfiles || [];
+      // Diario de bebé creado dentro de tu propia bitácora (el modo anterior): fuera de ella también sale su botón.
+      const diario = idActivo ? datos.diarioBebe : null;
       const especiales = perfiles.filter((p) => p.tipo === 'mascota' || p.tipo === 'bebe');
-      if (!especiales.length) return;
+      if (!especiales.length && !diario) return;
       const C = window.EcoBebeComun;
       const fila = C.filaEspecial();
       if (!fila) return;
       const propia = perfiles.find((p) => p.esPropia);
       const lista = idActivo && propia ? [propia, ...especiales] : especiales;
+      if (diario && propia) {
+        const d = document.createElement('button');
+        d.type = 'button';
+        d.className = 'eco-bebe-pill eco-pill-bebe';
+        d.textContent = C.emojiBebe(diario.genero) + ' ' + diario.nombre;
+        d.setAttribute('aria-label', 'Abrir el diario de ' + diario.nombre);
+        d.addEventListener('click', async () => {
+          d.disabled = true;
+          // Va a tu bitácora con el modo del diario abierto.
+          try { localStorage.setItem('eco-bebe-activo', '1'); } catch (e) { /* nada */ }
+          try {
+            const r = await fetch('/api/subprofiles/switch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: propia.id }) });
+            if (r.ok) { location.reload(); return; }
+          } catch (e) { /* se reintenta con otro toque */ }
+          d.disabled = false;
+        });
+        fila.appendChild(d);
+      }
       lista.forEach((p) => {
         const b = document.createElement('button');
         b.type = 'button';

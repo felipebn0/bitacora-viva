@@ -50,3 +50,9 @@ html.eco-mascota-activo .subperfil-banner { background: var(--cafe-claro) !impor
   :root:not([data-theme="light"]) .eco-especiales .eco-pill-propia[aria-current="true"], :root:not([data-theme="light"]) .eco-bebe-pill.eco-pill-propia[aria-pressed="true"] { background: #36402A; }
   :root:not([data-theme="light"]) .eco-especiales .eco-pill-mascota[aria-current="true"] { background: #4A3A12; }
 }
+
+/* Orden fijo de la fila: la persona, el diario de bebé de su bitácora, los bebés y al final las mascotas. */
+.eco-especiales .eco-pill-propia { order: 0; }
+.eco-especiales .eco-bebe-fila { order: 1; }
+.eco-especiales .eco-pill-bebe { order: 2; }
+.eco-especiales .eco-pill-mascota { order: 3; }

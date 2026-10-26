@@ -8,6 +8,9 @@ let fallos = 0;
 const ok = (c, m) => { if (c) console.log('✓ ' + m); else { fallos++; console.error('✗ ' + m); } };
 const CAPTURAS = process.env.CAPTURAS_MASCOTA;
 
+// Textos de los botones de la fila en el orden en que se ven (de izquierda a derecha).
+const enOrden = (page) => page.locator('.eco-especiales button:visible').evaluateAll((bs) => bs.sort((a, b) => Math.round(a.getBoundingClientRect().top / 10) - Math.round(b.getBoundingClientRect().top / 10) || a.getBoundingClientRect().left - b.getBoundingClientRect().left).map((b) => b.textContent.trim()));
+
 (async () => {
   const app = express();
   app.use(express.static(path.join(__dirname, '..', 'public')));
@@ -90,7 +93,7 @@ const CAPTURAS = process.env.CAPTURAS_MASCOTA;
     const u = new URL(route.request().url());
     const json = (o) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(o) });
     if (u.pathname === '/api/me') return json({ username: 'felipe', name: 'Felipe', email: 'f@x.com', isCollaborator: false, isGuest: false, puedeNarrar: true, bitacoraActiva: { id: 77, nombre: 'Roma', tipo: 'mascota', especie: 'perro' } });
-    if (u.pathname === '/api/subprofiles') return json({ perfiles: [{ id: 1, nombre: 'Felipe Bernal', esPropia: true }, { id: 77, nombre: 'Roma', esPropia: false, tipo: 'mascota', especie: 'perro' }] });
+    if (u.pathname === '/api/subprofiles') return json({ perfiles: [{ id: 1, nombre: 'Felipe Bernal', esPropia: true }, { id: 77, nombre: 'Roma', esPropia: false, tipo: 'mascota', especie: 'perro' }], diarioBebe: { nombre: 'Luna', genero: 'femenino', estado: 'en_camino' } });
     return json({});
   });
   await p2.goto(base + '/app.html');
@@ -101,8 +104,8 @@ const CAPTURAS = process.env.CAPTURAS_MASCOTA;
   await p2.waitForTimeout(700);
   const mascotaTema = await p2.evaluate(() => ({ clase: document.documentElement.classList.contains('eco-mascota-activo'), fondo: getComputedStyle(document.body).backgroundColor, orbe: getComputedStyle(document.getElementById('orb')).backgroundColor, volver: getComputedStyle(document.getElementById('subperfilVolverBtn')).display }));
   ok(mascotaTema.clase && mascotaTema.fondo === 'rgb(244, 236, 227)' && mascotaTema.orbe === 'rgb(181, 139, 99)', 'perfil de la mascota: colores café tenue (fondo y botón de hablar)');
-  const filaMascota = await p2.locator('.eco-especiales button').allTextContents();
-  ok(filaMascota.length === 2 && /Felipe/.test(filaMascota[0]) && /Roma/.test(filaMascota[1]) && mascotaTema.volver === 'none', 'perfil de la mascota: arriba están los botones para volver a Felipe o ir a la mascota (sin el botón suelto de volver)');
+  const filaMascota = await enOrden(p2);
+  ok(filaMascota.length === 3 && /Felipe/.test(filaMascota[0]) && /👧 Luna/.test(filaMascota[1]) && /🐶 Roma/.test(filaMascota[2]) && mascotaTema.volver === 'none', 'perfil de la mascota: arriba, en orden, Felipe, el diario del bebé (Luna) y la mascota (sin el botón suelto de volver)');
   if (CAPTURAS) await p2.screenshot({ path: path.join(CAPTURAS, 'app-mascota.png') });
   // "Ir a Felipe" desde la mascota no debe reabrir el diario de tu propia bitácora (el modo recordado)
   await p2.evaluate(() => localStorage.setItem('eco-bebe-activo', '1'));
@@ -167,7 +170,7 @@ const CAPTURAS = process.env.CAPTURAS_MASCOTA;
     const json = (o) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(o) });
     if (u.pathname === '/api/me') return json({ username: 'felipe', name: 'Felipe', email: 'f@x.com', isCollaborator: false, isGuest: false, puedeNarrar: true, bitacoraActiva: { id: 78, nombre: 'Rafaela', tipo: 'bebe' } });
     if (u.pathname === '/api/bebe') return json({ config: { nombre: 'Rafaela', genero: 'femenino', nacioEn: null, estado: 'en_camino' }, puedeEditar: true, entradas: [] });
-    if (u.pathname === '/api/subprofiles') return json({ perfiles: [{ id: 1, nombre: 'Felipe', esPropia: true }, { id: 77, nombre: 'Roma', esPropia: false, tipo: 'mascota', especie: 'perro' }, { id: 78, nombre: 'Rafaela', tratamiento: 'femenino', esPropia: false, tipo: 'bebe', estado: 'en_camino' }] });
+    if (u.pathname === '/api/subprofiles') return json({ perfiles: [{ id: 1, nombre: 'Felipe', esPropia: true }, { id: 77, nombre: 'Roma', esPropia: false, tipo: 'mascota', especie: 'perro' }, { id: 78, nombre: 'Rafaela', tratamiento: 'femenino', esPropia: false, tipo: 'bebe', estado: 'en_camino' }], diarioBebe: { nombre: 'Luna', genero: 'femenino', estado: 'en_camino' } });
     return json({});
   });
   await p6.goto(base + '/app.html');
@@ -176,10 +179,15 @@ const CAPTURAS = process.env.CAPTURAS_MASCOTA;
   ok(await p6.evaluate(() => document.documentElement.classList.contains('eco-bebe-activo') && window.EcoBebe.activo()), 'perfil del bebé: el modo rosado del diario ya está activo');
   ok(await p6.isHidden('#ecoBebePill'), 'perfil del bebé: no hay botón para entrar o salir del modo');
   await p6.waitForSelector('.eco-especiales .eco-pill-propia');
-  const filaBebe = await p6.locator('.eco-especiales button:visible').allTextContents();
-  ok(filaBebe.length === 3 && /Felipe/.test(filaBebe[0]) && filaBebe.some((x) => /Roma/.test(x)) && filaBebe.some((x) => /Rafaela/.test(x)), 'perfil del bebé: arriba están los botones de Felipe, de la mascota y del bebé');
+  const filaBebe = await enOrden(p6);
+  ok(filaBebe.length === 4 && /Felipe/.test(filaBebe[0]) && /Luna/.test(filaBebe[1]) && /Rafaela/.test(filaBebe[2]) && /Roma/.test(filaBebe[3]), 'perfil del bebé: arriba, en orden, Felipe, el diario del bebé (Luna), el bebé y la mascota');
   const colBebe = await p6.evaluate(() => { const c = (s) => getComputedStyle(document.querySelector(s)).borderTopColor; return { propia: c('.eco-pill-propia'), mascota: c('.eco-pill-mascota') }; });
   ok(colBebe.propia === 'rgb(138, 160, 112)' && colBebe.mascota === 'rgb(217, 164, 65)', 'estando en el bebé: Felipe sale en verde y la mascota en amarillo');
+  let cambioDiario = null;
+  await p6.route('**/api/subprofiles/switch', (route) => { cambioDiario = JSON.parse(route.request().postData()).id; route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }); });
+  await p6.locator('.eco-especiales button', { hasText: 'Luna' }).click();
+  const tl = Date.now(); while (cambioDiario === null && Date.now() - tl < 4000) await p6.waitForTimeout(50);
+  ok(cambioDiario === 1, 'el botón del diario de bebé lleva a tu bitácora (con ese diario abierto)');
   ok(await p6.locator('.eco-pill-bebe[aria-current="true"]').count() === 1, 'y el del bebé activo va resaltado');
   if (CAPTURAS) await p6.screenshot({ path: path.join(CAPTURAS, 'perfil-bebe.png') });
 
