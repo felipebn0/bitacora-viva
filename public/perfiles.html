@@ -403,6 +403,7 @@
     const cambiarId = e.target.dataset.cambiar;
     if (cambiarId) {
       try {
+        try { localStorage.setItem('eco-bebe-activo', '0'); } catch (e8) {}
         const resp = await fetch('/api/subprofiles/switch', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: Number(cambiarId) }),
         });

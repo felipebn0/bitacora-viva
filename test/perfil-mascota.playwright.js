@@ -104,6 +104,12 @@ const CAPTURAS = process.env.CAPTURAS_MASCOTA;
   const filaMascota = await p2.locator('.eco-especiales button').allTextContents();
   ok(filaMascota.length === 2 && /Felipe/.test(filaMascota[0]) && /Roma/.test(filaMascota[1]) && mascotaTema.volver === 'none', 'perfil de la mascota: arriba están los botones para volver a Felipe o ir a la mascota (sin el botón suelto de volver)');
   if (CAPTURAS) await p2.screenshot({ path: path.join(CAPTURAS, 'app-mascota.png') });
+  // "Ir a Felipe" desde la mascota no debe reabrir el diario de tu propia bitácora (el modo recordado)
+  await p2.evaluate(() => localStorage.setItem('eco-bebe-activo', '1'));
+  await p2.click('.eco-pill-propia');
+  await p2.waitForLoadState('load');
+  await p2.waitForTimeout(500);
+  ok(await p2.evaluate(() => localStorage.getItem('eco-bebe-activo')) === '0', 'al ir a Felipe desde la mascota se olvida el modo del diario (si no, abría el del bebé)');
 
   // una persona administrada sigue sin botón de hablar
   const p3 = await ctx.newPage();

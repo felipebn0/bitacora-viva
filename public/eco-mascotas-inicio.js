@@ -36,6 +36,8 @@
         b.addEventListener('click', async () => {
           if (activo) return;
           b.disabled = true;
+          // Al cambiar de perfil se olvida el modo del diario de tu propia bitácora: si no, "ir a Felipe" volvía a abrir el del bebé.
+          try { localStorage.setItem('eco-bebe-activo', '0'); } catch (e) { /* nada */ }
           try {
             const r = await fetch('/api/subprofiles/switch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id }) });
             if (r.ok) { location.reload(); return; }

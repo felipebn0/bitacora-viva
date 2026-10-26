@@ -2129,6 +2129,7 @@
   window.bitacoraActivaId = null;
 
   subperfilVolverBtn.addEventListener('click', async () => {
+    try { localStorage.setItem('eco-bebe-activo', '0'); } catch (e) {}
     try { await fetch('/api/subprofiles/switch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }); } catch (e) {}
     window.location.href = '/app.html';
   });
@@ -4219,7 +4220,7 @@
 </script>
 <script src="/eco-toast.js" defer></script>
 <script src="/eco-bebe-comun.js?v=6" defer></script>
-<script src="/eco-mascotas-inicio.js?v=3" defer></script>
+<script src="/eco-mascotas-inicio.js?v=4" defer></script>
 <script src="/eco-bebe.js?v=12" defer></script>
 <script src="/eco-crisis-banner.js?v=3" defer></script>
 <script src="/eco-intro.js?v=1" defer></script>
