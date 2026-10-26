@@ -232,6 +232,7 @@
   }
 
   let perfilesCache = [];
+  let diarioBebe = null; // diario de un bebé de tu propia bitácora, si hay uno sin archivar
   let enlaceAbiertoId = null;
   let activaId = null; // window.bitacoraActivaId, si /api/me lo trae
 
@@ -275,12 +276,32 @@
     </div>`;
   }
 
+  function filaDiario() {
+    if (!diarioBebe) return '';
+    const estado = diarioBebe.estado === 'nacida' ? 'ya llegó' : 'en camino';
+    return `<div class="perfil-card">
+      <div class="fila-principal">
+        <div class="identidad">
+          <div class="avatar">${escaparHtml((diarioBebe.nombre || '?').trim().charAt(0).toUpperCase())}</div>
+          <div>
+            <p class="nombre">${escaparHtml(diarioBebe.nombre)}</p>
+            <span class="principal-tag">Diario de bebé · ${estado}</span>
+          </div>
+        </div>
+        <div class="acciones-fila">
+          <a class="btn small" href="/diario-bebe.html">Abrir el diario</a>
+          <button class="btn small plain warn" data-archivar-diario="1" type="button">Archivar</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
   function pintarPerfiles() {
     if (!perfilesCache.length) {
       lista.innerHTML = '<p class="empty">No se pudieron cargar tus perfiles.</p>';
       return;
     }
-    lista.innerHTML = perfilesCache.map(filaPerfil).join('');
+    lista.innerHTML = perfilesCache.map(filaPerfil).join('') + filaDiario();
   }
 
   async function cargarPerfiles() {
@@ -295,6 +316,7 @@
         return;
       }
       perfilesCache = data.perfiles || [];
+      diarioBebe = data.diarioBebe || null;
       listaStatus.textContent = perfilesCache.length === 1 ? 'Se cargó 1 perfil.' : `Se cargaron ${perfilesCache.length} perfiles.`;
       pintarPerfiles();
     } catch (e) {
@@ -402,6 +424,18 @@
         enlaceAbiertoId = null;
         pintarPerfiles();
       } catch (e4) {}
+      return;
+    }
+    if (e.target.dataset.archivarDiario) {
+      if (!confirm(`¿Archivar el diario de ${(diarioBebe && diarioBebe.nombre) || 'tu bebé'}? Deja de aparecer aquí y en la pantalla principal. No se borra nada.`)) return;
+      try {
+        const resp = await fetch('/api/bebe/archivar', { method: 'POST' });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) { listaStatus.textContent = mensajeDeError(resp, data, 'No se pudo archivar el diario.'); return; }
+        await cargarPerfiles();
+      } catch (e7) {
+        listaStatus.textContent = 'No se pudo conectar. Intenta de nuevo.';
+      }
       return;
     }
     const archivarId = Number(e.target.dataset.archivar);

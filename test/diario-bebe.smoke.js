@@ -38,7 +38,12 @@ function fakeSql(strings, ...v) {
   if (text.includes('SELECT 1 FROM collaborations WHERE collaborator_user_id')) {
     return Promise.resolve(colaboraciones.some((c) => c.collaborator_user_id === v[0] && c.owner_user_id === v[1]) ? [{ x: 1 }] : []);
   }
-  if (text.includes('FROM diario_bebe WHERE profile_user_id')) { const d = diarios.find((x) => x.profile_user_id === v[0]); return Promise.resolve(d ? [d] : []); }
+  if (text.includes('UPDATE diario_bebe SET archived_at')) {
+    const d = diarios.find((x) => x.profile_user_id === v[0] && !x.archivado);
+    if (d) d.archivado = true;
+    return Promise.resolve(d ? [{ profile_user_id: d.profile_user_id }] : []);
+  }
+  if (text.includes('FROM diario_bebe WHERE profile_user_id')) { const d = diarios.find((x) => x.profile_user_id === v[0] && !x.archivado); return Promise.resolve(d ? [d] : []); }
   if (text.includes('INSERT INTO diario_bebe (')) {
     const fila = { profile_user_id: v[0], nombre: v[1], genero: v[2], nacio_en: v[3] };
     diarios = diarios.filter((x) => x.profile_user_id !== v[0]).concat(fila);
@@ -223,6 +228,21 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
   ok(r.status === 404 && entradas.length === 2, 'otra cuenta no logra borrar una entrada ajena (404)');
   r = await request(server, { path: `/api/bebe/entradas/${entradaFoto.id}`, method: 'DELETE' }, paula);
   ok(r.status === 200 && entradas.length === 1 && borrados.includes(fotoUrl) && borrados.includes(voz2), 'ella borra la entrada y también se borran la foto y las notas de voz guardadas');
+
+  // Archivar: deja de verse y se puede recuperar creándolo de nuevo
+  r = await request(server, { path: '/api/bebe/archivar', method: 'POST' }, abuela);
+  ok(diarios.some((d) => d.profile_user_id === 1 && !d.archivado), 'archivar desde otra cuenta no toca el diario de Paula (solo archiva el propio)');
+  r = await request(server, { path: '/api/bebe/archivar', method: 'POST' }, paula);
+  ok(r.status === 200, 'Paula archiva su diario');
+  r = await request(server, { path: '/api/bebe' }, paula);
+  ok(r.status === 200 && r.json.config === null && r.json.entradas.length === 0, 'archivado: ya no hay diario en la pantalla principal');
+  r = await request(server, { path: '/api/bebe/entradas', method: 'POST', body: { texto: 'nota' } }, paula);
+  ok(r.status === 409, 'y no se le agregan notas mientras está archivado');
+  r = await request(server, { path: '/api/bebe/archivar', method: 'POST' }, paula);
+  ok(r.status === 404, 'archivarlo otra vez no hace nada (404)');
+  r = await request(server, { path: '/api/bebe', method: 'PUT', body: { nombre: 'Rafaela', genero: 'femenino' } }, paula);
+  r = await request(server, { path: '/api/bebe' }, paula);
+  ok(r.json.config && r.json.config.nombre === 'Rafaela', 'crear el diario de nuevo lo recupera');
 
   server.close();
   console.log(`\n${pasaron} pasaron, ${fallaron} fallaron`);

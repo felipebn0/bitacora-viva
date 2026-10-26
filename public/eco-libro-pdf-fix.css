@@ -1,7 +1,7 @@
 /* ECO: corrección de hoja en blanco al imprimir el Estudio Editorial.
    Cargado al FINAL de todos los estilos de libro, incluido fase 4. */
 @media print{
- @page{margin:0}
+ @page{size:A4;margin:18mm 18mm 20mm 18mm}
  html,body{width:auto!important;height:auto!important;min-height:0!important;overflow:visible!important;
   display:block!important;position:static!important;visibility:visible!important;background:white!important}
  body{margin:0!important;padding:0!important}
@@ -23,12 +23,12 @@
   display:block!important;visibility:visible!important;opacity:1!important;transform:none!important;
   box-shadow:none!important;background:white!important;color:#302d25!important;
   box-sizing:border-box!important;margin:0!important;min-height:0!important;height:auto!important;
-  width:100%!important;max-width:none!important;padding:18mm 15mm!important;overflow:visible!important;
+  width:100%!important;max-width:none!important;padding:0!important;overflow:visible!important;
   break-before:page!important;page-break-before:always!important;break-after:auto!important;page-break-after:auto!important;
  }
  #ecoEditorialDialog #ecoEditorialBook>.eco-editorial-page:first-child{break-before:auto!important;page-break-before:auto!important}
  #ecoEditorialDialog #ecoEditorialBook>.eco-editorial-cover{display:flex!important;flex-direction:column!important;
-  align-items:center!important;justify-content:center!important;text-align:center!important;min-height:180mm!important}
+  align-items:center!important;justify-content:center!important;text-align:center!important;min-height:calc(var(--eco-print-alto,259mm) - 2mm)!important;box-sizing:border-box!important}
  #ecoEditorialDialog .eco-editorial-top,#ecoEditorialDialog .eco-editorial-topbuttons,
  #ecoEditorialDialog .eco-editorial-warning,#ecoEditorialDialog .eco-editorial-sidebar,
  #ecoEditorialDialog .eco-print4-settings{display:none!important}

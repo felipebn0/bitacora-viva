@@ -312,7 +312,7 @@
 <script src="/eco-colaborar-orbe.js?v=1" defer></script>
 <link rel="stylesheet" href="/eco-colaborar-rediseno.css?v=3">
 <link rel="stylesheet" href="/eco-crisis-banner.css?v=3">
-<script src="/eco-colaborar-rediseno.js?v=1" defer></script>
+<script src="/eco-colaborar-rediseno.js?v=1b" defer></script>
 <script src="/eco-crisis-banner.js?v=3" defer></script>
 <script src="/eco-audio-exclusivo.js" defer></script>
 <script src="/eco-audio-player.js" defer></script>
@@ -421,7 +421,7 @@
          arbol.html/capitulos.html/colaboraciones.html/historias.html — antes
          era una fila de 3 íconos que no existía en ninguna otra página. -->
     <nav class="topbar pc-93b8ea5b" id="ownTopbar" aria-label="Tu bitácora">
-      <a class="volver" href="/app.html">← volver a mi bitácora</a>
+      <a class="volver" href="/colaboraciones.html">← Volver a Colaboración</a>
     </nav>
 
     <header>
@@ -441,7 +441,7 @@
     </div>
 
     <div class="aportes">
-      <h2>Aportar una historia</h2>
+      <h2>Aportar a una historia</h2>
 
       <!-- role="log" aria-relevant="additions text": es una charla que va
            creciendo con cada turno — el lector de pantalla debe anunciar
@@ -708,7 +708,11 @@
         guestOwnerName.textContent = data.ownerName || '';
         guestHola.textContent = 'Hola, ' + data.nombre;
         if (conCuenta) {
-          guestNotice.textContent = 'Ya tienes una cuenta abierta en este navegador. Para entrar con este enlace personal, abre el enlace en una ventana privada o cierra sesión primero.';
+          // Ya hay una cuenta abierta: si su celular es el de la invitación, se entra con esa misma cuenta.
+          const vincular = await fetch('/api/invitacion-vincular', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ invitacion: invitacionUrl }) });
+          const resultado = await vincular.json().catch(() => ({}));
+          if (vincular.ok && resultado.ownerId) { location.replace('/colaborar.html?owner=' + encodeURIComponent(resultado.ownerId)); return; }
+          guestNotice.textContent = resultado.error || 'Ya tienes una cuenta abierta en este navegador. Para entrar con este enlace personal, abre el enlace en una ventana privada o cierra sesión primero.';
           return;
         }
         guestStartBtn.style.display = '';
@@ -1928,7 +1932,5 @@
   cargarAportes();
 })();
 </script>
-<link rel="stylesheet" href="/eco-bebe.css?v=1">
-<script src="/eco-bebe-familia.js?v=1" defer></script>
 </body>
 </html>

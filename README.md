@@ -189,6 +189,15 @@ Datos y rutas (`bebe-routes.js`, tablas `diario_bebe` y `diario_bebe_entradas`):
 
 En **Perfiles** hay una sección "Agregar una mascota" (nombre, perro/gato/otro, raza, macho o hembra, fecha). Es un subperfil con `bitacoras.tipo = 'mascota'` (más `especie` y `raza`). Como la mascota no puede hablar, quien la administra **sí puede narrar** su vida (`requireAuth` pone `puedeNarrar = true` solo para mascotas; las personas administradas siguen sin poder). En `/api/next` la charla agrega `instruccionMascota` (tercera persona, centro en su vida con la familia, sin trato de persona) y arranca con `inicioMascota`; el resumen de memoria y el aporte de familiares (`/api/contribute-chat`) también se adaptan. Los familiares aportan con el enlace del perfil igual que en cualquier subperfil. La ficha (nombre, especie, raza) va como dato no confiable. Pruebas: casos de mascota en `test/subperfiles.smoke.js` y `test/perfil-mascota.playwright.js` (`npm run test:perfil-mascota`). Los capítulos del libro todavía usan el texto pensado para personas.
 
+## Cambios de uso (octubre 2026)
+
+- **Celular para compartir** (`public/eco-telefono.js`): menú con bandera (Colombia +57, Estados Unidos +1) y solo los 10 dígitos. Se usa al invitar (pantalla principal y Colaboración) y en el perfil de la cuenta (que ahora guarda el celular). Al servidor viaja completo (`+573001234567`). Los enlaces de los mensajes salen siempre con https (`urlBase`: ignora un `PUBLIC_BASE_URL` que no sea una dirección web).
+- **Entrar con tu cuenta desde un enlace personal** (`POST /api/invitacion-vincular`): si el celular de tu cuenta es el de la invitación, te sumas como colaborador sin cerrar sesión. Prueba: `test/invitacion-vincular.smoke.js`.
+- **Colaboración**: sin "Quiénes han colaborado" (queda "Invitar familiares"), menú de dos opciones, botones verdes, "Aportar a una historia" y el enlace de volver lleva a Colaboración. Prueba: `npm run test:colaboracion`.
+- **Mi libro**: ya no hay importar/exportar borrador; los capítulos con grabaciones llevan su QR de voz por defecto (el que se retira a propósito queda en `qrOff` y no vuelve solo; `npm run test:libro-qr`); el PDF sale en A4 por defecto con márgenes en la hoja (`@page`), así que un capítulo largo conserva el margen en todas las páginas.
+- **Fusionar personas del árbol** (`POST /api/tree/merge`): si una es "Yo", esa se conserva con el nombre más completo; lo que apuntaba a cualquiera de los dos nombres (hijos, recuerdos) apunta a la persona fusionada. Prueba: `test/arbol-fusion.smoke.js`.
+- **Diario de bebé en Perfiles**: aparece como un perfil más y se puede archivar (`POST /api/bebe/archivar`); archivado no sale en la pantalla principal. Las mascotas no archivadas salen como un botón en la pantalla principal (`public/eco-mascotas-inicio.js`).
+
 ## Panel de consumo (`/admin.html`)
 
 Reporte de uso y costo estimado por perfil (cuenta dueña o subperfil): tokens de Claude (incluida la parte de prompt caching), caracteres de voz (ElevenLabs/Azure), tiempo hablado, y espacio ocupado en la base de datos. Pensado para los dueños del producto, no para cuentas normales.

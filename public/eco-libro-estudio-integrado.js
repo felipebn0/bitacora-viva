@@ -5,7 +5,7 @@ let chapters=[],stories=[],state={},activeId='',dialog,book,form,list,status,mod
 const byId=id=>document.getElementById(id);
 const node=(tag,cls,value)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(value!==undefined)e.textContent=value;return e};
 const plain=t=>String(t||'');
-function fresh(){return {title:'Mi historia familiar',subtitle:'Recuerdos para las próximas generaciones',dedication:'',order:[],edits:{},media:{},bookPhotos:{},qr:{}}}
+function fresh(){return {title:'Mi historia familiar',subtitle:'Recuerdos para las próximas generaciones',dedication:'',order:[],edits:{},media:{},bookPhotos:{},qr:{},qrOff:{}}}
 function read(){try{const x=JSON.parse(localStorage.getItem(KEY)||'null');if(x&&typeof x==='object'){return {...fresh(),...x,edits:typeof x.edits==='object'&&x.edits?x.edits:{},order:Array.isArray(x.order)?x.order:[]}}}catch{}return fresh()}
 let version=0,saveTimer=null,saving=Promise.resolve(),dirty=false,serverReady=false;
 function persist(){
@@ -24,11 +24,11 @@ function flush(){
  saving=saving.then(async()=>{
    const r=await fetch('/api/book-editor/draft',{method:'PUT',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({book:snapshot,version})});
    const d=await r.json().catch(()=>({}));
-   if(r.status===409){serverReady=false;dirty=true;status.textContent='Hay una versión más nueva en otro dispositivo. Exporta tu copia antes de recargar.';return}
+   if(r.status===409){serverReady=false;dirty=true;status.textContent='Hay una versión más nueva en otro dispositivo. Recarga la página para verla.';return}
    if(!r.ok)throw Error(d.error||'No se pudieron guardar los cambios.');
    version=d.version;
    status.textContent=dirty?'Hay nuevos cambios pendientes…':'Guardado en tu cuenta ECO ✓';
- }).catch(e=>{dirty=true;status.textContent='No se guardó en ECO: '+e.message+' Descarga el borrador como respaldo.'});
+ }).catch(e=>{dirty=true;status.textContent='No se guardó en ECO: '+e.message});
  return saving;
 }
 function saveField(k,v){state[k]=v;persist();drawBook()}
@@ -40,11 +40,10 @@ function init(){const orig=byId('ecoStudioLaunch');if(!orig||byId('ecoEditorialO
 }
 function create(){if(dialog)return;
  dialog=node('div','eco-editorial-overlay');dialog.id='ecoEditorialDialog';dialog.hidden=true;
- dialog.innerHTML=`<div class="eco-editorial-shell" role="dialog" aria-modal="true" aria-labelledby="ecoEditorialTitle"><div class="eco-editorial-top"><div><small>ECO · ESTUDIO EDITORIAL</small><h2 id="ecoEditorialTitle">Diseña tu libro</h2></div><div class="eco-editorial-topbuttons"><button id="ecoEditorialExport" type="button">Exportar borrador</button><button id="ecoEditorialPrint" type="button" class="eco-primary">Vista para imprimir</button><button id="ecoEditorialClose" type="button" aria-label="Cerrar estudio">Cerrar ×</button></div></div><p class="eco-editorial-warning">El libro se guarda en tu cuenta ECO cuando hay conexión. Las historias originales no se modifican. Puedes exportar una copia de respaldo.</p><div class="eco-editorial-layout"><aside class="eco-editorial-sidebar"><nav aria-label="Secciones del libro"><button type="button" data-view="cover" class="selected">01 · Portada y dedicatoria</button><button type="button" data-view="index">02 · Índice y orden</button><button type="button" data-view="chapter">03 · Editar un capítulo</button><button type="button" data-view="media">04 · Fotos y voces</button><button type="button" data-view="preview">05 · Vista del libro completo</button></nav><div id="ecoEditorialForm"></div><p id="ecoEditorialStatus" role="status" aria-live="polite"></p></aside><section class="eco-editorial-preview" aria-label="Vista previa"><div id="ecoEditorialBook" class="eco-editorial-pages"></div></section></div></div>`;
+ dialog.innerHTML=`<div class="eco-editorial-shell" role="dialog" aria-modal="true" aria-labelledby="ecoEditorialTitle"><div class="eco-editorial-top"><div><small>ECO · ESTUDIO EDITORIAL</small><h2 id="ecoEditorialTitle">Diseña tu libro</h2></div><div class="eco-editorial-topbuttons"><button id="ecoEditorialPrint" type="button" class="eco-primary">Vista para imprimir</button><button id="ecoEditorialClose" type="button" aria-label="Cerrar estudio">Cerrar ×</button></div></div><p class="eco-editorial-warning">El libro se guarda en tu cuenta ECO cuando hay conexión. Las historias originales no se modifican. Puedes exportar una copia de respaldo.</p><div class="eco-editorial-layout"><aside class="eco-editorial-sidebar"><nav aria-label="Secciones del libro"><button type="button" data-view="cover" class="selected">01 · Portada y dedicatoria</button><button type="button" data-view="index">02 · Índice y orden</button><button type="button" data-view="chapter">03 · Editar un capítulo</button><button type="button" data-view="media">04 · Fotos y voces</button><button type="button" data-view="preview">05 · Vista del libro completo</button></nav><div id="ecoEditorialForm"></div><p id="ecoEditorialStatus" role="status" aria-live="polite"></p></aside><section class="eco-editorial-preview" aria-label="Vista previa"><div id="ecoEditorialBook" class="eco-editorial-pages"></div></section></div></div>`;
  document.body.appendChild(dialog);book=byId('ecoEditorialBook');form=byId('ecoEditorialForm');status=byId('ecoEditorialStatus');
  dialog.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{mode=b.dataset.view;choose()}));
  byId('ecoEditorialClose').addEventListener('click',close);byId('ecoEditorialPrint').addEventListener('click',()=>{mode='preview';choose();window.setTimeout(()=>window.print(),100)});
- byId('ecoEditorialExport').addEventListener('click',exportDraft);
  dialog.addEventListener('click',e=>{if(e.target===dialog)close()});dialog.addEventListener('keydown',e=>{if(e.key==='Escape')close();if(e.key==='Tab')trap(e)});
 }
 function trap(e){const nodes=[...dialog.querySelectorAll('button:not([disabled]),input:not([disabled]),textarea:not([disabled]),select:not([disabled])')].filter(el=>el.getClientRects().length);if(!nodes.length)return;if(e.shiftKey&&document.activeElement===nodes[0]){e.preventDefault();nodes.at(-1).focus()}else if(!e.shiftKey&&document.activeElement===nodes.at(-1)){e.preventDefault();nodes[0].focus()}}
@@ -54,12 +53,33 @@ async function open(){create();previousFocus=document.activeElement;dialog.hidde
  if(!r.ok||!dr.ok||!sr.ok)throw Error((r.status===401||dr.status===401)?'Inicia sesión para acceder a tu libro.':'No se pudo conectar con el guardado de ECO.');
  const [data,draft,storyData]=await Promise.all([r.json(),dr.json(),sr.json()]);stories=Array.isArray(storyData.stories)?storyData.stories:[];
  chapters=Array.isArray(data.chapters)?data.chapters:[];
- state={...fresh(),...(draft.book||{}),edits:draft.book?.edits||{},order:Array.isArray(draft.book?.order)?draft.book.order:[],media:draft.book?.media||{},bookPhotos:draft.book?.bookPhotos||{},qr:draft.book?.qr||{}};
+ state={...fresh(),...(draft.book||{}),edits:draft.book?.edits||{},order:Array.isArray(draft.book?.order)?draft.book.order:[],media:draft.book?.media||{},bookPhotos:draft.book?.bookPhotos||{},qr:draft.book?.qr||{},qrOff:draft.book?.qrOff||{}};
  version=draft.version||0;serverReady=true;dirty=false;
  activeId=String(ordered()[0]?.id||'');
  status.textContent='Libro sincronizado con tu cuenta ECO ✓';
+ autoQr();
  }catch(e){chapters=[];state=read();status.textContent=e.message+' Se cargó el respaldo local cuando estaba disponible.'}
  mode='cover';choose();byId('ecoEditorialClose').focus()}
+// Por defecto, todos los capítulos que tienen grabaciones llevan su QR de voz; quien retiró uno a propósito
+// (qrOff) no lo vuelve a recibir solo.
+let autoQrEnCurso=false;
+async function autoQr(){
+ if(autoQrEnCurso)return;autoQrEnCurso=true;
+ try{
+  let cambio=false;
+  for(const c of chapters){
+   const id=String(c.id);
+   if(!Array.isArray(c.audios)||!c.audios.length||state.qr?.[id]?.token||state.qrOff?.[id])continue;
+   try{
+    const r=await fetch('/api/book-qr/chapters/'+encodeURIComponent(c.id),{method:'POST',credentials:'same-origin'});
+    const d=await r.json();
+    if(!r.ok||!d.token||!d.url)continue;
+    state.qr??={};state.qr[id]={token:d.token,url:d.url};cambio=true;
+   }catch(e){/* ese capítulo queda sin QR; se puede crear a mano */}
+  }
+  if(cambio){persist();if(!dialog.hidden)choose()}
+ }finally{autoQrEnCurso=false}
+}
 function close(){flush();dialog.hidden=true;document.body.classList.remove('eco-editorial-open-body');(previousFocus?.isConnected?previousFocus:byId('ecoEditorialOpen'))?.focus()}
 function field(label,val,fn,multi=false){const wrap=node('label','eco-editorial-field');wrap.appendChild(node('span','',label));const input=node(multi?'textarea':'input');if(multi)input.rows=6;input.value=val;input.addEventListener('input',()=>fn(input.value));wrap.appendChild(input);return wrap}
 function choose(){dialog.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('selected',b.dataset.view===mode));form.replaceChildren();
@@ -130,11 +150,11 @@ function mediaPanel(){
  const btn=node('button','eco-editorial-makeqr',qr?'Volver a comprobar el QR':'Crear QR de voz');btn.type='button';
  const msg=node('p','eco-editorial-hint','Cualquier persona que escanee este QR podrá escuchar las grabaciones originales de este capítulo, sin necesidad de cuenta. Puedes retirar el enlace cuando quieras.');
  btn.addEventListener('click',async()=>{btn.disabled=true;msg.textContent='Preparando enlace de voz…';try{const r=await fetch('/api/book-qr/chapters/'+encodeURIComponent(c.id),{method:'POST',credentials:'same-origin'});const d=await r.json();if(!r.ok)throw Error(d.error||'No se pudo generar el QR');
- state.qr??={};state.qr[activeId]={token:d.token,url:d.url};persist();choose();}catch(e){msg.textContent=e.message}finally{btn.disabled=false}});
+ state.qr??={};state.qr[activeId]={token:d.token,url:d.url};if(state.qrOff)delete state.qrOff[activeId];persist();choose();}catch(e){msg.textContent=e.message}finally{btn.disabled=false}});
  form.append(btn,msg);
  if(qr?.token){const quitar=node('button','eco-editorial-revokeqr','Retirar el enlace del QR');quitar.type='button';
  quitar.addEventListener('click',async()=>{if(!confirm('Los códigos QR ya impresos de este capítulo dejarán de funcionar. ¿Retirar el enlace?'))return;quitar.disabled=true;
- try{const r=await fetch('/api/book-qr/chapters/'+encodeURIComponent(c.id),{method:'DELETE',credentials:'same-origin'});if(!r.ok)throw Error('No se pudo retirar el enlace.');delete state.qr[activeId];persist();choose();}catch(e){msg.textContent=e.message;quitar.disabled=false}});
+ try{const r=await fetch('/api/book-qr/chapters/'+encodeURIComponent(c.id),{method:'DELETE',credentials:'same-origin'});if(!r.ok)throw Error('No se pudo retirar el enlace.');delete state.qr[activeId];state.qrOff={...(state.qrOff||{}),[activeId]:true};persist();choose();}catch(e){msg.textContent=e.message;quitar.disabled=false}});
  form.append(quitar)}
 }
 function appendMedia(page,c){const id=String(c.id),allowed=photoOptions(c),choice=state.media?.[id]||{},text=String(entry(c).text??c.generated_text??'');
@@ -154,7 +174,6 @@ function drawBook(){book.replaceChildren();const cover=page();cover.classList.ad
  if(state.dedication?.trim()){const d=page();d.append(node('small','','DEDICATORIA'),node('p','eco-editorial-dedication',state.dedication));book.appendChild(d)}
  const index=page();index.appendChild(node('h2','','Contenido'));ordered().forEach((c,i)=>index.appendChild(node('p','eco-editorial-indexrow',`${String(i+1).padStart(2,'0')}   ${entry(c).title??c.title??'Capítulo'}`)));if(!chapters.length)index.appendChild(node('p','','Los capítulos aparecerán aquí cuando los generes.'));book.appendChild(index);
  ordered().forEach((c,i)=>{const p=page();p.append(node('small','',`CAPÍTULO ${String(i+1).padStart(2,'0')}`),node('h2','',entry(c).title??c.title??'Capítulo'));appendMedia(p,c);book.appendChild(p)})}
-function exportDraft(){flush();const exportObject={format:'eco-editorial-borrador-v1',saved_at:new Date().toISOString(),book:state,chapters:chapters.map(c=>({id:c.id,original_title:c.title}))};const blob=new Blob([JSON.stringify(exportObject,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=node('a');a.href=url;a.download='ECO-mi-libro-borrador.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);status.textContent='Borrador exportado. Guárdalo como copia de seguridad.'}
 window.addEventListener('pagehide',()=>{if(dirty&&serverReady)flush()});
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();

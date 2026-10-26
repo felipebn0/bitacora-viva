@@ -45,7 +45,8 @@ module.exports = (app, { sql, ensureSchema, requireAuth, bloquearColaborador, ra
         old={token,chapter_title:ch.title};
       }
       const base = process.env.ECO_QR_PUBLIC_BASE_URL;
-      const origin = base && /^https:\/\/[\w.-]+(?::\d+)?$/i.test(base) ? base : `${req.protocol}://${req.get('host')}`;
+      const host = req.get('host') || '';
+      const origin = base && /^https:\/\/[\w.-]+(?::\d+)?$/i.test(base) ? base : `${/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(host) ? 'http' : 'https'}://${host}`;
       res.json({ok:true,token:old.token,url:`${origin}/escuchar.html?t=${old.token}`,title:old.chapter_title,private:true});
     }catch(e){console.error('Error QR libro',e);res.status(500).json({error:'No se pudo crear el enlace del capítulo.'});}
   });

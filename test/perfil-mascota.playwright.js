@@ -84,6 +84,51 @@ const CAPTURAS = process.env.CAPTURAS_MASCOTA;
   await p3.waitForSelector('#subperfilBanner', { state: 'visible', timeout: 8000 });
   ok(await p3.isHidden('#orb') && /no puedes contar su historia/.test(await p3.textContent('#subperfilBannerTexto')), 'app: el perfil de una persona sigue sin botón de hablar');
 
+
+  // pantalla principal: un botón por cada mascota, y el diario archivado deja de salir
+  const p4 = await ctx.newPage();
+  p4.on('pageerror', (e) => errores.push(e.message));
+  let cambioA = null;
+  await p4.route('**/api/**', (route) => {
+    const req = route.request();
+    const u = new URL(req.url());
+    const json = (o) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(o) });
+    if (u.pathname === '/api/me') return json({ username: 'felipe', name: 'Felipe', email: 'f@x.com', isCollaborator: false, isGuest: false, puedeNarrar: true });
+    if (u.pathname === '/api/subprofiles/switch') { cambioA = JSON.parse(req.postData()).id; return json({ ok: true }); }
+    if (u.pathname === '/api/subprofiles') return json({ perfiles: [{ id: 1, nombre: 'Felipe', esPropia: true }, { id: 50, nombre: 'Papá', esPropia: false }, { id: 77, nombre: 'Roma', esPropia: false, tipo: 'mascota', especie: 'perro' }], diarioBebe: null });
+    if (u.pathname === '/api/bebe') return json({ config: null, puedeEditar: true, entradas: [] });
+    return json({});
+  });
+  await p4.goto(base + '/app.html');
+  await p4.waitForSelector('.eco-mascota-pill', { timeout: 8000 });
+  ok(await p4.locator('.eco-mascota-pill').count() === 1 && /Roma/.test(await p4.textContent('.eco-mascota-pill')), 'pantalla principal: sale un botón con el nombre de la mascota (y no el de las personas)');
+  ok(await p4.locator('#ecoBebePill').count() === 0, 'y sin diario de bebé no sale el botón del diario');
+  if (CAPTURAS) await p4.screenshot({ path: path.join(CAPTURAS, 'inicio-mascota.png') });
+  await p4.click('.eco-mascota-pill');
+  const t0 = Date.now(); while (cambioA === null && Date.now() - t0 < 4000) await p4.waitForTimeout(50);
+  ok(cambioA === 77, 'al tocarlo cambia al perfil de la mascota');
+
+  // Perfiles: el diario de bebé aparece como un perfil más y se puede archivar
+  const p5 = await ctx.newPage();
+  p5.on('pageerror', (e) => errores.push(e.message));
+  let diarioActivo = true, archivoPedido = false;
+  p5.on('dialog', (d) => d.accept());
+  await p5.route('**/api/**', (route) => {
+    const req = route.request();
+    const u = new URL(req.url());
+    const json = (o) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(o) });
+    if (u.pathname === '/api/me') return json({ username: 'felipe', name: 'Felipe', isCollaborator: false, isGuest: false, puedeNarrar: true });
+    if (u.pathname === '/api/bebe/archivar') { archivoPedido = true; diarioActivo = false; return json({ ok: true }); }
+    if (u.pathname === '/api/subprofiles') return json({ perfiles: [{ id: 1, nombre: 'Felipe', esPropia: true }], diarioBebe: diarioActivo ? { nombre: 'Lucca', estado: 'en_camino' } : null });
+    return json({});
+  });
+  await p5.goto(base + '/perfiles.html');
+  await p5.waitForSelector('.perfil-card:has-text("Lucca")');
+  ok((await p5.locator('.perfil-card', { hasText: 'Lucca' }).textContent()).includes('Diario de bebé · en camino'), 'Perfiles: el diario de bebé aparece como un perfil más');
+  await p5.locator('.perfil-card', { hasText: 'Lucca' }).locator('[data-archivar-diario]').click();
+  await p5.waitForFunction(() => !document.body.innerText.includes('Lucca'));
+  ok(archivoPedido, 'Perfiles: al archivarlo se pide archivar y deja de aparecer');
+
   ok(errores.length === 0, 'sin errores de JavaScript' + (errores.length ? ': ' + errores.join(' | ') : ''));
   await browser.close();
   server.close();

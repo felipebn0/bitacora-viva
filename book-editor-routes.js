@@ -30,7 +30,7 @@ module.exports=(app,{sql,ensureSchema,requireAuth,bloquearColaborador,rateLimit,
   return {title:string(b.title,200),subtitle:string(b.subtitle,300),
     dedication:string(b.dedication,4000),
     order:Array.isArray(b.order)?b.order.filter(v=>/^\d{1,12}$/.test(String(v))).slice(0,250).map(String):[],
-    edits,media:cleanMedia(b.media),bookPhotos:cleanPhotos(b.bookPhotos),qr:cleanQr(b.qr)};
+    edits,media:cleanMedia(b.media),bookPhotos:cleanPhotos(b.bookPhotos),qr:cleanQr(b.qr),qrOff:cleanFlags(b.qrOff)};
  };
  function cleanMedia(raw){const out={};if(!raw||typeof raw!=='object'||Array.isArray(raw))return out;
  for(const [chapter,items] of Object.entries(raw).slice(0,250)){if(!/^\d{1,12}$/.test(chapter)||!items||typeof items!=='object')continue;
@@ -44,6 +44,9 @@ module.exports=(app,{sql,ensureSchema,requireAuth,bloquearColaborador,rateLimit,
   if(!/^\d{1,12}$/.test(chapter)||!Array.isArray(arr))continue;
   out[chapter]=arr.slice(0,60).filter(p=>p&&typeof p.url==='string'&&/^https:\/\//.test(p.url)&&p.url.length<2200).map(p=>({url:p.url,caption:String(p.caption||'').slice(0,180)}));
  }return out;}
+ function cleanFlags(raw){const out={};if(!raw||typeof raw!=='object'||Array.isArray(raw))return out;
+ for(const [chapter,v] of Object.entries(raw).slice(0,250))if(/^\d{1,12}$/.test(chapter)&&v===true)out[chapter]=true;
+ return out;}
  function cleanQr(raw){const out={};if(!raw||typeof raw!=='object'||Array.isArray(raw))return out;
  for(const [chapter,qr] of Object.entries(raw).slice(0,250)){
   if(!/^\d{1,12}$/.test(chapter)||!qr||!/^[a-f0-9]{48}$/.test(qr.token||''))continue;

@@ -373,9 +373,13 @@ function origenPermitido(req) {
 // siempre (protocolo + Host del pedido), así que no cambia nada hasta que
 // se configure.
 function urlBase(req) {
-  const configurada = process.env.PUBLIC_BASE_URL;
-  if (configurada) return configurada.replace(/\/+$/, '');
-  return `${req.protocol}://${req.get('host')}`;
+  // Solo vale si de verdad es una dirección web: un valor mal pegado en Vercel (por ejemplo el
+  // nombre de la variable en vez de la dirección) rompía los enlaces de los mensajes.
+  const configurada = String(process.env.PUBLIC_BASE_URL || '').trim();
+  if (/^https?:\/\/[^\s]+$/i.test(configurada)) return configurada.replace(/\/+$/, '');
+  const host = req.get('host');
+  const local = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(host || '');
+  return `${local ? 'http' : 'https'}://${host}`;
 }
 
 app.use('/api', (req, res, next) => {
@@ -1540,6 +1544,7 @@ function ensureSchema() {
       sql`CREATE INDEX IF NOT EXISTS idx_diario_bebe_entradas_perfil ON diario_bebe_entradas(profile_user_id, created_at)`,
 
       // Notas de voz originales del diario (JSON array de URLs en media/<id>/bebe/).
+      sql`ALTER TABLE diario_bebe ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ`,
       sql`ALTER TABLE diario_bebe_entradas ADD COLUMN IF NOT EXISTS audio_urls TEXT`,
       // 'charla' = lo que la persona contó en la charla del modo bebé (también queda en su libro).
       sql`ALTER TABLE diario_bebe_entradas ADD COLUMN IF NOT EXISTS origen TEXT`,
@@ -3077,6 +3082,33 @@ app.post('/api/invitaciones/:id/renovar', requireAuth, bloquearColaborador, bloq
 
 // Antes de entrar, colaborar.html muestra "Hola <nombre>, vas a colaborar con
 // la bitácora de <dueño>" — sin crear ninguna sesión todavía.
+// Alguien que YA tiene cuenta abre su enlace personal de invitado: si el celular de su cuenta es el
+// mismo con el que lo invitaron, se le suma como colaborador con su propia cuenta (no hace falta cerrar
+// sesión ni abrir una ventana privada).
+app.post('/api/invitacion-vincular', requireAuth, rateLimit, async (req, res) => {
+  try {
+    if (req.isGuest) return res.status(403).json({ error: 'Ya entraste con este enlace.' });
+    const codigo = String((req.body && req.body.invitacion) || '').trim().slice(0, 64);
+    if (!codigo) return res.status(400).json({ error: 'Falta el enlace.' });
+    await ensureSchema();
+    const rows = await sql`SELECT id, owner_id, owner_es_bitacora, nombre, telefono FROM invitados WHERE codigo = ${codigo} AND revocado_at IS NULL`;
+    if (!rows.length) return res.status(404).json({ error: 'Ese enlace ya no es válido — pídele a quien te invitó que te mande uno nuevo.' });
+    const inv = rows[0];
+    if (inv.owner_es_bitacora) return res.status(409).json({ error: 'Este enlace es para entrar sin cuenta. Ábrelo en una ventana privada.', soloSinCuenta: true });
+    if (inv.owner_id === req.userId) return res.status(400).json({ error: 'Esa es tu propia bitácora.' });
+    const cuenta = (await sql`SELECT phone FROM users WHERE id = ${req.userId}`)[0] || {};
+    const celularCuenta = telefonoParaWhatsApp(cuenta.phone);
+    if (!celularCuenta) return res.status(403).json({ error: 'Tu cuenta no tiene celular guardado. Agrégalo en tu perfil (menú de la cuenta) y vuelve a abrir el enlace.', faltaCelular: true, nombre: capitalizarNombre(inv.nombre) });
+    if (celularCuenta !== inv.telefono) return res.status(403).json({ error: 'Este enlace es para otro número de celular. Si es tuyo, pon ese celular en tu perfil, o ábrelo en una ventana privada.', otroCelular: true, nombre: capitalizarNombre(inv.nombre) });
+    await sql`INSERT INTO collaborations (collaborator_user_id, owner_user_id) VALUES (${req.userId}, ${inv.owner_id}) ON CONFLICT (collaborator_user_id, owner_user_id) DO NOTHING`;
+    await sql`UPDATE invitados SET ultimo_ingreso = now() WHERE id = ${inv.id}`;
+    res.json({ ok: true, ownerId: inv.owner_id, ownerName: await nombreDeLaBitacora(inv.owner_id, false) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo entrar con ese enlace.' });
+  }
+});
+
 app.get('/api/invitacion-info', rateLimit, async (req, res) => {
   try {
     const codigo = String(req.query.invitacion || '').trim().slice(0, 64);
@@ -3277,7 +3309,9 @@ app.get('/api/subprofiles', requireAuth, bloquearColaborador, bloquearInvitado, 
     const propia = await sql`SELECT name FROM users WHERE id = ${req.userId}`;
     const nombrePropio = capitalizarNombre((propia[0] && propia[0].name) || '') || req.username;
     const subperfiles = await sql`SELECT id, nombre, relacion, contexto_onboarding, tratamiento, tipo, especie, raza FROM bitacoras WHERE admin_user_id = ${req.userId} AND archived_at IS NULL ORDER BY created_at ASC`;
+    const diario = (await sql`SELECT nombre, to_char(nacio_en, 'YYYY-MM-DD') AS nacio_en FROM diario_bebe WHERE profile_user_id = ${req.userId} AND archived_at IS NULL`)[0];
     res.json({
+      diarioBebe: diario ? { nombre: diario.nombre, estado: diario.nacio_en ? 'nacida' : 'en_camino' } : null,
       perfiles: [
         { id: req.userId, nombre: nombrePropio, esPropia: true },
         ...subperfiles.map((s) => ({ id: s.id, nombre: capitalizarNombre(s.nombre), relacion: s.relacion || null, tratamiento: tratamientoValido(s.tratamiento), tieneOnboarding: !!s.contexto_onboarding, esPropia: false, ...(s.tipo === 'mascota' ? { tipo: 'mascota', especie: s.especie || 'perro', raza: s.raza || null } : {}) })),
@@ -4971,7 +5005,7 @@ function fotoRecienSubidaPrompt(caption) {
 // dato no confiable, nunca como instrucción.
 async function leerConfigBebe(profileUserId) {
   try {
-    const filas = await sql`SELECT nombre, genero, to_char(nacio_en, 'YYYY-MM-DD') AS nacio_en FROM diario_bebe WHERE profile_user_id = ${profileUserId}`;
+    const filas = await sql`SELECT nombre, genero, to_char(nacio_en, 'YYYY-MM-DD') AS nacio_en FROM diario_bebe WHERE profile_user_id = ${profileUserId} AND archived_at IS NULL`;
     return filas[0] || null;
   } catch (err) {
     console.error('No se pudo leer el diario del bebé:', err);
@@ -7212,11 +7246,12 @@ app.get('/api/chapters', requireAuth, bloquearColaborador, async (req, res) => {
     // Cada capítulo viene de una o más historias de story_log (story_ids) —
     // las que tengan audio guardado se mandan aquí para poder escucharlas
     // junto al capítulo, no solo leerlo.
-    const audioRows = await sql`SELECT id, audio_url FROM story_log WHERE user_id = ${req.profileUserId} AND audio_url IS NOT NULL`;
-    const audioPorId = new Map(audioRows.map((r) => [r.id, r.audio_url]));
+    // Una historia unida con otras trae varios audios (audio_urls), además del primero (audio_url).
+    const audioRows = await sql`SELECT id, audio_url, audio_urls FROM story_log WHERE user_id = ${req.profileUserId} AND (audio_url IS NOT NULL OR audio_urls IS NOT NULL)`;
+    const audioPorId = new Map(audioRows.map((r) => [r.id, [r.audio_url, ...parseJsonArray(r.audio_urls)].filter((u) => typeof u === 'string' && u)]));
     const chapters = rows.map((c) => {
       const storyIds = parseJsonArray(c.story_ids);
-      const audios = storyIds.map((id) => audioPorId.get(id)).filter(Boolean);
+      const audios = [...new Set(storyIds.flatMap((id) => audioPorId.get(id) || []))];
       return { ...c, story_ids: storyIds, audios };
     });
     res.json({ chapters });
@@ -7800,40 +7835,58 @@ app.get('/api/tree/merge-suggestions', requireAuth, bloquearColaborador, async (
 });
 
 // POST /api/tree/merge — fusiona dos entradas en una sola.
-// Body: { keepNombre, mergeNombre }
-// keepNombre: el nombre que se conserva (normalmente el más completo).
-// mergeNombre: el nombre que desaparece (se agrega como alias del keep).
+// Body: { keepNombre, mergeNombre, nuevoNombre? }
+// keepNombre: la entrada que se conserva (si una de las dos es "Yo", esa).
+// mergeNombre: la entrada que desaparece (queda como alias de la que se conserva).
+// nuevoNombre (opcional): el nombre con el que queda la persona fusionada, por ejemplo el más completo.
 app.post('/api/tree/merge', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
   try {
     await ensureSchema();
     const ownerId = await resolveProfileUserId(req);
     if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa bitácora.' });
-    const { keepNombre, mergeNombre } = req.body;
-    if (!keepNombre || !mergeNombre || keepNombre === mergeNombre) {
+    const { keepNombre, mergeNombre } = req.body || {};
+    if (typeof keepNombre !== 'string' || typeof mergeNombre !== 'string' || !keepNombre.trim() || !mergeNombre.trim() || keepNombre === mergeNombre) {
       return res.status(400).json({ error: 'Faltan nombres o son iguales.' });
     }
+    const pedido = req.body.nuevoNombre;
+    const nuevoNombre = typeof pedido === 'string' ? pedido.replace(/\s+/g, ' ').trim().slice(0, 100) : '';
 
-    await ensureSchema();
-    const [kept] = await sql`SELECT aliases FROM family_members WHERE user_id = ${ownerId} AND nombre = ${keepNombre} LIMIT 1`;
+    const filas = await sql`SELECT id, nombre, aliases, es_principal FROM family_members WHERE user_id = ${ownerId} AND nombre IN (${keepNombre}, ${mergeNombre})`;
+    const kept = filas.find((f) => f.nombre === keepNombre);
+    const merged = filas.find((f) => f.nombre === mergeNombre);
     if (!kept) return res.status(404).json({ error: `No se encontró a "${keepNombre}" en el árbol.` });
+    if (!merged) return res.status(404).json({ error: `No se encontró a "${mergeNombre}" en el árbol.` });
+    if (merged.es_principal) return res.status(409).json({ error: 'No puedes eliminar la persona principal del árbol.' });
+    const finalNombre = nuevoNombre || keepNombre;
+    const sinRepetir = (lista) => [...new Set(lista)];
 
-    // 1. Agregar mergeNombre a los aliases del kept.
-    let currentAliases = [];
-    try { currentAliases = JSON.parse(kept.aliases || '[]'); } catch {}
-    const mergeNorm = normalizarNombreParaComparar(mergeNombre);
-    if (!currentAliases.includes(mergeNorm)) currentAliases.push(mergeNorm);
-    await sql`UPDATE family_members SET aliases = ${JSON.stringify(currentAliases)} WHERE user_id = ${ownerId} AND nombre = ${keepNombre}`;
+    // 1. Los nombres que dejan de usarse quedan como alias de la persona fusionada.
+    let aliases = [];
+    try { aliases = JSON.parse(kept.aliases || '[]'); } catch {}
+    if (!Array.isArray(aliases)) aliases = [];
+    const alias = (n) => normalizarNombreParaComparar(n);
+    const aliasNuevos = [mergeNombre, ...(finalNombre !== keepNombre ? [keepNombre] : [])].map(alias).filter((n) => n && n !== alias(finalNombre));
+    aliases = sinRepetir([...aliases, ...aliasNuevos]);
 
-    // 2. Redirigir protagonista en family_notes.
-    await sql`UPDATE family_notes SET protagonista = ${keepNombre} WHERE user_id = ${ownerId} AND protagonista = ${mergeNombre}`;
+    // 2. Se borra la entrada duplicada ANTES de renombrar la que queda (puede quedar con el nombre de la borrada).
+    await sql`DELETE FROM family_members WHERE id = ${merged.id} AND user_id = ${ownerId}`;
+    await sql`UPDATE family_members SET nombre = ${finalNombre}, aliases = ${JSON.stringify(aliases)} WHERE id = ${kept.id} AND user_id = ${ownerId}`;
 
-    // 3. Eliminar la entrada duplicada.
-    await sql`DELETE FROM family_members WHERE user_id = ${ownerId} AND nombre = ${mergeNombre}`;
+    // 3. Lo que apuntaba a cualquiera de los dos nombres pasa a apuntar a la persona fusionada.
+    await sql`UPDATE family_notes SET protagonista = ${finalNombre} WHERE user_id = ${ownerId} AND protagonista IN (${keepNombre}, ${mergeNombre})`;
+    const conPadres = await sql`SELECT id, padres FROM family_members WHERE user_id = ${ownerId} AND padres IS NOT NULL AND padres <> ''`;
+    for (const o of conPadres) {
+      let lista;
+      try { lista = JSON.parse(o.padres); } catch { continue; }
+      if (!Array.isArray(lista) || !lista.some((n) => n === mergeNombre || n === keepNombre)) continue;
+      const nuevaLista = sinRepetir(lista.map((n) => (n === mergeNombre || n === keepNombre ? finalNombre : n)));
+      await sql`UPDATE family_members SET padres = ${JSON.stringify(nuevaLista)} WHERE id = ${o.id} AND user_id = ${ownerId}`;
+    }
 
-    // 4. Agregar el nombre fusionado a excluidos para que la IA no lo recree.
+    // 4. El nombre fusionado queda excluido para que la IA no lo vuelva a crear como otra persona.
     await sql`
       INSERT INTO family_members_excluidos (user_id, nombre_normalizado, nombre_original)
-      VALUES (${ownerId}, ${mergeNorm}, ${mergeNombre})
+      VALUES (${ownerId}, ${alias(mergeNombre)}, ${mergeNombre})
       ON CONFLICT (user_id, nombre_normalizado) DO NOTHING
     `;
 
@@ -7846,8 +7899,8 @@ app.post('/api/tree/merge', requireAuth, bloquearColaborador, rateLimit, async (
           OR (nombre_a = ${mergeNombre} AND nombre_b = ${keepNombre}))
     `;
 
-    console.log(`[merge] userId=${ownerId} fusionó "${mergeNombre}" → "${keepNombre}"`);
-    res.json({ ok: true });
+    console.log(`[merge] userId=${ownerId} fusionó "${mergeNombre}" → "${finalNombre}"`);
+    res.json({ ok: true, nombre: finalNombre });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo fusionar.' });

@@ -12,31 +12,16 @@
   bar.className='eco-c-actionbar';
   tabs.parentNode.insertBefore(bar,tabs);
   bar.append(cta,tabs);
-  cta.textContent='Aportar una historia';
+  cta.textContent='Aportar a una historia';
 
-  // Familiares: cerrar la lista larga, pero dejar visible el botón de invitar.
+  // Familiares: "Quiénes han colaborado" es lo mismo que "Aportes recibidos", así que solo queda
+  // el botón de invitar.
   const section=document.getElementById('colaboradoresSection');
-  const people=document.getElementById('colaboradoresLista');
-  if(section&&people){
-   const heading=section.querySelector('h2');
-   const sub=section.querySelector('p.sub');
-   const b=document.createElement('button');
-   b.type='button';b.className='eco-c-section-toggle';
-   b.setAttribute('aria-expanded','false');
-   b.setAttribute('aria-controls','colaboradoresLista');
-   b.textContent='Ver colaboradores ▾';
+  if(section){
+   section.classList.add('eco-c-solo-invitar');
    const btnRow=document.createElement('div');
    btnRow.className='eco-c-colabs-btnrow';
-   if(sub)sub.insertAdjacentElement('afterend',btnRow);
-   else if(heading)heading.insertAdjacentElement('afterend',btnRow);
-   btnRow.appendChild(b);
-   people.classList.add('eco-c-people-closed');
-   b.addEventListener('click',()=>{
-    const expanded=b.getAttribute('aria-expanded')!=='true';
-    b.setAttribute('aria-expanded',String(expanded));
-    b.textContent=expanded?'Ocultar colaboradores ▴':'Ver colaboradores ▾';
-    people.classList.toggle('eco-c-people-closed',!expanded);
-   });
+   section.insertBefore(btnRow,section.firstChild);
    const invOrig=document.getElementById('invitarToggle');
    const invPanel=document.getElementById('invitarPanel');
    if(invOrig&&invPanel){

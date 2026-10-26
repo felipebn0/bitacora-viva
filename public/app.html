@@ -25,6 +25,7 @@
      a un tercero. Ver public/fonts/fonts.css para el detalle. -->
 <link rel="stylesheet" href="/fonts/fonts.css">
 <script src="/font-size.js"></script>
+<script src="/eco-telefono.js?v=2"></script>
 <script src="/eco-saludo.js?v=1" defer></script>
 <style>
   :root {
@@ -839,7 +840,8 @@
 
 <link rel="stylesheet" href="/eco-login-v6.css?v=6">
 <link rel="stylesheet" href="/eco-mobile-base.css">
-<link rel="stylesheet" href="/eco-bebe.css?v=11">
+<link rel="stylesheet" href="/eco-telefono.css?v=1">
+<link rel="stylesheet" href="/eco-bebe.css?v=12">
 <link rel="stylesheet" href="/eco-crisis-banner.css?v=3">
 </head>
 <body class="eco-brand-v1 eco-page-inicio">
@@ -957,6 +959,8 @@
            <label class="um-field-label" for="umProfileEmail">Tu correo</label>
            <input type="email" id="umProfileEmail" placeholder="Tu correo" maxlength="200" autocomplete="email">
            <p class="um-value-full" id="umProfileEmailFull" hidden></p>
+           <label class="um-field-label" for="umProfilePhone">Tu celular (WhatsApp)</label>
+           <input type="tel" id="umProfilePhone" data-eco-tel placeholder="300 123 4567" autocomplete="tel-national">
            <label class="um-field-label" for="umProfileBirthdate">Fecha de nacimiento</label>
            <input type="date" id="umProfileBirthdate" aria-label="Tu fecha de nacimiento">
            <p class="um-hint">Para que la entrevistadora entienda mejor el contexto de tu edad al charlar — es opcional.</p>
@@ -1286,7 +1290,7 @@
           <label for="inviteNombre">Nombre</label>
           <input type="text" id="inviteNombre" maxlength="60" placeholder="Ej: Tía Marta" autocomplete="off">
           <label for="invitePhone">Celular con WhatsApp</label>
-          <input type="tel" id="invitePhone" placeholder="+57 300 123 4567" autocomplete="off">
+          <input type="tel" id="invitePhone" data-eco-tel placeholder="300 123 4567" autocomplete="off">
           <button class="invite-send" id="inviteSendBtn" type="button">📲 Invitar por WhatsApp</button>
           <p class="invite-msg" id="inviteMsg" role="status" aria-live="polite"></p>
           <ul class="invite-list" id="inviteList"></ul>
@@ -1315,6 +1319,7 @@
   const umAdminLink = document.getElementById('umAdminLink');
   const umProfileName = document.getElementById('umProfileName');
   const umProfileEmail = document.getElementById('umProfileEmail');
+  const umProfilePhone = document.getElementById('umProfilePhone');
   const umProfileNameFull = document.getElementById('umProfileNameFull');
   const umProfileEmailFull = document.getElementById('umProfileEmailFull');
   const umProfileBirthdate = document.getElementById('umProfileBirthdate');
@@ -1343,7 +1348,8 @@
   umProfileName.addEventListener('input', () => mostrarCompletoSiNoCabe(umProfileName, umProfileNameFull));
   umProfileEmail.addEventListener('input', () => mostrarCompletoSiNoCabe(umProfileEmail, umProfileEmailFull));
 
-  function showApp(username, name, email, fechaNacimiento, isAdmin, tratamiento) {
+  let perfilWhatsappOptIn = false;
+  function showApp(username, name, email, fechaNacimiento, isAdmin, tratamiento, phone) {
     checkingScreen.style.display = 'none';
     loginScreen.style.display = 'none';
     appContent.style.display = 'flex';
@@ -1357,6 +1363,7 @@
     if (umAdminLink) umAdminLink.style.display = isAdmin ? 'flex' : 'none';
     umProfileName.value = name || '';
     umProfileEmail.value = email || '';
+    window.EcoTelefono.poner(umProfilePhone, phone);
     umProfileBirthdate.value = fechaNacimiento || '';
     umProfileTratamiento.value = tratamiento || '';
     ajustarCamposDePerfil();
@@ -1611,6 +1618,12 @@
       umProfileMsg.textContent = 'Falta el nombre.';
       return;
     }
+    const celularPerfil = window.EcoTelefono.valor(umProfilePhone);
+    if (umProfilePhone.value.trim() && !celularPerfil) {
+      umProfileMsg.className = 'um-msg um-error';
+      umProfileMsg.textContent = 'Escribe tu celular de 10 dígitos.';
+      return;
+    }
     umProfileSaveBtn.disabled = true;
     umProfileMsg.textContent = '';
     try {
@@ -1620,6 +1633,8 @@
         body: JSON.stringify({
           name: umProfileName.value,
           email: umProfileEmail.value,
+          phone: celularPerfil,
+          whatsappOptIn: perfilWhatsappOptIn,
           fechaNacimiento: umProfileBirthdate.value || null,
           tratamiento: umProfileTratamiento.value || null,
         }),
@@ -1636,6 +1651,8 @@
       // vez de dejar tal cual lo que se había tipeado.
       umProfileName.value = data.name || '';
       umProfileEmail.value = data.email || '';
+      window.EcoTelefono.poner(umProfilePhone, data.phone);
+      perfilWhatsappOptIn = !!data.whatsappOptIn;
       umProfileBirthdate.value = data.fechaNacimiento || '';
       umProfileTratamiento.value = data.tratamiento || '';
       ajustarCamposDePerfil();
@@ -2017,13 +2034,14 @@
   inviteSendBtn.addEventListener('click', async () => {
     inviteMsg.textContent = '';
     if (!inviteNombre.value.trim()) { inviteMsg.textContent = 'Escribe el nombre de la persona.'; inviteNombre.focus(); return; }
-    if (!invitePhone.value.trim()) { inviteMsg.textContent = 'Escribe su celular, con el código de país.'; invitePhone.focus(); return; }
+    const celularInvitado = window.EcoTelefono.valor(invitePhone);
+    if (!celularInvitado) { inviteMsg.textContent = 'Escribe su celular de 10 dígitos.'; invitePhone.focus(); return; }
     inviteSendBtn.disabled = true;
     try {
       const resp = await fetch('/api/invitaciones', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre: inviteNombre.value, telefono: invitePhone.value }),
+        body: JSON.stringify({ nombre: inviteNombre.value, telefono: celularInvitado }),
       });
       const data = await resp.json();
       if (!resp.ok) { inviteMsg.textContent = data.error || 'No se pudo crear la invitación.'; return; }
@@ -2357,7 +2375,8 @@
       // subperfil (isNarradorLink) es un invitado DISTINTO: sí se queda
       // aquí, narrando su propia bitácora (ver aplicarSesionSubperfil).
       if (data.isCollaborator) { window.location.href = '/colaborar.html'; return; }
-      showApp(data.username, data.name, data.email, data.fechaNacimiento, data.isAdmin, data.tratamiento);
+      perfilWhatsappOptIn = !!data.whatsappOptIn;
+      showApp(data.username, data.name, data.email, data.fechaNacimiento, data.isAdmin, data.tratamiento, data.phone);
       aplicarSesionSubperfil(data);
       // cargarVozElegida vive en el otro bloque <script>; si algo falla ahí, nunca
       // debe tumbar el ingreso (este .catch devolvería a la pantalla de login).
@@ -4191,6 +4210,7 @@
 </script>
 <script src="/eco-toast.js" defer></script>
 <script src="/eco-bebe-comun.js?v=5" defer></script>
+<script src="/eco-mascotas-inicio.js?v=1" defer></script>
 <script src="/eco-bebe.js?v=11" defer></script>
 <script src="/eco-crisis-banner.js?v=3" defer></script>
 <script src="/eco-intro.js?v=1" defer></script>

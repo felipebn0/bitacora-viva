@@ -44,7 +44,7 @@ function fakeSql(strings, ...values) {
   if (text.includes('SELECT id, texto, created_at FROM story_log WHERE user_id')) {
     return Promise.resolve(storyLog.map((s) => ({ id: s.id, texto: s.texto, created_at: '2026-01-01T00:00:00Z' })));
   }
-  if (text.includes('SELECT id, audio_url FROM story_log WHERE user_id') && text.includes('audio_url IS NOT NULL')) {
+  if (text.includes('SELECT id, audio_url, audio_urls FROM story_log WHERE user_id') && text.includes('audio_url IS NOT NULL')) {
     return Promise.resolve(storyLog.filter((s) => s.audio_url).map((s) => ({ id: s.id, audio_url: s.audio_url })));
   }
   if (text.includes('DELETE FROM chapters WHERE user_id')) { chaptersTable = []; return Promise.resolve([]); }

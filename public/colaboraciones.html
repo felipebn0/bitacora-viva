@@ -77,25 +77,11 @@
     min-height: 44px; padding: 8px 14px; margin-top: 4px;
   }
   /* Solo para lectores de pantalla — ver el comentario junto a
-     #colaboradoresStatus más abajo. */
+     #aportesStatus más abajo. */
   .sr-only {
     position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
     overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
   }
-
-  .colab-grid { display: flex; flex-wrap: wrap; gap: 14px; }
-  .colab-card {
-    background: #FBF6EA; border: 1px solid #E7DFCC; border-radius: 14px;
-    padding: 18px 20px; min-width: 150px; flex: 1 1 150px; text-align: center;
-  }
-  .colab-avatar {
-    width: 52px; height: 52px; border-radius: 50%; border: 2px solid var(--gold-deep);
-    display: flex; align-items: center; justify-content: center; margin: 0 auto 10px;
-    font-family: var(--font-display); font-size: 1.3rem; color: var(--gold-deep); background: var(--bg);
-  }
-  .colab-card .nombre { font-weight: 700; margin: 0 0 2px; }
-  .colab-card .parentesco { color: var(--gold-deep); font-weight: 700; font-size: 0.8rem; margin: 0 0 4px; text-transform: capitalize; }
-  .colab-card .count { color: var(--ink-soft); font-size: 0.85rem; margin: 0; }
 
   .aporte-item {
     background: #FBF6EA; border: 1px solid #E7DFCC; border-radius: 14px;
@@ -188,12 +174,14 @@
 <link rel="stylesheet" href="/eco-interior.css?v=1">
 <link rel="stylesheet" href="/eco-colaboraciones.css?v=1">
 <script src="/eco-colaboraciones.js?v=1" defer></script>
-<link rel="stylesheet" href="/eco-colaboraciones-vista.css?v=1">
-<script src="/eco-colaboraciones-vista.js?v=1" defer></script>
+<link rel="stylesheet" href="/eco-colaboraciones-vista.css?v=2">
+<script src="/eco-colaboraciones-vista.js?v=2" defer></script>
 <link rel="stylesheet" href="/eco-volver-unificado.css?v=1">
 <script src="/eco-volver-unificado.js?v=1" defer></script>
 <link rel="stylesheet" href="/eco-identidad-global.css?v=1">
 <link rel="stylesheet" href="/eco-audio-player.css">
+<link rel="stylesheet" href="/eco-telefono.css?v=1">
+<script src="/eco-telefono.js?v=2"></script>
 </head>
 <body class="eco-brand-v1 eco-page-colaboraciones">
   <header>
@@ -206,7 +194,7 @@
   <!-- <main>, no <div>: mismo criterio que app.html — sin esto un lector de
        pantalla no tiene forma de saltar directo al contenido. -->
   <main class="wrap">
-    <a class="aportar-ahora" href="/colaborar.html">🎙️ Aportar una historia ahora</a>
+    <a class="aportar-ahora" href="/colaborar.html">🎙️ Aportar a una historia ahora</a>
 
     <div class="tabs-row" role="tablist" aria-label="Colaboración">
       <button class="tab-btn active" id="tabRecibidosBtn" type="button" role="tab" aria-selected="true" aria-controls="tabRecibidos">Lo que dijeron de mí</button>
@@ -219,15 +207,6 @@
         <select id="recibidosSelect"></select>
       </div>
       <section id="colaboradoresSection">
-        <h2>Quiénes han colaborado</h2>
-        <p class="sub">Familiares que aportaron historias con tu código de invitación.</p>
-        <!-- El anuncio corto (aria-live) va aparte del contenido visual: si
-           aria-live estuviera en #colaboradoresLista directamente, un lector
-           de pantalla anunciaría TODAS las tarjetas de golpe cada vez que la
-           lista cambia — aquí solo se avisa algo corto como "Se cargaron 3
-           colaboradores.", y la lista se explora aparte, a su ritmo. -->
-        <p id="colaboradoresStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
-        <div id="colaboradoresLista"><p class="empty">Cargando…</p></div>
         <!-- Invitar a una persona (SEC-002A): el formulario se despliega aquí
              mismo, debajo del botón, sin mandar a nadie a la pantalla principal. -->
         <button class="empty-cta" id="invitarToggle" type="button" aria-expanded="false" aria-controls="invitarPanel">Invitar familiares →</button>
@@ -236,7 +215,7 @@
           <label for="inviteNombre">Nombre</label>
           <input type="text" id="inviteNombre" maxlength="60" placeholder="Ej: Tía Marta" autocomplete="off">
           <label for="invitePhone">Celular con WhatsApp</label>
-          <input type="tel" id="invitePhone" placeholder="+57 300 123 4567" autocomplete="off">
+          <input type="tel" id="invitePhone" data-eco-tel placeholder="300 123 4567" autocomplete="off">
           <button class="invite-send" id="inviteSendBtn" type="button">📲 Invitar por WhatsApp</button>
           <p class="invite-msg" id="inviteMsg" role="status" aria-live="polite"></p>
           <div id="invitePreview" hidden>
@@ -291,8 +270,6 @@
     ).join('');
   }
 
-  const colaboradoresLista = document.getElementById('colaboradoresLista');
-  const colaboradoresStatus = document.getElementById('colaboradoresStatus');
   const aportesLista = document.getElementById('aportesLista');
   const aportesStatus = document.getElementById('aportesStatus');
   const tabRecibidosBtn = document.getElementById('tabRecibidosBtn');
@@ -467,17 +444,6 @@
   // solo decidir el CTA de "Invitar familiares" cuando las dos
   // respuestas ya están — así no se repite el mismo CTA dos veces sin
   // pagar el viaje extra al servidor que costaba encadenarlas.
-  async function pedirColaboradores(ownerId) {
-    try {
-      const resp = await fetch('/api/tree/colaboradores' + (ownerId ? '?owner=' + encodeURIComponent(ownerId) : ''));
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok) return { error: mensajeDeError(resp, data, 'No se pudo cargar quiénes colaboraron.') };
-      return { colaboradores: data.colaboradores || [] };
-    } catch (e) {
-      return { error: 'No se pudo conectar. Revisa tu conexión a internet e intenta de nuevo.' };
-    }
-  }
-
   async function pedirAportes(ownerId) {
     try {
       const resp = await fetch('/api/contributions' + (ownerId ? '?owner=' + encodeURIComponent(ownerId) : ''));
@@ -489,9 +455,6 @@
     }
   }
 
-  // Reintentar vuelve a pedir LAS DOS secciones (no solo la que falló): si
-  // solo se reintentara la que tuvo el error, "aportes" podría quedar con
-  // un colaboradoresVacios viejo de la carga anterior.
   function agregarBotonReintentar(container) {
     const retryBtn = document.createElement('button');
     retryBtn.className = 'retry-btn';
@@ -499,52 +462,6 @@
     retryBtn.textContent = 'Reintentar';
     retryBtn.addEventListener('click', cargarTodo);
     container.appendChild(retryBtn);
-  }
-
-  // Devuelve true cuando la sección quedó realmente vacía (sin
-  // colaboradores) — no cuando hubo un error, ver cómo se usa más abajo.
-  function pintarColaboradores(resultado) {
-    if (resultado.error) {
-      colaboradoresStatus.textContent = resultado.error;
-      colaboradoresLista.innerHTML = '<p class="empty">' + resultado.error + '</p>';
-      agregarBotonReintentar(colaboradoresLista);
-      return false;
-    }
-    const colaboradores = resultado.colaboradores;
-    if (!colaboradores.length) {
-      colaboradoresStatus.textContent = 'Todavía nadie ha colaborado.';
-      colaboradoresLista.innerHTML = '<p class="empty">Todavía nadie ha colaborado.</p>';
-      return true; // vacío — ver pintarAportes()
-    }
-    colaboradoresStatus.textContent = colaboradores.length === 1 ? 'Se cargó 1 colaborador.' : `Se cargaron ${colaboradores.length} colaboradores.`;
-    const grid = document.createElement('div');
-    grid.className = 'colab-grid';
-    colaboradores.forEach((c) => {
-      const card = document.createElement('div');
-      card.className = 'colab-card';
-      const avatar = document.createElement('div');
-      avatar.className = 'colab-avatar';
-      avatar.textContent = (c.nombre || '?').trim().charAt(0).toUpperCase();
-      card.appendChild(avatar);
-      const nombre = document.createElement('p');
-      nombre.className = 'nombre';
-      nombre.textContent = c.nombre || 'Familiar';
-      card.appendChild(nombre);
-      if (c.parentesco) {
-        const parentesco = document.createElement('p');
-        parentesco.className = 'parentesco';
-        parentesco.textContent = c.parentesco;
-        card.appendChild(parentesco);
-      }
-      const count = document.createElement('p');
-      count.className = 'count';
-      count.textContent = c.historias === 1 ? '1 historia aportada' : `${c.historias} historias aportadas`;
-      card.appendChild(count);
-      grid.appendChild(card);
-    });
-    colaboradoresLista.innerHTML = '';
-    colaboradoresLista.appendChild(grid);
-    return false;
   }
 
   async function cambiarPrivacidadAporte(id, privada) {
@@ -564,7 +481,7 @@
     cargarTodo();
   }
 
-  function pintarAportes(resultado, colaboradoresVacios) {
+  function pintarAportes(resultado) {
     if (resultado.error) {
       aportesStatus.textContent = resultado.error;
       aportesLista.innerHTML = '<p class="empty">' + resultado.error + '</p>';
@@ -771,13 +688,14 @@
   inviteSendBtn.addEventListener('click', async () => {
     inviteMsg.textContent = '';
     if (!inviteNombre.value.trim()) { inviteMsg.textContent = 'Escribe el nombre de la persona.'; inviteNombre.focus(); return; }
-    if (!invitePhone.value.trim()) { inviteMsg.textContent = 'Escribe su celular, con el código de país.'; invitePhone.focus(); return; }
+    const celularInvitado = window.EcoTelefono.valor(invitePhone);
+    if (!celularInvitado) { inviteMsg.textContent = 'Escribe su celular de 10 dígitos.'; invitePhone.focus(); return; }
     inviteSendBtn.disabled = true;
     try {
       const resp = await fetch('/api/invitaciones', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre: inviteNombre.value, telefono: invitePhone.value, owner: ownerSeleccionado || undefined }),
+        body: JSON.stringify({ nombre: inviteNombre.value, telefono: celularInvitado, owner: ownerSeleccionado || undefined }),
       });
       const data = await resp.json();
       if (!resp.ok) { inviteMsg.textContent = data.error || 'No se pudo crear la invitación.'; return; }
@@ -799,11 +717,9 @@
   async function cargarTodo(ownerId, marcarVistos) {
     ownerSeleccionado = ownerId || null;
     if (!invitarPanel.hidden) cargarInvitaciones(); // cambió de bitácora: sus invitaciones
-    colaboradoresLista.innerHTML = skeletonHTML(2);
     aportesLista.innerHTML = skeletonHTML(3);
-    const [colabResultado, aportesResultado] = await Promise.all([pedirColaboradores(ownerId), pedirAportes(ownerId)]);
-    const colaboradoresVacios = pintarColaboradores(colabResultado);
-    pintarAportes(aportesResultado, colaboradoresVacios);
+    const aportesResultado = await pedirAportes(ownerId);
+    pintarAportes(aportesResultado);
     if (marcarVistos && !aportesResultado.error && !aportesVistos) {
       aportesVistos = true;
       fetch('/api/aportes/mark-seen', { method: 'POST' }).catch(() => {});

@@ -103,8 +103,6 @@ html.eco-bebe-activo .device { position: relative; }
 .eco-bebe-pagina details summary { cursor: pointer; font-weight: 700; padding: 8px 0; color: var(--rosa-hondo); }
 .eco-bebe-pagina :focus-visible, .eco-bebe-panel :focus-visible, .eco-bebe-pill:focus-visible { outline: 3px solid var(--rosa-hondo); outline-offset: 2px; }
 
-.eco-bebe-enlace-familia { display: inline-block; margin: 4px 0 10px; padding: 8px 16px; border-radius: 999px; background: var(--rosa-claro); color: var(--rosa-hondo); border: 1px solid var(--rosa-medio); font-weight: 700; text-decoration: none; }
-
 /* Nota por voz: el botón redondo de ECO reemplaza la caja de texto (la caja solo aparece si no hay micrófono). */
 .eco-bebe-invitacion { margin: 4px 0 0; text-align: center; color: var(--rosa-suave); font-size: 0.95rem; }
 .eco-bebe-voz { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 4px 0 6px; }
@@ -161,3 +159,7 @@ html.eco-bebe-azul .eco-bebe-voz-msg.error { color: #A3263A; }
 .orb.con-foto .orb-foto { display: block; }
 .orb.con-foto .orb-logo, .orb.con-foto #orbLabel { visibility: hidden; }
 html.eco-bebe-activo .orb.con-foto { box-shadow: 0 0 0 4px var(--rosa-papel), 0 0 0 7px var(--rosa-fuerte), 0 14px 30px -12px rgba(0, 0, 0, 0.35) !important; }
+
+.eco-mascotas-fila { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-self: center; }
+.eco-mascota-pill { border-color: #8aa070; color: #4F5D3A; }
+.eco-mascota-pill:disabled { opacity: 0.6; cursor: default; }

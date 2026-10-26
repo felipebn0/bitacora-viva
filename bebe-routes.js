@@ -61,7 +61,7 @@ module.exports = (app, {
   } : null;
 
   const leerConfig = async (profileUserId) => {
-    const filas = await sql`SELECT nombre, genero, to_char(nacio_en, 'YYYY-MM-DD') AS nacio_en FROM diario_bebe WHERE profile_user_id = ${profileUserId}`;
+    const filas = await sql`SELECT nombre, genero, to_char(nacio_en, 'YYYY-MM-DD') AS nacio_en FROM diario_bebe WHERE profile_user_id = ${profileUserId} AND archived_at IS NULL`;
     return filas[0] || null;
   };
 
@@ -100,11 +100,26 @@ module.exports = (app, {
       await ensureSchema();
       await sql`INSERT INTO diario_bebe (profile_user_id, nombre, genero, nacio_en)
         VALUES (${req.profileUserId}, ${nombre}, ${genero}, ${nacioEn})
-        ON CONFLICT (profile_user_id) DO UPDATE SET nombre = EXCLUDED.nombre, genero = EXCLUDED.genero, nacio_en = EXCLUDED.nacio_en, updated_at = now()`;
+        ON CONFLICT (profile_user_id) DO UPDATE SET nombre = EXCLUDED.nombre, genero = EXCLUDED.genero, nacio_en = EXCLUDED.nacio_en, archived_at = NULL, updated_at = now()`;
       res.json({ ok: true, config: formatearConfig(await leerConfig(req.profileUserId)) });
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: 'No se pudo guardar.' });
+    }
+  });
+
+  // Archivar el diario de tu propia bitácora: deja de verse en la pantalla principal y en Perfiles; no se
+  // borra nada (crearlo de nuevo con el mismo botón lo recupera).
+  app.post('/api/bebe/archivar', requireAuth, bloquearEscritura[0], rateLimit, async (req, res) => {
+    sinCache(res);
+    try {
+      await ensureSchema();
+      const filas = await sql`UPDATE diario_bebe SET archived_at = now() WHERE profile_user_id = ${req.userId} AND archived_at IS NULL RETURNING profile_user_id`;
+      if (!filas.length) return res.status(404).json({ error: 'No hay un diario para archivar.' });
+      res.json({ ok: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'No se pudo archivar.' });
     }
   });
 

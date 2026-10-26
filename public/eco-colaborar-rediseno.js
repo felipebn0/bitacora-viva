@@ -116,7 +116,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 (()=>{
   function init(){
     const title=document.querySelector('#appContent > header h1');
-    if(title) title.textContent='Aportar una historia';
+    if(title) title.textContent='Aportar a una historia';
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
   else init();
