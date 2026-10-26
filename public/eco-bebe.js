@@ -55,6 +55,8 @@
   function pintarEstado() {
     html.classList.toggle('eco-bebe-activo', activo);
     pill.setAttribute('aria-pressed', activo ? 'true' : 'false');
+    pill.classList.toggle('eco-pill-propia', activo);
+    pill.classList.toggle('eco-pill-bebe', !activo);
     const principal = nombrePrincipal();
     pill.textContent = activo ? (principal || 'Volver a mi perfil') : C().emojiBebe(config.genero) + ' ' + config.nombre;
     pill.setAttribute('aria-label', activo

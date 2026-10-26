@@ -1,0 +1,52 @@
+/* Perfil de una mascota: paleta café tenue (como el rosado del bebé) y colores de los botones de perfil:
+   la persona en verde, el bebé en rosado y la mascota en amarillo. */
+:root {
+  --cafe-fondo: #F4ECE3;
+  --cafe-papel: #FBF7F2;
+  --cafe-tinta: #3F2E22;
+  --cafe-suave: #6F5845;
+  --cafe-claro: #EAD9C6;
+  --cafe-medio: #D2B596;
+  --cafe-fuerte: #B58B63;
+  --cafe-hondo: #7A5232;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --cafe-fondo: #241C15;
+    --cafe-papel: #31261D;
+    --cafe-tinta: #F3E6D8;
+    --cafe-suave: #C9AF94;
+    --cafe-claro: #46372A;
+    --cafe-medio: #7A5F45;
+    --cafe-fuerte: #C99A6E;
+    --cafe-hondo: #E4BE98;
+  }
+}
+html.eco-mascota-activo { --bg: var(--cafe-fondo); --ink: var(--cafe-tinta); --ink-soft: var(--cafe-suave); --gold: var(--cafe-hondo); --gold-deep: var(--cafe-hondo); --moss: var(--cafe-fuerte); --bubble-user: var(--cafe-claro); }
+html.eco-mascota-activo body { background: var(--cafe-fondo) !important; color: var(--cafe-tinta); }
+html.eco-mascota-activo .device { background: var(--cafe-papel) !important; }
+html.eco-mascota-activo .orb { background: var(--cafe-fuerte) !important; box-shadow: 0 10px 26px -10px rgba(181, 139, 99, 0.65) !important; color: #2E2016 !important; }
+html.eco-mascota-activo .orb[data-state="listening"] { background: var(--cafe-hondo) !important; color: #fff !important; }
+html.eco-mascota-activo .orb[data-state="speaking"], html.eco-mascota-activo .orb[data-state="thinking"] { background: #8C6A4A !important; color: #fff !important; }
+html.eco-mascota-activo .orb[data-state="paused"] { background: var(--cafe-suave) !important; }
+html.eco-mascota-activo .write-row button, html.eco-mascota-activo .invite-cta { background: var(--cafe-hondo) !important; }
+html.eco-mascota-activo .write-toggle { color: var(--cafe-hondo); }
+html.eco-mascota-activo .body-area { gap: 14px; }
+html.eco-mascota-activo .greeting .sub { font-size: 1rem; }
+html.eco-mascota-activo .subperfil-banner { background: var(--cafe-claro) !important; border-color: var(--cafe-medio) !important; color: var(--cafe-tinta) !important; }
+
+/* Botones de perfil (fila de arriba): verde = la persona, rosado = bebé, amarillo = mascota. El del perfil activo va relleno. */
+.eco-especiales .eco-bebe-pill { background: transparent; }
+.eco-especiales .eco-pill-propia, .eco-bebe-pill.eco-pill-propia { border-color: #8aa070; color: #4F5D3A; }
+.eco-especiales .eco-pill-bebe { border-color: var(--rosa-medio, #E7B4BA); color: var(--rosa-hondo, #9A4F5C); }
+.eco-especiales .eco-pill-mascota { border-color: #D9A441; color: #7A5214; }
+.eco-especiales .eco-bebe-pill[aria-current="true"], .eco-especiales .eco-bebe-pill:hover:not(:disabled) { font-weight: 700; }
+.eco-especiales .eco-pill-propia[aria-current="true"], .eco-bebe-pill.eco-pill-propia[aria-pressed="true"] { background: #E6ECD8; }
+.eco-especiales .eco-pill-bebe[aria-current="true"] { background: var(--rosa-claro, #F6D9DB); }
+.eco-especiales .eco-pill-mascota[aria-current="true"] { background: #F8E7B8; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .eco-especiales .eco-pill-propia, :root:not([data-theme="light"]) .eco-bebe-pill.eco-pill-propia { color: #B5C98F; }
+  :root:not([data-theme="light"]) .eco-especiales .eco-pill-mascota { color: #E8C575; }
+  :root:not([data-theme="light"]) .eco-especiales .eco-pill-propia[aria-current="true"], :root:not([data-theme="light"]) .eco-bebe-pill.eco-pill-propia[aria-pressed="true"] { background: #36402A; }
+  :root:not([data-theme="light"]) .eco-especiales .eco-pill-mascota[aria-current="true"] { background: #4A3A12; }
+}

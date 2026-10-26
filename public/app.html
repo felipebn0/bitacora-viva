@@ -841,7 +841,8 @@
 <link rel="stylesheet" href="/eco-login-v6.css?v=6">
 <link rel="stylesheet" href="/eco-mobile-base.css">
 <link rel="stylesheet" href="/eco-telefono.css?v=1">
-<link rel="stylesheet" href="/eco-bebe.css?v=16">
+<link rel="stylesheet" href="/eco-bebe.css?v=17">
+<link rel="stylesheet" href="/eco-mascota.css?v=1">
 <link rel="stylesheet" href="/eco-crisis-banner.css?v=3">
 </head>
 <body class="eco-brand-v1 eco-page-inicio">
@@ -2276,6 +2277,7 @@
     }
     window.bitacoraActivaId = data.bitacoraActiva ? data.bitacoraActiva.id : null;
     window.bitacoraActivaTipo = data.bitacoraActiva ? (data.bitacoraActiva.tipo || null) : null;
+    document.documentElement.classList.toggle('eco-mascota-activo', window.bitacoraActivaTipo === 'mascota');
     if (data.bitacoraActiva && (data.bitacoraActiva.tipo === 'mascota' || data.bitacoraActiva.tipo === 'bebe')) {
       // Una mascota o un bebé no pueden hablar: quien los administra cuenta su vida, así que
       // el botón de hablar sigue visible; el aviso solo recuerda de quién es.
@@ -2284,6 +2286,8 @@
         ? `Estás guardando el diario de ${nombreEspecial}: sus fotos y lo que cuentes de sus días. Habla tú, ${nombreEspecial} es la protagonista.`
         : `Estás contando la vida de ${nombreEspecial}. Habla tú: ${nombreEspecial} es la protagonista.`;
       subperfilBanner.style.display = 'flex';
+      // Los botones de arriba (eco-mascotas-inicio.js) ya llevan de vuelta a la bitácora de la persona.
+      if (subperfilVolverBtn) subperfilVolverBtn.style.display = 'none';
       orbZone.style.display = '';
       if (greetingBox) greetingBox.style.display = '';
     } else if (data.bitacoraActiva) {
@@ -4215,7 +4219,7 @@
 </script>
 <script src="/eco-toast.js" defer></script>
 <script src="/eco-bebe-comun.js?v=6" defer></script>
-<script src="/eco-mascotas-inicio.js?v=2" defer></script>
+<script src="/eco-mascotas-inicio.js?v=3" defer></script>
 <script src="/eco-bebe.js?v=12" defer></script>
 <script src="/eco-crisis-banner.js?v=3" defer></script>
 <script src="/eco-intro.js?v=1" defer></script>
