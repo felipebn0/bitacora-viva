@@ -89,6 +89,31 @@ function fakeSql(strings, ...values) {
     const bit = bitacoras[values[0]];
     return Promise.resolve(bit && (bit.tipo === 'mascota' || bit.tipo === 'bebe') ? [{ tipo: bit.tipo, especie: bit.especie || null, raza: bit.raza || null }] : []);
   }
+  // Editar los datos de un perfil
+  if (text.includes('SELECT id, tipo FROM bitacoras WHERE id') && text.includes('archived_at IS NULL')) {
+    const bit = bitacoras[values[0]];
+    return Promise.resolve(bit && bit.admin_user_id === values[1] && !bit.archived_at ? [{ id: bit.id, tipo: bit.tipo || null }] : []);
+  }
+  if (text.includes('UPDATE bitacoras SET nombre = ') && text.includes('relacion = ')) {
+    const [nombre, fecha, relacion, trato, id] = values;
+    Object.assign(bitacoras[id], { nombre, fecha_nacimiento: fecha, relacion, tratamiento: trato || bitacoras[id].tratamiento });
+    return Promise.resolve([]);
+  }
+  if (text.includes('UPDATE bitacoras SET nombre = ') && text.includes('especie = ')) {
+    const [nombre, fecha, especie, raza, trato, id] = values;
+    Object.assign(bitacoras[id], { nombre, fecha_nacimiento: fecha, especie, raza, tratamiento: trato || bitacoras[id].tratamiento });
+    return Promise.resolve([]);
+  }
+  if (text.includes('UPDATE bitacoras SET nombre = ') && text.includes('tratamiento = ') && !text.includes('COALESCE')) {
+    const [nombre, trato, id] = values;
+    Object.assign(bitacoras[id], { nombre, tratamiento: trato });
+    return Promise.resolve([]);
+  }
+  if (text.includes('UPDATE diario_bebe SET nombre = ')) {
+    const [nombre, genero, nacioEn, id] = values;
+    Object.assign(diariosBebe[id], { nombre, genero, nacio_en: nacioEn });
+    return Promise.resolve([]);
+  }
   // Bebés: el diario vive en diario_bebe con el mismo id del perfil
   if (text.includes('INSERT INTO diario_bebe (profile_user_id, nombre, genero, nacio_en) SELECT id')) {
     const [adminUserId, nombre, tratamiento, nombre2, genero, nacioEn] = values;
@@ -123,9 +148,9 @@ function fakeSql(strings, ...values) {
     bitacoras[id] = { id, admin_user_id: adminUserId, nombre, fecha_nacimiento: fechaNacimiento, relacion: relacion || null, tratamiento: tratamiento || null, narrador_code: null, invite_code: null, aportes_pending_names: null, pin_hash: null, contexto_onboarding: null };
     return Promise.resolve([{ id }]);
   }
-  if (text.includes('SELECT id, nombre, relacion, contexto_onboarding, tratamiento, tipo, especie, raza FROM bitacoras WHERE admin_user_id')) {
+  if (text.includes('SELECT id, nombre, relacion, contexto_onboarding, tratamiento, tipo, especie, raza,') && text.includes('FROM bitacoras WHERE admin_user_id')) {
     const lista = Object.values(bitacoras).filter((b) => b.admin_user_id === values[0]);
-    return Promise.resolve(lista.map((b) => ({ id: b.id, nombre: b.nombre, relacion: b.relacion || null, contexto_onboarding: b.contexto_onboarding || null, tratamiento: b.tratamiento || null, tipo: b.tipo || null, especie: b.especie || null, raza: b.raza || null })));
+    return Promise.resolve(lista.map((b) => ({ id: b.id, nombre: b.nombre, relacion: b.relacion || null, contexto_onboarding: b.contexto_onboarding || null, tratamiento: b.tratamiento || null, tipo: b.tipo || null, especie: b.especie || null, raza: b.raza || null, fecha_nacimiento: b.fecha_nacimiento || null })));
   }
   if (text.includes('SELECT id FROM bitacoras WHERE id') && text.includes('admin_user_id')) {
     const bit = bitacoras[values[0]];
@@ -560,6 +585,31 @@ function check(nombre, cond) {
     check('el trato del bebé (niña) no se le aplica a quien habla', !/TRATO DE LA PERSONA/.test(sistemaBebe || ''));
     check('a quien habla se le trata según SU trato (papá), no según el del bebé', /PAPÁ de este bebé/.test(sistemaBebe || ''));
     check('el arranque es el del diario del bebé', /diario de su bebé/.test(llamadasAnthropic[0].messages[0].content));
+
+    // --- Editar los datos de los perfiles ---
+    const editar = (id, cuerpo, cookie = cookieFelipe) => request(server, { path: `/api/subprofiles/${id}/editar`, method: 'POST', body: cuerpo }, cookie);
+    let r = await editar(papaId, { nombre: 'papá nuevo', fechaNacimiento: '1950-03-04', relacion: 'Papá', tratamiento: 'masculino' });
+    check('editar una persona: nombre, fecha y para quién es', r.status === 200 && bitacoras[papaId].nombre === 'Papá Nuevo' && bitacoras[papaId].fecha_nacimiento === '1950-03-04' && bitacoras[papaId].relacion === 'Papá');
+    r = await editar(papaId, { nombre: 'Papá Nuevo', fechaNacimiento: '2999-01-01' });
+    check('una fecha que no existe se rechaza (400)', r.status === 400 || bitacoras[papaId].fecha_nacimiento !== '2999-01-01');
+    r = await editar(papaId, { nombre: '   ' });
+    check('sin nombre no se guarda (400)', r.status === 400);
+    r = await editar(romaId, { nombre: 'roma', especie: 'gato', raza: 'Angora', tratamiento: 'femenino', fechaNacimiento: '2020-05-01' });
+    check('editar una mascota: especie, raza, sexo y fecha', r.status === 200 && bitacoras[romaId].especie === 'gato' && bitacoras[romaId].raza === 'Angora' && bitacoras[romaId].fecha_nacimiento === '2020-05-01');
+    r = await editar(romaId, { nombre: 'Roma', especie: '', raza: '', tratamiento: 'femenino' });
+    check('sin decir qué animal es, se asume perro, y la raza vacía se borra', bitacoras[romaId].especie === 'perro' && bitacoras[romaId].raza === null);
+    r = await editar(rafaelaId, { nombre: 'rafaela sofía', tratamiento: 'femenino', nacioEn: nacidoHoy });
+    check('editar un bebé: nombre y fecha de nacimiento (ya llegó)', r.status === 200 && bitacoras[rafaelaId].nombre === 'Rafaela Sofía' && diariosBebe[rafaelaId].nombre === 'Rafaela Sofía' && diariosBebe[rafaelaId].nacio_en === nacidoHoy);
+    r = await editar(rafaelaId, { nombre: 'Rafaela', tratamiento: null, nacioEn: null });
+    check('quitar la fecha lo deja otra vez "en camino" y sin sexo', diariosBebe[rafaelaId].nacio_en === null && diariosBebe[rafaelaId].genero === null);
+    r = await editar(rafaelaId, { nombre: 'Rafaela', nacioEn: '2099-01-01' });
+    check('un bebé no puede haber nacido en el futuro (400)', r.status === 400);
+    const listaEditada = JSON.parse((await request(server, { path: '/api/subprofiles' }, cookieFelipe)).body).perfiles;
+    check('la lista trae lo que hace falta para editar (fecha, para quién es, raza)', listaEditada.find((p) => p.id === papaId).fechaNacimiento === '1950-03-04' && listaEditada.find((p) => p.id === papaId).relacion === 'Papá' && listaEditada.find((p) => p.id === rafaelaId).nacioEn === null);
+    r = await editar(papaId, { nombre: 'Intruso' }, cookieOtra);
+    check('otra familia no puede editar un perfil ajeno (404)', r.status === 404 && bitacoras[papaId].nombre === 'Papá Nuevo');
+    r = await editar(999999, { nombre: 'Nadie' });
+    check('un perfil que no existe -> 404', r.status === 404);
   } finally {
     server.close();
   }

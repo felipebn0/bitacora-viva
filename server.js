@@ -3326,15 +3326,15 @@ app.get('/api/subprofiles', requireAuth, bloquearColaborador, bloquearInvitado, 
     await ensureSchema();
     const propia = await sql`SELECT name FROM users WHERE id = ${req.userId}`;
     const nombrePropio = capitalizarNombre((propia[0] && propia[0].name) || '') || req.username;
-    const subperfiles = await sql`SELECT id, nombre, relacion, contexto_onboarding, tratamiento, tipo, especie, raza FROM bitacoras WHERE admin_user_id = ${req.userId} AND archived_at IS NULL ORDER BY created_at ASC`;
+    const subperfiles = await sql`SELECT id, nombre, relacion, contexto_onboarding, tratamiento, tipo, especie, raza, to_char(fecha_nacimiento, 'YYYY-MM-DD') AS fecha_nacimiento FROM bitacoras WHERE admin_user_id = ${req.userId} AND archived_at IS NULL ORDER BY created_at ASC`;
     const diario = (await sql`SELECT nombre, genero, to_char(nacio_en, 'YYYY-MM-DD') AS nacio_en FROM diario_bebe WHERE profile_user_id = ${req.userId} AND archived_at IS NULL`)[0];
     const diariosDeBebes = await sql`SELECT d.profile_user_id AS id, to_char(d.nacio_en, 'YYYY-MM-DD') AS nacio_en FROM diario_bebe d JOIN bitacoras b ON b.id = d.profile_user_id WHERE b.admin_user_id = ${req.userId} AND b.tipo = 'bebe'`;
-    const estadoDeBebe = new Map(diariosDeBebes.map((d) => [d.id, d.nacio_en ? 'nacida' : 'en_camino']));
+    const nacioDeBebe = new Map(diariosDeBebes.map((d) => [d.id, d.nacio_en || null]));
     res.json({
       diarioBebe: diario ? { nombre: diario.nombre, genero: diario.genero || null, estado: diario.nacio_en ? 'nacida' : 'en_camino' } : null,
       perfiles: [
         { id: req.userId, nombre: nombrePropio, esPropia: true },
-        ...subperfiles.map((s) => ({ id: s.id, nombre: capitalizarNombre(s.nombre), relacion: s.relacion || null, tratamiento: tratamientoValido(s.tratamiento), tieneOnboarding: !!s.contexto_onboarding, esPropia: false, ...(s.tipo === 'mascota' ? { tipo: 'mascota', especie: s.especie || 'perro', raza: s.raza || null } : {}), ...(s.tipo === 'bebe' ? { tipo: 'bebe', estado: estadoDeBebe.get(s.id) || 'en_camino' } : {}) })),
+        ...subperfiles.map((s) => ({ id: s.id, nombre: capitalizarNombre(s.nombre), relacion: s.relacion || null, tratamiento: tratamientoValido(s.tratamiento), tieneOnboarding: !!s.contexto_onboarding, esPropia: false, ...(s.tipo === 'mascota' ? { tipo: 'mascota', especie: s.especie || 'perro', raza: s.raza || null } : {}), ...(s.tipo === 'bebe' ? { tipo: 'bebe', estado: nacioDeBebe.get(s.id) ? 'nacida' : 'en_camino', nacioEn: nacioDeBebe.get(s.id) || null } : { fechaNacimiento: s.fecha_nacimiento || null }) })),
       ],
     });
   } catch (err) {
@@ -3430,6 +3430,42 @@ app.post('/api/subprofiles/:id/narrador-link/revoke', requireAuth, bloquearColab
 // en "cambiar de perfil" (ver los AND archived_at IS NULL de arriba), y se
 // cortan los dos códigos (narrador y de invitación) para que nadie pueda
 // seguir narrando ni aportando ahí mientras está archivado.
+// Cambia los datos de un perfil que administras (persona, mascota o bebé). Cada tipo edita lo suyo.
+app.post('/api/subprofiles/:id/editar', requireAuth, bloquearColaborador, bloquearInvitado, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    const id = parseInt(req.params.id, 10);
+    const filas = await sql`SELECT id, tipo FROM bitacoras WHERE id = ${id} AND admin_user_id = ${req.userId} AND archived_at IS NULL`;
+    if (!filas.length) return res.status(404).json({ error: 'No se encontró ese perfil.' });
+    const tipo = filas[0].tipo;
+    const cuerpo = req.body || {};
+    const nombre = capitalizarNombre(String(cuerpo.nombre || '').trim().slice(0, 100));
+    if (!nombre) return res.status(400).json({ error: 'Falta el nombre.' });
+    const trato = tratamientoValido(cuerpo.tratamiento);
+    const fecha = cuerpo.fechaNacimiento ? fechaNacimientoValida(cuerpo.fechaNacimiento) : null;
+    if (cuerpo.fechaNacimiento && !fecha) return res.status(400).json({ error: 'La fecha de nacimiento no es válida.' });
+
+    if (tipo === 'bebe') {
+      const nacioEn = cuerpo.nacioEn ? fechaNacimientoValida(cuerpo.nacioEn) : null;
+      if (cuerpo.nacioEn && !nacioEn) return res.status(400).json({ error: 'La fecha de nacimiento no es válida.' });
+      if (nacioEn && nacioEn > new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10)) return res.status(400).json({ error: 'La fecha de nacimiento no puede estar en el futuro.' });
+      await sql.transaction([
+        sql`UPDATE bitacoras SET nombre = ${nombre}, tratamiento = ${trato} WHERE id = ${id} AND admin_user_id = ${req.userId}`,
+        sql`UPDATE diario_bebe SET nombre = ${nombre}, genero = ${trato}, nacio_en = ${nacioEn}, updated_at = now() WHERE profile_user_id = ${id}`,
+      ]);
+    } else if (tipo === 'mascota') {
+      await sql`UPDATE bitacoras SET nombre = ${nombre}, fecha_nacimiento = ${fecha}, especie = ${limpiarTextoCorto(cuerpo.especie, 40) || 'perro'}, raza = ${limpiarTextoCorto(cuerpo.raza, 60)}, tratamiento = COALESCE(${trato}, tratamiento) WHERE id = ${id} AND admin_user_id = ${req.userId}`;
+    } else {
+      const relacion = capitalizarNombre(String(cuerpo.relacion || '').trim().slice(0, 60)) || null;
+      await sql`UPDATE bitacoras SET nombre = ${nombre}, fecha_nacimiento = ${fecha}, relacion = ${relacion}, tratamiento = COALESCE(${trato}, tratamiento) WHERE id = ${id} AND admin_user_id = ${req.userId}`;
+    }
+    res.json({ ok: true, nombre });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudieron guardar los cambios.' });
+  }
+});
+
 app.post('/api/subprofiles/:id/tratamiento', requireAuth, bloquearColaborador, bloquearInvitado, rateLimit, async (req, res) => {
   try {
     await ensureSchema();

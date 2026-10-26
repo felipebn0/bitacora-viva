@@ -210,6 +210,10 @@ En **Perfiles → Agregar un perfil** hay un selector (Familiar, Mascota, Bebé)
 - **Colaboración**: "Aportar a una historia" es un botón aparte (con su nota) y debajo la sección "Historias" con un menú de dos pestañas subrayadas (lo que dijeron de mí / lo que yo dije de otros).
 - **Fila de perfiles** (`public/eco-mascotas-inicio.js`, `eco-mascota.css`): arriba de la pantalla principal van, uno al lado del otro, la persona (verde), los bebés (rosado) y las mascotas (amarillo), con emoji (bebé: 👧 👦 👶 según el sexo; mascota: 🐶 perro, 🐱 gato, 🐾 otra). En el perfil de un bebé o de una mascota la fila incluye el botón de la persona para volver; el perfil activo va resaltado. El perfil de la mascota usa una paleta café tenue (clase `eco-mascota-activo`), como el rosado del bebé.
 
+## Editar los datos de un perfil
+
+En **Perfiles**, cada perfil administrado (familiar, mascota o bebé) tiene "Editar datos" (`POST /api/subprofiles/:id/editar`, solo la cuenta que lo administra). Cada tipo edita lo suyo: la persona, su nombre, fecha y "para quién es" (el trato sigue en su lista); la mascota, nombre, animal, raza, sexo y fecha; el bebé, nombre, sexo y fecha de nacimiento (vacía = "en camino"; al ponerla pasa a "ya llegó"). Los cambios del bebé se guardan también en su diario. Pruebas: `test/subperfiles.smoke.js` y `npm run test:perfil-mascota`.
+
 ## Panel de consumo (`/admin.html`)
 
 Reporte de uso y costo estimado por perfil (cuenta dueña o subperfil): tokens de Claude (incluida la parte de prompt caching), caracteres de voz (ElevenLabs/Azure), tiempo hablado, y espacio ocupado en la base de datos. Pensado para los dueños del producto, no para cuentas normales.

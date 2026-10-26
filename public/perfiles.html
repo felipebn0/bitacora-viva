@@ -108,6 +108,8 @@
   .trato-fila { margin-top: 10px; font-size: 0.85rem; color: var(--ink-soft); }
   .trato-fila select { margin-left: 6px; min-height: 36px; border: 1px solid #E7DFCC; border-radius: 8px; padding: 4px 8px; font-family: var(--font-body); background: #fff; color: var(--ink); font-size: 0.9rem; }
   .form-nueva .hint { font-size: 0.8rem; color: var(--ink-soft); margin: -8px 0 14px; }
+  .editar-box { margin-top: 14px; }
+  .editar-box .btn { margin-right: 8px; }
   .form-nueva .eco-check-fila { display: flex; align-items: center; gap: 8px; font-size: 0.95rem; color: var(--ink); margin: 0 0 14px; }
   .form-nueva .eco-check-fila input { width: 22px; min-height: 22px; height: 22px; margin: 0; }
 </style>
@@ -257,9 +259,35 @@
   }
 
   let perfilesCache = [];
+  let editandoId = null; // perfil cuyos datos se están editando
   let diarioBebe = null; // diario de un bebé de tu propia bitácora, si hay uno sin archivar
   let enlaceAbiertoId = null;
   let activaId = null; // window.bitacoraActivaId, si /api/me lo trae
+
+  // Datos que se pueden cambiar de un perfil: cada tipo (persona, mascota, bebé) muestra los suyos.
+  function formularioEdicion(p) {
+    const v = (x) => escaparHtml(x == null ? '' : x);
+    const campo = (id, etiqueta, valor, extra) => `<label for="ed-${id}">${etiqueta}</label><input type="text" id="ed-${id}" value="${v(valor)}" ${extra || ''}>`;
+    const fecha = (id, etiqueta, valor) => `<label for="ed-${id}">${etiqueta}</label><input type="date" id="ed-${id}" value="${v(valor)}">`;
+    const sexo = (opciones) => `<label for="ed-trato">Es</label><select id="ed-trato">${opciones.map(([val, txt]) => `<option value="${val}"${(p.tratamiento || '') === val ? ' selected' : ''}>${txt}</option>`).join('')}</select>`;
+    let campos = campo('nombre', 'Nombre', p.nombre, 'maxlength="100"');
+    if (p.tipo === 'bebe') {
+      campos = campo('nombre', 'Nombre', p.nombre, 'maxlength="40"') + sexo([['', 'Prefiero no decir'], ['femenino', 'Una niña'], ['masculino', 'Un niño']]) + fecha('nacio', 'Fecha de nacimiento (déjala vacía si todavía no nace)', p.nacioEn);
+    } else if (p.tipo === 'mascota') {
+      campos += campo('especie', 'Qué animal es', p.especie, 'maxlength="40" list="ed-especies"') + '<datalist id="ed-especies"><option value="perro"><option value="gato"></datalist>'
+        + campo('raza', 'Raza (opcional)', p.raza, 'maxlength="60"')
+        + sexo([['femenino', 'Hembra'], ['masculino', 'Macho']]) + fecha('fecha', 'Fecha de nacimiento o de llegada (opcional)', p.fechaNacimiento);
+    } else {
+      campos += fecha('fecha', 'Fecha de nacimiento (opcional)', p.fechaNacimiento)
+        + campo('relacion', '¿Para quién es? (opcional)', p.relacion, 'maxlength="60" list="ed-relaciones"')
+        + '<datalist id="ed-relaciones"><option value="Papá"><option value="Mamá"><option value="Abuelo"><option value="Abuela"><option value="Hijo"><option value="Hija"><option value="Amigo"><option value="Amiga"></datalist>';
+    }
+    return `<div class="form-nueva editar-box" data-editar-box="${p.id}">${campos}
+      <button class="btn" data-guardar-edicion="${p.id}" type="button">Guardar cambios</button>
+      <button class="btn small plain" data-cancelar-edicion="1" type="button">Cancelar</button>
+      <p class="msg" id="ed-msg" role="status" aria-live="polite" aria-atomic="true"></p>
+    </div>`;
+  }
 
   function filaPerfil(p) {
     const esActivo = p.esPropia ? !activaId : activaId === p.id;
@@ -286,6 +314,8 @@
     // ofrecer un botón que va a fallar).
     const archivarBtn = (!p.esPropia && !esActivo) ? `<button class="btn small plain warn" data-archivar="${p.id}" type="button">Archivar</button>` : '';
     const tratoFila = (p.esPropia || esMascota) ? '' : `<label class="trato-fila">Cómo quiere que lo traten:<select data-tratamiento="${p.id}" aria-label="Cómo quiere que lo traten"><option value=""${p.tratamiento ? '' : ' selected'}>Sin elegir</option><option value="masculino"${p.tratamiento === 'masculino' ? ' selected' : ''}>En masculino (él)</option><option value="femenino"${p.tratamiento === 'femenino' ? ' selected' : ''}>En femenino (ella)</option></select></label>`;
+    const editarBtn = p.esPropia ? '' : `<button class="btn small plain" data-editar="${p.id}" type="button">${editandoId === p.id ? 'Cerrar edición' : 'Editar datos'}</button>`;
+    const editarBox = editandoId === p.id ? formularioEdicion(p) : '';
     const enlaceBox = enlaceAbiertoId === p.id ? `<div class="enlace-box" id="enlaceBox-${p.id}"><p class="msg">Cargando…</p></div>` : '';
     return `<div class="perfil-card">
       <div class="fila-principal">
@@ -296,8 +326,9 @@
             ${tagPrincipal}
           </div>
         </div>
-        <div class="acciones-fila">${cambiarBtn}${enlaceToggleBtn}${onboardingBtn}${archivarBtn}</div>
+        <div class="acciones-fila">${cambiarBtn}${editarBtn}${enlaceToggleBtn}${onboardingBtn}${archivarBtn}</div>
       </div>
+      ${editarBox}
       ${tratoFila}
       ${enlaceBox}
     </div>`;
@@ -400,6 +431,41 @@
   });
 
   lista.addEventListener('click', async (e) => {
+    if (e.target.dataset.editar) {
+      const id = Number(e.target.dataset.editar);
+      editandoId = editandoId === id ? null : id;
+      pintarPerfiles();
+      return;
+    }
+    if (e.target.dataset.cancelarEdicion) { editandoId = null; pintarPerfiles(); return; }
+    if (e.target.dataset.guardarEdicion) {
+      const id = Number(e.target.dataset.guardarEdicion);
+      const perfil = perfilesCache.find((x) => x.id === id);
+      const val = (campo) => { const el = document.getElementById('ed-' + campo); return el ? el.value.trim() : ''; };
+      const msg = document.getElementById('ed-msg');
+      if (!val('nombre')) { msg.textContent = 'Falta el nombre.'; msg.classList.add('error'); return; }
+      const cuerpo = { nombre: val('nombre'), tratamiento: val('trato') || null };
+      if (perfil && perfil.tipo === 'bebe') cuerpo.nacioEn = val('nacio') || null;
+      else {
+        cuerpo.fechaNacimiento = val('fecha') || null;
+        if (perfil && perfil.tipo === 'mascota') { cuerpo.especie = val('especie'); cuerpo.raza = val('raza') || null; }
+        else cuerpo.relacion = val('relacion') || null;
+      }
+      e.target.disabled = true;
+      try {
+        const resp = await fetch(`/api/subprofiles/${id}/editar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) { msg.textContent = mensajeDeError(resp, data, 'No se pudieron guardar los cambios.'); msg.classList.add('error'); e.target.disabled = false; return; }
+        editandoId = null;
+        await cargarPerfiles();
+        listaStatus.textContent = '✓ Se guardaron los cambios.';
+      } catch (e9) {
+        msg.textContent = 'No se pudo conectar. Intenta de nuevo.';
+        msg.classList.add('error');
+        e.target.disabled = false;
+      }
+      return;
+    }
     const cambiarId = e.target.dataset.cambiar;
     if (cambiarId) {
       try {
