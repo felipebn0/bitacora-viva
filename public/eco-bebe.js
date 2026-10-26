@@ -141,7 +141,10 @@
     const saludo = document.getElementById('greeting');
     area.insertBefore(fila, area.firstChild);
     area.insertBefore(panel, saludo ? saludo.nextSibling : fila.nextSibling);
-    activo = leerGuardado();
+    // En el perfil de un bebé el modo está siempre activo (no hay botón para entrar ni salir).
+    const esPerfilBebe = window.bitacoraActivaTipo === 'bebe';
+    activo = esPerfilBebe || leerGuardado();
+    pill.hidden = esPerfilBebe;
     pintarEstado();
   }
 

@@ -198,6 +198,10 @@ En **Perfiles** hay una sección "Agregar una mascota" (nombre, perro/gato/otro,
 - **Fusionar personas del árbol** (`POST /api/tree/merge`): si una es "Yo", esa se conserva con el nombre más completo; lo que apuntaba a cualquiera de los dos nombres (hijos, recuerdos) apunta a la persona fusionada. Prueba: `test/arbol-fusion.smoke.js`.
 - **Diario de bebé en Perfiles**: aparece como un perfil más y se puede archivar (`POST /api/bebe/archivar`); archivado no sale en la pantalla principal. Las mascotas no archivadas salen como un botón en la pantalla principal (`public/eco-mascotas-inicio.js`).
 
+## Perfil de un bebé (igual que el de una mascota)
+
+En **Perfiles → Agregar un perfil** hay un selector (Familiar, Mascota, Bebé) que muestra las opciones de cada tipo. Un bebé es un subperfil con `bitacoras.tipo = 'bebe'` y su diario en `diario_bebe` con el mismo id (se crean juntos en `POST /api/subprofiles` con `tipo: 'bebe'`, `tratamiento` = niña/niño y `nacioEn` si ya nació). Como la mascota, quien lo administra SÍ puede narrar (`puedeNarrar`); dentro del perfil el modo del diario (paleta rosada o azul, subir fotos, charla del día a día) está siempre activo y el servidor lo aplica aunque el cliente no lo pida (`esPerfilBebe` en `/api/next`). El trato niña/niño es del bebé: a quien habla se le trata según el trato de su propia cuenta. En la pantalla principal sale un botón por cada bebé y mascota sin archivar (`public/eco-mascotas-inicio.js`). Un diario creado antes dentro de la propia bitácora (menú) sigue funcionando y aparece en Perfiles; los nuevos se crean solo desde Perfiles. Pruebas: `test/subperfiles.smoke.js` y `npm run test:perfil-mascota`.
+
 ## Panel de consumo (`/admin.html`)
 
 Reporte de uso y costo estimado por perfil (cuenta dueña o subperfil): tokens de Claude (incluida la parte de prompt caching), caracteres de voz (ElevenLabs/Azure), tiempo hablado, y espacio ocupado en la base de datos. Pensado para los dueños del producto, no para cuentas normales.

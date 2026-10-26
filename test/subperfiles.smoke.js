@@ -22,12 +22,13 @@ const serverPath = path.resolve(__dirname, '..', 'server.js');
 const PASSWORD_HASH = bcrypt.hashSync('miclave123', 4);
 
 const users = {
-  1: { id: 1, username: 'felipe', password_hash: PASSWORD_HASH, token_version: 0, owner_user_id: null, name: 'Felipe' },
+  1: { id: 1, username: 'felipe', password_hash: PASSWORD_HASH, token_version: 0, owner_user_id: null, name: 'Felipe', tratamiento: 'masculino' },
   // Cuenta de OTRA familia — para probar que nunca puede ver/tocar los
   // subperfiles administrados por la cuenta 1.
   2: { id: 2, username: 'otrafamilia', password_hash: PASSWORD_HASH, token_version: 0, owner_user_id: null, name: 'Otra Familia' },
 };
 
+let diariosBebe = {}; // id de bebé -> { profile_user_id, nombre, genero, nacio_en }
 let bitacoras = {}; // id -> { id, admin_user_id, nombre, fecha_nacimiento, narrador_code, created_at }
 // Arranca en 1000 (bien por encima de cualquier id de "users" del fixture)
 // para simular que la secuencia real nunca entregaría un id ya usado por una
@@ -84,11 +85,27 @@ function fakeSql(strings, ...values) {
     return Promise.resolve(bit ? [{ id: bit.id, admin_user_id: bit.admin_user_id, tipo: bit.tipo || null }] : []);
   }
   // Mascotas: ¿es una mascota? / perfil de la bitácora activa
-  if (text.includes('SELECT especie, raza FROM bitacoras WHERE id')) {
+  if (text.includes('SELECT tipo, especie, raza FROM bitacoras WHERE id')) {
     const bit = bitacoras[values[0]];
-    return Promise.resolve(bit && bit.tipo === 'mascota' ? [{ especie: bit.especie, raza: bit.raza }] : []);
+    return Promise.resolve(bit && (bit.tipo === 'mascota' || bit.tipo === 'bebe') ? [{ tipo: bit.tipo, especie: bit.especie || null, raza: bit.raza || null }] : []);
   }
-  if (text.includes('contexto_onboarding, tratamiento, voz FROM bitacoras WHERE id') && bitacoras[values[0]] && bitacoras[values[0]].tipo === 'mascota') {
+  // Bebés: el diario vive en diario_bebe con el mismo id del perfil
+  if (text.includes('INSERT INTO diario_bebe (profile_user_id, nombre, genero, nacio_en) SELECT id')) {
+    const [adminUserId, nombre, tratamiento, nombre2, genero, nacioEn] = values;
+    const id = nextBitacoraId++;
+    bitacoras[id] = { id, admin_user_id: adminUserId, nombre, fecha_nacimiento: null, relacion: null, tratamiento: tratamiento || null, tipo: 'bebe', narrador_code: null, invite_code: null, archived_at: null, created_at: new Date() };
+    diariosBebe[id] = { profile_user_id: id, nombre: nombre2, genero: genero || null, nacio_en: nacioEn || null };
+    return Promise.resolve([{ id }]);
+  }
+  if (text.includes('FROM diario_bebe d JOIN bitacoras b')) {
+    return Promise.resolve(Object.values(diariosBebe).filter((d) => bitacoras[d.profile_user_id] && bitacoras[d.profile_user_id].admin_user_id === values[0]).map((d) => ({ id: d.profile_user_id, nacio_en: d.nacio_en })));
+  }
+  if (text.includes('FROM diario_bebe WHERE profile_user_id') && text.includes('archived_at IS NULL')) {
+    const d = diariosBebe[values[0]];
+    return Promise.resolve(d ? [d] : []);
+  }
+  if (text.includes('SELECT tratamiento FROM users WHERE id')) return Promise.resolve([{ tratamiento: users[values[0]] && users[values[0]].tratamiento || null }]);
+  if (text.includes('contexto_onboarding, tratamiento, voz FROM bitacoras WHERE id') && bitacoras[values[0]] && (bitacoras[values[0]].tipo === 'mascota' || bitacoras[values[0]].tipo === 'bebe')) {
     const bit = bitacoras[values[0]];
     return Promise.resolve([{ nombre: bit.nombre, fecha_nacimiento: bit.fecha_nacimiento, created_at: null, contexto_onboarding: null, tratamiento: bit.tratamiento, voz: null }]);
   }
@@ -518,6 +535,31 @@ function check(nombre, cond) {
     check('el perfil de una persona sigue sin poder narrarse desde la cuenta administradora (403)', nextPapa.status === 403);
     const meFelipe = JSON.parse((await request(server, { path: '/api/me' }, cookieFelipe)).body);
     check('la propia bitácora no es mascota', !meFelipe.bitacoraActiva);
+
+    // --- Bebé: un perfil como el de la mascota, con su diario ---
+    const crearBebe = await request(server, { path: '/api/subprofiles', method: 'POST', body: { tipo: 'bebe', nombre: 'rafaela', tratamiento: 'femenino' } }, cookieFelipe);
+    check('crear el perfil de un bebé -> 200', crearBebe.status === 200);
+    const { id: rafaelaId } = JSON.parse(crearBebe.body);
+    check('queda como perfil de tipo bebé y con su diario (en camino, niña)', bitacoras[rafaelaId].tipo === 'bebe' && diariosBebe[rafaelaId] && diariosBebe[rafaelaId].nombre === 'Rafaela' && diariosBebe[rafaelaId].genero === 'femenino' && !diariosBebe[rafaelaId].nacio_en);
+    const futuro = await request(server, { path: '/api/subprofiles', method: 'POST', body: { tipo: 'bebe', nombre: 'Luna', nacioEn: '2099-01-01' } }, cookieFelipe);
+    check('una fecha de nacimiento en el futuro se rechaza (400)', futuro.status === 400);
+    const nacidoHoy = new Date().toISOString().slice(0, 10);
+    const crearNacido = await request(server, { path: '/api/subprofiles', method: 'POST', body: { tipo: 'bebe', nombre: 'Tomás', tratamiento: 'masculino', nacioEn: nacidoHoy } }, cookieFelipe);
+    check('si ya nació se guarda su fecha', crearNacido.status === 200 && diariosBebe[JSON.parse(crearNacido.body).id].nacio_en === nacidoHoy);
+    const listaBebe = JSON.parse((await request(server, { path: '/api/subprofiles' }, cookieFelipe)).body).perfiles;
+    check('la lista marca al bebé (tipo bebé, en camino) y al nacido (ya llegó)', listaBebe.find((p) => p.id === rafaelaId).tipo === 'bebe' && listaBebe.find((p) => p.id === rafaelaId).estado === 'en_camino' && listaBebe.find((p) => p.nombre === 'Tomás').estado === 'nacida');
+    const cookieComoBebe = (await request(server, { path: '/api/subprofiles/switch', method: 'POST', body: { id: rafaelaId } }, cookieFelipe)).headers['set-cookie'][0].split(';')[0];
+    const meBebe = JSON.parse((await request(server, { path: '/api/me' }, cookieComoBebe)).body);
+    check('/api/me: perfil de bebé donde sí se puede narrar', meBebe.puedeNarrar === true && meBebe.bitacoraActiva.tipo === 'bebe' && meBebe.bitacoraActiva.nombre === 'Rafaela');
+    llamadasAnthropic.length = 0;
+    pushAnthropicResponse('Qué lindo. ¿Cómo te sientes hoy esperando a Rafaela?');
+    const nextBebe = await request(server, { path: '/api/next', method: 'POST', body: { history: [], mode: 'historia' } }, cookieComoBebe);
+    const sistemaBebe = llamadasAnthropic[0] && llamadasAnthropic[0].system[0].text;
+    check('quien administra al bebé puede narrar (no hay 403)', nextBebe.status === 200);
+    check('la charla es la del diario del bebé aunque el cliente no pida el modo', /DIARIO DE UN BEBÉ/.test(sistemaBebe || '') && /Rafaela/.test(sistemaBebe || '') && /todavía no ha nacido/.test(sistemaBebe || ''));
+    check('el trato del bebé (niña) no se le aplica a quien habla', !/TRATO DE LA PERSONA/.test(sistemaBebe || ''));
+    check('a quien habla se le trata según SU trato (papá), no según el del bebé', /PAPÁ de este bebé/.test(sistemaBebe || ''));
+    check('el arranque es el del diario del bebé', /diario de su bebé/.test(llamadasAnthropic[0].messages[0].content));
   } finally {
     server.close();
   }

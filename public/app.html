@@ -841,7 +841,7 @@
 <link rel="stylesheet" href="/eco-login-v6.css?v=6">
 <link rel="stylesheet" href="/eco-mobile-base.css">
 <link rel="stylesheet" href="/eco-telefono.css?v=1">
-<link rel="stylesheet" href="/eco-bebe.css?v=12">
+<link rel="stylesheet" href="/eco-bebe.css?v=14">
 <link rel="stylesheet" href="/eco-crisis-banner.css?v=3">
 </head>
 <body class="eco-brand-v1 eco-page-inicio">
@@ -1395,7 +1395,6 @@
       });
       history.replaceState(null, '', location.pathname + location.hash);
     }
-    document.dispatchEvent(new CustomEvent('eco:app-lista'));
   }
 
   function showLogin() {
@@ -2276,10 +2275,14 @@
       return;
     }
     window.bitacoraActivaId = data.bitacoraActiva ? data.bitacoraActiva.id : null;
-    if (data.bitacoraActiva && data.bitacoraActiva.tipo === 'mascota') {
-      // Una mascota no puede hablar: quien la administra cuenta su vida, así que
+    window.bitacoraActivaTipo = data.bitacoraActiva ? (data.bitacoraActiva.tipo || null) : null;
+    if (data.bitacoraActiva && (data.bitacoraActiva.tipo === 'mascota' || data.bitacoraActiva.tipo === 'bebe')) {
+      // Una mascota o un bebé no pueden hablar: quien los administra cuenta su vida, así que
       // el botón de hablar sigue visible; el aviso solo recuerda de quién es.
-      subperfilBannerTexto.textContent = `Estás contando la vida de ${data.bitacoraActiva.nombre || 'tu mascota'}. Habla tú: ${data.bitacoraActiva.nombre || 'tu mascota'} es la protagonista.`;
+      const nombreEspecial = data.bitacoraActiva.nombre || (data.bitacoraActiva.tipo === 'bebe' ? 'tu bebé' : 'tu mascota');
+      subperfilBannerTexto.textContent = data.bitacoraActiva.tipo === 'bebe'
+        ? `Estás guardando el diario de ${nombreEspecial}: sus fotos y lo que cuentes de sus días. Habla tú, ${nombreEspecial} es la protagonista.`
+        : `Estás contando la vida de ${nombreEspecial}. Habla tú: ${nombreEspecial} es la protagonista.`;
       subperfilBanner.style.display = 'flex';
       orbZone.style.display = '';
       if (greetingBox) greetingBox.style.display = '';
@@ -2378,6 +2381,8 @@
       perfilWhatsappOptIn = !!data.whatsappOptIn;
       showApp(data.username, data.name, data.email, data.fechaNacimiento, data.isAdmin, data.tratamiento, data.phone);
       aplicarSesionSubperfil(data);
+      // Después de saber cuál perfil está activo: los botones de bebé y mascotas dependen de eso.
+      document.dispatchEvent(new CustomEvent('eco:app-lista'));
       // cargarVozElegida vive en el otro bloque <script>; si algo falla ahí, nunca
       // debe tumbar el ingreso (este .catch devolvería a la pantalla de login).
       try { if (window.cargarVozElegida) window.cargarVozElegida(); } catch (e) {}

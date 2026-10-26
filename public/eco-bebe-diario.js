@@ -82,7 +82,7 @@
     $('vistaDiario').hidden = !cfg;
     if (!cfg) {
       if (!estado.puedeEditar) aviso('Todavía no hay un diario para ver.');
-      else { aviso(''); precargarForm(); $('formConfig').hidden = false; }
+      else aviso('');
       return;
     }
     aviso('');
@@ -92,10 +92,7 @@
     $('avisoPrivacidad').textContent = estado.puedeEditar
       ? 'Lo que subes aquí lo ven solo los familiares que invitaste a tu bitácora. Lo que cuentas en la charla con ECO queda en tu libro y también aquí.'
       : 'Este diario lo comparte contigo su familia. No lo reenvíes sin permiso.';
-    if (estado.puedeEditar) {
-      $('ajustesForm').appendChild($('formConfig'));
-      precargarForm();
-    }
+    if (estado.puedeEditar) precargarForm();
     $('volver').href = estado.puedeEditar ? '/app.html' : '/colaboraciones.html';
     pintarEntradas();
   }
@@ -129,7 +126,6 @@
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || 'No se pudo guardar.');
       estado.config = d.config;
-      $('vistaCrear').appendChild($('formConfig'));
       mostrar();
       aviso('Guardado.');
     } catch (e) { aviso(e.message, true); }

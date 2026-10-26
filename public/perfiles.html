@@ -108,6 +108,8 @@
   .trato-fila { margin-top: 10px; font-size: 0.85rem; color: var(--ink-soft); }
   .trato-fila select { margin-left: 6px; min-height: 36px; border: 1px solid #E7DFCC; border-radius: 8px; padding: 4px 8px; font-family: var(--font-body); background: #fff; color: var(--ink); font-size: 0.9rem; }
   .form-nueva .hint { font-size: 0.8rem; color: var(--ink-soft); margin: -8px 0 14px; }
+  .form-nueva .eco-check-fila { display: flex; align-items: center; gap: 8px; font-size: 0.95rem; color: var(--ink); margin: 0 0 14px; }
+  .form-nueva .eco-check-fila input { width: 22px; min-height: 22px; height: 22px; margin: 0; }
 </style>
 </head>
 <body class="eco-brand-v1 eco-page-perfiles">
@@ -130,9 +132,17 @@
     </section>
 
     <section id="nuevaSection">
-      <h2>Agregar bitácora de otra persona</h2>
-      <p class="sub">Para alguien que quieras administrar (ej. tu papá o tu mamá) — no necesita usuario ni clave, le compartes un enlace permanente para que cuente sus propias historias.</p>
+      <h2>Agregar un perfil</h2>
+      <p class="sub" id="nuevoSub"></p>
       <div class="form-nueva">
+        <label for="tipoPerfil">¿Qué tipo de perfil es?</label>
+        <select id="tipoPerfil">
+          <option value="familiar">Familiar</option>
+          <option value="mascota">Mascota</option>
+          <option value="bebe">Bebé</option>
+        </select>
+
+        <div id="grupoFamiliar">
         <label for="nuevoNombre">Nombre</label>
         <input type="text" id="nuevoNombre" placeholder="Ej: Papá" maxlength="100">
         <label for="nuevaFecha">Fecha de nacimiento (opcional)</label>
@@ -159,13 +169,9 @@
         <input type="text" id="nuevaRelacionOtro" placeholder="¿Cuál?" maxlength="60" hidden>
         <button class="btn" id="crearBtn" type="button">+ Agregar bitácora</button>
         <p class="msg" id="crearMsg" role="status" aria-live="polite" aria-atomic="true"></p>
-      </div>
-    </section>
+        </div>
 
-    <section id="mascotaSection">
-      <h2>Agregar una mascota</h2>
-      <p class="sub">Tú cuentas su vida: cómo llegó, sus travesuras, sus costumbres. Eco te pregunta por ella. Si quieres, compartes un enlace para que la familia sume sus recuerdos.</p>
-      <div class="form-nueva">
+        <div id="grupoMascota" hidden>
         <label for="mascotaNombre">Nombre</label>
         <input type="text" id="mascotaNombre" placeholder="Ej: Roma" maxlength="100">
         <label for="mascotaEspecie">¿Qué es?</label>
@@ -187,6 +193,25 @@
         <input type="date" id="mascotaFecha" aria-label="Fecha de nacimiento o de llegada (opcional)">
         <button class="btn" id="mascotaBtn" type="button">+ Agregar mascota</button>
         <p class="msg" id="mascotaMsg" role="status" aria-live="polite" aria-atomic="true"></p>
+        </div>
+
+        <div id="grupoBebe" hidden>
+        <label for="bebeNombre">Nombre</label>
+        <input type="text" id="bebeNombre" placeholder="Ej: Rafaela" maxlength="40">
+        <label for="bebeSexo">Es</label>
+        <select id="bebeSexo">
+          <option value="">Prefiero no decir</option>
+          <option value="femenino">Una niña</option>
+          <option value="masculino">Un niño</option>
+        </select>
+        <label class="eco-check-fila" for="bebeNacio"><input type="checkbox" id="bebeNacio"> Ya nació</label>
+        <div id="bebeFechaCampo" hidden>
+          <label for="bebeFecha">Fecha de nacimiento</label>
+          <input type="date" id="bebeFecha" aria-label="Fecha de nacimiento">
+        </div>
+        <button class="btn" id="bebeBtn" type="button">+ Agregar bebé</button>
+        <p class="msg" id="bebeMsg" role="status" aria-live="polite" aria-atomic="true"></p>
+        </div>
       </div>
     </section>
   </main>
@@ -239,9 +264,11 @@
   function filaPerfil(p) {
     const esActivo = p.esPropia ? !activaId : activaId === p.id;
     const inicial = (p.nombre || '?').trim().charAt(0).toUpperCase();
-    const esMascota = p.tipo === 'mascota';
+    const esMascota = p.tipo === 'mascota' || p.tipo === 'bebe';
     const tagPrincipal = p.esPropia
       ? `<span class="principal-tag">Usuario principal</span>`
+      : p.tipo === 'bebe'
+      ? `<span class="principal-tag">Bebé · ${p.estado === 'nacida' ? 'ya llegó' : 'en camino'}</span>`
       : esMascota
       ? `<span class="principal-tag">${escaparHtml(p.especie || 'Mascota')}${p.raza ? ' · ' + escaparHtml(p.raza) : ''}</span>`
       : (p.relacion ? `<span class="principal-tag">${escaparHtml(p.relacion)}</span>` : '');
@@ -511,6 +538,6 @@
 })();
 </script>
 <script src="/eco-volver-unificado.js" defer></script>
-<script src="/perfiles-mascota.js?v=1" defer></script>
+<script src="/perfiles-nuevo.js?v=1" defer></script>
 </body>
 </html>

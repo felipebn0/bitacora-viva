@@ -1,4 +1,4 @@
-/* Pantalla principal: un botón por cada mascota (no archivada) para entrar a contar su vida. */
+/* Pantalla principal: un botón por cada bebé y mascota (no archivados) para entrar a contar su vida. */
 (() => {
   'use strict';
   let hecho = false;
@@ -13,14 +13,14 @@
     try {
       const resp = await fetch('/api/subprofiles', { credentials: 'same-origin' });
       if (!resp.ok) return;
-      const mascotas = ((await resp.json()).perfiles || []).filter((p) => p.tipo === 'mascota');
+      const mascotas = ((await resp.json()).perfiles || []).filter((p) => p.tipo === 'mascota' || p.tipo === 'bebe');
       if (!mascotas.length) return;
       const fila = document.createElement('div');
       fila.className = 'eco-mascotas-fila';
       mascotas.forEach((m) => {
         const b = document.createElement('button');
         b.type = 'button';
-        b.className = 'eco-bebe-pill eco-mascota-pill';
+        b.className = 'eco-bebe-pill ' + (m.tipo === 'bebe' ? 'eco-bebe-pill-bebe' : 'eco-mascota-pill');
         b.textContent = m.nombre + ' ›';
         b.setAttribute('aria-label', 'Contar la vida de ' + m.nombre);
         b.addEventListener('click', async () => {

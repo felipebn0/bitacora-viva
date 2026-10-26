@@ -7,7 +7,7 @@
 <title>Diario de un bebé · Eco</title>
 <link rel="icon" href="/images/favicon-32.png">
 <link rel="stylesheet" href="/fonts/fonts.css">
-<link rel="stylesheet" href="/eco-bebe.css?v=11">
+<link rel="stylesheet" href="/eco-bebe.css?v=14">
 <script src="/font-size.js"></script>
 </head>
 <body class="eco-bebe-pagina">
@@ -21,7 +21,26 @@
 
   <main>
     <section class="eco-bebe-tarjeta" id="vistaCrear" hidden aria-labelledby="crearTitulo">
-      <h2 id="crearTitulo" class="eco-bebe-sub">Crea el diario</h2>
+      <h2 id="crearTitulo" class="eco-bebe-sub">Todavía no hay un diario</h2>
+      <p class="eco-bebe-aviso">El diario de un bebé se crea como un perfil: agrégalo en Perfiles, igual que una mascota o un familiar.</p>
+      <a class="eco-bebe-grande eco-bebe-enlace-boton" href="/perfiles.html">Agregar un bebé en Perfiles</a>
+    </section>
+
+    <section id="vistaDiario" hidden>
+      <div class="eco-bebe-tarjeta" id="nuevaEntrada" hidden>
+        <button class="eco-bebe-grande" id="botonFoto" type="button">Subir una foto de hoy</button>
+        <input id="inputFoto" type="file" accept="image/*" hidden aria-label="Elegir una foto">
+        <div class="eco-bebe-campo" id="campoNota">
+          <p class="eco-bebe-invitacion">Cuéntale a ECO cómo estuvo el día, qué sentiste, qué pasó en la foto. Se guarda solo.</p>
+          <textarea id="textoNota" maxlength="600" aria-label="Cuenta algo de hoy" placeholder="Cómo estuvo el día, qué sentiste, qué pasó en la foto"></textarea>
+        </div>
+        <button class="eco-bebe-revoz" id="otraNota" type="button" hidden>Empezar otra nota</button>
+      </div>
+      <ul class="eco-bebe-lista" id="lista"></ul>
+      <p class="eco-bebe-vacio" id="vacio" hidden></p>
+      <details class="eco-bebe-tarjeta" id="ajustes" hidden>
+        <summary>Cambiar los datos del bebé</summary>
+        <div id="ajustesForm">
       <form id="formConfig" class="eco-bebe-form" novalidate>
         <div class="eco-bebe-campo">
           <label for="cfgNombre">Nombre del bebé</label>
@@ -45,30 +64,13 @@
         </div>
         <button class="eco-bebe-grande" id="cfgGuardar" type="submit">Guardar</button>
       </form>
-      <p class="eco-bebe-aviso">Las fotos y notas que subas aquí las ven solo los familiares que invitaste a tu bitácora.</p>
-    </section>
-
-    <section id="vistaDiario" hidden>
-      <div class="eco-bebe-tarjeta" id="nuevaEntrada" hidden>
-        <button class="eco-bebe-grande" id="botonFoto" type="button">Subir una foto de hoy</button>
-        <input id="inputFoto" type="file" accept="image/*" hidden aria-label="Elegir una foto">
-        <div class="eco-bebe-campo" id="campoNota">
-          <p class="eco-bebe-invitacion">Cuéntale a ECO cómo estuvo el día, qué sentiste, qué pasó en la foto. Se guarda solo.</p>
-          <textarea id="textoNota" maxlength="600" aria-label="Cuenta algo de hoy" placeholder="Cómo estuvo el día, qué sentiste, qué pasó en la foto"></textarea>
         </div>
-        <button class="eco-bebe-revoz" id="otraNota" type="button" hidden>Empezar otra nota</button>
-      </div>
-      <ul class="eco-bebe-lista" id="lista"></ul>
-      <p class="eco-bebe-vacio" id="vacio" hidden></p>
-      <details class="eco-bebe-tarjeta" id="ajustes" hidden>
-        <summary>Cambiar los datos del bebé</summary>
-        <div id="ajustesForm"></div>
       </details>
       <p class="eco-bebe-aviso" id="avisoPrivacidad"></p>
     </section>
   </main>
 </div>
 <script src="/eco-bebe-comun.js?v=5"></script>
-<script src="/eco-bebe-diario.js?v=6"></script>
+<script src="/eco-bebe-diario.js?v=7"></script>
 </body>
 </html>

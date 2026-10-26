@@ -163,3 +163,9 @@ html.eco-bebe-activo .orb.con-foto { box-shadow: 0 0 0 4px var(--rosa-papel), 0 
 .eco-mascotas-fila { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-self: center; }
 .eco-mascota-pill { border-color: #8aa070; color: #4F5D3A; }
 .eco-mascota-pill:disabled { opacity: 0.6; cursor: default; }
+
+.eco-bebe-enlace-boton { display: block; text-align: center; text-decoration: none; box-sizing: border-box; }
+.eco-bebe-pill-bebe { border-color: var(--rosa-medio, #E7B4BA); color: var(--rosa-hondo, #9A4F5C); }
+.eco-bebe-pill-bebe:disabled { opacity: 0.6; cursor: default; }
+html.eco-bebe-activo .subperfil-banner { background: var(--rosa-claro) !important; border-color: var(--rosa-medio) !important; color: var(--rosa-tinta) !important; }
+html.eco-bebe-activo .subperfil-banner .write-toggle { color: var(--rosa-hondo); }

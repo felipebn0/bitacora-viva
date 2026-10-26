@@ -150,17 +150,18 @@ const CAPTURAS = process.env.CAPTURAS_BEBE;
   if (CAPTURAS) await t.page.screenshot({ path: path.join(CAPTURAS, 'sesion-rosa-oscuro.png') });
   await t.ctx.close();
 
-  // 4) Página del diario: crear, ya nació, subir
+  // 4a) Sin diario: la página manda a Perfiles (un bebé se agrega como un perfil más)
   t = await contexto({ config: null });
   await t.page.goto(base + '/diario-bebe.html');
   await t.page.waitForSelector('#vistaCrear:not([hidden])');
-  await t.page.click('#cfgGuardar');
-  ok(/nombre/i.test(await t.page.textContent('#estado')), 'sin nombre no deja crear el diario');
-  await t.page.fill('#cfgNombre', 'Rafaela');
-  await t.page.selectOption('#cfgGenero', 'femenino');
-  await t.page.click('#cfgGuardar');
+  ok(await t.page.getAttribute('#vistaCrear a', 'href') === '/perfiles.html' && await t.page.isHidden('#formConfig'), 'sin diario: la página lleva a Perfiles para agregar un bebé (ya no hay formulario aquí)');
+  await t.ctx.close();
+
+  // 4) Página del diario: nota por voz, ya nació
+  t = await contexto({ config: { nombre: 'Rafaela', genero: 'femenino', nacioEn: null, estado: 'en_camino' } });
+  await t.page.goto(base + '/diario-bebe.html');
   await t.page.waitForSelector('#vistaDiario:not([hidden])');
-  ok((await t.page.textContent('#titulo')) === 'Diario de Rafaela' && (await t.page.textContent('#subtitulo')) === 'Rafaela, en camino', 'crea el diario: "Diario de Rafaela, en camino"');
+  ok((await t.page.textContent('#titulo')) === 'Diario de Rafaela' && (await t.page.textContent('#subtitulo')) === 'Rafaela, en camino', 'abre el diario: "Diario de Rafaela, en camino"');
   t.estado.dictado = 'Hoy escuché su corazón';
   await t.page.click('#campoNota .eco-bebe-orbe');
   await t.page.waitForSelector('#campoNota .eco-bebe-orbe.grabando');
