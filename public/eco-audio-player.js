@@ -57,12 +57,26 @@
     row.appendChild(area);
 
     // Conectar al <audio> real
-    if (audio.readyState >= 1 && audio.duration) {
-      dur.textContent = fmt(audio.duration);
-    }
-    audio.addEventListener('loadedmetadata', () => {
-      dur.textContent = fmt(audio.duration);
-    });
+    // Las grabaciones hechas desde el navegador (webm) a veces no traen su duración y el reproductor la ve
+    // como "infinita": se muestra 0:00 hasta darles play. Saltar al final una vez hace que el navegador la calcule.
+    const mostrarDuracion = () => {
+      const d = audio.duration;
+      dur.textContent = Number.isFinite(d) && d > 0 ? fmt(d) : '0:00';
+    };
+    const calcularDuracion = () => {
+      if (audio.duration !== Infinity || !audio.paused) return;
+      const antes = audio.currentTime;
+      const alVolver = () => {
+        audio.removeEventListener('timeupdate', alVolver);
+        if (audio.paused) audio.currentTime = antes;
+        mostrarDuracion();
+      };
+      audio.addEventListener('timeupdate', alVolver);
+      try { audio.currentTime = 1e101; } catch (e) { audio.removeEventListener('timeupdate', alVolver); }
+    };
+    if (audio.readyState >= 1) { mostrarDuracion(); calcularDuracion(); }
+    audio.addEventListener('loadedmetadata', () => { mostrarDuracion(); calcularDuracion(); });
+    audio.addEventListener('durationchange', mostrarDuracion);
     audio.addEventListener('timeupdate', () => {
       if (!audio.duration) return;
       const pct = (audio.currentTime / audio.duration * 100).toFixed(1) + '%';

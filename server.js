@@ -5113,6 +5113,20 @@ function extraerMarcaNacio(texto) {
   return { text: limpio, nacioEn: fecha };
 }
 
+// Cuando el mes está terminando (últimos 5 días, hora de Colombia), la entrevistadora pregunta una vez por algo
+// nuevo o interesante que pasó en ese mes (un viaje, un trabajo, un amor): así la charla alterna entre el pasado y
+// el presente y no se olvidan las cosas nuevas. ECO_FECHA_HOY (AAAA-MM-DD) solo sirve para las pruebas.
+function instruccionFinDeMes(ahora) {
+  const base = process.env.ECO_FECHA_HOY ? new Date(process.env.ECO_FECHA_HOY + 'T12:00:00-05:00') : (ahora || new Date());
+  const partes = {};
+  new Intl.DateTimeFormat('es-CO', { timeZone: 'America/Bogota', year: 'numeric', month: 'numeric', day: 'numeric' }).formatToParts(base).forEach((x) => { partes[x.type] = x.value; });
+  const anio = Number(partes.year), mes = Number(partes.month), dia = Number(partes.day);
+  const diasDelMes = new Date(Date.UTC(anio, mes, 0)).getUTCDate();
+  if (diasDelMes - dia > 4) return '';
+  const nombreMes = new Intl.DateTimeFormat('es-CO', { timeZone: 'UTC', month: 'long' }).format(new Date(Date.UTC(anio, mes - 1, 15)));
+  return `\n\nFIN DE MES: estamos en los últimos días de ${nombreMes} de ${anio}. En algún momento de esta charla, cuando cierres un tema o la conversación respire (nunca interrumpiendo una historia que la persona está contando), haz UNA sola vez una pregunta sobre este mes que termina: algo interesante o nuevo que haya pasado en estos días, por ejemplo un viaje, un trabajo nuevo, un nuevo amor, una noticia, un logro o algo que haya cambiado en su vida. Esto sirve para alternar entre el pasado y el presente y no olvidar las cosas nuevas que están pasando. Si en esta charla ya hiciste esa pregunta, no la repitas. Si la persona cuenta algo de este mes, trátalo con el mismo interés que un recuerdo antiguo, profundiza con calma y después puedes volver al tema de antes.`;
+}
+
 const INICIO_MODO_BEBE = '(La persona acaba de presionar el botón para charlar en el modo especial del diario de su bebé. Saluda con calidez por su nombre si lo sabes y, en el mismo mensaje, haz UNA sola pregunta sencilla sobre cómo le fue hoy con su bebé o cómo se ha sentido hoy (según lo que dice el modo especial de arriba). No hables de otros recuerdos ni de otros temas de su vida.)';
 
 // Cuando la charla del modo bebé arranca porque la persona acaba de subir una foto desde el panel
@@ -5600,7 +5614,8 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
         SYSTEM_PROMPT +
         (memoria ? `\n\nResumen de charlas anteriores (no repitas lo que ya está aquí):` + envolverDatoNoConfiable('resumen_charlas_anteriores', memoria) : '') +
         familia.text +
-        (configBebe ? instruccionModoBebe(configBebe, tratamientoDeQuienHabla) : '');
+        (configBebe ? instruccionModoBebe(configBebe, tratamientoDeQuienHabla) : '') +
+        (!configBebe && !mascotaActiva ? instruccionFinDeMes() : '');
     }
 
     // Prompt caching: este system (~13.000 tokens de SYSTEM_PROMPT/ARBOL_SYSTEM_PROMPT

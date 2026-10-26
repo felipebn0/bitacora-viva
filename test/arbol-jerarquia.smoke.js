@@ -76,5 +76,66 @@ ok(r7.levels[2] === 0 && r7.levels[3] === 0 && r7.levels[4] === 0 && r7.levels[1
 // --- Las pistas de relación ---
 ok(pista('Abuela materna') === -2 && pista('Bisabuelo') === -3 && pista('Mamá') === -1 && pista('Tío abuelo') === -2 && pista('Prima') === 0 && pista('Sobrino') === 1 && pista('Nieto') === 2 && pista('amigo de la familia') === null, 'pistas: abuelos -2, bisabuelos -3, padres -1, primos 0, sobrinos +1, nietos +2, otros nada');
 
+
+// --- Hermanos juntos e hijos cerca de sus padres (árboles armados al azar, siempre los mismos) ---
+function azar(semilla) { let x = semilla; return () => { x = (x * 1664525 + 1013904223) % 4294967296; return x / 4294967296; }; }
+let violaciones = 0, solapes = 0, lejos = 0, arboles = 0, familias = 0;
+for (let semilla = 1; semilla <= 120; semilla++) {
+  const rnd = azar(semilla);
+  const gente2 = [], aristas2 = [];
+  let id = 0;
+  const nueva = (relacion, extra) => { id++; const p = P(id, 'Persona ' + String(id).padStart(3, '0') + String.fromCharCode(97 + Math.floor(rnd() * 20)), relacion, extra); gente2.push(p); return p; };
+  const hermanosDe = new Map(); // id -> [ids de sus hermanos incluido él]
+  const parejaDe = new Map();
+  const nucleos = [];
+  const principal = nueva('Yo', { es_principal: true });
+  const familia = (padresIds, cuantos, profundidad) => {
+    const hijos = [];
+    for (let i = 0; i < cuantos; i++) {
+      const h = i === 0 && profundidad === 'principal' ? principal : nueva('Familiar');
+      padresIds.forEach((pid) => aristas2.push({ a: pid, b: h.id, type: 'parent' }));
+      hijos.push(h.id);
+    }
+    hijos.forEach((h) => hermanosDe.set(h, hijos));
+    return hijos;
+  };
+  const abuelos = [nueva('Abuelo').id, nueva('Abuela').id];
+  const hijosAbuelos = familia(abuelos, 3 + Math.floor(rnd() * 3), 'nada');
+  hijosAbuelos.forEach((h, i) => {
+    const pareja = nueva('Pareja');
+    aristas2.push({ a: h, b: pareja.id, type: 'partner' }); parejaDe.set(pareja.id, h);
+    const nietos = familia([h, pareja.id], i === 0 ? 3 + Math.floor(rnd() * 2) : Math.floor(rnd() * 3), i === 0 ? 'principal' : 'nada');
+    nietos.forEach((n) => { if (rnd() < 0.4) { const q = nueva('Pareja'); aristas2.push({ a: n, b: q.id, type: 'partner' }); parejaDe.set(q.id, n); familia([n, q.id], Math.floor(rnd() * 3), 'nada'); } });
+  });
+  const res = compute(gente2, aristas2);
+  arboles++;
+  // 1) Nadie se cuela entre hermanos (salvo sus propias parejas)
+  const vistos = new Set();
+  hermanosDe.forEach((grupo) => {
+    const llave = grupo.join(',');
+    if (vistos.has(llave) || grupo.length < 2) return;
+    vistos.add(llave);
+    const fila = res.levels[grupo[0]];
+    if (grupo.some((h) => res.levels[h] !== fila)) return;
+    const xs = grupo.map((h) => res.positions[h].x);
+    const lo = Math.min(...xs), hi = Math.max(...xs);
+    const propios = new Set(grupo.concat(Array.from(parejaDe.entries()).filter(([, h]) => grupo.includes(h)).map(([q]) => q)));
+    const colados = gente2.filter((p) => res.levels[p.id] === fila && !propios.has(p.id) && res.positions[p.id].x > lo && res.positions[p.id].x < hi);
+    if (colados.length) violaciones++;
+  });
+  if (!sinSolapes(res, gente2)) solapes++;
+  // 2) Los hijos quedan cerca de sus padres: el centro de cada familia de hermanos a menos de 3 tarjetas del de sus padres
+  hermanosDe.forEach((grupo, h) => {
+    const padres2 = aristas2.filter((e) => e.type === 'parent' && e.b === h).map((e) => e.a);
+    if (grupo[0] !== h || !padres2.length) return;
+    familias++;
+    const cx = (ids) => ids.reduce((s, i) => s + res.positions[i].x, 0) / ids.length;
+    if (Math.abs(cx(grupo) - cx(padres2)) > 3 * 228) lejos++;
+  });
+}
+ok(arboles === 120 && violaciones === 0, 'en 120 árboles al azar, ningún primo ni otro pariente se cuela entre hermanos (' + violaciones + ' casos)');
+ok(solapes === 0, 'y ninguna tarjeta queda encima de otra (' + solapes + ' casos)');
+ok(lejos <= familias * 0.05, 'los hijos quedan cerca de sus padres: solo ' + lejos + ' de ' + familias + ' familias quedan a más de 3 tarjetas del centro de sus padres (antes eran muchas más)');
+
 console.log(`\n${pasaron} pasaron, ${fallaron} fallaron`);
 process.exit(fallaron ? 1 : 0);

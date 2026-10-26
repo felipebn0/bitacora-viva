@@ -11,9 +11,11 @@ const CAPTURAS = process.env.CAPTURAS_LIBRO;
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
 const FOTO = 'https://x.test/foto1.jpg';
 const TOKEN = 'a'.repeat(48);
+// Audio de 3 segundos (WAV de 8 kHz) para comprobar que la duración se ve sin darle play.
+const WAV = (() => { const n = 8000 * 3, b = Buffer.alloc(44 + n * 2); b.write('RIFF', 0); b.writeUInt32LE(36 + n * 2, 4); b.write('WAVEfmt ', 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22); b.writeUInt32LE(8000, 24); b.writeUInt32LE(16000, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write('data', 36); b.writeUInt32LE(n * 2, 40); return b; })();
 const parrafos = Array.from({ length: 6 }, (_, i) => `Párrafo ${i + 1}. Era una tarde de lluvia en la casa de mis abuelos y todos nos reunimos alrededor de la mesa a contar historias de cuando éramos pequeños.`).join('\n\n');
 const capitulos = [
-  { id: 1, title: 'Infancia', theme: 'infancia', generated_text: 'Texto original.', story_ids: [1], audios: [], created_at: new Date().toISOString() },
+  { id: 1, title: 'Infancia', theme: 'infancia', generated_text: 'Texto original.', story_ids: [1], audios: ['https://x.test/a1.wav', 'https://x.test/a2.wav'], created_at: new Date().toISOString() },
   { id: 2, title: 'El trabajo', theme: 'trabajo', generated_text: 'Segundo capítulo.', story_ids: [2], audios: [], created_at: new Date().toISOString() },
 ];
 
@@ -32,7 +34,7 @@ const capitulos = [
   await page.route('**/api/**', (r) => {
     const u = new URL(r.request().url()), m = r.request().method();
     const json = (o) => r.fulfill({ json: o });
-    if (u.pathname === '/api/media-file') return r.fulfill({ status: 200, contentType: 'image/png', body: PNG });
+    if (u.pathname === '/api/media-file') return /\.wav/.test(u.searchParams.get('u') || '') ? r.fulfill({ status: 200, contentType: 'audio/wav', body: WAV }) : r.fulfill({ status: 200, contentType: 'image/png', body: PNG });
     if (u.pathname.startsWith('/api/book-qr/image/')) return r.fulfill({ status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>' });
     if (u.pathname === '/api/chapters') return json({ chapters: capitulos });
     if (u.pathname === '/api/story-log') return json({ stories: [{ id: 1, texto: 'x', media_urls: [{ url: FOTO, type: 'foto', caption: 'En el río' }], created_at: new Date().toISOString() }, { id: 2, texto: 'y', created_at: new Date().toISOString() }] });
@@ -62,6 +64,8 @@ const capitulos = [
   ok(lectura.textoIzq, 'el texto empieza a la izquierda de la foto (la rodea)');
   ok(lectura.ancho >= 38 && lectura.ancho <= 46, 'y mide un solo tamaño estándar (' + lectura.ancho + '% del ancho del texto)');
   ok(lectura.pie === 'Con el abuelo', 'con su pie de foto editado');
+  await page.waitForFunction(() => [...document.querySelectorAll('#ecoReaderAudios .eco-track-times')].length === 2 && [...document.querySelectorAll('#ecoReaderAudios .eco-track-times span:last-child')].every((x) => x.textContent === '0:03'), null, { timeout: 8000 });
+  ok(true, 'Leer capítulo: las notas de voz muestran su duración (0:03) sin darles play, no 0:00');
   if (CAPTURAS) await page.screenshot({ path: path.join(CAPTURAS, 'libro-lectura.png') });
   await page.click('#ecoReaderClose');
 

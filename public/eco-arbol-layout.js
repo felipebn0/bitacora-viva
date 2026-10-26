@@ -201,20 +201,81 @@
       barrer(filas.length - 2, -1, -1, function (g) { return gHijos.get(g); });
     }
 
-    // 6) Coordenadas: de abajo hacia arriba, cada familia centrada sobre sus hijos sin pisar a su vecina.
+    // 5b) Hermanos juntos: las familias que comparten algún padre forman un bloque y nadie (un primo sin hijos, por ejemplo)
+    // se cuela en medio. El bloque queda donde estaba su primer miembro.
+    var bloques = filas.map(function () { return []; });
+    filas.forEach(function (fila, l) {
+      var jefeF = new Map();
+      fila.forEach(function (g) { jefeF.set(g, g); });
+      var hallar = function (x) { while (jefeF.get(x) !== x) { jefeF.set(x, jefeF.get(jefeF.get(x))); x = jefeF.get(x); } return x; };
+      var duenoDePadre = new Map();
+      fila.forEach(function (g) {
+        gPadres.get(g).forEach(function (pg) {
+          if (duenoDePadre.has(pg)) { var ra = hallar(g), rb = hallar(duenoDePadre.get(pg)); if (ra !== rb) jefeF.set(rb, ra); }
+          else duenoDePadre.set(pg, g);
+        });
+      });
+      var emitidos = new Set(), nuevaFila = [];
+      fila.forEach(function (g) {
+        var r = hallar(g);
+        if (emitidos.has(r)) return;
+        emitidos.add(r);
+        var bloque = fila.filter(function (x) { return hallar(x) === r; });
+        bloque.forEach(function (x) { nuevaFila.push(x); });
+        bloques[l].push(bloque);
+      });
+      filas[l] = nuevaFila;
+    });
+
+    // 6) Coordenadas. Primero de abajo hacia arriba (cada familia centrada sobre sus hijos) y después se repite de arriba hacia
+    // abajo: cada bloque de hermanos se centra bajo sus padres, para que los hijos queden lo más cerca posible de ellos.
     var centro = new Map(), inicio = new Map();
-    for (var f = filas.length - 1; f >= 0; f--) {
-      var cursor = null;
-      filas[f].forEach(function (g) {
-        var ancho = grupos.get(g).length * PASO_X;
-        var hijos = Array.from(gHijos.get(g)).filter(function (h) { return centro.has(h); });
-        var deseado = hijos.length ? hijos.reduce(function (s, h) { return s + centro.get(h); }, 0) / hijos.length : null;
-        var x0 = cursor === null ? (deseado === null ? 0 : deseado - ancho / 2) : (deseado === null ? cursor : Math.max(cursor, deseado - ancho / 2));
-        inicio.set(g, x0);
-        centro.set(g, x0 + ancho / 2);
-        cursor = x0 + ancho + HUECO;
+    var anchoDe = function (g) { return grupos.get(g).length * PASO_X; };
+    // Reparte los bloques de una fila lo más cerca posible del lugar que quieren (el centro de sus hijos o de sus padres)
+    // sin cambiar su orden ni encimarlos: cuando dos se estorban, se corren los dos un poco en vez de empujar solo a uno.
+    function repartir(anchos, deseados) {
+      var n = anchos.length, offset = [], acum = 0;
+      for (var i = 0; i < n; i++) { offset.push(acum); acum += anchos[i] + HUECO; }
+      var bloquesPAV = [];
+      for (var j = 0; j < n; j++) {
+        var peso = deseados[j] === null ? 0.001 : 1;
+        var meta = deseados[j] === null ? (bloquesPAV.length ? bloquesPAV[bloquesPAV.length - 1].media : 0) : deseados[j] - anchos[j] / 2 - offset[j];
+        bloquesPAV.push({ suma: meta * peso, peso: peso, media: meta, cuantos: 1 });
+        while (bloquesPAV.length > 1 && bloquesPAV[bloquesPAV.length - 2].media > bloquesPAV[bloquesPAV.length - 1].media) {
+          var ult = bloquesPAV.pop(), ant = bloquesPAV.pop();
+          var suma = ant.suma + ult.suma, pesoT = ant.peso + ult.peso;
+          bloquesPAV.push({ suma: suma, peso: pesoT, media: suma / pesoT, cuantos: ant.cuantos + ult.cuantos });
+        }
+      }
+      var xs = [], k = 0;
+      bloquesPAV.forEach(function (bl) { for (var c = 0; c < bl.cuantos; c++) { xs.push(bl.media + offset[k]); k++; } });
+      return xs;
+    }
+    function colocarFila(f, haciaArriba) {
+      var unidades = haciaArriba ? filas[f].map(function (g) { return [g]; }) : bloques[f];
+      var anchos = unidades.map(function (u) { return u.reduce(function (s, g) { return s + anchoDe(g); }, 0) + HUECO * (u.length - 1); });
+      var deseados = unidades.map(function (u) {
+        var vecinos = new Set();
+        u.forEach(function (g) { (haciaArriba ? gHijos : gPadres).get(g).forEach(function (v) { if (centro.has(v)) vecinos.add(v); }); });
+        var lista = Array.from(vecinos);
+        return lista.length ? lista.reduce(function (s, v) { return s + centro.get(v); }, 0) / lista.length : null;
+      });
+      var xs = repartir(anchos, deseados);
+      unidades.forEach(function (u, i) {
+        var pos = xs[i];
+        u.forEach(function (g) {
+          inicio.set(g, pos);
+          centro.set(g, pos + anchoDe(g) / 2);
+          pos += anchoDe(g) + HUECO;
+        });
       });
     }
+    var bajar = function () { for (var f = 1; f < filas.length; f++) colocarFila(f, false); };
+    var subir = function () { for (var f = filas.length - 2; f >= 0; f--) colocarFila(f, true); };
+    if (filas.length) colocarFila(filas.length - 1, true);
+    subir();
+    for (var rep = 0; rep < 2; rep++) { bajar(); subir(); }
+    bajar();
     var minX = Infinity;
     inicio.forEach(function (x) { minX = Math.min(minX, x); });
     if (!isFinite(minX)) minX = 0;

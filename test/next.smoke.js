@@ -759,6 +759,27 @@ async function main() {
   const sinStream = await nextForUser(server, cookie, { history: historial, mode: 'historia' });
   check('sin stream: JSON normal y messages.create', String(sinStream.headers['content-type']).includes('application/json') && capturedCalls[0].__stream !== true && JSON.parse(sinStream.body).message.startsWith('Uy, qué belleza.'));
 
+  // Fin de mes: en los últimos días del mes se pregunta, una vez, por algo nuevo que haya pasado en ese mes
+  user.diarioBebe = null;
+  for (const [fecha, debe] of [['2026-10-27', true], ['2026-10-31', true], ['2026-10-26', false], ['2026-10-10', false], ['2026-02-25', true], ['2026-02-20', false]]) {
+    process.env.ECO_FECHA_HOY = fecha;
+    resetAnthropicMock();
+    pushAnthropicResponse('Cuéntame más. ¿Qué pasó después?');
+    await nextForUser(server, cookie, { history: [], mode: 'historia' });
+    const system = capturedCalls[0].system[0].text;
+    check(`fin de mes (${fecha}): ${debe ? 'se pide preguntar por algo nuevo del mes' : 'no se menciona'}`, /FIN DE MES/.test(system) === debe);
+    if (debe && fecha === '2026-10-27') check('la instrucción nombra el mes y da ejemplos (viaje, trabajo nuevo, nuevo amor)', /octubre de 2026/.test(system) && /viaje/.test(system) && /trabajo nuevo/.test(system) && /nuevo amor/.test(system) && /UNA sola vez/.test(system));
+  }
+  delete process.env.ECO_FECHA_HOY;
+  user.diarioBebe = { nombre: 'Rafaela', genero: 'femenino', nacio_en: null };
+  process.env.ECO_FECHA_HOY = '2026-10-30';
+  resetAnthropicMock();
+  pushAnthropicResponse('Qué lindo. ¿Cómo te sientes hoy?');
+  await nextForUser(server, cookie, { history: [], mode: 'historia', modoBebe: true });
+  check('en el modo del diario del bebé no se pregunta por el mes de la persona', !/FIN DE MES/.test(capturedCalls[0].system[0].text));
+  delete process.env.ECO_FECHA_HOY;
+  user.diarioBebe = null;
+
   // Modo "diario de un bebé": solo se activa si la persona lo pide Y existe el diario.
   user.diarioBebe = { nombre: 'Rafaela', genero: 'femenino', nacio_en: null };
   resetAnthropicMock();

@@ -67,7 +67,7 @@
        audios.appendChild(heading);
        tracks.forEach(a=>{
          const copy=document.createElement('audio');
-         copy.controls=true;copy.preload='none';copy.src=a.currentSrc||a.src;
+         copy.controls=true;copy.preload='metadata';copy.src=a.currentSrc||a.src;
          audios.appendChild(copy);
        });
      }
