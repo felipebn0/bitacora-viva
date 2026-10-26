@@ -66,6 +66,7 @@
        heading.textContent=tracks.length===1?'Escucha la historia original':'Escucha las historias originales';
        audios.appendChild(heading);
        tracks.forEach(a=>{
+         if(a.dataset.pregunta){const q=document.createElement('p');q.className='eco-reader-pregunta';q.textContent=a.dataset.pregunta;audios.appendChild(q)}
          const copy=document.createElement('audio');
          copy.controls=true;copy.preload='metadata';copy.src=a.currentSrc||a.src;
          audios.appendChild(copy);

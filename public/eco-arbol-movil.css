@@ -1,0 +1,12 @@
+/* Árbol en celular: la pantalla no se ensancha con el árbol (solo el cuadro del árbol se desplaza) y el panel cabe completo. */
+@media (max-width: 940px) {
+  .layout { grid-template-columns: minmax(0, 1fr) !important; }
+  .layout > * { min-width: 0; max-width: 100%; }
+  .stage { max-width: 100%; }
+  .side { overflow-wrap: anywhere; }
+}
+
+/* Botones del árbol de 44px de alto (tamaño cómodo para el dedo). */
+@media (max-width: 900px) {
+  header .toolbar .btn, header .toolbar button, header .toolbar input, #searchInput, .eco7-nav .btn, .side .btn, .side button, #actionsTrigger { min-height: 44px; }
+}

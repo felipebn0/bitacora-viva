@@ -44,8 +44,17 @@ function fakeSql(strings, ...values) {
   if (text.includes('SELECT id, texto, created_at FROM story_log WHERE user_id')) {
     return Promise.resolve(storyLog.map((s) => ({ id: s.id, texto: s.texto, created_at: '2026-01-01T00:00:00Z' })));
   }
-  if (text.includes('SELECT id, audio_url, audio_urls FROM story_log WHERE user_id') && text.includes('audio_url IS NOT NULL')) {
-    return Promise.resolve(storyLog.filter((s) => s.audio_url).map((s) => ({ id: s.id, audio_url: s.audio_url })));
+  if (text.includes('SELECT id, texto, audio_url, audio_urls FROM story_log WHERE user_id') && text.includes('audio_url IS NOT NULL')) {
+    return Promise.resolve(storyLog.filter((s) => s.audio_url).map((s) => ({ id: s.id, texto: s.texto, audio_url: s.audio_url })));
+  }
+  // Charlas guardadas: la entrevistadora saluda, comenta y pregunta; la persona responde.
+  if (text.includes('SELECT intercambios FROM sessions WHERE user_id')) {
+    return Promise.resolve([{ intercambios: [
+      { role: 'assistant', content: '¡Qué bueno verte, Diego! Hoy quiero conocerte mejor. Cuéntame, ¿cómo era la finca donde vivían en Boyacá?' },
+      { role: 'user', content: 'De chico vivíamos en una finca en Boyacá.' },
+      { role: 'assistant', content: 'Qué recuerdo tan lindo. Y después, ¿qué pasó?' },
+      { role: 'user', content: 'Otra cosa distinta.' },
+    ] }]);
   }
   if (text.includes('DELETE FROM chapters WHERE user_id')) { chaptersTable = []; return Promise.resolve([]); }
   if (text.includes('INSERT INTO chapters')) {
@@ -151,6 +160,7 @@ function check(nombre, cond) {
     const listaData = JSON.parse(lista.body);
     check('el capítulo trae el audio de la historia que sí tenía (id 10)', JSON.stringify(listaData.chapters[0].audios) === JSON.stringify(['https://fake.blob/audio/1/a.webm']));
     check('NO trae null por la historia sin audio (id 11) — se filtra, no se cuela', listaData.chapters[0].audios.length === 1);
+    check('cada nota de voz trae solo la pregunta que se le hizo (sin saludo ni comentarios)', JSON.stringify(listaData.chapters[0].preguntas) === JSON.stringify(['¿cómo era la finca donde vivían en Boyacá?']));
 
     // --- Default: sin mandar "persona", narra en tercera ---
     capturedAnthropicCalls = [];

@@ -2,9 +2,9 @@
 (()=>{'use strict';
  const $=id=>document.getElementById(id);
  let config={size:'A4',type:'interior'};
- // m = márgenes de la hoja (arriba derecha abajo izquierda). Van en @page, no en cada página del libro: así cuentan
- // también cuando un capítulo largo sigue en la hoja siguiente.
- const options={A4:{w:'210mm',h:'297mm',m:'18mm 18mm 20mm 18mm',inner:'259mm'},A5:{w:'148mm',h:'210mm',m:'14mm 14mm 16mm 14mm',inner:'180mm'},'6x9':{w:'152.4mm',h:'228.6mm',m:'15mm 15mm 17mm 15mm',inner:'196mm'}};
+ // El libro siempre es A4. m = márgenes de la hoja (arriba derecha abajo izquierda); van en @page, no en cada página del libro:
+ // así cuentan también cuando un capítulo largo sigue en la hoja siguiente.
+ const options={A4:{w:'210mm',h:'297mm',m:'18mm 18mm 20mm 18mm',inner:'259mm'}};
  function init(){
   const launch=$('ecoEditorialOpen');
   if(!launch)return;
@@ -18,12 +18,11 @@
   btn.textContent='Preparar PDF para impresión';
   const top=dialog.querySelector('.eco-editorial-topbuttons');
   const settings=document.createElement('section');settings.className='eco-print4-settings';settings.id='ecoPrint4Settings';
-  settings.innerHTML='<div class="eco-print4-header"><strong>Preparar el libro para impresión</strong><button type="button" id="ecoPrint4Close" aria-label="Cerrar opciones de impresión">×</button></div><label>Tamaño de página <select id="ecoPrint4Size"><option value="A4" selected>A4 · 21 × 29,7 cm</option><option value="A5">A5 · 14,8 × 21 cm</option><option value="6x9">6 × 9 pulgadas · 15,24 × 22,86 cm</option></select></label><p class="eco-print4-help">Incluye portada interior, dedicatoria, índice, capítulos, fotos y QR existentes. Genera un PDF desde Imprimir → Guardar como PDF.</p><div id="ecoPrint4Checks" role="status"></div><button type="button" id="ecoPrint4Go" class="eco-print4-primary">Vista previa / Guardar PDF</button><p class="eco-print4-help">Prueba editorial. No es un archivo listo para imprenta: faltan cubierta exterior, lomo, sangrados, fuentes incrustadas y validación con proveedor.</p>';
+  settings.innerHTML='<div class="eco-print4-header"><strong>Preparar el libro para impresión</strong><button type="button" id="ecoPrint4Close" aria-label="Cerrar opciones de impresión">×</button></div><p class="eco-print4-help">Hoja A4. Incluye portada interior, dedicatoria, índice, capítulos, fotos y QR existentes. Genera un PDF desde Imprimir → Guardar como PDF.</p><div id="ecoPrint4Checks" role="status"></div><button type="button" id="ecoPrint4Go" class="eco-print4-primary">Vista previa / Guardar PDF</button><p class="eco-print4-help">Prueba editorial. No es un archivo listo para imprenta: faltan cubierta exterior, lomo, sangrados, fuentes incrustadas y validación con proveedor.</p>';
   (top||dialog).insertAdjacentElement('afterend',settings);
   const style=document.createElement('style');style.id='ecoPrint4Page';document.head.appendChild(style);
   function sync(){const q=options[config.size];style.textContent=`@page{size:${q.w} ${q.h};margin:${q.m}}:root{--eco-print-alto:${q.inner}}`;document.documentElement.dataset.ecoPrint4=config.size;}
   sync();
-  $('ecoPrint4Size').addEventListener('change',e=>{config.size=e.target.value;sync();check()});
   btn.addEventListener('click',e=>{e.preventDefault();e.stopImmediatePropagation();settings.classList.add('eco-print4-visible');check()},{capture:true});
   $('ecoPrint4Close').addEventListener('click',()=>settings.classList.remove('eco-print4-visible'));
   $('ecoPrint4Go').addEventListener('click',async()=>{

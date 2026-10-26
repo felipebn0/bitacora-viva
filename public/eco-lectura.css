@@ -32,3 +32,5 @@ body.eco-reader-open{overflow:hidden}
 
 .eco-reader-par{margin:0 0 1.1em;white-space:pre-wrap}
 .eco-reader-text::after{content:'';display:block;clear:both}
+.eco-reader-pregunta{margin:18px 0 6px;font:italic 1.02rem/1.5 "Source Serif 4",Georgia,serif;color:#4d6542}
+.eco-reader-audios h3+.eco-reader-pregunta{margin-top:6px}

@@ -7322,6 +7322,41 @@ app.post('/api/chapters/generate', requireAuth, bloquearColaborador, rateLimit, 
   }
 });
 
+const textoComparable = (t) => String(t || '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+// Solo la pregunta de un mensaje de la entrevistadora: la última frase entre ¿ ? (sin saludos ni comentarios).
+function extraerPregunta(mensaje) {
+  const texto = String(mensaje || '');
+  const conSignos = texto.match(/¿[^?¿]*\?/g);
+  if (conSignos && conSignos.length) return conSignos[conSignos.length - 1].trim();
+  const frases = texto.split(/(?<=[.!?])\s+/);
+  for (let i = frases.length - 1; i >= 0; i--) if (/\?\s*$/.test(frases[i])) return frases[i].trim();
+  return null;
+}
+
+// Respuesta de la persona (texto comparable) -> pregunta que se le había hecho, según sus charlas guardadas.
+async function preguntasPorRespuesta(profileUserId) {
+  const mapa = new Map();
+  try {
+    const sesiones = await sql`SELECT intercambios FROM sessions WHERE user_id = ${profileUserId} ORDER BY fecha DESC LIMIT 400`;
+    for (const ses of sesiones) {
+      let arr = ses.intercambios;
+      if (typeof arr === 'string') { try { arr = JSON.parse(arr); } catch { continue; } }
+      if (!Array.isArray(arr)) continue;
+      for (let i = 1; i < arr.length; i++) {
+        const m = arr[i], previo = arr[i - 1];
+        if (!m || m.role !== 'user' || typeof m.content !== 'string' || !previo || previo.role !== 'assistant') continue;
+        const pregunta = extraerPregunta(previo.content);
+        const llave = textoComparable(m.content);
+        if (pregunta && llave && !mapa.has(llave)) mapa.set(llave, pregunta);
+      }
+    }
+  } catch (err) {
+    console.error('No se pudieron buscar las preguntas de las notas de voz:', err);
+  }
+  return mapa;
+}
+
 app.get('/api/chapters', requireAuth, bloquearColaborador, async (req, res) => {
   try {
     await ensureSchema();
@@ -7330,12 +7365,22 @@ app.get('/api/chapters', requireAuth, bloquearColaborador, async (req, res) => {
     // las que tengan audio guardado se mandan aquí para poder escucharlas
     // junto al capítulo, no solo leerlo.
     // Una historia unida con otras trae varios audios (audio_urls), además del primero (audio_url).
-    const audioRows = await sql`SELECT id, audio_url, audio_urls FROM story_log WHERE user_id = ${req.profileUserId} AND (audio_url IS NOT NULL OR audio_urls IS NOT NULL)`;
-    const audioPorId = new Map(audioRows.map((r) => [r.id, [r.audio_url, ...parseJsonArray(r.audio_urls)].filter((u) => typeof u === 'string' && u)]));
+    const audioRows = await sql`SELECT id, texto, audio_url, audio_urls FROM story_log WHERE user_id = ${req.profileUserId} AND (audio_url IS NOT NULL OR audio_urls IS NOT NULL)`;
+    // La pregunta que se le hizo a la persona antes de cada nota de voz: se saca de las charlas guardadas (el mensaje
+    // de la entrevistadora justo antes de esa respuesta), solo la pregunta, sin lo demás que dijo.
+    const preguntaDe = audioRows.length ? await preguntasPorRespuesta(req.profileUserId) : new Map();
+    const audiosPorId = new Map(audioRows.map((r) => {
+      const urls = [r.audio_url, ...parseJsonArray(r.audio_urls)].filter((u) => typeof u === 'string' && u);
+      const segmentos = String(r.texto || '').split(/\n\s*\n/).filter((x) => x.trim());
+      const preguntas = segmentos.map((seg) => preguntaDe.get(textoComparable(seg)) || null);
+      const unica = preguntaDe.get(textoComparable(r.texto)) || null;
+      return [r.id, urls.map((url, i) => ({ url, pregunta: segmentos.length === urls.length ? preguntas[i] : (i === 0 ? (unica || preguntas[0] || null) : null) }))];
+    }));
     const chapters = rows.map((c) => {
       const storyIds = parseJsonArray(c.story_ids);
-      const audios = [...new Set(storyIds.flatMap((id) => audioPorId.get(id) || []))];
-      return { ...c, story_ids: storyIds, audios };
+      const vistos = new Set();
+      const items = storyIds.flatMap((id) => audiosPorId.get(id) || []).filter((x) => !vistos.has(x.url) && vistos.add(x.url));
+      return { ...c, story_ids: storyIds, audios: items.map((x) => x.url), preguntas: items.map((x) => x.pregunta) };
     });
     res.json({ chapters });
   } catch (err) {

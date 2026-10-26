@@ -272,7 +272,7 @@ function fakeSql(strings, ...values) {
   if (text.includes('SELECT fm.id, fm.nombre, fm.relacion, fm.detalles, fm.padres, fm.es_principal')) return Promise.resolve([]);
   if (text.includes('SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events')) return Promise.resolve([]);
   if (text.includes('SELECT id, title, theme, generated_text, story_ids, persona, created_at FROM chapters')) return Promise.resolve([]);
-  if (text.includes('SELECT id, audio_url, audio_urls FROM story_log') && text.includes('audio_url IS NOT NULL')) return Promise.resolve([]);
+  if (text.includes('SELECT id, texto, audio_url, audio_urls FROM story_log') && text.includes('audio_url IS NOT NULL')) return Promise.resolve([]);
 
   // --- story_log: el destino real de /api/next, para verificar a qué
   // bitácora quedó atada cada historia narrada ---

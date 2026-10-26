@@ -38,12 +38,16 @@ body > header a.volver[href^='/app.html']:focus-visible,
   outline-offset: 4px !important;
   border-radius: 2px !important;
 }
-@media (max-width: 680px) {
+@media (max-width: 900px) {
   body > header a.volver[href^='/app.html'],
   #appContent #ownTopbar a.volver[href^='/app.html'],
   .shell > header a.volver[href^='/app.html'] {
     padding: 0 !important;
-    margin-bottom: 8px !important;
+    margin-bottom: 4px !important;
     font-size: 14px !important;
+    /* En el celular es un botón de toque: mide 44px de alto */
+    display: inline-flex !important;
+    align-items: center !important;
+    min-height: 44px !important;
   }
 }

@@ -15,7 +15,7 @@ const TOKEN = 'a'.repeat(48);
 const WAV = (() => { const n = 8000 * 3, b = Buffer.alloc(44 + n * 2); b.write('RIFF', 0); b.writeUInt32LE(36 + n * 2, 4); b.write('WAVEfmt ', 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22); b.writeUInt32LE(8000, 24); b.writeUInt32LE(16000, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write('data', 36); b.writeUInt32LE(n * 2, 40); return b; })();
 const parrafos = Array.from({ length: 6 }, (_, i) => `Párrafo ${i + 1}. Era una tarde de lluvia en la casa de mis abuelos y todos nos reunimos alrededor de la mesa a contar historias de cuando éramos pequeños.`).join('\n\n');
 const capitulos = [
-  { id: 1, title: 'Infancia', theme: 'infancia', generated_text: 'Texto original.', story_ids: [1], audios: ['https://x.test/a1.wav', 'https://x.test/a2.wav'], created_at: new Date().toISOString() },
+  { id: 1, title: 'Infancia', theme: 'infancia', generated_text: 'Texto original.', story_ids: [1], audios: ['https://x.test/a1.wav', 'https://x.test/a2.wav'], preguntas: ['¿Cómo era la casa donde creciste?', null], created_at: new Date().toISOString() },
   { id: 2, title: 'El trabajo', theme: 'trabajo', generated_text: 'Segundo capítulo.', story_ids: [2], audios: [], created_at: new Date().toISOString() },
 ];
 
@@ -66,12 +66,16 @@ const capitulos = [
   ok(lectura.pie === 'Con el abuelo', 'con su pie de foto editado');
   await page.waitForFunction(() => [...document.querySelectorAll('#ecoReaderAudios .eco-track-times')].length === 2 && [...document.querySelectorAll('#ecoReaderAudios .eco-track-times span:last-child')].every((x) => x.textContent === '0:03'), null, { timeout: 8000 });
   ok(true, 'Leer capítulo: las notas de voz muestran su duración (0:03) sin darles play, no 0:00');
+  const preguntas = await page.locator('#ecoReaderAudios .eco-reader-pregunta').allTextContents();
+  ok(preguntas.length === 1 && preguntas[0] === '¿Cómo era la casa donde creciste?', 'arriba de la nota de voz va, en texto, la pregunta que se le hizo (solo esa; la que no tiene pregunta no muestra nada)');
+  ok(await page.evaluate(() => { const q = document.querySelector('#ecoReaderAudios .eco-reader-pregunta'); return !!q.nextElementSibling && q.nextElementSibling.tagName === 'AUDIO'; }), 'y queda justo arriba de su reproductor');
   if (CAPTURAS) await page.screenshot({ path: path.join(CAPTURAS, 'libro-lectura.png') });
   await page.click('#ecoReaderClose');
 
   // 3) El estudio: sin tamaño ni posición, pie editable, sin "Volver a comprobar"
   await page.click('#ecoEditorialOpen');
   await page.waitForFunction(() => /sincronizado|Guardado en tu cuenta/.test(document.getElementById('ecoEditorialStatus').textContent));
+  ok(await page.locator('#ecoPrint4Size').count() === 0 && /size:210mm 297mm/.test(await page.evaluate(() => document.getElementById('ecoPrint4Page').textContent)), 'el libro siempre es A4: ya no hay selector de tamaño de página y la hoja de impresión es 210 x 297 mm');
   await page.click('[data-view="media"]');
   await page.selectOption('#ecoEditorialForm select', '1');
   await page.waitForSelector('.eco-editorial-photo-config');
