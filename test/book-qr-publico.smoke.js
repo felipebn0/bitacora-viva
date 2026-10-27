@@ -36,9 +36,9 @@ function fakeSql(strings, ...values) {
     return Promise.resolve(u ? [{ id: u.id, username: u.username, password_hash: u.password_hash, token_version: u.token_version }] : []);
   }
   if (text.includes('SELECT owner_user_id, token_version FROM users WHERE id')) { const u = users[values[0]]; return Promise.resolve(u ? [{ owner_user_id: null, token_version: u.token_version }] : []); }
-  if (text.includes('SELECT chapter_title,audio_urls FROM book_audio_links WHERE token')) {
+  if (text.includes('SELECT owner_id,chapter_title,audio_urls FROM book_audio_links WHERE token')) {
     const e = enlaces.find((x) => x.token === values[0] && !x.revoked_at);
-    return Promise.resolve(e ? [{ chapter_title: e.chapter_title, audio_urls: e.audio_urls }] : []);
+    return Promise.resolve(e ? [{ owner_id: e.owner_id, chapter_title: e.chapter_title, audio_urls: e.audio_urls }] : []);
   }
   if (text.includes('SELECT owner_id,audio_urls FROM book_audio_links WHERE token')) {
     const e = enlaces.find((x) => x.token === values[0] && !x.revoked_at);
@@ -47,6 +47,15 @@ function fakeSql(strings, ...values) {
   if (text.includes('SELECT 1 FROM book_audio_links WHERE token') && text.includes('owner_id')) {
     const e = enlaces.find((x) => x.token === values[0] && x.owner_id === values[1] && !x.revoked_at);
     return Promise.resolve(e ? [{ '?column?': 1 }] : []);
+  }
+  if (text.includes('SELECT id, texto, audio_url, audio_urls FROM story_log WHERE user_id')) {
+    return Promise.resolve([{ id: 5, texto: 'Crecí en Medellín.', audio_url: `https://fake.public.blob.vercel-storage.com/${AUDIO_1}`, audio_urls: null }]);
+  }
+  if (text.includes('SELECT intercambios FROM sessions WHERE user_id')) {
+    return Promise.resolve([{ intercambios: [
+      { role: 'assistant', content: 'Qué bueno verte. Cuéntame, ¿dónde creciste?' },
+      { role: 'user', content: 'Crecí en Medellín.' },
+    ] }]);
   }
   if (text.includes('UPDATE book_audio_links SET revoked_at')) {
     enlaces.filter((x) => x.owner_id === values[0] && x.chapter_id === values[1] && !x.revoked_at).forEach((x) => { x.revoked_at = new Date(); });
@@ -100,6 +109,7 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
   let r = await request(server, { path: `/api/book-qr/listen/${T1}` });
   ok(r.status === 200 && r.json.title === 'Infancia' && r.json.audios.length === 1, 'sin sesión: el QR abre el capítulo y lista sus grabaciones (200)');
   ok(r.json.audios[0] === `/api/book-qr/audio/${T1}/0`, 'las grabaciones se piden por token y posición, no por la ruta del archivo');
+  ok(Array.isArray(r.json.preguntas) && r.json.preguntas[0] === '¿dónde creciste?', 'cada grabación trae solo la pregunta que se le hizo a la persona');
   ok(r.headers['cache-control'] === 'no-store' && /noindex/.test(r.headers['x-robots-tag']), 'no se guarda en caché ni se indexa en buscadores');
   r = await request(server, { path: `/api/book-qr/audio/${T1}/0` });
   ok(r.status === 200 && /^audio\//.test(r.headers['content-type']) && r.body.equals(CONTENIDO), 'sin sesión: se oye la grabación (200, audio completo)');

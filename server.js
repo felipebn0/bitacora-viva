@@ -7357,6 +7357,33 @@ async function preguntasPorRespuesta(profileUserId) {
   return mapa;
 }
 
+// Historia (story_log) -> sus notas de voz, cada una con la pregunta que se le hizo a la persona antes de grabarla.
+// Una historia unida con otras trae varios audios (audio_urls), además del primero (audio_url).
+async function audiosConPregunta(profileUserId) {
+  const audioRows = await sql`SELECT id, texto, audio_url, audio_urls FROM story_log WHERE user_id = ${profileUserId} AND (audio_url IS NOT NULL OR audio_urls IS NOT NULL)`;
+  // La pregunta sale de las charlas guardadas (el mensaje de la entrevistadora justo antes de esa respuesta),
+  // solo la pregunta, sin lo demás que dijo.
+  const preguntaDe = audioRows.length ? await preguntasPorRespuesta(profileUserId) : new Map();
+  return new Map(audioRows.map((r) => {
+    const urls = [r.audio_url, ...parseJsonArray(r.audio_urls)].filter((u) => typeof u === 'string' && u);
+    const segmentos = String(r.texto || '').split(/\n\s*\n/).filter((x) => x.trim());
+    const preguntas = segmentos.map((seg) => preguntaDe.get(textoComparable(seg)) || null);
+    const unica = preguntaDe.get(textoComparable(r.texto)) || null;
+    return [r.id, urls.map((url, i) => ({ url, pregunta: segmentos.length === urls.length ? preguntas[i] : (i === 0 ? (unica || preguntas[0] || null) : null) }))];
+  }));
+}
+
+// Dirección del audio -> pregunta, para las páginas públicas del QR del libro.
+async function preguntasPorAudio(profileUserId) {
+  const mapa = new Map();
+  try {
+    for (const items of (await audiosConPregunta(profileUserId)).values()) for (const x of items) if (x.pregunta && !mapa.has(x.url)) mapa.set(x.url, x.pregunta);
+  } catch (err) {
+    console.error('No se pudieron buscar las preguntas del QR:', err);
+  }
+  return mapa;
+}
+
 app.get('/api/chapters', requireAuth, bloquearColaborador, async (req, res) => {
   try {
     await ensureSchema();
@@ -7364,18 +7391,7 @@ app.get('/api/chapters', requireAuth, bloquearColaborador, async (req, res) => {
     // Cada capítulo viene de una o más historias de story_log (story_ids) —
     // las que tengan audio guardado se mandan aquí para poder escucharlas
     // junto al capítulo, no solo leerlo.
-    // Una historia unida con otras trae varios audios (audio_urls), además del primero (audio_url).
-    const audioRows = await sql`SELECT id, texto, audio_url, audio_urls FROM story_log WHERE user_id = ${req.profileUserId} AND (audio_url IS NOT NULL OR audio_urls IS NOT NULL)`;
-    // La pregunta que se le hizo a la persona antes de cada nota de voz: se saca de las charlas guardadas (el mensaje
-    // de la entrevistadora justo antes de esa respuesta), solo la pregunta, sin lo demás que dijo.
-    const preguntaDe = audioRows.length ? await preguntasPorRespuesta(req.profileUserId) : new Map();
-    const audiosPorId = new Map(audioRows.map((r) => {
-      const urls = [r.audio_url, ...parseJsonArray(r.audio_urls)].filter((u) => typeof u === 'string' && u);
-      const segmentos = String(r.texto || '').split(/\n\s*\n/).filter((x) => x.trim());
-      const preguntas = segmentos.map((seg) => preguntaDe.get(textoComparable(seg)) || null);
-      const unica = preguntaDe.get(textoComparable(r.texto)) || null;
-      return [r.id, urls.map((url, i) => ({ url, pregunta: segmentos.length === urls.length ? preguntas[i] : (i === 0 ? (unica || preguntas[0] || null) : null) }))];
-    }));
+    const audiosPorId = await audiosConPregunta(req.profileUserId);
     const chapters = rows.map((c) => {
       const storyIds = parseJsonArray(c.story_ids);
       const vistos = new Set();
@@ -7403,7 +7419,7 @@ app.delete('/api/chapters/:id', requireAuth, bloquearColaborador, rateLimit, asy
   }
 });
 
-require('./book-qr-routes')(app, { sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob });
+require('./book-qr-routes')(app, { preguntasPorAudio, sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob });
 require('./recuperar-clave-routes')(app, { sql, ensureSchema, rateLimit, limitePorClave, claveDemasiadoLarga });
 require('./bebe-routes')(app, { sql, ensureSchema, requireAuth, rateLimit, bloquearEscritura: [bloquearColaborador, bloquearSiNoPuedeNarrar, bloquearSiReadOnly], resolveProfileUserId, almacenarArchivo, verificarArchivoReal, MEDIA_MIME_PERMITIDOS, AUDIO_MIME_PERMITIDOS, enviarArchivoAlmacenado, datosDelArchivoDeBlob, borrarArchivosBlob });
 require('./book-editor-routes')(app, {

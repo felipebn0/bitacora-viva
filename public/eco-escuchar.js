@@ -8,7 +8,11 @@
   const d=await r.json().catch(()=>({}));
   if(!r.ok)throw Error(d.error||'No disponible');
   title.textContent=d.title||'Recuerdo familiar';box.replaceChildren();
-  for(const u of d.audios||[]){const a=document.createElement('audio');a.controls=true;a.preload='none';a.src=u;box.appendChild(a)}
+  (d.audios||[]).forEach((u,i)=>{
+   const q=(d.preguntas||[])[i];
+   if(q){const p=document.createElement('p');p.className='eco-escuchar-pregunta';p.textContent=q;box.appendChild(p)}
+   const a=document.createElement('audio');a.controls=true;a.preload='metadata';a.src=u;box.appendChild(a)
+  });
   if(!(d.audios||[]).length)msg.textContent='No hay grabaciones disponibles.';
  }catch(e){title.textContent='Recuerdo no disponible';msg.textContent=e.message}
 })();

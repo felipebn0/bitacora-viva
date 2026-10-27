@@ -6,7 +6,7 @@
 const crypto = require('crypto');
 const QRCode = require('./vendor/QRCode');
 const ECL = require('./vendor/QRCode/QRErrorCorrectLevel');
-module.exports = (app, { sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob }) => {
+module.exports = (app, { preguntasPorAudio, sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob }) => {
   async function ready() {
     await ensureSchema();
     await sql`CREATE TABLE IF NOT EXISTS book_audio_links (
@@ -57,10 +57,12 @@ module.exports = (app, { sql, ensureSchema, requireAuth, bloquearColaborador, ra
     if(!safeToken(req.params.token))return res.status(404).json({error:'Enlace no encontrado.'});
     try{
       await ready();
-      const item=(await sql`SELECT chapter_title,audio_urls FROM book_audio_links WHERE token=${req.params.token} AND revoked_at IS NULL`)[0];
+      const item=(await sql`SELECT owner_id,chapter_title,audio_urls FROM book_audio_links WHERE token=${req.params.token} AND revoked_at IS NULL`)[0];
       if(!item)return res.status(404).json({error:'Este enlace ya no está disponible.'});
-      const audios=jsonArray(item.audio_urls).map((_,i)=>`/api/book-qr/audio/${req.params.token}/${i}`);
-      res.json({title:item.chapter_title,audios});
+      const urls=jsonArray(item.audio_urls);
+      const audios=urls.map((_,i)=>`/api/book-qr/audio/${req.params.token}/${i}`);
+      const preguntaDe=await preguntasPorAudio(item.owner_id);
+      res.json({title:item.chapter_title,audios,preguntas:urls.map(u=>preguntaDe.get(u)||null)});
     }catch(e){console.error('Escuchar libro QR',e);res.status(500).json({error:'No se pudo cargar el recuerdo.'});}
   });
   // Público: entrega UNA grabación del capítulo (por posición, nunca por URL que mande el navegador).

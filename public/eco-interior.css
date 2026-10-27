@@ -76,3 +76,5 @@ button:disabled{cursor:not-allowed;opacity:.58;}
   a.aportar-ahora,button.generar{width:100%;box-sizing:border-box;}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation-duration:.01ms!important;}}
+.eco-escuchar-pregunta{margin:18px 0 0;font:italic 1.05rem/1.5 Georgia,serif;color:#4d6542}
+.eco-escuchar-pregunta+audio{margin-top:6px}
