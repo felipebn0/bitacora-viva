@@ -21,7 +21,7 @@ const AUDIO_AJENO = 'audio/2/sesion-b/user-0.webm';
 const CONTENIDO = Buffer.from('0123456789abcdefghij');
 const T1 = 'a'.repeat(48), T_REVOCADO = 'b'.repeat(48), T_AJENO = 'c'.repeat(48);
 const enlaces = [
-  { token: T1, owner_id: 1, chapter_id: 7, chapter_title: 'Infancia', audio_urls: JSON.stringify([`https://fake.public.blob.vercel-storage.com/${AUDIO_1}`]), revoked_at: null },
+  { token: T1, owner_id: 1, chapter_id: 7, chapter_title: 'Infancia', audio_urls: JSON.stringify([`https://fake.public.blob.vercel-storage.com/${AUDIO_1}`, 'https://fake.public.blob.vercel-storage.com/audio/1/sesion-a/user-1.webm']), revoked_at: null },
   { token: T_REVOCADO, owner_id: 1, chapter_id: 8, chapter_title: 'Retirado', audio_urls: JSON.stringify([`https://fake.public.blob.vercel-storage.com/${AUDIO_1}`]), revoked_at: new Date() },
   // enlace manipulado: apunta al audio de OTRA cuenta
   { token: T_AJENO, owner_id: 1, chapter_id: 9, chapter_title: 'Manipulado', audio_urls: JSON.stringify([`https://fake.public.blob.vercel-storage.com/${AUDIO_AJENO}`]), revoked_at: null },
@@ -49,7 +49,7 @@ function fakeSql(strings, ...values) {
     return Promise.resolve(e ? [{ '?column?': 1 }] : []);
   }
   if (text.includes('SELECT id, texto, audio_url, audio_urls FROM story_log WHERE user_id')) {
-    return Promise.resolve([{ id: 5, texto: 'Crecí en Medellín.', audio_url: `https://fake.public.blob.vercel-storage.com/${AUDIO_1}`, audio_urls: null }]);
+    return Promise.resolve([{ id: 5, texto: 'Crecí en Medellín.', audio_url: `https://fake.public.blob.vercel-storage.com/${AUDIO_1}`, audio_urls: null }, { id: 6, texto: 'Mi papá era arriero y viajaba mucho.', audio_url: 'https://fake.public.blob.vercel-storage.com/audio/1/sesion-a/user-1.webm', audio_urls: null }]);
   }
   if (text.includes('SELECT intercambios FROM sessions WHERE user_id')) {
     return Promise.resolve([{ intercambios: [
@@ -77,7 +77,7 @@ require.cache[require.resolve('@vercel/blob')] = { id: require.resolve('@vercel/
     if (rango) { const m = /bytes=(\d+)-(\d*)/.exec(rango); cuerpo = CONTENIDO.subarray(Number(m[1]), m[2] ? Number(m[2]) + 1 : undefined); headers.set('content-range', `bytes ${m[1]}-${Number(m[1]) + cuerpo.length - 1}/${CONTENIDO.length}`); headers.set('content-length', String(cuerpo.length)); }
     return { statusCode: 200, stream: streamDe(cuerpo), headers, blob: { contentType: 'audio/webm', size: CONTENIDO.length } };
   } } };
-require.cache[require.resolve('@anthropic-ai/sdk')] = { id: require.resolve('@anthropic-ai/sdk'), filename: require.resolve('@anthropic-ai/sdk'), loaded: true, exports: class { constructor() { this.messages = { create: async () => ({ content: [{ type: 'text', text: '["¿En qué ciudad creciste?"]' }], usage: { input_tokens: 1, output_tokens: 1 } }) }; } } };
+require.cache[require.resolve('@anthropic-ai/sdk')] = { id: require.resolve('@anthropic-ai/sdk'), filename: require.resolve('@anthropic-ai/sdk'), loaded: true, exports: class { constructor() { this.messages = { create: async (p) => ({ content: [{ type: 'text', text: JSON.stringify(p.messages[0].content.split('\n\n').map((b) => (/SIN PREGUNTA/.test(b) ? 'Hablando de su papá arriero' : '¿En qué ciudad creciste?'))) }], usage: { input_tokens: 1, output_tokens: 1 } }) }; } } };
 const app = require(serverPath);
 
 function request(server, opts, cookie) {
@@ -107,9 +107,10 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
 
   // --- Público: sin cuenta ni cookie ---
   let r = await request(server, { path: `/api/book-qr/listen/${T1}` });
-  ok(r.status === 200 && r.json.title === 'Infancia' && r.json.audios.length === 1, 'sin sesión: el QR abre el capítulo y lista sus grabaciones (200)');
+  ok(r.status === 200 && r.json.title === 'Infancia' && r.json.audios.length === 2, 'sin sesión: el QR abre el capítulo y lista sus grabaciones (200)');
   ok(r.json.audios[0] === `/api/book-qr/audio/${T1}/0`, 'las grabaciones se piden por token y posición, no por la ruta del archivo');
   ok(Array.isArray(r.json.preguntas) && r.json.preguntas[0] === '¿En qué ciudad creciste?', 'cada grabación trae su pregunta; si era muy corta para entenderse sola, viene completa');
+  ok(r.json.preguntas[1] === 'Hablando de su papá arriero', 'si una nota no tiene pregunta, trae un contexto breve en su lugar');
   ok(r.headers['cache-control'] === 'no-store' && /noindex/.test(r.headers['x-robots-tag']), 'no se guarda en caché ni se indexa en buscadores');
   r = await request(server, { path: `/api/book-qr/audio/${T1}/0` });
   ok(r.status === 200 && /^audio\//.test(r.headers['content-type']) && r.body.equals(CONTENIDO), 'sin sesión: se oye la grabación (200, audio completo)');
