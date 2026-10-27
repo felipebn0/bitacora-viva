@@ -28,6 +28,7 @@ const storyLog = [
 let chaptersTable = [];
 let nextChapterId = 1;
 let capturedAnthropicCalls = [];
+let trato = 'femenino';
 
 function fakeSql(strings, ...values) {
   const text = strings.join('?');
@@ -36,6 +37,9 @@ function fakeSql(strings, ...values) {
   if (text.includes('SELECT id, username, password_hash, token_version FROM users WHERE username')) {
     const u = users[1];
     return Promise.resolve(u.username === values[0] ? [{ id: u.id, username: u.username, password_hash: u.password_hash, token_version: u.token_version }] : []);
+  }
+  if (text.includes('SELECT name AS nombre, fecha_nacimiento, created_at, tratamiento, voz FROM users WHERE id')) {
+    return Promise.resolve([{ nombre: 'Stella', fecha_nacimiento: null, created_at: '2026-01-01T00:00:00Z', tratamiento: trato, voz: null }]);
   }
   if (text.includes('SELECT owner_user_id, token_version FROM users WHERE id')) {
     const u = users[values[0]];
@@ -161,6 +165,18 @@ function check(nombre, cond) {
     check('el capítulo trae el audio de la historia que sí tenía (id 10)', JSON.stringify(listaData.chapters[0].audios) === JSON.stringify(['https://fake.blob/audio/1/a.webm']));
     check('NO trae null por la historia sin audio (id 11) — se filtra, no se cuela', listaData.chapters[0].audios.length === 1);
     check('cada nota de voz trae solo la pregunta que se le hizo (sin saludo ni comentarios)', JSON.stringify(listaData.chapters[0].preguntas) === JSON.stringify(['¿cómo era la finca donde vivían en Boyacá?']));
+
+    check('el capítulo se escribe en FEMENINO si así se trata a la persona', promptEscribir.messages[0].content.includes('FEMENINO') && !promptEscribir.messages[0].content.includes('en MASCULINO'));
+    trato = 'masculino';
+    capturedAnthropicCalls = [];
+    await request(server, { path: '/api/chapters/generate', method: 'POST', body: {} }, cookie);
+    const promptMasc = capturedAnthropicCalls.find((c) => c.tool_choice && c.tool_choice.name === 'escribir_capitulo');
+    check('y en MASCULINO si se trata en masculino', promptMasc.messages[0].content.includes('en MASCULINO'));
+    trato = null;
+    capturedAnthropicCalls = [];
+    await request(server, { path: '/api/chapters/generate', method: 'POST', body: {} }, cookie);
+    const promptSin = capturedAnthropicCalls.find((c) => c.tool_choice && c.tool_choice.name === 'escribir_capitulo');
+    check('sin trato elegido, no se adivina por el nombre', promptSin.messages[0].content.includes('no se sabe si la persona'));
 
     // --- Default: sin mandar "persona", narra en tercera ---
     capturedAnthropicCalls = [];
