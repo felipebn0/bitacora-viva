@@ -3204,7 +3204,7 @@
       if (fallbackRecognition) { try { fallbackRecognition.abort(); } catch (e) {} }
       pausedFromState = 'listening';
       sessionId += 1;
-      const avisoPausa = 'Tómate tu tiempo. Cuando quieras retomar, presiona el botón o escribe tu respuesta abajo.';
+      const avisoPausa = 'Tómate tu tiempo. Cuando quieras retomar, presiona el botón.';
       setState('paused', avisoPausa);
       if (avisoPausaHabla) avisoPausaHabla.cancelar();
       avisoPausaHabla = iniciarHabla();
@@ -3219,7 +3219,7 @@
       try { writeInput.focus(); } catch (e) {}
       return;
     }
-    stateLabel.textContent = 'No te escuché bien — te sigo escuchando (o escribe tu respuesta).';
+    stateLabel.textContent = 'No te escuché bien — te sigo escuchando.';
     listenForAnswer();
   }
 
