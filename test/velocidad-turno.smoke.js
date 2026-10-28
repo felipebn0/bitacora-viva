@@ -250,6 +250,8 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
 
   // --- Respuesta especulativa (2026-10-08) ---
   ok(/const ESPECULAR_MS = 900;/.test(app_) && /const SILENCE_MS = 2000;/.test(app_), 'app: se especula a los 900 ms de silencio y se cierra a los 2000 ms');
+  ok(/const SILENCIO_INICIAL_MS = 8000;/.test(app_) && /const esperaInicial = !huboVoz && finalizacionesVacias === 0;/.test(app_), 'app: antes de la primera palabra hay 8 s para pensar, solo en el primer intento del turno (los reintentos vuelven a 2 s)');
+  ok(/Tómate tu tiempo\. Cuando quieras retomar, presiona el botón/.test(app_) && /avisoPausaHabla\.cancelar\(\)/.test(app_), 'app: tras 3 intentos sin voz, Eco dice que se tome su tiempo y que apriete el botón (y se calla si retoma)');
   ok(/if \(especulacion && especulacion\.loudAt !== lastLoudTime\) cancelarEspeculacion\(\);/.test(app_), 'app: si la persona vuelve a hablar, la especulación se descarta');
   ok(/const esp = especulacion && !especulacion\.cancelada && especulacion\.loudAt === lastLoudTime/.test(app_), 'app: al cerrar el turno solo se aprovecha si no volvió a hablar');
   ok(/if \(!esp && !interpretarRespuestaPausa/.test(app_), 'app: un turno especulado nunca ofrece la pausa (no se especula si le toca)');

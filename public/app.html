@@ -3019,6 +3019,9 @@
   // Felipe al ver que la IA tardaba en contestar): 200ms menos de espera
   // en cada turno.
   const SILENCE_MS = 2000; // pausa tolerada antes de dar la respuesta por terminada
+  // Antes de que la persona diga la primera palabra de un turno se le da más tiempo para pensar; si no
+  // dijo nada y se reintenta, vuelven los 2 segundos de siempre.
+  const SILENCIO_INICIAL_MS = 8000;
   // A los ESPECULAR_MS de silencio (ya habiendo hablado) se empieza a transcribir y
   // a generar la respuesta por adelantado; a los SILENCE_MS, si no volvió a
   // hablar, esa respuesta ya está casi lista. Si habla de nuevo, se descarta
@@ -3107,7 +3110,8 @@
         iniciarEspeculacion();
       }
 
-      const silencioLargo = Date.now() - lastLoudTime > SILENCE_MS;
+      const esperaInicial = !huboVoz && finalizacionesVacias === 0;
+      const silencioLargo = Date.now() - lastLoudTime > (esperaInicial ? SILENCIO_INICIAL_MS : SILENCE_MS);
       const turnoDemasiadoLargo = recordingStartedAt && (Date.now() - recordingStartedAt > MAX_TURN_MS);
       if (silencioLargo || turnoDemasiadoLargo) {
         stopVoiceActivityDetection();
@@ -3177,6 +3181,7 @@
   // enfocado). Se pone en 0 en cuanto un turno SÍ trae texto (handleAnswer).
   let finalizacionesVacias = 0;
   const MAX_VACIOS = 3;
+  let avisoPausaHabla = null;
   // Evita que dos disparos casi simultáneos (el tick del detector de
   // silencio y el handler de "pantalla oculta", más abajo) entren los dos
   // a finalizar el mismo turno.
@@ -3199,7 +3204,12 @@
       if (fallbackRecognition) { try { fallbackRecognition.abort(); } catch (e) {} }
       pausedFromState = 'listening';
       sessionId += 1;
-      setState('paused', 'No logré escucharte. Escribe tu respuesta abajo, o presiona el botón para hablar de nuevo.');
+      const avisoPausa = 'Tómate tu tiempo. Cuando quieras retomar, presiona el botón o escribe tu respuesta abajo.';
+      setState('paused', avisoPausa);
+      if (avisoPausaHabla) avisoPausaHabla.cancelar();
+      avisoPausaHabla = iniciarHabla();
+      avisoPausaHabla.agregar('Tómate tu tiempo. Cuando quieras retomar, presiona el botón.');
+      avisoPausaHabla.cerrar();
       orbLabel.innerHTML = 'Presiona<br>para hablar';
       // Ocultar el botón rojo "Terminar": en este estado se le pide a la
       // persona que TOQUE el orbe para reintentar, y ese botón se apoya
@@ -3718,6 +3728,7 @@
   }
 
   async function listenForAnswer() {
+    if (avisoPausaHabla) { avisoPausaHabla.cancelar(); avisoPausaHabla = null; }
     cancelarEspeculacion();
     especulacionesEsteTurno = 0;
     setState('listening', 'Escuchando…');
