@@ -325,7 +325,11 @@ app.get('/api/manifest.json', (req, res) => {
   res.json({
     name: nombre ? `Eco de ${nombre}` : 'Eco',
     short_name: nombre || 'Eco',
+    id: codigo ? `/app.html?codigo=${codigo}` : '/app.html',
     start_url: codigo ? `/app.html?codigo=${codigo}` : '/app.html',
+    scope: '/',
+    lang: 'es',
+    orientation: 'portrait',
     display: 'standalone',
     background_color: '#F6EEDC', // crema de Eco
     theme_color: '#4F5D3A', // musgo de Eco
