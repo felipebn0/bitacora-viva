@@ -43,6 +43,7 @@
     if (dias < 14) return dias + ' días';
     if (dias < 90) return Math.floor(dias / 7) + ' semanas';
     const meses = Math.floor(dias / 30.4);
+    if (meses >= 24) { const anios = Math.floor(meses / 12); return anios + ' años'; }
     return meses === 1 ? '1 mes' : meses + ' meses';
   }
 

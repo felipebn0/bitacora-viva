@@ -25,7 +25,7 @@ module.exports = (app, {
     const t = Date.parse(valor + 'T12:00:00Z');
     if (Number.isNaN(t)) return undefined;
     const hoy = Date.now();
-    if (t > hoy + 3 * 86400000 || t < hoy - 3 * 365 * 86400000) return undefined;
+    if (t > hoy + 3 * 86400000 || t < hoy - 12 * 366 * 86400000) return undefined;
     return valor;
   };
 

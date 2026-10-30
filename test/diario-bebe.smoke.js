@@ -123,6 +123,11 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
   ok(r.status === 400, 'sin nombre no se crea (400)');
   r = await request(server, { path: '/api/bebe', method: 'PUT', body: { nombre: 'Rafaela', nacioEn: '2099-01-01' } }, paula);
   ok(r.status === 400, 'una fecha de nacimiento muy en el futuro no es válida (400)');
+  const haceAnios = (n) => new Date(Date.now() - n * 365.25 * 86400000).toISOString().slice(0, 10);
+  r = await request(server, { path: '/api/bebe', method: 'PUT', body: { nombre: 'Luca', nacioEn: haceAnios(4) } }, paula);
+  ok(r.status === 200 && r.json.config.nombre === 'Luca', 'un niño de 4 años sí se puede guardar (el límite ya no es de 3 años)');
+  r = await request(server, { path: '/api/bebe', method: 'PUT', body: { nombre: 'Luca', nacioEn: haceAnios(13) } }, paula);
+  ok(r.status === 400, 'una fecha de hace más de 12 años no es válida (400)');
   r = await request(server, { path: '/api/bebe', method: 'PUT', body: { nombre: 'Rafaela', genero: 'femenino' } }, paula);
   ok(r.status === 200 && r.json.config.nombre === 'Rafaela' && r.json.config.estado === 'en_camino', 'crea el diario: Rafaela, en camino');
 

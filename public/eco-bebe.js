@@ -47,9 +47,10 @@
     chip.textContent = dias === null ? C().etiqueta(config) : config.nombre + ', ya llegó';
     fila.classList.toggle('con-edad', !edad.hidden);
     if (dias === null) return;
-    edad.querySelector('.eco-bebe-edad-num').textContent = dias === 0 ? 'Hoy' : String(dias);
-    edad.querySelector('.eco-bebe-edad-unidad').textContent = dias === 0 ? 'nació' : dias === 1 ? 'día' : 'días';
-    edad.setAttribute('aria-label', dias === 0 ? 'Edad: nació hoy' : 'Edad: ' + dias + (dias === 1 ? ' día' : ' días'));
+    const anios = dias >= 730 ? Math.floor(dias / 365.25) : 0;
+    edad.querySelector('.eco-bebe-edad-num').textContent = dias === 0 ? 'Hoy' : String(anios || dias);
+    edad.querySelector('.eco-bebe-edad-unidad').textContent = dias === 0 ? 'nació' : anios ? 'años' : dias === 1 ? 'día' : 'días';
+    edad.setAttribute('aria-label', dias === 0 ? 'Edad: nació hoy' : 'Edad: ' + (anios || dias) + (anios ? ' años' : dias === 1 ? ' día' : ' días'));
   }
 
   function pintarEstado() {
