@@ -2490,6 +2490,8 @@
   // por qué la instrucción no puede ir pegada solo al turno donde se
   // ofrece). Se usa una sola vez y se resetea enseguida.
   let esperandoRespuestaPausa = false;
+  // La persona tocó "Fin": después del mensaje de cierre la charla termina SIEMPRE, aunque la IA no ponga [FIN].
+  let finPedido = false;
   const OFRECER_PAUSA_MS = 5 * 60 * 1000;
   let mediaStream = null;
   let mediaRecorder = null;
@@ -3039,6 +3041,7 @@
   // terminado de hablar. 0.035 sigue detectando voz normal sin colgarse del
   // ruido de fondo típico de una casa.
   const VAD_THRESHOLD = 0.035; // umbral de volumen para considerar que hay voz
+  const UMBRAL_SONIDO_ESPECULACION = 0.015; // sonido más bajito: descarta la respuesta adelantada
   // Corte de seguridad aparte del silencio: si alguien cuenta una historia
   // larga SIN pausas de más de SILENCE_MS, la grabación sigue creciendo sin
   // límite — y tanto /api/transcribe como /api/save-audio rechazan
@@ -3103,6 +3106,9 @@
       }
       const rms = Math.sqrt(sumSquares / data.length);
       if (rms > VAD_THRESHOLD) { lastLoudTime = Date.now(); huboVoz = true; }
+      // Habla más bajita que el umbral de voz (una frase que se retoma en voz baja) no cuenta como "volvió a hablar", pero
+      // sí hace que la respuesta adelantada ya no sirva: no incluiría esas palabras.
+      if (especulacion && rms > UMBRAL_SONIDO_ESPECULACION) especulacion.sonidoDespues = true;
 
       // Respuesta especulativa: si la persona ya dijo algo y lleva ESPECULAR_MS
       // callada, la IA empieza a pensar sin esperar a que se cumpla SILENCE_MS.
@@ -3241,7 +3247,8 @@
     if (fallbackRecognition) { try { fallbackRecognition.stop(); } catch (e) {} }
     // Una respuesta especulativa solo vale si la persona no volvió a hablar
     // desde que se pidió (si lo hizo, el tick del detector ya la canceló).
-    const esp = especulacion && !especulacion.cancelada && especulacion.loudAt === lastLoudTime ? especulacion : null;
+    const esp = especulacion && !especulacion.cancelada && especulacion.loudAt === lastLoudTime && !especulacion.sonidoDespues ? especulacion : null;
+    if (!esp) cancelarEspeculacion();
     especulacion = null;
     const audioBlob = await stopRecordingAudio();
     // history.length===0 = la prueba de micrófono (primer turno de la
@@ -3534,7 +3541,8 @@
       const sigueVigente = () => mySession === sessionId;
       const alTerminarDeHablar = () => {
         if (mySession !== sessionId) return;
-        if (data.done) {
+        if (data.done || finPedido) {
+          finPedido = false;
           finishSession();
         } else if (data.pausado) {
           entrarEnPausaOfrecida();
@@ -3609,6 +3617,12 @@
       // el MISMO history (nunca se le agregó nada — el push a history
       // pasa solo con la respuesta OK, más arriba), no arranca una
       // sesión nueva.
+      if (finPedido) {
+        // Pidió terminar y el cierre no llegó (sin conexión, error del servidor): se guarda y se termina igual.
+        finPedido = false;
+        finishSession();
+        return;
+      }
       stateLabel.textContent = mensajeDeErrorDeTurno(err);
       setState('error', stateLabel.textContent);
       orbLabel.innerHTML = 'Reintentar';
@@ -3618,6 +3632,7 @@
   }
 
   async function endConversation() {
+    finPedido = true;
     quitarFotoDelOrbe();
     cancelarEspeculacion();
     stopVoiceActivityDetection();
@@ -3976,6 +3991,7 @@
 
   function startSession(mode) {
     if (state !== 'idle' && state !== 'ended' && state !== 'save-failed') return;
+    finPedido = false;
     
     // Si hay datos pendientes, pedir confirmación
     if (pendingSessionLog.length > 0 && state !== 'ended') {

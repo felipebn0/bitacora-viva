@@ -250,6 +250,8 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
 
   // --- Respuesta especulativa (2026-10-08) ---
   ok(/const ESPECULAR_MS = 900;/.test(app_) && /const SILENCE_MS = 2500;/.test(app_), 'app: se especula a los 900 ms de silencio y se cierra a los 2500 ms');
+  ok(/const UMBRAL_SONIDO_ESPECULACION = 0\.015;/.test(app_) && /especulacion\.sonidoDespues = true;/.test(app_) && /!especulacion\.sonidoDespues \? especulacion : null/.test(app_), 'app: si hubo sonido (aunque bajito) después de la pausa, la respuesta adelantada se descarta y se transcribe todo el audio');
+  ok(/if \(data\.done \|\| finPedido\)/.test(app_) && /finPedido = true;/.test(app_), 'app: el botón Fin termina la charla aunque la IA no ponga [FIN]');
   ok(/const SILENCIO_INICIAL_MS = 8000;/.test(app_) && /const esperaInicial = !huboVoz && finalizacionesVacias === 0;/.test(app_), 'app: antes de la primera palabra hay 8 s para pensar, solo en el primer intento del turno (los reintentos vuelven a 2 s)');
   ok(/Tómate tu tiempo\. Cuando quieras retomar, presiona el botón/.test(app_) && /avisoPausaHabla\.cancelar\(\)/.test(app_), 'app: tras 3 intentos sin voz, Eco dice que se tome su tiempo y que apriete el botón (y se calla si retoma)');
   ok(/if \(especulacion && especulacion\.loudAt !== lastLoudTime\) cancelarEspeculacion\(\);/.test(app_), 'app: si la persona vuelve a hablar, la especulación se descarta');

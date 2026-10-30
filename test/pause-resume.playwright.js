@@ -239,6 +239,33 @@ async function scenarioSinNadaQueGuardar(browser, base) {
   await context.close();
 }
 
+async function scenarioFinSiempreTermina(browser, base) {
+  console.log('\n--- Escenario 3: el botón "Fin" termina la charla aunque la IA no ponga [FIN] ---');
+  const { context, page, callCounts } = await setupPage(browser, { transcript: 'algo' });
+  await page.goto(base + '/app.html');
+  await page.waitForSelector('#orb', { state: 'visible' });
+  await page.click('#orb');
+  await esperarEstado(page, 'listening');
+  await page.click('#endBtn');
+  await esperarEstado(page, 'ended');
+  assert(callCounts.next === 2, 'Fin pidió el mensaje de cierre y la charla quedó terminada (sin [FIN] en la respuesta)');
+  await context.close();
+}
+
+async function scenarioFinConError(browser, base) {
+  console.log('\n--- Escenario 4: el botón "Fin" termina la charla aunque el servidor falle ---');
+  const { context, page } = await setupPage(browser, { transcript: 'algo' });
+  await page.goto(base + '/app.html');
+  await page.waitForSelector('#orb', { state: 'visible' });
+  await page.click('#orb');
+  await esperarEstado(page, 'listening');
+  await page.route('**/api/next', (route) => route.fulfill({ status: 400, contentType: 'application/json', body: '{"error":"x"}' }));
+  await page.click('#endBtn');
+  await esperarEstado(page, 'ended');
+  assert(true, 'con el servidor fallando, Fin igual termina y guarda la charla');
+  await context.close();
+}
+
 (async () => {
   const server = await startStaticServer();
   const port = server.address().port;
@@ -247,6 +274,8 @@ async function scenarioSinNadaQueGuardar(browser, base) {
   try {
     await scenarioGuardaRespuestaParcial(browser, base);
     await scenarioSinNadaQueGuardar(browser, base);
+    await scenarioFinSiempreTermina(browser, base);
+    await scenarioFinConError(browser, base);
   } catch (err) {
     failures++;
     console.error('✗ error inesperado:', err && err.stack ? err.stack : err);
