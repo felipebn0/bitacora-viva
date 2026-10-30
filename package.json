@@ -32,6 +32,7 @@
     "test:libro-qr": "node test/libro-qr-defecto.playwright.js",
     "test:restablecer": "node test/restablecer-clave.playwright.js",
     "test:perfil-mascota": "node test/perfil-mascota.playwright.js",
+    "test:recordatorio-app": "node test/recordatorio-app.playwright.js",
     "test:diario-bebe": "node test/diario-bebe.playwright.js",
     "test:admin": "node test/admin-routes.smoke.js"
   },

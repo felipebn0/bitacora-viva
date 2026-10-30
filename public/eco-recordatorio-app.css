@@ -1,0 +1,4 @@
+.um-recordatorio-app { padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid #E7DFCC; }
+.um-recordatorio-app .um-recordatorio-app-fila { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.um-recordatorio-app input[type="time"] { width: 100%; min-height: 44px; box-sizing: border-box; font: inherit; margin-bottom: 8px; }
+.um-recordatorio-app .um-btn { margin-top: 6px; }
