@@ -264,6 +264,9 @@
   .ab-card dt { color: var(--ink-soft); font-size: 0.82rem; }
   .ab-card dd { margin: 0; font-family: var(--font-display); font-weight: 600; text-align: right; }
   .ab-note { font-size: 0.8rem; color: var(--ink-soft); margin-top: 12px; }
+  .pr-tabla { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 0.85rem; }
+  .pr-tabla th, .pr-tabla td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  .pr-tabla th { color: var(--ink-soft); font-weight: 600; }
 
   footer.note { max-width: 1180px; margin: 24px auto 0; color: var(--ink-soft); font-size: 0.8rem; }
 </style>
@@ -283,6 +286,7 @@
   </div>
   <div class="wrap"><div id="waWrap"></div></div>
   <div class="wrap"><div id="abWrap"></div></div>
+  <div class="wrap"><div id="prWrap"></div></div>
   <footer class="note" id="footNote" hidden></footer>
 
 <script>
@@ -870,6 +874,33 @@
       .catch(() => { abWrap.innerHTML = '<section class="panel"><h2>Prueba A/B de la landing</h2><p class="sub">No se pudo cargar esta sección.</p></section>'; });
   }
 
+  const prWrap = document.getElementById('prWrap');
+  const NOMBRES_TIPO = { A: 'Tiempo corto', B: 'Pregunta concreta', C: 'Familia y legado', D: 'Progreso de tu libro', E: 'Compañía y calidez' };
+
+  function renderRecordatorios(data) {
+    const tipos = data.tipos || [];
+    const totalEnviados = tipos.reduce((a, t) => a + t.enviados, 0);
+    const pct = (n, d) => (d > 0 ? ((n / d) * 100).toFixed(1) + '%' : '—');
+    const hayMuestra = tipos.every((t) => t.enviados >= 100);
+    const filas = tipos.map((t) => `<tr><td>${esc(t.tipo + ' · ' + NOMBRES_TIPO[t.tipo])}</td><td>${fmtNumber(t.cuentas)}</td><td>${fmtNumber(t.enviados)}</td><td>${fmtNumber(t.abiertos)}</td><td>${pct(t.abiertos, t.enviados)}</td><td>${pct(t.charlas, t.enviados)}</td></tr>`).join('');
+    const filasVar = (data.variantes || []).map((v) => `<tr><td>${esc(v.tipo + (v.variante + 1))}</td><td>${esc(v.titulo)}</td><td>${fmtNumber(v.enviados)}</td><td>${pct(v.abiertos, v.enviados)}</td></tr>`).join('');
+    prWrap.innerHTML = `
+      <section class="panel">
+        <h2>Prueba de recordatorios diarios (push, 5 pm)</h2>
+        <p class="sub">Cada cuenta con avisos activados queda en un tipo de mensaje y recibe una de sus 3 variantes cada día. "Abrieron" es quien tocó el aviso y entró a Eco; "Charlaron" es quien hizo una charla en las 24 horas siguientes.</p>
+        ${totalEnviados ? `<table class="pr-tabla"><thead><tr><th>Tipo</th><th>Cuentas</th><th>Enviados</th><th>Abrieron</th><th>% abrió</th><th>% charló</th></tr></thead><tbody>${filas}</tbody></table>
+        <table class="pr-tabla"><thead><tr><th>Mensaje</th><th>Título</th><th>Enviados</th><th>% abrió</th></tr></thead><tbody>${filasVar}</tbody></table>` : '<p class="ab-note">Todavía no se ha enviado ningún recordatorio.</p>'}
+        <p class="ab-note">${hayMuestra ? 'Ya hay una muestra razonable por tipo, aunque conviene dejar correr unos días más antes de decidir.' : 'Todavía hay pocos envíos por tipo (menos de 100): las diferencias pueden ser solo azar, mira las tendencias sin declarar un ganador.'}</p>
+      </section>`;
+  }
+
+  function cargarRecordatorios() {
+    fetch('/api/admin/push-recordatorios')
+      .then((r) => (r.ok ? r.json() : Promise.reject('pr')))
+      .then(renderRecordatorios)
+      .catch(() => { prWrap.innerHTML = '<section class="panel"><h2>Prueba de recordatorios diarios</h2><p class="sub">No se pudo cargar esta sección.</p></section>'; });
+  }
+
   fetch('/api/me')
     .then((resp) => (resp.ok ? resp.json() : Promise.reject('auth')))
     .then((me) => {
@@ -878,6 +909,7 @@
       cargar(r.start, r.end);
       cargarWhatsApp();
       cargarAbLanding();
+      cargarRecordatorios();
     })
     .catch((err) => {
       if (err === 'forbidden' || err === 'auth') showUnauthorized();

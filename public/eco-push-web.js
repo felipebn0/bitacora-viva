@@ -1,5 +1,5 @@
-/* Avisos push en el celular (Web Push): un bloque dentro de Opciones avanzadas > Recordatorios para activarlos, apagarlos y
-   mandarse uno de prueba. En la app de Xcode (Capacitor) no aplica: ahí hay recordatorios locales. */
+/* Avisos push en el celular (Web Push): un bloque dentro de Recordatorios para activarlos, apagarlos, encender o apagar el
+   recordatorio diario y mandarse uno de prueba. En la app de Xcode (Capacitor) no aplica: ahí hay recordatorios locales. */
 (() => {
   'use strict';
   const cap = window.Capacitor;
@@ -39,11 +39,13 @@
       return;
     }
 
-    const activar = E('button', 'um-btn', 'Avisarme cuando un familiar cuente una historia');
+    const activar = E('button', 'um-btn', 'Activar avisos (aportes de familiares y recordatorio diario)');
     const apagar = E('button', 'um-btn um-plain', 'Dejar de avisarme en este celular');
     const probar = E('button', 'um-btn um-plain', 'Mandarme un aviso de prueba');
-    [activar, apagar, probar].forEach((b) => { b.type = 'button'; });
-    caja.append(activar, probar, apagar, msg);
+    const diario = E('button', 'um-btn um-plain', '');
+    [activar, apagar, probar, diario].forEach((b) => { b.type = 'button'; });
+    caja.append(activar, probar, diario, apagar, msg);
+    let diarioActivo = true;
 
     async function suscripcionActual() {
       const reg = await navigator.serviceWorker.getRegistration('/');
@@ -56,6 +58,11 @@
       activar.hidden = activo;
       apagar.hidden = !activo;
       probar.hidden = !activo;
+      diario.hidden = !activo;
+      if (activo) {
+        try { const d = await (await fetch('/api/push/recordatorio', { credentials: 'same-origin' })).json(); diarioActivo = d.activo !== false; } catch (e) { /* queda como estaba */ }
+        diario.textContent = diarioActivo ? 'Apagar el recordatorio diario de las 5 pm' : 'Encender el recordatorio diario de las 5 pm';
+      }
       if (Notification.permission === 'denied') msg.textContent = 'Los avisos están bloqueados. Actívalos en Ajustes > Notificaciones > Eco (o en los permisos del sitio).';
     }
 
@@ -67,7 +74,7 @@
         await navigator.serviceWorker.ready;
         const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: claveABytes(cfg.clave) });
         const r = await enviarJson('/api/push/suscribir', { subscription: sub.toJSON() });
-        msg.textContent = r.ok ? 'Listo, te avisamos cuando un familiar cuente una historia.' : 'No se pudieron activar los avisos. Intenta de nuevo.';
+        msg.textContent = r.ok ? 'Listo, te avisamos cuando un familiar cuente una historia y te recordamos charlar cada día a las 5 pm.' : 'No se pudieron activar los avisos. Intenta de nuevo.';
       } catch (e) {
         msg.textContent = 'No se pudieron activar los avisos en este celular.';
       }
@@ -79,6 +86,12 @@
         if (sub) { await enviarJson('/api/push/baja', { endpoint: sub.endpoint }); await sub.unsubscribe(); }
         msg.textContent = 'Listo, no te vamos a avisar en este celular.';
       } catch (e) { msg.textContent = 'No se pudo apagar. Intenta de nuevo.'; }
+      pintar();
+    });
+    diario.addEventListener('click', async () => {
+      const r = await enviarJson('/api/push/recordatorio', { activo: !diarioActivo }).catch(() => null);
+      if (r && r.ok) { diarioActivo = !diarioActivo; msg.textContent = diarioActivo ? 'Listo, te recordamos cada día a las 5 pm.' : 'Listo, no te mandamos el recordatorio diario. Los avisos de aportes siguen.'; }
+      else msg.textContent = 'No se pudo cambiar. Intenta de nuevo.';
       pintar();
     });
     probar.addEventListener('click', async () => {

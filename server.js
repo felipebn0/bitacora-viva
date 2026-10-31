@@ -7517,6 +7517,7 @@ app.delete('/api/chapters/:id', requireAuth, bloquearColaborador, rateLimit, asy
 });
 
 pushWeb = require('./push-web-routes')(app, { sql, ensureSchema, requireAuth, bloquearColaborador, bloquearInvitado, rateLimit });
+require('./push-recordatorios-routes')(app, { sql, ensureSchema, requireAuth, requireAdmin, bloquearColaborador, bloquearInvitado, rateLimit, pushWeb });
 require('./book-qr-routes')(app, { preguntasPorAudio, sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob });
 require('./recuperar-clave-routes')(app, { sql, ensureSchema, rateLimit, limitePorClave, claveDemasiadoLarga });
 require('./bebe-routes')(app, { sql, ensureSchema, requireAuth, rateLimit, bloquearEscritura: [bloquearColaborador, bloquearSiNoPuedeNarrar, bloquearSiReadOnly], resolveProfileUserId, almacenarArchivo, verificarArchivoReal, MEDIA_MIME_PERMITIDOS, AUDIO_MIME_PERMITIDOS, enviarArchivoAlmacenado, datosDelArchivoDeBlob, borrarArchivosBlob });
