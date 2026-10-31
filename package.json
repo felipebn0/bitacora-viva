@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
-    "test": "node test/smoke.js && node test/next.smoke.js && node test/shutdown.smoke.js && node test/account-actions.smoke.js && node test/export.smoke.js && node test/media-file.smoke.js && node test/guest.smoke.js && node test/book-qr-publico.smoke.js && node test/diario-bebe.smoke.js && node test/landing-robots.smoke.js && node test/restablecer-clave.smoke.js && node test/invitacion-vincular.smoke.js && node test/arbol-fusion.smoke.js && node test/crisis-banner.smoke.js && node test/intro-regalo.smoke.js && node test/arbol-jerarquia.smoke.js && node test/consentimiento-formularios.smoke.js && node test/subperfiles.smoke.js && node test/billing.smoke.js && node test/billing-dummy.smoke.js && node test/chapters.smoke.js && node test/contribute-draft.smoke.js && node test/arbol-rebuild.smoke.js && node test/signup.smoke.js && node test/sentry.smoke.js && node test/regalo-concurrencia.smoke.js && node test/invitado-rotacion.smoke.js && node test/clave-y-limites.smoke.js && node test/ssrf-media-file.smoke.js && node test/seguridad-headers.smoke.js && node test/blob-host-exacto.smoke.js && node test/escape-datos-no-confiables.smoke.js && node test/csp-report.smoke.js && node test/fuentes-autoalojadas.smoke.js && node test/sin-estilos-inline.smoke.js && node test/hashes-csp-vercel.smoke.js && node test/contribute-media.smoke.js && node test/story-log-merge.smoke.js && node test/whatsapp-recordatorios.smoke.js && node test/whatsapp-api.smoke.js && node test/r2-storage.smoke.js && node test/migracion-blob-r2.smoke.js && node test/paginas-legales.smoke.js && node test/voz-modelo.smoke.js && node test/voz-genero.smoke.js && node test/redireccion-dominio.smoke.js && node test/espanol-colombiano.smoke.js && node test/arbol-consumo.smoke.js && node test/tarifa-voz.smoke.js && node test/velocidad-turno.smoke.js && node test/tratamiento.smoke.js",
+    "test": "node test/smoke.js && node test/next.smoke.js && node test/shutdown.smoke.js && node test/account-actions.smoke.js && node test/export.smoke.js && node test/media-file.smoke.js && node test/guest.smoke.js && node test/book-qr-publico.smoke.js && node test/diario-bebe.smoke.js && node test/landing-robots.smoke.js && node test/restablecer-clave.smoke.js && node test/invitacion-vincular.smoke.js && node test/arbol-fusion.smoke.js && node test/crisis-banner.smoke.js && node test/intro-regalo.smoke.js && node test/arbol-jerarquia.smoke.js && node test/consentimiento-formularios.smoke.js && node test/subperfiles.smoke.js && node test/billing.smoke.js && node test/billing-dummy.smoke.js && node test/chapters.smoke.js && node test/contribute-draft.smoke.js && node test/arbol-rebuild.smoke.js && node test/signup.smoke.js && node test/sentry.smoke.js && node test/regalo-concurrencia.smoke.js && node test/invitado-rotacion.smoke.js && node test/clave-y-limites.smoke.js && node test/ssrf-media-file.smoke.js && node test/seguridad-headers.smoke.js && node test/blob-host-exacto.smoke.js && node test/escape-datos-no-confiables.smoke.js && node test/csp-report.smoke.js && node test/fuentes-autoalojadas.smoke.js && node test/sin-estilos-inline.smoke.js && node test/hashes-csp-vercel.smoke.js && node test/contribute-media.smoke.js && node test/story-log-merge.smoke.js && node test/whatsapp-recordatorios.smoke.js && node test/whatsapp-api.smoke.js && node test/r2-storage.smoke.js && node test/migracion-blob-r2.smoke.js && node test/paginas-legales.smoke.js && node test/voz-modelo.smoke.js && node test/voz-genero.smoke.js && node test/redireccion-dominio.smoke.js && node test/espanol-colombiano.smoke.js && node test/arbol-consumo.smoke.js && node test/tarifa-voz.smoke.js && node test/velocidad-turno.smoke.js && node test/tratamiento.smoke.js && node test/push-web.smoke.js",
     "test:intro": "node test/intro.playwright.js",
     "test:perfilar-regalo": "node test/perfilar-regalo.playwright.js",
     "test:libro-exportar": "node test/libro-exportar.playwright.js",
@@ -33,6 +33,8 @@
     "test:restablecer": "node test/restablecer-clave.playwright.js",
     "test:perfil-mascota": "node test/perfil-mascota.playwright.js",
     "test:recordatorio-app": "node test/recordatorio-app.playwright.js",
+    "test:push-web": "node test/push-web.playwright.js",
+    "test:push-web-smoke": "node test/push-web.smoke.js",
     "test:diario-bebe": "node test/diario-bebe.playwright.js",
     "test:admin": "node test/admin-routes.smoke.js"
   },
@@ -46,7 +48,8 @@
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "file-type": "^22.0.2"
+    "file-type": "^22.0.2",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

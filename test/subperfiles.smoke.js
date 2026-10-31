@@ -238,6 +238,10 @@ function fakeSql(strings, ...values) {
   if (text.includes('SELECT aportes_pending_names FROM users WHERE id')) {
     return Promise.resolve([]);
   }
+  if (text.includes('SELECT aportes_pending_names, admin_user_id, nombre FROM bitacoras WHERE id')) {
+    const bit = bitacoras[values[0]];
+    return Promise.resolve(bit ? [{ aportes_pending_names: bit.aportes_pending_names, admin_user_id: bit.admin_user_id, nombre: bit.nombre }] : []);
+  }
   if (text.includes('SELECT aportes_pending_names FROM bitacoras WHERE id')) {
     const bit = bitacoras[values[0]];
     return Promise.resolve(bit ? [{ aportes_pending_names: bit.aportes_pending_names }] : []);

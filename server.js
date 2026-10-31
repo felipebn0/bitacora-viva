@@ -780,6 +780,8 @@ if (!DB_URL) {
 }
 
 let schemaReady = null;
+// Avisos push (push-web-routes.js): se asigna al montar las rutas, más abajo.
+let pushWeb = null;
 // Antes esto era una función async que hacía 44 "await sql`...`" seguidos —
 // cada uno un viaje de red HTTP aparte a Neon. La memoización de schemaReady
 // ya hacía que esto solo corriera una vez por instancia tibia, pero esa
@@ -6452,6 +6454,18 @@ async function guardarBorradorAporte(ownerId, draftId, historyHastaAhora, audioU
 // (el caso de siempre, más común) y solo si no hay fila ahí se prueba
 // contra bitacoras — en vez de exigir que cada llamador sepa y pase la
 // respuesta correcta.
+// Aviso al celular de quien administra ese perfil (Web Push, ver push-web-routes.js). No falla nunca.
+async function avisarAportePorPush(cuentaId, contribuidor, perfilNombre) {
+  if (!pushWeb || !pushWeb.habilitado || !cuentaId) return;
+  const donde = perfilNombre ? ' al perfil de ' + perfilNombre : ' a tu libro';
+  await pushWeb.enviarPush(cuentaId, {
+    title: 'Nuevo aporte en Eco',
+    body: contribuidor + ' contó una historia' + donde + '. Tócala para verla.',
+    url: '/colaboraciones.html',
+    tag: 'eco-aporte',
+  });
+}
+
 async function marcarAportePendiente(ownerId, contributorName) {
   try {
     const nombre = (contributorName || '').trim() || 'Un familiar';
@@ -6460,13 +6474,15 @@ async function marcarAportePendiente(ownerId, contributorName) {
       const pendientes = new Set(parseJsonArray(enUsers[0].aportes_pending_names));
       pendientes.add(nombre);
       await sql`UPDATE users SET aportes_pending_names = ${JSON.stringify(Array.from(pendientes))} WHERE id = ${ownerId}`;
+      await avisarAportePorPush(ownerId, nombre, null);
       return;
     }
-    const enBitacoras = await sql`SELECT aportes_pending_names FROM bitacoras WHERE id = ${ownerId}`;
+    const enBitacoras = await sql`SELECT aportes_pending_names, admin_user_id, nombre FROM bitacoras WHERE id = ${ownerId}`;
     if (enBitacoras.length) {
       const pendientes = new Set(parseJsonArray(enBitacoras[0].aportes_pending_names));
       pendientes.add(nombre);
       await sql`UPDATE bitacoras SET aportes_pending_names = ${JSON.stringify(Array.from(pendientes))} WHERE id = ${ownerId}`;
+      await avisarAportePorPush(enBitacoras[0].admin_user_id, nombre, capitalizarNombre(enBitacoras[0].nombre || ''));
     }
   } catch (err) {
     console.error('No se pudo marcar el aporte pendiente:', err);
@@ -7500,6 +7516,7 @@ app.delete('/api/chapters/:id', requireAuth, bloquearColaborador, rateLimit, asy
   }
 });
 
+pushWeb = require('./push-web-routes')(app, { sql, ensureSchema, requireAuth, bloquearColaborador, bloquearInvitado, rateLimit });
 require('./book-qr-routes')(app, { preguntasPorAudio, sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob });
 require('./recuperar-clave-routes')(app, { sql, ensureSchema, rateLimit, limitePorClave, claveDemasiadoLarga });
 require('./bebe-routes')(app, { sql, ensureSchema, requireAuth, rateLimit, bloquearEscritura: [bloquearColaborador, bloquearSiNoPuedeNarrar, bloquearSiReadOnly], resolveProfileUserId, almacenarArchivo, verificarArchivoReal, MEDIA_MIME_PERMITIDOS, AUDIO_MIME_PERMITIDOS, enviarArchivoAlmacenado, datosDelArchivoDeBlob, borrarArchivosBlob });
