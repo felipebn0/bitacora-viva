@@ -4,3 +4,4 @@
 .eco-aviso-aportes span { flex: 1; }
 .eco-aviso-aportes a { color: #FBF6EA; text-decoration: underline; min-height: 44px; display: inline-flex; align-items: center; }
 .eco-aviso-aportes button { background: none; border: none; color: #FBF6EA; font-size: 1.4rem; min-width: 44px; min-height: 44px; cursor: pointer; }
+.um-push-web .um-btn[hidden] { display: none; }
