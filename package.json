@@ -33,6 +33,7 @@
     "test:restablecer": "node test/restablecer-clave.playwright.js",
     "test:perfil-mascota": "node test/perfil-mascota.playwright.js",
     "test:recordatorio-app": "node test/recordatorio-app.playwright.js",
+    "test:arbol-movil": "node test/arbol-movil.playwright.js",
     "test:push-web": "node test/push-web.playwright.js",
     "test:push-web-smoke": "node test/push-web.smoke.js",
     "test:diario-bebe": "node test/diario-bebe.playwright.js",
