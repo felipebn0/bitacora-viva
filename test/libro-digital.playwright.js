@@ -9,6 +9,7 @@ try { ({ chromium } = require('playwright')); } catch (e) { console.error('Falta
 let fallas = 0;
 const ok = (c, m) => { if (c) console.log('✓ ' + m); else { fallas++; console.error('✗ ' + m); } };
 const plantilla = fs.readFileSync(path.join(__dirname, '..', 'public', 'libro-digital-plantilla.txt'), 'utf8');
+const wav = (() => { const n = 8000, d = Buffer.alloc(n * 2); for (let i = 0; i < n; i++) d.writeInt16LE(Math.round(2000 * Math.sin(i / 8)), i * 2); const h = Buffer.alloc(44); h.write('RIFF', 0); h.writeUInt32LE(36 + d.length, 4); h.write('WAVEfmt ', 8); h.writeUInt32LE(16, 16); h.writeUInt16LE(1, 20); h.writeUInt16LE(1, 22); h.writeUInt32LE(8000, 24); h.writeUInt32LE(16000, 28); h.writeUInt16LE(2, 32); h.writeUInt16LE(16, 34); h.write('data', 36); h.writeUInt32LE(d.length, 40); return 'data:audio/wav;base64,' + Buffer.concat([h, d]).toString('base64'); })();
 const foto = 'data:image/jpeg;base64,' + fs.readFileSync(path.join(__dirname, '..', 'public', 'images', 'voces', 'voz-1.jpg')).toString('base64');
 
 function libro(n, extra = {}) {
@@ -18,13 +19,14 @@ function libro(n, extra = {}) {
     '',
   ];
   const caps = [];
-  for (let i = 0; i < n; i++) caps.push({ id: i + 1, titulo: ['Mi infancia en la finca', 'Mi primer trabajo', 'Cómo conocí a tu abuela y todo lo que pasó después en aquel pueblo', 'La casa de los domingos'][i % 4] + (i >= 4 ? ' ' + (i + 1) : ''), tema: i % 2 ? 'Trabajo' : 'Infancia', texto: textos[i % 3], fotos: i % 2 === 0 ? [{ src: foto, pie: 'Con mi mamá, 1962' }] : [], audios: i === 4 ? [{ src: 'data:audio/webm;base64,GkXfowEAAAAAAAAfQoaBAUL3gQFC8oEEQvOBCEKCQAR3ZWJtQoeBAkKFgQIYU4BnQI0VSalmQCgq17FAAw9CQE2AQAZ3aGFtbXlXQUAGd2hhbW15RIlACECPQAAAAAAAFlSua0AxrkAu14EBY8WBAZyBACK1nEADdW5khkAFVl9WUDglhohAA1ZQOIOBAeBABrCBCLqBCB9DtnVAIueBAKNAHIEAAIAwAQCdASoIAAgAAUAmJaQAA3AA/vz0AAA=', pregunta: '¿Cómo se llamaban tus papás?' }] : [] });
+  for (let i = 0; i < n; i++) caps.push({ id: i + 1, titulo: ['Mi infancia en la finca', 'Mi primer trabajo', 'Cómo conocí a tu abuela y todo lo que pasó después en aquel pueblo', 'La casa de los domingos'][i % 4] + (i >= 4 ? ' ' + (i + 1) : ''), tema: i % 2 ? 'Trabajo' : 'Infancia', texto: textos[i % 3], fotos: i % 2 === 0 ? [{ src: foto, pie: 'Con mi mamá, 1962' }] : [], audios: i === 4 ? [{ src: wav, pregunta: '¿Cómo se llamaban tus papás?' }, { src: wav, pregunta: '¿Y tus abuelos?' }] : [] });
   return Object.assign({ titulo: 'Los recuerdos de Felipe', subtitulo: 'Una historia contada con Eco', dedicatoria: 'Para mis nietos', fecha: 'Octubre de 2026', capitulos: caps }, extra);
 }
 const armar = (datos) => plantilla.replace(/(<script type="application\/json" id="datos">)[\s\S]*?(<\/script>)/, (m, a, b) => a + JSON.stringify(datos).replace(/</g, '\\u003c') + b);
 
 (async () => {
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' }).catch(() => chromium.launch());
+  const args = ['--autoplay-policy=no-user-gesture-required'];
+  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args }).catch(() => chromium.launch({ args }));
   async function abrir(datos, { ancho = 1440, alto = 900 } = {}) {
     const ctx = await browser.newContext({ viewport: { width: ancho, height: alto } });
     const page = await ctx.newPage();
@@ -59,9 +61,11 @@ const armar = (datos) => plantilla.replace(/(<script type="application\/json" id
   await t.page.waitForTimeout(2600);
   ok(await t.page.evaluate(() => document.getElementById('detalle').classList.contains('vivo')), 'Enter abre el capítulo');
   ok(/Mi infancia en la finca 5/.test(await t.page.locator('#dTitulo').innerText()), 'muestra el título del capítulo abierto');
-  ok(await t.page.locator('#dAudios audio').count() === 1 && /Cómo se llamaban tus papás/.test(await t.page.locator('#dAudios').innerText()) && /escucha la historia original/i.test(await t.page.locator('#dAudios').innerText()), 'muestra el audio original con su pregunta');
+  ok(await t.page.locator('#dAudios audio').count() === 2 && /Cómo se llamaban tus papás/.test(await t.page.locator('#dAudios').innerText()) && /escucha las historias originales/i.test(await t.page.locator('#dAudios').innerText()), 'muestra el audio original con su pregunta');
   ok((await t.page.locator('#dCuerpo p').count()) >= 1 && (await t.page.locator('#dCuerpo figure img').count()) >= 1, 'muestra el texto en párrafos y su foto');
   await t.page.screenshot({ path: path.join(process.env.CAPTURAS || '/tmp', 'libro-digital-detalle.png') });
+  const sonando = await t.page.evaluate(async () => { const a = [...document.querySelectorAll('#dAudios audio')]; await a[0].play(); const primeroSonaba = !a[0].paused; await a[1].play(); return { primeroSonaba, primeroPausado: a[0].paused, segundoSuena: !a[1].paused }; });
+  ok(sonando.primeroSonaba && sonando.primeroPausado && sonando.segundoSuena, 'al darle play a un audio se pausa el que sonaba (solo suena uno a la vez)');
   await t.page.locator('#dMas').click();
   ok(await t.page.evaluate(() => getComputedStyle(document.getElementById('dCuerpo')).fontSize) === '20px', 'A+ agranda la letra');
   await t.page.keyboard.press('Escape');

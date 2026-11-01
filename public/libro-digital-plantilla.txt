@@ -469,6 +469,11 @@ function cerrarDetalle() {
   detalle.querySelectorAll('audio').forEach((x) => x.pause());
   a.onfinish = () => { detalle.classList.remove('vivo'); detalle.getAnimations().forEach((x) => x.cancel()); abierto = false; cancelAnimationFrame(tinta); if (focoPrevio && focoPrevio.focus) focoPrevio.focus({ preventScroll: true }); };
 }
+// Solo suena un audio a la vez: al darle play a uno, se pausan los demás.
+document.addEventListener('play', (e) => {
+  if (!(e.target instanceof HTMLAudioElement)) return;
+  detalle.querySelectorAll('audio').forEach((x) => { if (x !== e.target) x.pause(); });
+}, true);
 $('dCerrar').addEventListener('click', cerrarDetalle);
 detalle.addEventListener('keydown', (e) => {
   if (e.key !== 'Tab') return;
