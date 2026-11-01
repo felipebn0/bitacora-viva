@@ -31,3 +31,18 @@
 
 /* Búsqueda en árbol completo: la persona encontrada se marca y se centra en pantalla. */
 .person.search-hit{outline:3px solid #9b6734;outline-offset:4px;}
+
+/* Barra de herramientas en celular: una cuadrícula ordenada en vez de botones sueltos.
+   Orden: añadir + buscar · zoom (solo árbol completo) · vistas · organizar + recuerdos. */
+@media(max-width:600px){
+ header .toolbar{flex:1 1 100%;width:100%;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+ .toolbar>*{min-width:0;width:auto!important;margin:0!important}
+ #addPerson{grid-column:span 2;order:1}
+ #searchInput{grid-column:span 2;order:2;width:100%!important}
+ #zoomOut,#zoomText,#zoomIn,#zoomReset{order:3}
+ #zoomText{text-align:center;font-size:14px;color:var(--deep);font-weight:700}
+ .toolbar .eco7-nav{grid-column:1/-1;order:4;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+ .toolbar .eco7-organize{grid-column:span 2;order:5}
+ #ecoFamilyV3Btn{grid-column:span 2;order:6}
+ .toolbar .btn{width:100%;justify-content:center;text-align:center}
+}
