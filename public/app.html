@@ -2486,7 +2486,10 @@
   let pausedFromState = null;
   let sessionId = 0;
   let sessionStartTime = null; // para ofrecer una pausa después de un rato charlando
-  let ofrecioPausa = false; // una sola vez por sesión, no en cada turno
+  // Momentos (en minutos desde que empezó la charla) en que se le pregunta si
+  // quiere seguir o pausar: 5, luego +7, +12 y +19 (estilo Fibonacci).
+  const PAUSAS_MIN = [5, 12, 24, 43];
+  let indicePausa = 0; // cuántas preguntas de pausa ya se hicieron en esta sesión
   // Cuando el turno anterior ofreció la pausa, el turno SIGUIENTE (donde la
   // persona ya respondió si quiere seguir o pausar) necesita avisarle al
   // backend que interprete esa respuesta — el backend no puede "adivinarlo"
@@ -2496,7 +2499,10 @@
   let esperandoRespuestaPausa = false;
   // La persona tocó "Fin": después del mensaje de cierre la charla termina SIEMPRE, aunque la IA no ponga [FIN].
   let finPedido = false;
-  const OFRECER_PAUSA_MS = 5 * 60 * 1000;
+  function pausaDebida() {
+    return indicePausa < PAUSAS_MIN.length && !!sessionStartTime
+      && (Date.now() - sessionStartTime) >= PAUSAS_MIN[indicePausa] * 60 * 1000;
+  }
   let mediaStream = null;
   let mediaRecorder = null;
   let audioChunks = [];
@@ -3381,7 +3387,7 @@
   function puedeEspecular() {
     return sessionMode === 'historia' && history.length > 0 && !esperandoRespuestaPausa
       && mediaUrlsLocal.length === 0 && !fotoRecienSubida && !subidaFotoEnCurso
-      && !(!ofrecioPausa && sessionStartTime && (Date.now() - sessionStartTime) >= OFRECER_PAUSA_MS);
+      && !(indicePausa < PAUSAS_MIN.length && sessionStartTime && (Date.now() - sessionStartTime) >= PAUSAS_MIN[indicePausa] * 60 * 1000);
   }
 
   // Lo grabado hasta ahora, sin detener la grabación.
@@ -3499,9 +3505,9 @@
       // de pausar en vez de dejar que la sesión siga sin límite — una sola
       // vez por sesión, no en cada turno.
       let ofrecerPausa = false;
-      if (!esp && !interpretarRespuestaPausa && sessionMode === 'historia' && !ofrecioPausa && sessionStartTime && (Date.now() - sessionStartTime) >= OFRECER_PAUSA_MS) {
+      if (!esp && !interpretarRespuestaPausa && sessionMode === 'historia' && pausaDebida()) {
         ofrecerPausa = true;
-        ofrecioPausa = true;
+        indicePausa++;
         esperandoRespuestaPausa = true; // para el PRÓXIMO turno, no este
       }
       const pedirTurno = () => fetch('/api/next', {
@@ -4011,7 +4017,7 @@
     sessionMode = mode === 'arbol' ? 'arbol' : 'historia';
     sessionId += 1;
     sessionStartTime = Date.now();
-    ofrecioPausa = false;
+    indicePausa = 0;
     pausedFromState = null;
     currentSessionDbId = null;
     finalizacionesVacias = 0;

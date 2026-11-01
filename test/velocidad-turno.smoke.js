@@ -261,7 +261,7 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
   const e1 = app_.indexOf('async function fetchNext(');
   ok(e0 !== -1 && e1 > e0, 'app: existe el bloque de especulación');
   const montar = new Function('estado', 'fetch', 'transcribeAudio', 'adelantarVoz', 'dividirParaVoz', 'vozAdelantada', 'Blob', 'AbortController',
-    `let { sessionMode, history, esperandoRespuestaPausa, mediaUrlsLocal, fotoRecienSubida, subidaFotoEnCurso, ofrecioPausa, sessionStartTime, OFRECER_PAUSA_MS,
+    `let { sessionMode, history, esperandoRespuestaPausa, mediaUrlsLocal, fotoRecienSubida, subidaFotoEnCurso, indicePausa, sessionStartTime, PAUSAS_MIN,
        mediaRecorder, audioChunks, lastRecordingMimeType, recordingStartedAt, lastLoudTime } = estado;\n` +
     app_.slice(e0, e1) + `\nreturn { iniciar: iniciarEspeculacion, cancelar: cancelarEspeculacion, actual: () => especulacion, fuenteEspeculada, puedeEspecular, contador: () => especulacionesEsteTurno };`);
   const ndjson = (eventos) => new Response(eventos.map((e) => JSON.stringify(e)).join('\n') + '\n', { headers: { 'Content-Type': 'application/x-ndjson' } });
@@ -269,7 +269,7 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
     const llamadas = []; const adelantadas = new Map();
     const estado = Object.assign({
       sessionMode: 'historia', history: [{ role: 'assistant', content: '¿Cómo era tu casa?' }], esperandoRespuestaPausa: false, mediaUrlsLocal: [], fotoRecienSubida: null,
-      subidaFotoEnCurso: null, ofrecioPausa: false, sessionStartTime: Date.now(), OFRECER_PAUSA_MS: 15 * 60 * 1000,
+      subidaFotoEnCurso: null, indicePausa: 0, sessionStartTime: Date.now(), PAUSAS_MIN: [15],
       mediaRecorder: { state: 'recording', addEventListener(_, cb) { this.cb = cb; }, removeEventListener() {}, requestData() { setTimeout(() => this.cb(), 1); } },
       audioChunks: [new Uint8Array(1500)], lastRecordingMimeType: 'audio/webm', recordingStartedAt: Date.now() - 4000, lastLoudTime: 1234,
     }, over.estado || {});
