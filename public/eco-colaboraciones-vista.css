@@ -27,7 +27,7 @@ body>main.wrap .eco-c-colabs-btnrow .empty-cta,body>main.wrap .aporte-acciones b
 }
 body>main.wrap .eco-c-colabs-btnrow .empty-cta:hover,body>main.wrap .aporte-acciones button:not(.archivar-btn):hover{background:#edf0e5!important}
 body>main.wrap .aporte-acciones .archivar-btn{background:#fffdf6;color:#8f2b2b;border:1px solid #c9a4a0;border-radius:12px;min-height:44px;padding:10px 16px;font-weight:700;cursor:pointer}
-body>main.wrap #aportesSection{padding:0 16px}
+body>main.wrap #aportesSection{padding:20px 18px;border:1px solid var(--eco-edge)}
 body>main.wrap .eco-c-story-card{
  padding:0!important;margin:0 0 9px!important;border:1px solid #dadaca;
  border-radius:15px;background:#fffdf6;overflow:hidden;box-shadow:none;
