@@ -117,3 +117,6 @@ dialog.eco-codigo-dlg .eco-dlg-close:hover{color:#293d30}
   #appContent > header {margin-bottom: 15px;}
 }
 .aportes > h2 + .eco-colab-subtitulo{text-align:center;margin:0 0 18px}
+
+/* Por ahora se oculta "o sube una nota de voz que ya tengas" (queda en el código para retomarlo luego). */
+#subirAudioBtn,#subirAudioInput{display:none!important}
