@@ -77,7 +77,7 @@ require.cache[require.resolve('@vercel/blob')] = { id: require.resolve('@vercel/
     if (rango) { const m = /bytes=(\d+)-(\d*)/.exec(rango); cuerpo = CONTENIDO.subarray(Number(m[1]), m[2] ? Number(m[2]) + 1 : undefined); headers.set('content-range', `bytes ${m[1]}-${Number(m[1]) + cuerpo.length - 1}/${CONTENIDO.length}`); headers.set('content-length', String(cuerpo.length)); }
     return { statusCode: 200, stream: streamDe(cuerpo), headers, blob: { contentType: 'audio/webm', size: CONTENIDO.length } };
   } } };
-require.cache[require.resolve('@anthropic-ai/sdk')] = { id: require.resolve('@anthropic-ai/sdk'), filename: require.resolve('@anthropic-ai/sdk'), loaded: true, exports: class { constructor() { this.messages = { create: async (p) => ({ content: [{ type: 'text', text: JSON.stringify(p.messages[0].content.split('\n\n').map((b) => (/SIN PREGUNTA/.test(b) ? 'Hablando de su papá arriero' : '¿En qué ciudad creciste?'))) }], usage: { input_tokens: 1, output_tokens: 1 } }) }; } } };
+require.cache[require.resolve('@anthropic-ai/sdk')] = { id: require.resolve('@anthropic-ai/sdk'), filename: require.resolve('@anthropic-ai/sdk'), loaded: true, exports: class { constructor() { this.messages = { create: async (p) => ({ content: [{ type: 'text', text: JSON.stringify(p.messages[0].content.split('\n\n').map((b, i) => ({ n: i + 1, texto: /SIN PREGUNTA/.test(b) ? 'Hablando de su papá arriero' : '¿Dónde creciste, en Medellín?' }))) }], usage: { input_tokens: 1, output_tokens: 1 } }) }; } } };
 const app = require(serverPath);
 
 function request(server, opts, cookie) {
@@ -109,7 +109,7 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
   let r = await request(server, { path: `/api/book-qr/listen/${T1}` });
   ok(r.status === 200 && r.json.title === 'Infancia' && r.json.audios.length === 2, 'sin sesión: el QR abre el capítulo y lista sus grabaciones (200)');
   ok(r.json.audios[0] === `/api/book-qr/audio/${T1}/0`, 'las grabaciones se piden por token y posición, no por la ruta del archivo');
-  ok(Array.isArray(r.json.preguntas) && r.json.preguntas[0] === '¿En qué ciudad creciste?', 'cada grabación trae su pregunta; si era muy corta para entenderse sola, viene completa');
+  ok(Array.isArray(r.json.preguntas) && r.json.preguntas[0] === '¿Dónde creciste, en Medellín?', 'cada grabación trae su pregunta; si era muy corta para entenderse sola, viene completa');
   ok(r.json.preguntas[1] === 'Hablando de su papá arriero', 'si una nota no tiene pregunta, trae un contexto breve en su lugar');
   ok(r.headers['cache-control'] === 'no-store' && /noindex/.test(r.headers['x-robots-tag']), 'no se guarda en caché ni se indexa en buscadores');
   r = await request(server, { path: `/api/book-qr/audio/${T1}/0` });
