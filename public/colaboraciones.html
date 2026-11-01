@@ -352,7 +352,8 @@
         dadosLista.innerHTML = '<p class="empty">' + dadosStatus.textContent + '</p>';
         return;
       }
-      const historias = data.historias || [];
+      // Solo bitácoras donde esta cuenta ya aportó alguna historia.
+      const historias = (data.historias || []).filter((h) => h.aportes > 0);
       if (!historias.length) {
         dadosStatus.textContent = 'Todavía no colaboras con ninguna otra bitácora.';
         dadosLista.innerHTML = '<p class="empty">Todavía no colaboras con ninguna otra bitácora.</p><a class="empty-cta" href="/colaborar.html">Aportar a una bitácora →</a>';
