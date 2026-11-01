@@ -114,6 +114,10 @@
   }
 
   function upgradeCardAudios(card) {
+    // Tarjetas nuevas de aporte: el audio va dentro de su propia caja
+    // ("Grabaciones de audio"), así que el reproductor se pone ahí mismo.
+    const dentroDeCaja = Array.from(card.querySelectorAll('.ap-box audio:not([data-eco-up])'));
+    dentroDeCaja.forEach(upgradeInlineAudio);
     const audios = Array.from(card.querySelectorAll('audio:not([data-eco-up])'));
     if (!audios.length) return;
 

@@ -174,7 +174,7 @@
 <link rel="stylesheet" href="/eco-interior.css?v=1">
 <link rel="stylesheet" href="/eco-colaboraciones.css?v=1">
 <script src="/eco-colaboraciones.js?v=1" defer></script>
-<link rel="stylesheet" href="/eco-colaboraciones-vista.css?v=8">
+<link rel="stylesheet" href="/eco-colaboraciones-vista.css?v=9">
 <script src="/eco-colaboraciones-vista.js?v=3" defer></script>
 <link rel="stylesheet" href="/eco-volver-unificado.css?v=3">
 <script src="/eco-volver-unificado.js?v=1" defer></script>
@@ -372,45 +372,144 @@
   // Misma forma de pintar un aporte que ya usan colaborar.html/
   // colaboraciones.html -- aquí SIN botones de administrar (item 14: eso
   // vive del lado de "lo que me dijeron a mí", no aquí).
-  function pintarAporteSimple(container, it) {
-    const div = document.createElement('div');
-    div.className = 'aporte-item';
-    const urls = (it.audio_urls && it.audio_urls.length) ? it.audio_urls : (it.audio_url ? [it.audio_url] : []);
-    const quien = it.contributor ? it.contributor + (it.parentesco ? ` (${it.parentesco})` : '') : 'Familia';
-    const etiqueta = it.protagonista ? `Historia de ${it.protagonista} — compartida por ${quien}` : quien;
-    const quienP = document.createElement('p');
-    quienP.className = 'quien';
-    quienP.textContent = etiqueta + (it.is_private ? ' (privado)' : '');
-    div.appendChild(quienP);
+  // Resumen corto: el que guardó el servidor (IA) o, si todavía no existe,
+  // la primera frase del texto como respaldo.
+  function resumenDeAporte(n) {
+    const r = (n.resumen || '').trim();
+    if (r) return r;
+    const t = (n.texto || '').replace(/\s+/g, ' ').trim();
+    const m = t.match(/^.*?[.!?](?=\s|$)/);
+    return m ? m[0] : t.slice(0, 160);
+  }
+
+  // Tarjeta de un aporte: encabezado con nombre y resumen; al abrirla,
+  // "Resumen", "Historia completa", grabaciones, foto y acciones.
+  function armarTarjetaAporte(n, etiqueta, opts) {
+    const item = document.createElement('div');
+    item.className = 'aporte-item ap-card';
+    item.dataset.ecoCompact = '1'; // la vista previa vieja no la vuelve a tocar
+
+    const head = document.createElement('button');
+    head.type = 'button';
+    head.className = 'ap-head';
+    head.setAttribute('aria-expanded', 'false');
+    const quienSpan = document.createElement('span');
+    quienSpan.className = 'quien';
+    quienSpan.textContent = etiqueta + (n.is_private ? ' (privado — solo lo ves tú)' : '');
+    const shortSpan = document.createElement('span');
+    shortSpan.className = 'ap-short';
+    shortSpan.textContent = resumenDeAporte(n);
+    const chev = document.createElement('span');
+    chev.className = 'ap-chev';
+    chev.setAttribute('aria-hidden', 'true');
+    chev.textContent = '⌄';
+    head.append(quienSpan, shortSpan, chev);
+
+    const body = document.createElement('div');
+    body.className = 'ap-body';
+    body.hidden = true;
+
+    const resumenBar = document.createElement('div');
+    resumenBar.className = 'ap-resumen';
+    const rotulo = document.createElement('span');
+    rotulo.className = 'ap-label';
+    rotulo.textContent = 'Resumen';
+    const resumenTexto = document.createElement('span');
+    resumenTexto.textContent = resumenDeAporte(n);
+    resumenBar.append(rotulo, resumenTexto);
+
+    const grid = document.createElement('div');
+    grid.className = 'ap-grid';
+    const colIzq = document.createElement('div');
+    colIzq.className = 'ap-col';
+    const colDer = document.createElement('div');
+    colDer.className = 'ap-col';
+
+    const histBox = document.createElement('div');
+    histBox.className = 'ap-box';
+    const histTitulo = document.createElement('h4');
+    histTitulo.textContent = 'Historia completa';
     const textoDiv = document.createElement('div');
     textoDiv.className = 'texto';
-    textoDiv.textContent = it.texto;
-    div.appendChild(textoDiv);
-    urls.forEach((u) => {
-      if (typeof u === 'string' && /^https?:\/\//.test(u)) {
+    textoDiv.textContent = n.texto || '';
+    histBox.append(histTitulo, textoDiv);
+    colIzq.appendChild(histBox);
+
+    const urls = (n.audio_urls && n.audio_urls.length) ? n.audio_urls : (n.audio_url ? [n.audio_url] : []);
+    const audios = urls.filter((u) => typeof u === 'string' && /^https?:\/\//.test(u));
+    if (audios.length) {
+      const audBox = document.createElement('div');
+      audBox.className = 'ap-box';
+      const audTitulo = document.createElement('h4');
+      audTitulo.textContent = `Grabaciones de audio (${audios.length})`;
+      audBox.appendChild(audTitulo);
+      audios.forEach((u) => {
         const audio = document.createElement('audio');
         audio.controls = true;
-        audio.preload = 'none'; // no descargar nada hasta que la persona le de play (ahorra operaciones de Blob)
+        audio.preload = 'none';
         audio.src = '/api/media-file?u=' + encodeURIComponent(u);
-        div.appendChild(audio);
-      }
-    });
-    // ECO-COLAB-V2: mostrar los archivos asociados también en los aportes enviados.
-    const adjuntos = Array.isArray(it.media_urls) ? it.media_urls : [];
-    if (adjuntos.length) {
+        audBox.appendChild(audio);
+      });
+      colIzq.appendChild(audBox);
+    }
+
+    const media = (Array.isArray(n.media_urls) ? n.media_urls : []).filter((m) => m && typeof m.url === 'string' && /^https?:\/\//.test(m.url));
+    if (media.length) {
+      const fotoBox = document.createElement('div');
+      fotoBox.className = 'ap-box';
+      const fotoTitulo = document.createElement('h4');
+      fotoTitulo.textContent = media.length === 1 ? 'Foto adjunta' : `Fotos adjuntas (${media.length})`;
       const galeria = document.createElement('div');
       galeria.className = 'media-adjunta';
-      adjuntos.forEach((m) => {
-        if (!m || typeof m.url !== 'string' || !/^https?:\/\//.test(m.url)) return;
+      media.forEach((m) => {
         const src = '/api/media-file?u=' + encodeURIComponent(m.url);
         const el = m.type === 'video' ? document.createElement('video') : document.createElement('img');
         if (m.type === 'video') { el.controls = true; el.preload = 'none'; el.src = src; }
         else { el.loading = 'lazy'; el.src = src; el.alt = m.caption || 'Foto de la historia'; }
         galeria.appendChild(el);
       });
-      if (galeria.childElementCount) div.appendChild(galeria);
+      fotoBox.append(fotoTitulo, galeria);
+      colDer.appendChild(fotoBox);
     }
-    container.appendChild(div);
+
+    if (opts && opts.acciones) {
+      const accBox = document.createElement('div');
+      accBox.className = 'ap-box ap-acc';
+      const accTitulo = document.createElement('h4');
+      accTitulo.textContent = 'Acciones';
+      const acciones = document.createElement('div');
+      acciones.className = 'aporte-acciones';
+      const privBtn = document.createElement('button');
+      privBtn.type = 'button';
+      privBtn.textContent = n.is_private ? 'Quitar privado' : 'Marcar privado';
+      privBtn.addEventListener('click', () => cambiarPrivacidadAporte(n.id, !n.is_private));
+      const archBtn = document.createElement('button');
+      archBtn.type = 'button';
+      archBtn.className = 'archivar-btn';
+      archBtn.textContent = 'Archivar';
+      archBtn.addEventListener('click', () => archivarAporte(n.id));
+      acciones.append(privBtn, archBtn);
+      accBox.append(accTitulo, acciones);
+      colDer.appendChild(accBox);
+    }
+
+    grid.append(colIzq, colDer);
+    body.append(resumenBar, grid);
+
+    head.addEventListener('click', () => {
+      const abrir = body.hidden;
+      body.hidden = !abrir;
+      head.setAttribute('aria-expanded', String(abrir));
+      chev.textContent = abrir ? '⌃' : '⌄';
+    });
+    item.append(head, body);
+    return item;
+  }
+
+  function pintarAporteSimple(container, it) {
+    const quien = it.contributor ? it.contributor + (it.parentesco ? ` (${it.parentesco})` : '') : 'Familia';
+    const etiqueta = it.protagonista ? `Historia de ${it.protagonista} — compartida por ${quien}` : quien;
+    container.appendChild(armarTarjetaAporte(it, etiqueta, { acciones: false }));
   }
 
   async function cargarAportesDados(ownerId) {
@@ -514,69 +613,9 @@
     aportesStatus.textContent = notes.length === 1 ? 'Se cargó 1 aporte.' : `Se cargaron ${notes.length} aportes.`;
     aportesLista.innerHTML = '';
     notes.forEach((n) => {
-      const item = document.createElement('div');
-      item.className = 'aporte-item';
       const quien = n.contributor ? n.contributor + (n.parentesco ? ` (${n.parentesco})` : '') : 'Familia';
       const etiqueta = n.protagonista ? `Historia de ${n.protagonista} — compartida por ${quien}` : quien;
-      const urls = (n.audio_urls && n.audio_urls.length) ? n.audio_urls : (n.audio_url ? [n.audio_url] : []);
-      const quienP = document.createElement('p');
-      quienP.className = 'quien';
-      // is_private (item 14): quien lo aportó lo marcó privado -- se
-      // esconde del resto del círculo, pero el dueño de la bitácora lo
-      // sigue viendo siempre (decisión de Felipe), así que aquí se aclara
-      // por qué aparece.
-      quienP.textContent = etiqueta + (n.is_private ? ' (privado — solo lo ves tú)' : '');
-      item.appendChild(quienP);
-      const textoDiv = document.createElement('div');
-      textoDiv.className = 'texto';
-      textoDiv.textContent = n.texto;
-      item.appendChild(textoDiv);
-      urls.forEach((u) => {
-        if (typeof u === 'string' && /^https?:\/\//.test(u)) {
-          const audio = document.createElement('audio');
-          audio.controls = true;
-          audio.preload = 'none'; // no descargar nada hasta que la persona le de play (ahorra operaciones de Blob)
-          // Acceso privado en Blob — /api/media-file confirma el permiso
-          // antes de traerlo (ver server.js).
-          audio.src = '/api/media-file?u=' + encodeURIComponent(u);
-          item.appendChild(audio);
-        }
-      });
-      // Fotos/video que se subieron mientras se contaba ESTA historia (ver
-      // colaborar.html) — al lado de su propio aporte, no en una sección
-      // aparte sin relación visual con la historia a la que pertenecen.
-      const mediaAdjunta = Array.isArray(n.media_urls) ? n.media_urls : [];
-      if (mediaAdjunta.length) {
-        const grid = document.createElement('div');
-        grid.className = 'media-adjunta';
-        mediaAdjunta.forEach((m) => {
-          if (!m || typeof m.url !== 'string' || !/^https?:\/\//.test(m.url)) return;
-          const src = '/api/media-file?u=' + encodeURIComponent(m.url);
-          const el = m.type === 'video' ? document.createElement('video') : document.createElement('img');
-          if (m.type === 'video') { el.controls = true; el.preload = 'none'; el.src = src; }
-          else { el.loading = 'lazy'; el.src = src; el.alt = m.caption || 'Foto de la historia'; }
-          grid.appendChild(el);
-        });
-        item.appendChild(grid);
-      }
-      // Item 14 (ajustado 2026-09-08, pedido de Felipe): quien administra
-      // la bitácora puede esconder o archivar CUALQUIER aporte que le
-      // hicieron a su historia -- ver aporteAdministrable en server.js.
-      const acciones = document.createElement('div');
-      acciones.className = 'aporte-acciones';
-      const privBtn = document.createElement('button');
-      privBtn.type = 'button';
-      privBtn.textContent = n.is_private ? 'Quitar privado' : 'Marcar privado';
-      privBtn.addEventListener('click', () => cambiarPrivacidadAporte(n.id, !n.is_private));
-      const archBtn = document.createElement('button');
-      archBtn.type = 'button';
-      archBtn.className = 'archivar-btn';
-      archBtn.textContent = 'Archivar';
-      archBtn.addEventListener('click', () => archivarAporte(n.id));
-      acciones.appendChild(privBtn);
-      acciones.appendChild(archBtn);
-      item.appendChild(acciones);
-      aportesLista.appendChild(item);
+      aportesLista.appendChild(armarTarjetaAporte(n, etiqueta, { acciones: true }));
     });
   }
 
@@ -764,7 +803,7 @@
 
 </script>
 <script src="/eco-audio-exclusivo.js" defer></script>
-<script src="/eco-audio-player.js?v=2" defer></script>
+<script src="/eco-audio-player.js?v=3" defer></script>
 <script src="/eco-toast.js" defer></script>
 <script src="/eco-tour.js?v=2" defer></script>
 </body>
