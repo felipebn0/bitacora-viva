@@ -82,7 +82,7 @@ function init(){
    sync();
  }
  // Se quitó el desplegable "Ver historias que he aportado": el historial ya no se muestra aquí.
- if(list){ list.hidden=true; }
+ if(list){ list.style.setProperty('display','none','important'); }
  // Insertar barra antes del panel principal.
  wrap.parentNode.insertBefore(barra,wrap);
  // Agrupa opciones para adjuntar, pero no mueve los inputs ni los controles.
