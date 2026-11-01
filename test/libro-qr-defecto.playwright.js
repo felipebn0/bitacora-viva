@@ -41,7 +41,6 @@ const capitulos = [
     return json({});
   });
   await page.goto(base + '/capitulos.html');
-  await page.waitForSelector('#ecoEditorialOpen');
   // Al entrar a Mi libro el estudio se abre solo
   await page.waitForFunction(() => /sincronizado|Guardado en tu cuenta/.test(document.getElementById('ecoEditorialStatus').textContent));
   const t0 = Date.now(); while (creados.length < 2 && Date.now() - t0 < 6000) await page.waitForTimeout(50);
@@ -61,10 +60,8 @@ const capitulos = [
   const t1 = Date.now(); while (!(borrador.qrOff && borrador.qrOff['1']) && Date.now() - t1 < 5000) await page.waitForTimeout(100);
   ok(borrador.qrOff && borrador.qrOff['1'] === true, 'y queda anotado en el borrador que se retiró a propósito');
 
-  await page.click('#ecoEditorialClose');
-  ok(await page.evaluate(() => document.getElementById('ecoEditorialDialog').hidden) && /#capitulos$/.test(page.url()), 'al cerrar el estudio se vuelve a la lista de capítulos');
   creados.length = 0;
-  await page.click('#ecoEditorialOpen');
+  await page.reload();
   await page.waitForFunction(() => /sincronizado|Guardado en tu cuenta/.test(document.getElementById('ecoEditorialStatus').textContent));
   await page.waitForTimeout(800);
   ok(!creados.includes(1), 'al volver a abrir, el QR retirado no se vuelve a crear solo');

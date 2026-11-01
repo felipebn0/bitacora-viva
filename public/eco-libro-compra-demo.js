@@ -1,7 +1,7 @@
 /* ECO · compra del libro digital, modo demostración. No procesa dinero. */
 (()=>{'use strict';
 const $=id=>document.getElementById(id);
-let approved=false,loaded=false,busy=false,dialog,esperando=null;
+let approved=false,loaded=false,busy=false,dialog,esperando=null,exigeCompra=false;
 const request=async(path,opts)=>{
   const res=await fetch(path,{credentials:'same-origin',cache:'no-store',...opts});
   const data=await res.json().catch(()=>({}));if(!res.ok)throw Error(data.error||'No fue posible conectar con ECO.');return data;
@@ -24,7 +24,7 @@ function createModal(){
  dialog.addEventListener('click',e=>{if(e.target===dialog)close()});
  $('ecoDemoConfirm').addEventListener('click',buy);
 }
-function close(){dialog.hidden=true;if(esperando){const r=esperando;esperando=null;r(approved)}}
+function close(){dialog.hidden=true;if(esperando){const r=esperando;esperando=null;r(exigeCompra?false:approved)}}
 function show(){createModal();$('ecoDemoMessage').textContent='';$('ecoDemoConfirm').hidden=approved;dialog.hidden=false;$('ecoDemoClose').focus()}
 async function status(){
  try{const data=await request('/api/book-demo/status');loaded=true;approved=!!data.approved;return approved}
@@ -42,12 +42,14 @@ async function buy(){
  }catch(e){$('ecoDemoMessage').textContent=e.message}
  finally{busy=false;btn.disabled=false}
 }
-// Para quien necesite estar seguro de que la compra está aprobada (el botón "Exportar en PDF" de Mi libro):
-// si ya lo está responde true; si no, abre la ventana de compra y responde cuando se aprueba (true) o se cierra (false).
+// Para quien necesite estar seguro de que la compra está aprobada (las descargas de Mi libro): si ya lo está responde true;
+// si no, abre la ventana de compra y responde cuando se aprueba (true) o se cierra (false). Con { siempre: true } la ventana de
+// compra se muestra aunque ya se haya aprobado antes (cada descarga pasa por la pantalla de pago).
 window.EcoLibroCompra={
- async asegurar(){
+ async asegurar({siempre=false}={}){
   if(!loaded)await status();
-  if(approved)return true;
+  if(approved&&!siempre)return true;
+  exigeCompra=siempre;
   createModal();$('ecoDemoMessage').textContent='';$('ecoDemoConfirm').hidden=false;dialog.hidden=false;$('ecoDemoClose').focus();
   return new Promise(r=>{esperando=r});
  }

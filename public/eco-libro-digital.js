@@ -1,9 +1,9 @@
-/* Mi libro: botón "Exportar libro digital". Arma un solo archivo HTML (sin internet, se abre en cualquier navegador) con la
-   estantería de capítulos de public/libro-digital-plantilla.txt: títulos y textos ya editados, fotos reducidas, los audios
-   originales de cada capítulo y las tipografías incluidas. Pide la misma compra de prueba que el PDF. */
+/* Mi libro: "Descargar libro digital" (lo llama el estudio del libro). Arma un solo archivo HTML (sin internet, se abre en
+   cualquier navegador) con la estantería de capítulos de public/libro-digital-plantilla.txt: títulos y textos ya editados,
+   fotos reducidas, los audios originales de cada capítulo y las tipografías incluidas. El texto del libro va también como
+   página de lectura, para que se vea donde no corre JavaScript (la vista previa de Archivos del iPhone). */
 (() => {
   'use strict';
-  const $ = (id) => document.getElementById(id);
   const MAX_FOTOS = 36, MAX_FOTOS_POR_CAPITULO = 6, LADO_MAX = 1100, BYTES_MAX = 14 * 1024 * 1024;
   const AUDIO_BYTES_MAX = 30 * 1024 * 1024, AUDIO_UNO_MAX = 8 * 1024 * 1024;
   const FUENTES = [
@@ -12,15 +12,7 @@
     ['Atkinson Hyperlegible', 'normal', '400', 'atkinson-hyperlegible-latin-400-normal.woff2'],
     ['Atkinson Hyperlegible', 'normal', '700', 'atkinson-hyperlegible-latin-700-normal.woff2'],
   ];
-  let ocupado = false, botonLista = null;
-
-  const mensaje = () => document.querySelector('.eco-libro-exportar-msg');
-  function aviso(texto, error) {
-    const m = mensaje();
-    if (!m) return;
-    m.textContent = texto || '';
-    m.classList.toggle('eco-libro-exportar-error', !!error);
-  }
+  let ocupado = false;
 
   const pedirJson = (url) => fetch(url, { credentials: 'same-origin' }).then((r) => (r.ok ? r.json() : Promise.reject(new Error('No se pudo cargar tu libro. Intenta de nuevo.'))));
   const aBase64 = (buf) => { let s = ''; const b = new Uint8Array(buf); for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(s); };
@@ -106,25 +98,43 @@
     };
   }
 
-  // Versión de solo texto para quien abre el archivo sin JavaScript (por ejemplo la vista previa de Archivos en el iPhone).
+  // Versión de lectura: el libro como texto simple, con sus fotos y audios. Las fotos y los audios están UNA sola vez aquí;
+  // los datos de la estantería los enlazan por su número (ref) en vez de repetirlos.
   const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  function versionDeTexto(datos) {
-    const partes = ['<noscript><main class="plano"><h1>' + esc(datos.titulo) + '</h1><p class="sub">' + esc(datos.subtitulo || 'Una historia contada con Eco') + '</p>'];
+  function versionDeLectura(datos) {
+    const partes = ['<main class="plano"><h1>' + esc(datos.titulo) + '</h1><p class="sub">' + esc(datos.subtitulo || 'Una historia contada con Eco') + '</p>'];
     if (datos.dedicatoria) partes.push('<p><em>' + esc(datos.dedicatoria) + '</em></p>');
     datos.capitulos.forEach((c, i) => {
       partes.push('<section><h2>' + (i + 1) + '. ' + esc(c.titulo) + '</h2>' + (c.tema ? '<p class="tema">' + esc(c.tema) + '</p>' : ''));
-      String(c.texto || '').split(/\n\s*\n/).filter((x) => x.trim()).forEach((p) => partes.push('<p>' + esc(p.trim()) + '</p>'));
+      const pars = String(c.texto || '').split(/\n\s*\n/).filter((x) => x.trim());
+      const fotos = c.fotos || [];
+      const antes = new Map();
+      fotos.forEach((f, k) => { const j = pars.length ? Math.min(pars.length - 1, Math.round((k * pars.length) / fotos.length)) : 0; if (!antes.has(j)) antes.set(j, []); antes.get(j).push(f); });
+      const figura = (f) => '<figure><img id="' + f.ref + '" src="' + f.src + '" alt="' + esc(f.pie || 'Foto familiar') + '">' + (f.pie ? '<figcaption>' + esc(f.pie) + '</figcaption>' : '') + '</figure>';
+      pars.forEach((p, j) => { (antes.get(j) || []).forEach((f) => partes.push(figura(f))); partes.push('<p>' + esc(p.trim()) + '</p>'); });
+      if (!pars.length) fotos.forEach((f) => partes.push(figura(f)));
+      const audios = c.audios || [];
+      if (audios.length) partes.push('<h3 class="tema">' + (audios.length === 1 ? 'Escucha la historia original' : 'Escucha las historias originales') + '</h3>');
+      audios.forEach((a) => { if (a.pregunta) partes.push('<p class="pregunta">' + esc(a.pregunta) + '</p>'); partes.push('<audio id="' + a.ref + '" controls preload="metadata" src="' + a.src + '"></audio>'); });
       partes.push('</section>');
     });
-    partes.push('<p class="aviso">Aquí está el texto de tu libro. Para ver las fotos, escuchar los audios y pasar los capítulos como libros en una estantería, abre este archivo en un navegador (Safari o Chrome).</p></main></noscript>');
+    partes.push('<p class="aviso">Para recorrer tu libro como una estantería, abre este archivo en un navegador (Safari o Chrome). En la vista previa de Archivos del iPhone se ve así, como un texto para leer.</p></main>');
     return partes.join('');
   }
+  // A cada foto y audio se le pone un número y el JSON queda solo con ese número (sin repetir los datos pesados).
+  function numerarMedios(datos) {
+    datos.capitulos.forEach((c, i) => {
+      (c.fotos || []).forEach((f, k) => { f.ref = 'f-' + i + '-' + k; });
+      (c.audios || []).forEach((a, k) => { a.ref = 'a-' + i + '-' + k; });
+    });
+  }
+  const sinPeso = (datos) => ({ ...datos, capitulos: datos.capitulos.map((c) => ({ ...c, fotos: (c.fotos || []).map((f) => ({ ref: f.ref, pie: f.pie })), audios: (c.audios || []).map((a) => ({ ref: a.ref, pregunta: a.pregunta })) })) });
 
   const nombreDeArchivo = (titulo) => (titulo.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase().slice(0, 60) || 'mi-libro') + '-eco.html';
 
   async function exportar(opciones) {
-    const boton = (opciones && opciones.boton) || botonLista;
-    const avisar = (opciones && opciones.aviso) || aviso;
+    const boton = opciones && opciones.boton;
+    const avisar = (opciones && opciones.aviso) || (() => {});
     if (ocupado) return;
     ocupado = true;
     const texto = boton ? boton.textContent : '';
@@ -134,7 +144,7 @@
       let hay = true;
       try { const r = await fetch('/api/chapters', { credentials: 'same-origin' }); if (r.ok) hay = ((await r.json()).chapters || []).length > 0; } catch (e) { /* sin conexión: se intenta igual */ }
       if (!hay) { avisar('Todavía no tienes capítulos. Genera tus capítulos primero y luego exporta tu libro.', true); return; }
-      if (window.EcoLibroCompra && !(await window.EcoLibroCompra.asegurar())) { avisar('Para exportar el libro primero hay que completar la compra de prueba.'); return; }
+      if (!(opciones && opciones.yaPagado) && window.EcoLibroCompra && !(await window.EcoLibroCompra.asegurar())) { avisar('Para exportar el libro primero hay que completar la compra de prueba.'); return; }
       avisar('Preparando tu libro: reduciendo las fotos y juntando los audios…');
       const [datos, fuentes, plantilla] = await Promise.all([
         armarDatos(), cssDeFuentes(),
@@ -142,9 +152,10 @@
       ]);
       const omitidos = datos.audiosOmitidos || 0;
       delete datos.audiosOmitidos;
-      const json = JSON.stringify(datos).replace(/</g, '\\u003c').replace(/[\u2028\u2029]/g, ' ');
+      numerarMedios(datos);
+      const json = JSON.stringify(sinPeso(datos)).replace(/</g, '\\u003c').replace(/[\u2028\u2029]/g, ' ');
       const html = plantilla
-        .replace('<!--__ESTATICO__-->', () => versionDeTexto(datos))
+        .replace('<!--__ESTATICO__-->', () => versionDeLectura(datos))
         .replace('/*__FUENTES__*/', () => fuentes)
         .replace(/(<script type="application\/json" id="datos">)[\s\S]*?(<\/script>)/, (m, a, b) => a + json + b);
       const archivo = new Blob([html], { type: 'text/html;charset=utf-8' });
@@ -162,21 +173,6 @@
     }
   }
 
-  function montar() {
-    if ($('ecoLibroDigital')) return;
-    const previo = $('ecoLibroExportar');
-    if (!previo) return;
-    botonLista = document.createElement('button');
-    botonLista.type = 'button';
-    botonLista.id = 'ecoLibroDigital';
-    botonLista.className = 'eco-libro-exportar';
-    botonLista.textContent = 'Exportar libro digital';
-    botonLista.addEventListener('click', () => exportar());
-    previo.insertAdjacentElement('afterend', botonLista);
-  }
-
   window.EcoLibroDigital = { exportar };
 
-  new MutationObserver(montar).observe(document.documentElement, { childList: true, subtree: true });
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', montar); else montar();
 })();

@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<script>document.documentElement.classList.add('con-js')</script>
 <title>Mi libro · Eco</title>
 <style>
 /*__FUENTES__*/
@@ -138,20 +139,27 @@ a { color: inherit; text-decoration: none; }
   .d-col { overflow: visible; flex: none; padding: 0; } .d-in { margin: 0; }
   .d-titulo { font-size: 38px; } .d-cuerpo { font-size: var(--tam, 18px); }
 }
-/* Foco visible con los colores de Eco */
-:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
-</style>
-<noscript><style>
-html, body { height: auto; overflow: auto; user-select: text; -webkit-user-select: text; }
-.barra, .indice, .estante, .abrir, .pie-cap, .flecha, .pie-pag, .detalle, .grano { display: none !important; }
+/* Versión de lectura: es el libro como texto simple. Se ve cuando no corre JavaScript (por ejemplo en la vista previa de
+   Archivos del iPhone); con JavaScript se esconde y su contenido pasa a la estantería. */
+html.con-js .plano { display: none; }
+html:not(.con-js) body { height: auto; overflow: auto; user-select: text; -webkit-user-select: text; }
+html:not(.con-js) :is(.barra, .indice, .estante, .abrir, .pie-cap, .flecha, .pie-pag, .detalle, .grano) { display: none !important; }
 .plano { max-width: 40rem; margin: 0 auto; padding: 28px 22px 60px; font-family: var(--serif); line-height: 1.6; font-size: 19px; }
 .plano h1 { font-size: 34px; line-height: 1.1; margin: 0 0 6px; color: var(--accent); }
 .plano .sub { margin: 0 0 28px; font-family: var(--sans); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
-.plano h2 { font-size: 26px; line-height: 1.15; margin: 34px 0 4px; }
+.plano h2 { font-size: 26px; line-height: 1.15; margin: 38px 0 4px; }
 .plano .tema { margin: 0 0 12px; font-family: var(--sans); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
 .plano p { text-align: justify; hyphens: auto; -webkit-hyphens: auto; margin: 0 0 1em; }
+.plano figure { float: right; width: 42%; margin: .3em 0 .8em 1em; }
+.plano figure img { width: 100%; display: block; border-radius: 3px; }
+.plano figcaption { font-family: var(--sans); font-size: 13px; color: var(--muted); margin-top: .4em; line-height: 1.35; }
+.plano .pregunta { font-style: italic; color: var(--muted); text-align: left; margin: 14px 0 6px; }
+.plano audio { width: 100%; display: block; margin-bottom: 8px; }
+.plano section::after { content: ""; display: block; clear: both; }
 .plano .aviso { margin-top: 36px; padding-top: 14px; border-top: 1px solid rgba(31,27,20,.25); font-family: var(--sans); font-size: 14px; color: var(--muted); text-align: left; }
-</style></noscript>
+/* Foco visible con los colores de Eco */
+:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+</style>
 </head>
 <body>
 <!--__ESTATICO__-->
@@ -200,7 +208,7 @@ html, body { height: auto; overflow: auto; user-select: text; -webkit-user-selec
 
 <script type="application/json" id="datos">/*__DATOS__*/{"titulo":"Mi libro","subtitulo":"","dedicatoria":"","fecha":"","capitulos":[]}</script>
 <script>
-(() => {
+try { (() => {
 'use strict';
 const NS = 'http://www.w3.org/2000/svg';
 const DATOS = JSON.parse(document.getElementById('datos').textContent);
@@ -212,6 +220,7 @@ const S = (tag, attrs) => { const x = document.createElementNS(NS, tag); for (co
 const reducir = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const smooth = (x) => x * x * (3 - 2 * x);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const fuente = (m) => m.src || (m.ref && (document.getElementById(m.ref) || {}).src) || '';
 
 $('libroTitulo').textContent = DATOS.titulo || 'Mi libro';
 $('dLogoT').textContent = DATOS.titulo || 'Mi libro';
@@ -257,7 +266,7 @@ for (let v = 0; v < TOTAL; v++) {
   const pie = E('div', 'pie'); pie.appendChild(E('span', '', 'ECO')); pie.appendChild(E('b', '', String(i + 1)));
   sp.append(tit, pie);
   const cv = E('div', 'face cv'); cv.style.setProperty('--bg', c.bg); cv.style.setProperty('--fg', c.fg);
-  const foto = ch.fotos && ch.fotos[0] && ch.fotos[0].src;
+  const foto = ch.fotos && ch.fotos[0] && fuente(ch.fotos[0]);
   if (foto) { cv.style.backgroundImage = 'url("' + foto + '")'; cv.appendChild(E('div', 'velo')); } else { cv.classList.add('sinfoto'); cv.insertAdjacentHTML('beforeend', ANILLOS({ fg: c.fg, ac: c.ac }).replace('class="anillos"', 'class="adorno"')); }
   cv.appendChild(E('div', 'arriba', 'Capítulo ' + (i + 1)));
   const largo = ch.titulo.length;
@@ -413,7 +422,7 @@ function armarPoster(i) {
   const ch = CAPS[i], c = color(i), g = $('gPoster');
   g.replaceChildren();
   g.appendChild(S('rect', { width: 474, height: 900, fill: c.bg }));
-  const foto = ch.fotos && ch.fotos[0] && ch.fotos[0].src;
+  const foto = ch.fotos && ch.fotos[0] && fuente(ch.fotos[0]);
   if (foto) {
     const im = S('image', { x: 0, y: 0, width: 474, height: 900, preserveAspectRatio: 'xMidYMid slice' }); im.setAttribute('href', foto); g.appendChild(im);
     const gr = S('linearGradient', { id: 'gVelo', x1: 0, y1: 0, x2: 0, y2: 1 });
@@ -441,17 +450,17 @@ function llenarDetalle(i) {
   const antes = new Map();
   fotos.forEach((f, k) => { const j = pars.length ? Math.min(pars.length - 1, Math.round((k * pars.length) / fotos.length)) : 0; if (!antes.has(j)) antes.set(j, []); antes.get(j).push(f); });
   pars.forEach((t, j) => {
-    (antes.get(j) || []).forEach((f) => { const fig = E('figure'); const im = E('img'); im.src = f.src; im.alt = f.pie || 'Foto familiar'; fig.appendChild(im); if (f.pie) fig.appendChild(E('figcaption', '', f.pie)); cuerpo.appendChild(fig); });
+    (antes.get(j) || []).forEach((f) => { const fig = E('figure'); const im = E('img'); im.src = fuente(f); im.alt = f.pie || 'Foto familiar'; fig.appendChild(im); if (f.pie) fig.appendChild(E('figcaption', '', f.pie)); cuerpo.appendChild(fig); });
     cuerpo.appendChild(E('p', '', t));
   });
-  if (!pars.length) fotos.forEach((f) => { const fig = E('figure'); const im = E('img'); im.src = f.src; im.alt = f.pie || 'Foto familiar'; fig.appendChild(im); cuerpo.appendChild(fig); });
+  if (!pars.length) fotos.forEach((f) => { const fig = E('figure'); const im = E('img'); im.src = fuente(f); im.alt = f.pie || 'Foto familiar'; fig.appendChild(im); cuerpo.appendChild(fig); });
   cuerpo.appendChild(E('div', 'd-fin', '✦'));
   $('dDed').textContent = i === 0 && DATOS.dedicatoria ? DATOS.dedicatoria : '';
   const zona = $('dAudios'); zona.replaceChildren();
   const aud = ch.audios || [];
   if (aud.length) {
     zona.appendChild(E('h3', '', aud.length === 1 ? 'Escucha la historia original' : 'Escucha las historias originales'));
-    aud.forEach((a) => { if (a.pregunta) zona.appendChild(E('p', '', a.pregunta)); const au = E('audio'); au.controls = true; au.preload = 'metadata'; au.src = a.src; zona.appendChild(au); });
+    aud.forEach((a) => { if (a.pregunta) zona.appendChild(E('p', '', a.pregunta)); const au = E('audio'); au.controls = true; au.preload = 'metadata'; au.src = fuente(a); zona.appendChild(au); });
   }
   $('dCol').scrollTop = 0;
   armarPoster(i);
@@ -507,7 +516,7 @@ detalle.addEventListener('keydown', (e) => {
   else if (!e.shiftKey && document.activeElement === cs[cs.length - 1]) { e.preventDefault(); cs[0].focus(); }
 });
 window.__libro = { abrir: abrirDetalle, cerrar: cerrarDetalle };
-})();
+})(); } catch (e) { document.documentElement.classList.remove('con-js'); throw e; }
 </script>
 </body>
 </html>

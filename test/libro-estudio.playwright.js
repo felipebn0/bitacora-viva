@@ -29,7 +29,7 @@ const capitulos = [
   async function abrir({ ancho = 1300, alto = 900, sinCapitulos = false, aprobada = true, ruta = '/capitulos.html', movil = false } = {}) {
     const ctx = await browser.newContext({ viewport: { width: ancho, height: alto }, acceptDownloads: true, isMobile: movil, hasTouch: movil });
     const page = await ctx.newPage();
-    const t = { ctx, page, errores: [], guardados: [], borrador: { title: 'Mi libro de prueba', subtitle: 'Para mis nietos', order: ['2', '1', '3'], edits: {}, qr: {}, qrOff: {} }, version: 1, imprimio: 0, compras: 0, aprobada };
+    const t = { ctx, page, errores: [], guardados: [], borrados: [], generados: [], fotosSubidas: [], capitulos: sinCapitulos ? [] : capitulos.map((c) => ({ ...c })), borrador: { title: 'Mi libro de prueba', subtitle: 'Para mis nietos', order: ['2', '1', '3'], edits: {}, qr: {}, qrOff: {} }, version: 1, imprimio: 0, compras: 0, aprobada };
     page.on('pageerror', (e) => t.errores.push(e.message));
     await page.addInitScript(() => { try { localStorage.setItem('eco_tour_done__capitulos_html', '1'); } catch (e) { /* nada */ } window.__imprimio = 0; window.print = () => { window.__imprimio++; }; });
     await page.route('**/api/**', (r) => {
@@ -38,7 +38,10 @@ const capitulos = [
       if (u.pathname === '/api/book-demo/status') return json({ approved: t.aprobada });
       if (u.pathname === '/api/book-demo/purchase') { t.compras++; t.aprobada = true; return json({ approved: true }); }
       if (u.pathname === '/api/media-file') return r.fulfill({ status: 200, contentType: 'image/jpeg', body: foto });
-      if (u.pathname === '/api/chapters') return json({ chapters: sinCapitulos ? [] : capitulos });
+      if (u.pathname === '/api/chapters/generate' && m === 'POST') { t.generados.push(JSON.parse(r.request().postData())); t.capitulos = [{ id: 11, title: 'Capítulo nuevo uno', theme: 'infancia', generated_text: 'Texto nuevo uno.', story_ids: [1], audios: [], persona: 'primera' }, { id: 12, title: 'Capítulo nuevo dos', theme: 'trabajo', generated_text: 'Texto nuevo dos.', story_ids: [2], audios: [] }]; return json({ ok: true, chapters: t.capitulos }); }
+      if (/^\/api\/chapters\/\d+$/.test(u.pathname) && m === 'DELETE') { const id = Number(u.pathname.split('/').pop()); t.borrados.push(id); t.capitulos = t.capitulos.filter((c) => c.id !== id); return json({ ok: true }); }
+      if (u.pathname === '/api/book-editor/photo' && m === 'POST') { t.fotosSubidas.push({ tipo: r.request().headers()['content-type'], bytes: r.request().postDataBuffer().length }); return json({ ok: true, url: 'https://x.test/subida' + t.fotosSubidas.length + '.jpg' }); }
+      if (u.pathname === '/api/chapters') return json({ chapters: t.capitulos });
       if (u.pathname === '/api/story-log') return json({ stories: [] });
       if (u.pathname === '/api/book-editor/draft' && m === 'PUT') { t.borrador = JSON.parse(r.request().postData()).book; t.guardados.push(t.borrador); t.version++; return json({ ok: true, version: t.version }); }
       if (u.pathname === '/api/book-editor/draft') return json({ book: t.borrador, version: t.version });
@@ -96,22 +99,56 @@ const capitulos = [
   ok(await esperarGuardado(t, (b) => b.order.join(',') === '2,3,1'), 'subir un capítulo en el índice cambia el orden del libro');
   ok((await t.page.locator('#ecoEditorialBook [data-sec^="ch-"] small').allInnerTexts()).join('|') === 'CAPÍTULO 01|CAPÍTULO 02|CAPÍTULO 03' && await t.page.locator('#ecoEditorialBook [data-sec^="ch-"]').first().getAttribute('data-sec') === 'ch-2', 'y el libro se reordena y renumera');
 
-  // 6) Los botones de arriba
+  // 6) Los botones de arriba: las dos descargas pasan por la pantalla de pago, aunque la compra de prueba ya estuviera aprobada
   await t.page.click('#ecoEditorialPdf');
+  await t.page.waitForSelector('#ecoDemoPay:not([hidden])');
+  ok(await t.page.evaluate(() => window.__imprimio) === 0, '«Descargar PDF» muestra primero la pantalla de pago (aunque ya se había aprobado antes)');
+  await t.page.click('#ecoDemoContinue');
+  await t.page.waitForTimeout(300);
+  ok(await t.page.evaluate(() => window.__imprimio) === 0 && /compra de prueba/.test(await t.page.locator('#ecoEditorialStatus').innerText()), 'si se cierra la pantalla de pago sin comprar, no se descarga nada');
+  await t.page.click('#ecoEditorialPdf');
+  await t.page.waitForSelector('#ecoDemoPay:not([hidden])');
+  await t.page.click('#ecoDemoConfirm');
   await t.page.waitForFunction(() => window.__imprimio === 1);
-  ok(/A4/.test(await t.page.locator('#ecoEditorialStatus').innerText()), '«Descargar PDF» abre la impresión y avisa que la hoja es A4');
-  const [descarga] = await Promise.all([t.page.waitForEvent('download', { timeout: 30000 }), t.page.click('#ecoEditorialDigital')]);
+  ok(/A4/.test(await t.page.locator('#ecoEditorialStatus').innerText()), 'al pagar, «Descargar PDF» abre la impresión y avisa que la hoja es A4');
+  await t.page.click('#ecoEditorialDigital');
+  await t.page.waitForSelector('#ecoDemoPay:not([hidden])');
+  ok(await t.page.locator('#ecoDemoConfirm').isVisible(), '«Descargar libro digital» también muestra la pantalla de pago');
+  const [descarga] = await Promise.all([t.page.waitForEvent('download', { timeout: 30000 }), t.page.click('#ecoDemoConfirm')]);
   const html = fs.readFileSync(await descarga.path(), 'utf8');
-  ok(/\.html$/.test(descarga.suggestedFilename()) && /Los recuerdos de Ana/.test(html) && /Mi infancia en la finca/.test(html), '«Descargar libro digital» baja el archivo con lo que se editó (' + descarga.suggestedFilename() + ')');
+  ok(/\.html$/.test(descarga.suggestedFilename()) && /Los recuerdos de Ana/.test(html) && /Mi infancia en la finca/.test(html), 'al pagar baja el libro digital con lo que se editó (' + descarga.suggestedFilename() + ')');
   ok(/Listo: se descargó/.test(await t.page.locator('#ecoEditorialStatus').innerText()), 'y avisa arriba, junto al libro');
   if (CAPTURAS) await t.page.screenshot({ path: path.join(CAPTURAS, 'estudio-escritorio.png') });
 
-  // 7) Salir a la lista y volver
-  await t.page.click('#ecoEditorialClose');
-  ok(await t.page.evaluate(() => document.getElementById('ecoEditorialDialog').hidden) && /#capitulos$/.test(t.page.url()), '«Capítulos y audios» cierra el estudio y muestra la lista');
-  await t.page.click('#ecoEditorialOpen');
-  ok(await t.page.evaluate(() => !document.getElementById('ecoEditorialDialog').hidden) && !/#capitulos/.test(t.page.url()), '«Diseñar mi libro» vuelve a abrir el estudio');
+  // 7) Volver a la bitácora, eliminar un capítulo y actualizar el libro
+  ok(await t.page.locator('#ecoEditorialBack').getAttribute('href') === '/app.html' && /Volver a la bitácora/.test(await t.page.locator('#ecoEditorialBack').innerText()), 'hay un botón para volver a la bitácora');
+  ok(await t.page.locator('#ecoEditorialClose').count() === 0 && await t.page.locator('#lista, #generarBtn').count() === 0, 'ya no existe la pantalla de lista de capítulos');
+  t.page.once('dialog', (d) => d.accept());
+  await t.page.locator('[data-sec="ch-3"] .eco-editorial-delete').click();
+  await t.page.waitForFunction(() => !document.querySelector('[data-sec="ch-3"]'));
+  ok(t.borrados.join(',') === '3' && (await t.page.locator('#ecoEditorialOutline .eco-outline-t').allInnerTexts()).join('|') === 'El trabajo|Mi infancia en la finca', '«Eliminar capítulo» lo borra del servidor y del libro');
+  ok(await esperarGuardado(t, (b) => !b.order.includes('3') && !(b.edits && b.edits['3'])), 'y limpia lo que colgaba de ese capítulo en el borrador');
+  t.page.once('dialog', (d) => { ok(/se pierden los cambios/i.test(d.message()), 'antes de actualizar avisa que se pierden los cambios de los capítulos'); d.accept(); });
+  await t.page.selectOption('#ecoEditorialVoz', 'primera');
+  await t.page.click('#ecoEditorialUpdate');
+  await t.page.waitForFunction(() => /Libro actualizado/.test(document.getElementById('ecoEditorialStatus').textContent));
+  ok(t.generados.length === 1 && t.generados[0].persona === 'primera', '«Actualizar libro» vuelve a generar los capítulos con la voz elegida');
+  ok((await t.page.locator('#ecoEditorialOutline .eco-outline-t').allInnerTexts()).join('|') === 'Capítulo nuevo uno|Capítulo nuevo dos', 'y el libro muestra los capítulos nuevos');
+  ok(await esperarGuardado(t, (b) => b.order.length === 0 && Object.keys(b.edits || {}).length === 0 && b.title === 'Los recuerdos de Ana'), 'las ediciones viejas se limpian y el título del libro se conserva');
   ok(t.errores.length === 0, 'sin errores de JavaScript' + (t.errores.length ? ': ' + t.errores.join(' | ') : ''));
+  await t.ctx.close();
+
+  // 7b) Una foto grande del celular se reduce sola y hay un solo botón para subirla
+  t = await abrir();
+  await t.page.waitForFunction(() => /sincronizado/.test((document.getElementById('ecoEditorialStatus') || {}).textContent || ''));
+  await t.page.click('[data-sec="ch-2"] .eco-editorial-tools > summary');
+  ok(await t.page.locator('[data-sec="ch-2"] .eco-editorial-upload-label').count() === 1 && await t.page.evaluate(() => { const i = document.querySelector('[data-sec="ch-2"] .eco-editorial-upload-input'); const r = i.getBoundingClientRect(); return r.width <= 2 && r.height <= 2; }), 'para subir fotos hay un solo botón (el selector de archivos feo queda escondido)');
+  const grande = await t.page.evaluate(async () => { const c = document.createElement('canvas'); c.width = 4032; c.height = 3024; const x = c.getContext('2d'); const im = x.createImageData(c.width, c.height); for (let i = 0; i < im.data.length; i += 4) { im.data[i] = Math.random() * 255; im.data[i + 1] = Math.random() * 255; im.data[i + 2] = Math.random() * 255; im.data[i + 3] = 255; } x.putImageData(im, 0, 0); const b = await new Promise((r) => c.toBlob(r, 'image/png')); const buf = new Uint8Array(await b.arrayBuffer()); let s = ''; for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000)); return btoa(s); });
+  const original = Buffer.from(grande, 'base64');
+  await t.page.setInputFiles('[data-sec="ch-2"] .eco-editorial-upload-input', { name: 'IMG_4210.PNG', mimeType: 'image/png', buffer: original });
+  const t0 = Date.now(); while (!t.fotosSubidas.length && Date.now() - t0 < 30000) await t.page.waitForTimeout(100);
+  ok(original.length > 20 * 1024 * 1024, 'la foto de prueba es enorme (' + (original.length / 1048576).toFixed(0) + ' MB, como una del iPhone Pro)');
+  ok(t.fotosSubidas.length === 1 && t.fotosSubidas[0].tipo === 'image/jpeg' && t.fotosSubidas[0].bytes < 2.9 * 1024 * 1024, 'se sube reducida: JPEG de ' + (t.fotosSubidas[0] ? (t.fotosSubidas[0].bytes / 1048576).toFixed(1) : '?') + ' MB (el libro acepta hasta 3 MB)');
   await t.ctx.close();
 
   // 8) Sin comprar: pide la compra de prueba antes de bajar el PDF
@@ -125,10 +162,10 @@ const capitulos = [
   ok(t.compras === 1, 'y al aprobarla sigue con la descarga');
   await t.ctx.close();
 
-  // 9) Sin capítulos todavía: se muestra la lista, donde se generan
+  // 9) Sin capítulos todavía: el libro vacío invita a actualizar el libro
   t = await abrir({ sinCapitulos: true });
-  await t.page.waitForFunction(() => document.getElementById('ecoEditorialDialog') && document.getElementById('ecoEditorialDialog').hidden === true);
-  ok(await t.page.evaluate(() => document.getElementById('ecoEditorialDialog').hidden), 'si todavía no hay capítulos, no se abre el estudio solo: se ve la lista para generarlos');
+  await t.page.waitForSelector('.eco-editorial-sin-capitulos');
+  ok(/Todavía no tienes capítulos/.test(await t.page.locator('.eco-editorial-sin-capitulos').innerText()) && await t.page.locator('.eco-editorial-sin-capitulos button', { hasText: 'Actualizar libro' }).count() === 1, 'sin capítulos, el libro lo explica y ofrece «Actualizar libro»');
   ok(t.errores.length === 0, 'sin errores sin capítulos' + (t.errores.length ? ': ' + t.errores.join(' | ') : ''));
   await t.ctx.close();
 

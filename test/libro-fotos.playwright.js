@@ -42,39 +42,15 @@ const capitulos = [
     if (u.pathname === '/api/book-editor/draft') return json({ book: borrador, version });
     return json({});
   });
-  await page.goto(base + '/capitulos.html#capitulos');
-  await page.waitForSelector('#lista .chapter');
+  await page.goto(base + '/capitulos.html');
 
-  // 1) La lista sigue lo diseñado: orden y títulos
-  await page.waitForFunction(() => document.querySelector('#lista .chapter h2')?.textContent === 'El trabajo' && /La casa de siempre/.test(document.querySelectorAll('#lista .chapter h2')[1]?.textContent || ''));
-  const titulos = await page.locator('#lista .chapter h2').allTextContents();
-  ok(titulos.join('|') === 'El trabajo|La casa de siempre', 'la lista de Mi libro sigue el orden y los títulos del libro diseñado (' + titulos.join(' | ') + ')');
-
-  // 2) "Leer capítulo": texto editado y la foto dentro del texto, arriba a la derecha
-  await page.locator('#lista .chapter', { hasText: 'La casa de siempre' }).locator('.eco-read-btn').click();
-  await page.waitForSelector('#ecoReader:not([hidden]) .eco-foto-flota');
-  ok((await page.textContent('#ecoReaderTitle')) === 'La casa de siempre', 'Leer capítulo: muestra el título que se diseñó');
-  ok(await page.locator('#ecoReaderText .eco-reader-par').count() === 6 && /Párrafo 1/.test(await page.locator('#ecoReaderText .eco-reader-par').first().textContent()), 'y el texto que se editó, en sus párrafos');
-  const lectura = await page.evaluate(() => {
-    const t = document.getElementById('ecoReaderText'); const f = t.querySelector('figure');
-    const rf = f.getBoundingClientRect(), rt = t.getBoundingClientRect(); const rango = document.createRange(); rango.selectNodeContents(t.querySelector('.eco-reader-par')); const linea = rango.getClientRects()[0];
-    return { primero: t.firstElementChild === f, flota: getComputedStyle(f).float, ancho: Math.round(rf.width / rt.width * 100), derecha: Math.abs(rt.right - rf.right) < 2, arriba: Math.abs(rf.top - rt.top) < 12, textoIzq: linea.right <= rf.left + 2 && linea.top < rf.bottom, pie: f.querySelector('figcaption')?.textContent };
-  });
-  ok(lectura.primero && lectura.flota === 'right' && lectura.derecha && lectura.arriba, 'la foto está al principio del texto, arriba a la derecha');
-  ok(lectura.textoIzq, 'el texto empieza a la izquierda de la foto (la rodea)');
-  ok(lectura.ancho >= 38 && lectura.ancho <= 46, 'y mide un solo tamaño estándar (' + lectura.ancho + '% del ancho del texto)');
-  ok(lectura.pie === 'Con el abuelo', 'con su pie de foto editado');
-  await page.waitForFunction(() => [...document.querySelectorAll('#ecoReaderAudios .eco-track-times')].length === 2 && [...document.querySelectorAll('#ecoReaderAudios .eco-track-times span:last-child')].every((x) => x.textContent === '0:03'), null, { timeout: 8000 });
-  ok(true, 'Leer capítulo: las notas de voz muestran su duración (0:03) sin darles play, no 0:00');
-  const preguntas = await page.locator('#ecoReaderAudios .eco-reader-pregunta').allTextContents();
-  ok(preguntas.length === 1 && preguntas[0] === '¿Cómo era la casa donde creciste?', 'arriba de la nota de voz va, en texto, la pregunta que se le hizo (solo esa; la que no tiene pregunta no muestra nada)');
-  ok(await page.evaluate(() => { const q = document.querySelector('#ecoReaderAudios .eco-reader-pregunta'); return !!q.nextElementSibling && q.nextElementSibling.tagName === 'AUDIO'; }), 'y queda justo arriba de su reproductor');
-  if (CAPTURAS) await page.screenshot({ path: path.join(CAPTURAS, 'libro-lectura.png') });
-  await page.click('#ecoReaderClose');
-
-  // 3) El estudio: el libro se edita directamente; las fotos y el QR de cada capítulo están debajo del texto
-  await page.click('#ecoEditorialOpen');
+  // 1) El libro sigue lo diseñado: orden y títulos
   await page.waitForFunction(() => /sincronizado|Guardado en tu cuenta/.test(document.getElementById('ecoEditorialStatus').textContent));
+  const titulos = await page.locator('#ecoEditorialOutline .eco-outline-t').allTextContents();
+  ok(titulos.join('|') === 'El trabajo|La casa de siempre', 'el libro sigue el orden y los títulos del libro diseñado (' + titulos.join(' | ') + ')');
+  ok(await page.locator('[data-sec="ch-1"] p.eco-editorial-paragraph').count() === 6 && /Párrafo 1/.test(await page.locator('[data-sec="ch-1"] p.eco-editorial-paragraph').first().textContent()), 'y el texto que se editó, en sus párrafos');
+
+  // 2) El estudio: el libro se edita directamente; las fotos y el QR de cada capítulo están debajo del texto
   const pdf = await (async () => { await page.emulateMedia({ media: 'print' }); const b = await page.pdf({ preferCSSPageSize: true }); await page.emulateMedia({ media: 'screen' }); return b.toString('latin1'); })();
   const caja = pdf.match(/\/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)\s*\]/);
   ok(caja && Math.abs(caja[1] - 595.28) < 1.5 && Math.abs(caja[2] - 841.89) < 1.5, 'el libro siempre se imprime en hoja A4 (' + (caja ? caja[1] + ' x ' + caja[2] + ' pt' : 'sin medida') + ')');
@@ -96,15 +72,13 @@ const capitulos = [
   await page.check('[data-sec="ch-1"] .eco-editorial-photo-fields input[type=checkbox]');
   await page.waitForSelector('#ecoEditorialBook .eco-foto-flota');
 
-  // 4) Lo diseñado vuelve a verse al salir del estudio y entrar al capítulo
-  await page.waitForFunction(() => borradorListo = true).catch(() => {});
+  // 3) Lo diseñado vuelve a verse al recargar la página
   const t0 = Date.now(); while (!(borrador.media && borrador.media['1'] && borrador.media['1'][FOTO] && borrador.media['1'][FOTO].caption === 'En la finca, 1985' && borrador.media['1'][FOTO].pos === '0') && Date.now() - t0 < 6000) await page.waitForTimeout(100);
-  await page.click('#ecoEditorialClose');
   await page.reload();
-  await page.waitForSelector('#lista .chapter');
-  await page.locator('#lista .chapter', { hasText: 'La casa de siempre' }).locator('.eco-read-btn').click();
-  await page.waitForSelector('#ecoReader:not([hidden]) .eco-foto-flota');
-  ok((await page.textContent('#ecoReader figcaption')) === 'En la finca, 1985', 'al volver al libro y entrar al capítulo se ve la foto con lo que se diseñó');
+  await page.waitForSelector('#ecoEditorialBook [data-sec="ch-1"] figure');
+  ok((await page.textContent('#ecoEditorialBook [data-sec="ch-1"] figcaption')) === 'En la finca, 1985', 'al volver al libro se ve la foto con lo que se diseñó');
+  const audio = await page.evaluate(async () => { document.querySelector('[data-sec="ch-1"] .eco-editorial-tools > summary').click(); const a = [...document.querySelectorAll('[data-sec="ch-1"] .eco-editorial-tools audio')]; await new Promise((r) => setTimeout(r, 800)); return { n: a.length, preguntas: [...document.querySelectorAll('[data-sec="ch-1"] .eco-editorial-pregunta')].map((x) => x.textContent), duraciones: a.map((x) => Math.round(x.duration)) }; });
+  ok(audio.n === 2 && audio.preguntas.join('|') === '¿Cómo era la casa donde creciste?' && audio.duraciones.every((d) => d === 3), 'las notas de voz originales se oyen desde el capítulo, con su pregunta y su duración (0:03) sin darles play');
   ok(errores.length === 0, 'sin errores de JavaScript' + (errores.length ? ': ' + errores.join(' | ') : ''));
   await browser.close();
   server.close();
