@@ -124,7 +124,8 @@ body.eco-editorial-open-body{overflow:hidden}
 
 /* Enlace para compartir */
 .eco-outline-share{margin-top:22px;padding:14px 8px 0;border-top:1px solid #dadaca;display:grid;gap:8px}
-.eco-outline-share[hidden]{display:none}
+.eco-outline-share[hidden],.eco-share-box[hidden]{display:none}
+.eco-share-box{display:grid;gap:8px}
 .eco-outline-share label{font:700 11px 'Atkinson Hyperlegible',sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#4d6542}
 .eco-outline-share input{width:100%;min-height:44px;font:14px 'Atkinson Hyperlegible',sans-serif;padding:9px;border:1px solid #dadaca;border-radius:10px;background:#fff;color:#302d25}
 .eco-outline-share button{min-height:44px;border-radius:11px;border:1px solid #4d6542;background:#fffdf6;color:#293d30;font:700 14px 'Atkinson Hyperlegible',sans-serif;cursor:pointer}

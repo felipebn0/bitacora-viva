@@ -57,8 +57,9 @@
     } catch (e) { return { fallo: true }; }
   }
 
-  // conAudios: false para el PDF (que no lleva audios): así no se bajan.
-  async function armarDatos({ conAudios = true } = {}) {
+  // conAudios: false para el PDF (que no lleva audios): así no se bajan. soloEnlace: true para el enlace en línea, que no
+  // necesita bajar ni reducir fotos y audios (solo sus direcciones).
+  async function armarDatos({ conAudios = true, soloEnlace = false } = {}) {
     const [c, d, h] = await Promise.all([pedirJson('/api/chapters'), pedirJson('/api/book-editor/draft').catch(() => ({})), pedirJson('/api/story-log').catch(() => ({}))]);
     const capitulos = Array.isArray(c.chapters) ? c.chapters : [];
     const estado = (d && d.book) || {};
@@ -73,7 +74,7 @@
       const ed = (estado.edits && estado.edits[String(ch.id)]) || {};
       const incluidas = window.EcoLibroFotos ? window.EcoLibroFotos.incluidas(ch, estado, historias) : [];
       const fotos = [];
-      for (const f of incluidas.slice(0, MAX_FOTOS_POR_CAPITULO)) {
+      for (const f of soloEnlace ? [] : incluidas.slice(0, MAX_FOTOS_POR_CAPITULO)) {
         if (fotosPedidas >= MAX_FOTOS || bytes >= BYTES_MAX) break;
         fotosPedidas++;
         const src = await fotoReducida(f.url);
@@ -86,7 +87,7 @@
         fotos: incluidas.slice(0, 12).map((f) => ({ url: f.url, pie: f.caption || '' })),
         audios: urls.slice(0, 40).map((u, k) => ({ url: u, pregunta: String((ch.preguntas && ch.preguntas[k]) || '').trim() })),
       };
-      for (let k = 0; k < urls.length; k++) {
+      for (let k = 0; k < (soloEnlace ? 0 : urls.length); k++) {
         if (bytesAudio >= AUDIO_BYTES_MAX) { audiosOmitidos += urls.length - k; break; }
         const a = await audioEnLinea(urls[k]);
         if (a.src && bytesAudio + a.bytes <= AUDIO_BYTES_MAX) { bytesAudio += a.bytes; audios.push({ src: a.src, pregunta: String((ch.preguntas && ch.preguntas[k]) || '').trim() }); }
@@ -162,6 +163,11 @@
     }
   }
 
-  window.EcoLibroDigital = { exportar, armarDatos };
+  // Crea o actualiza el enlace en línea del libro, sin descargar el archivo. Devuelve la dirección o null.
+  async function compartirEnLinea() {
+    try { return await actualizarEnlace(await armarDatos({ soloEnlace: true })); } catch (e) { return null; }
+  }
+
+  window.EcoLibroDigital = { exportar, armarDatos, compartirEnLinea };
 
 })();

@@ -10,9 +10,10 @@ const node=(tag,cls,value)=>{const e=document.createElement(tag);if(cls)e.classN
 const plain=t=>String(t||'');
 function fresh(){return {title:'Mi historia familiar',subtitle:'Recuerdos para las próximas generaciones',dedication:'',order:[],edits:{},media:{},bookPhotos:{},qr:{},qrOff:{}}}
 function read(){try{const x=JSON.parse(localStorage.getItem(KEY)||'null');if(x&&typeof x==='object'){return {...fresh(),...x,edits:typeof x.edits==='object'&&x.edits?x.edits:{},order:Array.isArray(x.order)?x.order:[]}}}catch{}return fresh()}
-let version=0,saveTimer=null,saving=Promise.resolve(),dirty=false,serverReady=false;
+let version=0,saveTimer=null,saving=Promise.resolve(),dirty=false,serverReady=false,enlaceActivo=false,enlaceTimer=null,enlaceEnCurso=false;
 function persist(){
  dirty=true;
+ programarEnlace();
  try{localStorage.setItem(KEY,JSON.stringify(state))}catch{}
  if(!serverReady){status.textContent='Sin conexión con el guardado en ECO. Descarga una copia de respaldo.';return}
  status.textContent='Cambios pendientes de guardar…';
@@ -50,10 +51,11 @@ function create(){if(dialog)return;
  <div class="eco-editorial-topbuttons"><button id="ecoEditorialIndexToggle" type="button" class="eco-outline-toggle" aria-expanded="false">☰ Índice</button><button id="ecoEditorialPdf" type="button" class="eco-primary">Descargar PDF</button><button id="ecoEditorialDigital" type="button" class="eco-primary">Descargar libro digital</button><a id="ecoEditorialBack" class="eco-editorial-back" href="/app.html">← Volver a la bitácora</a></div></div>
  <div class="eco-editorial-layout"><aside class="eco-editorial-sidebar"><nav id="ecoEditorialOutline" aria-label="Índice del libro"></nav>
  <div class="eco-outline-update"><label for="ecoEditorialVoz">Voz del libro</label><select id="ecoEditorialVoz"><option value="tercera">tercera persona («contó que…»)</option><option value="primera">primera persona («yo conté…»)</option></select><button id="ecoEditorialUpdate" type="button">Actualizar libro</button><p class="eco-editorial-hint">Vuelve a escribir los capítulos con tus historias más recientes. Se pierden los cambios que hiciste a los capítulos.</p></div>
- <div class="eco-outline-share" id="ecoEditorialShare" hidden><label for="ecoEditorialShareUrl">Enlace para compartir</label><input id="ecoEditorialShareUrl" type="text" readonly aria-label="Enlace para compartir tu libro"><button id="ecoEditorialShareCopy" type="button">Copiar enlace</button><button id="ecoEditorialShareSend" type="button" hidden>Compartir…</button><button id="ecoEditorialShareStop" type="button" class="eco-share-stop">Dejar de compartir</button><p class="eco-editorial-hint">Cualquiera que tenga este enlace puede ver tu libro y oír los audios, en el celular o el computador. Se actualiza cada vez que descargas el libro digital.</p></div></aside>
+ <div class="eco-outline-share" id="ecoEditorialShare"><label for="ecoEditorialShareMake">Libro en línea</label><button id="ecoEditorialShareMake" type="button">Compartir libro en línea</button><div class="eco-share-box" id="ecoEditorialShareBox" hidden><input id="ecoEditorialShareUrl" type="text" readonly aria-label="Enlace para compartir tu libro"><button id="ecoEditorialShareCopy" type="button">Copiar enlace</button><button id="ecoEditorialShareSend" type="button" hidden>Compartir…</button><button id="ecoEditorialShareStop" type="button" class="eco-share-stop">Dejar de compartir</button></div><p class="eco-editorial-hint">Un enlace que se abre en el celular o el computador, sin cuenta y con los audios. Una vez creado, se actualiza solo cuando cambias tu libro.</p></div></aside>
  <section class="eco-editorial-preview" aria-label="Libro"><div id="ecoEditorialBook" class="eco-editorial-pages"></div></section></div></div>`;
  document.body.appendChild(dialog);book=byId('ecoEditorialBook');outline=byId('ecoEditorialOutline');status=byId('ecoEditorialStatus');
  byId('ecoEditorialUpdate').addEventListener('click',actualizarLibro);
+ byId('ecoEditorialShareMake').addEventListener('click',compartirEnLinea);
  byId('ecoEditorialShareCopy').addEventListener('click',copiarEnlace);
  byId('ecoEditorialShareSend').addEventListener('click',compartirEnlace);
  byId('ecoEditorialShareStop').addEventListener('click',dejarDeCompartir);
@@ -104,7 +106,33 @@ async function autoQr(){
 }
 
 /* ── Enlace para compartir el libro ────────────────────────────────────────── */
-function mostrarEnlace(url){const caja=byId('ecoEditorialShare');byId('ecoEditorialShareUrl').value=url||'';caja.hidden=!url}
+function mostrarEnlace(url){byId('ecoEditorialShareUrl').value=url||'';byId('ecoEditorialShareBox').hidden=!url;byId('ecoEditorialShareMake').hidden=!!url;enlaceActivo=!!url}
+async function compartirEnLinea(){
+ const btn=byId('ecoEditorialShareMake'),texto=btn.textContent;
+ if(!window.EcoLibroDigital||!window.EcoLibroDigital.compartirEnLinea){status.textContent='No se pudo preparar el enlace. Recarga la página e intenta de nuevo.';return}
+ if(!chapters.length){status.textContent='Todavía no tienes capítulos. Genera tus capítulos primero y luego comparte tu libro.';return}
+ if(!(await pagar())){status.textContent='Para compartir el libro en línea primero hay que completar la compra de prueba.';return}
+ status.classList.remove('eco-editorial-status-error');
+ btn.disabled=true;btn.textContent='Preparando tu enlace…';
+ try{
+  await flush();
+  const url=await window.EcoLibroDigital.compartirEnLinea();
+  if(!url)throw Error('No se pudo preparar el enlace. Intenta de nuevo.');
+  mostrarEnlace(url);status.textContent='Listo: tu libro está en línea. Copia el enlace y mándalo; se actualiza solo cuando cambias tu libro.';
+ }catch(e){status.textContent=e.message;status.classList.add('eco-editorial-status-error')}
+ finally{btn.disabled=false;btn.textContent=texto}
+}
+// Si el libro ya está en línea, cada cambio lo actualiza solo (unos segundos después del último cambio).
+function programarEnlace(){
+ if(!enlaceActivo)return;
+ clearTimeout(enlaceTimer);
+ enlaceTimer=setTimeout(async()=>{
+  if(enlaceEnCurso)return programarEnlace();
+  enlaceEnCurso=true;
+  try{await flush();if(await window.EcoLibroDigital.compartirEnLinea())status.textContent='Guardado ✓ El enlace de tu libro quedó al día.'}catch{/* se reintenta con el próximo cambio */}
+  finally{enlaceEnCurso=false}
+ },5000);
+}
 async function consultarEnlace(){
  try{const r=await fetch('/api/libro-compartido',{credentials:'same-origin'});const d=await r.json().catch(()=>({}));mostrarEnlace(r.ok&&d.activo?d.url:'')}catch{/* sin enlace a la vista */}
 }

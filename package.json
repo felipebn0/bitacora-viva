@@ -39,6 +39,7 @@
     "test:tour": "node test/tour-por-usuario.playwright.js",
     "test:libro-digital": "node test/libro-digital.playwright.js",
     "test:libro-compartido": "node test/libro-compartido.smoke.js",
+    "test:libro-enlace": "node test/libro-enlace.playwright.js",
     "test:libro-estudio": "node test/libro-estudio.playwright.js",
     "test:libro-digital-exportar": "node test/libro-digital-exportar.playwright.js",
     "test:diario-bebe": "node test/diario-bebe.playwright.js",
