@@ -22,6 +22,8 @@ const AUDIO_ANA = 'audio/1/sesion-a/user-0.webm';
 const FOTO_AJENA = 'media/libros/2/xyz.jpg';
 const CONTENIDO = Buffer.from('0123456789abcdefghij');
 let enlaces = [];
+const copias = [];
+const guardadosWav = [];
 
 function fakeSql(strings, ...values) {
   const text = strings.join('?');
@@ -32,6 +34,8 @@ function fakeSql(strings, ...values) {
     return Promise.resolve(u ? [{ id: u.id, username: u.username, password_hash: u.password_hash, token_version: u.token_version }] : []);
   }
   if (text.includes('SELECT owner_user_id, token_version FROM users WHERE id')) { const u = users[values[0]]; return Promise.resolve(u ? [{ owner_user_id: null, token_version: u.token_version }] : []); }
+  if (text.includes('SELECT original_url, wav_url FROM libro_audios')) return Promise.resolve(copias.filter((x) => x.owner_id === values[0]).map((x) => ({ original_url: x.original_url, wav_url: x.wav_url })));
+  if (text.includes('INSERT INTO libro_audios')) { copias.push({ owner_id: values[0], original_url: values[1], wav_url: values[2] }); return Promise.resolve([]); }
   if (text.includes('INSERT INTO libros_compartidos')) { enlaces.push({ token: values[0], owner_id: values[1], datos: values[2], medios: values[3], revoked_at: null, updated_at: new Date() }); return Promise.resolve([]); }
   if (text.includes('SELECT token FROM libros_compartidos WHERE owner_id')) { const e = enlaces.filter((x) => x.owner_id === values[0] && !x.revoked_at).pop(); return Promise.resolve(e ? [{ token: e.token }] : []); }
   if (text.includes('UPDATE libros_compartidos SET datos')) { const e = enlaces.find((x) => x.token === values[2] && x.owner_id === values[3]); if (e) { e.datos = values[0]; e.medios = values[1]; e.updated_at = new Date(); } return Promise.resolve([]); }
@@ -46,14 +50,14 @@ fakeSql.transaction = (q) => Promise.all(q);
 function streamDe(buf) { return new ReadableStream({ start(c) { c.enqueue(new Uint8Array(buf)); c.close(); } }); }
 require.cache[require.resolve('@neondatabase/serverless')] = { id: require.resolve('@neondatabase/serverless'), filename: require.resolve('@neondatabase/serverless'), loaded: true, exports: { neon: () => fakeSql } };
 require.cache[require.resolve('@vercel/blob')] = { id: require.resolve('@vercel/blob'), filename: require.resolve('@vercel/blob'), loaded: true, exports: {
-  put: async () => ({ url: 'x' }), del: async () => {}, list: async () => ({ blobs: [], hasMore: false }),
+  put: async (pathname, cuerpo, opts) => { const url = BASE + pathname.replace(/\.wav$/, '-r1.wav'); guardadosWav.push({ pathname, tipo: opts && opts.contentType, bytes: cuerpo.length, url }); return { url }; }, del: async () => {}, list: async () => ({ blobs: [], hasMore: false }),
   get: async (clave, opts) => {
-    if (![FOTO_ANA, AUDIO_ANA, FOTO_AJENA].includes(clave)) return null;
+    if (![FOTO_ANA, AUDIO_ANA, FOTO_AJENA].includes(clave) && !/\.wav$/.test(clave)) return null;
     const rango = opts && opts.headers && opts.headers.Range;
     const headers = new Headers();
     let cuerpo = CONTENIDO;
     if (rango) { const m = /bytes=(\d+)-(\d*)/.exec(rango); cuerpo = CONTENIDO.subarray(Number(m[1]), m[2] ? Number(m[2]) + 1 : undefined); headers.set('content-range', `bytes ${m[1]}-${Number(m[1]) + cuerpo.length - 1}/${CONTENIDO.length}`); headers.set('content-length', String(cuerpo.length)); return { statusCode: 206, stream: streamDe(cuerpo), headers, blob: { contentType: 'audio/webm', size: CONTENIDO.length } }; }
-    return { statusCode: 200, stream: streamDe(cuerpo), headers, blob: { contentType: clave.endsWith('.jpg') ? 'image/jpeg' : 'audio/webm', size: CONTENIDO.length } };
+    return { statusCode: 200, stream: streamDe(cuerpo), headers, blob: { contentType: clave.endsWith('.jpg') ? 'image/jpeg' : clave.endsWith('.wav') ? 'audio/wav' : 'audio/webm', size: CONTENIDO.length } };
   } } };
 require.cache[require.resolve('@anthropic-ai/sdk')] = { id: require.resolve('@anthropic-ai/sdk'), filename: require.resolve('@anthropic-ai/sdk'), loaded: true, exports: class { constructor() { this.messages = { create: async () => ({ content: [{ type: 'text', text: '[]' }] }) }; } } };
 const app = require(serverPath);
@@ -72,6 +76,16 @@ function request(server, opts, cookie) {
     r.on('error', reject); if (cuerpo) r.write(cuerpo); r.end();
   });
 }
+function pedirCrudo(server, ruta, cuerpo, cookie) {
+  return new Promise((resolve, reject) => {
+    const host = '127.0.0.1:' + server.address().port;
+    const headers = { Origin: 'http://' + host, 'Content-Type': 'audio/wav', 'Content-Length': cuerpo.length };
+    if (cookie) headers.Cookie = cookie;
+    const q = http.request({ host: '127.0.0.1', port: server.address().port, path: ruta, method: 'PUT', headers }, (res) => { const ch = []; res.on('data', (x) => ch.push(x)); res.on('end', () => { let json = null; try { json = JSON.parse(Buffer.concat(ch).toString()); } catch (e) { /* no es JSON */ } resolve({ status: res.statusCode, json }); }); });
+    q.on('error', reject); q.write(cuerpo); q.end();
+  });
+}
+const wavDePrueba = () => { const b = Buffer.alloc(2044); b.write('RIFF', 0, 'latin1'); b.write('WAVE', 8, 'latin1'); return b; };
 const entrar = async (server, u) => (await request(server, { path: '/api/login', method: 'POST', body: { username: u, password: 'miclave123' } })).headers['set-cookie'][0].split(';')[0];
 let pasaron = 0, fallaron = 0;
 const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { fallaron++; console.error('FAIL - ' + m); } };
@@ -133,6 +147,26 @@ const libro = (extra = {}) => Object.assign({
   ok(r.status === 200 && r.json.token === token && r.json.nuevo === false && enlaces.length === 1, 'al descargar otra vez, el enlace se actualiza y sigue siendo el mismo');
   r = await request(server, { path: `/libro/${token}` });
   ok(/<title>Segunda versión · Eco<\/title>/.test(r.texto), 'y quien tiene el enlace ve el libro actualizado');
+
+  // Copia en WAV de los audios (los .webm de Chrome no suenan en todos los iPhone)
+  r = await pedirCrudo(server, '/api/libro-compartido/audio?u=' + encodeURIComponent(BASE + AUDIO_ANA), wavDePrueba());
+  ok(r.status === 401, 'sin sesión no se guarda ninguna copia de audio (401)');
+  r = await pedirCrudo(server, '/api/libro-compartido/audio?u=' + encodeURIComponent(BASE + 'audio/2/sesion/user-0.webm'), wavDePrueba(), ana);
+  ok(r.status === 400, 'no se guarda la copia de un audio que es de otra cuenta (400)');
+  r = await pedirCrudo(server, '/api/libro-compartido/audio?u=' + encodeURIComponent(BASE + AUDIO_ANA), Buffer.from('esto no es un wav '.repeat(20)), ana);
+  ok(r.status === 400, 'tampoco algo que no sea un WAV (400)');
+  r = await pedirCrudo(server, '/api/libro-compartido/audio?u=' + encodeURIComponent(BASE + AUDIO_ANA), wavDePrueba(), ana);
+  ok(r.status === 200 && /\/media\/libros\/1\/audio-[a-f0-9]{24}-r1\.wav$/.test(r.json.url) && guardadosWav.length === 1 && guardadosWav[0].tipo === 'audio/wav', 'la dueña guarda la copia en WAV de su audio, en su carpeta');
+  r = await request(server, { path: '/api/libro-compartido/audios' }, ana);
+  ok(r.status === 200 && r.json.copias[BASE + AUDIO_ANA] === guardadosWav[0].url, 'el navegador puede saber qué audios ya tienen copia');
+  r = await request(server, { path: '/api/libro-compartido/audios' }, otra);
+  ok(r.status === 200 && Object.keys(r.json.copias).length === 0, 'y cada cuenta solo ve las suyas');
+  r = await request(server, { path: '/api/libro-compartido', method: 'POST', body: { datos: libro() } }, ana);
+  const mediosConCopia = JSON.parse(enlaces[0].medios);
+  ok(r.status === 200 && mediosConCopia.includes(guardadosWav[0].url) && !mediosConCopia.includes(BASE + AUDIO_ANA), 'al actualizar el enlace, el audio se sirve desde su copia en WAV');
+  const posWav = mediosConCopia.indexOf(guardadosWav[0].url);
+  r = await request(server, { path: `/api/libro/${token}/m/${posWav}` });
+  ok(r.status === 200 && /audio\/wav/.test(r.headers['content-type']), 'y quien abre el enlace recibe un audio WAV (suena en todos los iPhone)');
 
   // Gestión
   r = await request(server, { path: '/api/libro-compartido' }, ana);

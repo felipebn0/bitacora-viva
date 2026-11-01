@@ -115,7 +115,7 @@ async function compartirEnLinea(){
  btn.disabled=true;btn.textContent='Preparando tu enlace…';
  try{
   await flush();
-  const url=await window.EcoLibroDigital.compartirEnLinea();
+  const url=await window.EcoLibroDigital.compartirEnLinea({aviso:t=>{status.textContent=t}});
   if(!url)throw Error('No se pudo preparar el enlace. Intenta de nuevo.');
   mostrarEnlace(url);alternarIndice(true);status.textContent='Listo: copia el enlace de tu libro (a la izquierda) y mándalo. Se actualiza solo cuando cambias tu libro.';
  }catch(e){status.textContent=e.message;status.classList.add('eco-editorial-status-error')}

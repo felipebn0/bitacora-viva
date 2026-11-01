@@ -97,7 +97,7 @@
        pantalla completa (requiere viewport-fit=cover en el <meta
        viewport>, ver arriba) — en el resto de los navegadores estos
        env() valen 0, así que no cambia nada. */
-    padding: calc(24px + env(safe-area-inset-top)) calc(24px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) calc(24px + env(safe-area-inset-left));
+    padding: calc(24px + env(safe-area-inset-top) * 1.35) calc(24px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) calc(24px + env(safe-area-inset-left));
   }
   @media (prefers-reduced-motion: reduce) {
     /* El selector "*" solo no alcanza a la animación del ::before del
@@ -818,8 +818,8 @@
   :root { --orb: clamp(150px, min(calc(100dvh - 440px), calc(100vw - 130px)), 330px); }
   /* en pantalla ancha la tarjeta mide 640px y el botón puede crecer más */
   @media (min-width: 980px) { :root { --orb: clamp(150px, calc(100dvh - 440px), 400px); } }
-  body { padding-top: calc(10px + env(safe-area-inset-top)); padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
-  #appContent { min-height: calc(100dvh - 20px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+  body { padding-top: calc(10px + env(safe-area-inset-top) * 1.35); padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+  #appContent { min-height: calc(100dvh - 20px - env(safe-area-inset-top) * 1.35 - env(safe-area-inset-bottom)); }
   #appContent .greeting-bar { margin-bottom: 4px; }
   #appContent .device { min-height: 0; padding: clamp(14px, 3dvh, 36px) clamp(20px, 5vw, 52px); gap: 10px; }
   #appContent .body-area { gap: clamp(10px, 2.2dvh, 26px); }

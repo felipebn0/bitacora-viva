@@ -163,9 +163,55 @@
     }
   }
 
+  // Los audios que graba Chrome (.webm) no suenan en todos los iPhone. Para el enlace se guarda además una copia en WAV, que
+  // suena en cualquier celular. La convierte este navegador (que sí lee el .webm) y solo los audios que todavía no la tienen.
+  const MAX_WAV = 4.2 * 1024 * 1024; // Vercel no recibe pedidos de más de 4,5 MB
+  function aWav(canal, tasa) {
+    const v = new DataView(new ArrayBuffer(44 + canal.length * 2));
+    const txt = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+    txt(0, 'RIFF'); v.setUint32(4, 36 + canal.length * 2, true); txt(8, 'WAVE'); txt(12, 'fmt ');
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, tasa, true); v.setUint32(28, tasa * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    txt(36, 'data'); v.setUint32(40, canal.length * 2, true);
+    for (let i = 0; i < canal.length; i++) { const x = Math.max(-1, Math.min(1, canal[i])); v.setInt16(44 + i * 2, x < 0 ? x * 0x8000 : x * 0x7fff, true); }
+    return new Blob([v.buffer], { type: 'audio/wav' });
+  }
+  async function convertirAWav(url) {
+    const r = await fetch('/api/media-file?u=' + encodeURIComponent(url), { credentials: 'same-origin' });
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!r.ok || !Ctx) return null;
+    const ctx = new Ctx();
+    try {
+      const buf = await ctx.decodeAudioData(await r.arrayBuffer());
+      for (const tasa of [16000, 8000]) {
+        if (44 + Math.ceil(buf.duration * tasa) * 2 > MAX_WAV) continue;
+        const fuera = new OfflineAudioContext(1, Math.max(1, Math.ceil(buf.duration * tasa)), tasa);
+        const fuente = fuera.createBufferSource();
+        fuente.buffer = buf; fuente.connect(fuera.destination); fuente.start();
+        return aWav((await fuera.startRendering()).getChannelData(0), tasa);
+      }
+      return null;
+    } finally { ctx.close().catch(() => {}); }
+  }
+  async function copiasEnWav(urls, avisar) {
+    let copias = {};
+    try { const r = await fetch('/api/libro-compartido/audios', { credentials: 'same-origin' }); if (r.ok) copias = (await r.json()).copias || {}; } catch (e) { /* se intenta con todos */ }
+    const faltan = [...new Set(urls)].filter((u) => !copias[u]);
+    for (let i = 0; i < faltan.length; i++) {
+      if (avisar) avisar('Preparando los audios para que suenen en cualquier celular (' + (i + 1) + ' de ' + faltan.length + ')…');
+      try {
+        const wav = await convertirAWav(faltan[i]);
+        if (wav) await fetch('/api/libro-compartido/audio?u=' + encodeURIComponent(faltan[i]), { method: 'PUT', headers: { 'Content-Type': 'audio/wav' }, credentials: 'same-origin', body: wav });
+      } catch (e) { /* ese audio queda con su formato de siempre */ }
+    }
+  }
+
   // Crea o actualiza el enlace en línea del libro, sin descargar el archivo. Devuelve la dirección o null.
-  async function compartirEnLinea() {
-    try { return await actualizarEnlace(await armarDatos({ soloEnlace: true })); } catch (e) { return null; }
+  async function compartirEnLinea(opciones) {
+    try {
+      const datos = await armarDatos({ soloEnlace: true });
+      await copiasEnWav(datos.capitulos.flatMap((c) => c.enlace.audios.map((a) => a.url)), opciones && opciones.aviso);
+      return await actualizarEnlace(datos);
+    } catch (e) { return null; }
   }
 
   window.EcoLibroDigital = { exportar, armarDatos, compartirEnLinea };

@@ -1008,6 +1008,12 @@ function ensureSchema() {
         revoked_at TIMESTAMPTZ
       )`,
       sql`CREATE INDEX IF NOT EXISTS idx_libros_compartidos_owner ON libros_compartidos(owner_id)`,
+      // Copia en WAV de cada audio del libro (libro-compartido-routes.js): los .webm de Chrome no suenan en todos los iPhone.
+      sql`CREATE TABLE IF NOT EXISTS libro_audios (
+        owner_id INTEGER NOT NULL, original_url TEXT NOT NULL, wav_url TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (owner_id, original_url)
+      )`,
       sql`CREATE TABLE IF NOT EXISTS tree_v4_state (profile_user_id INTEGER PRIMARY KEY, state JSONB NOT NULL DEFAULT '{}'::jsonb, updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`,
       sql`ALTER TABLE tree_v4_state ADD COLUMN IF NOT EXISTS revision INTEGER NOT NULL DEFAULT 0`,
       // Item 12 (pedido de Felipe, 2026-09-08): A/B test de DÓNDE se
@@ -4069,6 +4075,7 @@ app.post('/api/reset-bitacora', requireAuth, bloquearColaborador, bloquearInvita
       sql`DELETE FROM book_demo_purchases WHERE owner_id = ${req.userId}`,
       sql`DELETE FROM book_audio_links WHERE owner_id = ${req.userId}`,
       sql`DELETE FROM libros_compartidos WHERE owner_id = ${req.userId}`,
+      sql`DELETE FROM libro_audios WHERE owner_id = ${req.userId}`,
       sql`DELETE FROM tree_v4_state WHERE profile_user_id = ${req.userId}`,
       sql`DELETE FROM diario_bebe_entradas WHERE profile_user_id = ${req.userId}`,
       sql`DELETE FROM diario_bebe WHERE profile_user_id = ${req.userId}`,
@@ -4207,6 +4214,7 @@ app.post('/api/delete-account', requireAuth, rateLimit, async (req, res) => {
       sql`DELETE FROM book_demo_purchases WHERE owner_id = ${req.userId}`,
       sql`DELETE FROM book_audio_links WHERE owner_id = ${req.userId}`,
       sql`DELETE FROM libros_compartidos WHERE owner_id = ${req.userId}`,
+      sql`DELETE FROM libro_audios WHERE owner_id = ${req.userId}`,
       sql`DELETE FROM tree_v4_state WHERE profile_user_id = ${req.userId}`,
       sql`DELETE FROM diario_bebe_entradas WHERE profile_user_id = ${req.userId}`,
       sql`DELETE FROM diario_bebe WHERE profile_user_id = ${req.userId}`,
@@ -7687,7 +7695,7 @@ app.delete('/api/chapters/:id', requireAuth, bloquearColaborador, rateLimit, asy
 pushWeb = require('./push-web-routes')(app, { sql, ensureSchema, requireAuth, bloquearColaborador, bloquearInvitado, rateLimit });
 require('./push-recordatorios-routes')(app, { sql, ensureSchema, requireAuth, requireAdmin, bloquearColaborador, bloquearInvitado, rateLimit, pushWeb });
 require('./book-qr-routes')(app, { preguntasPorAudio, sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob });
-require('./libro-compartido-routes')(app, { sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob });
+require('./libro-compartido-routes')(app, { sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob, almacenarArchivo, express });
 require('./recuperar-clave-routes')(app, { sql, ensureSchema, rateLimit, limitePorClave, claveDemasiadoLarga });
 require('./bebe-routes')(app, { sql, ensureSchema, requireAuth, rateLimit, bloquearEscritura: [bloquearColaborador, bloquearSiNoPuedeNarrar, bloquearSiReadOnly], resolveProfileUserId, almacenarArchivo, verificarArchivoReal, MEDIA_MIME_PERMITIDOS, AUDIO_MIME_PERMITIDOS, enviarArchivoAlmacenado, datosDelArchivoDeBlob, borrarArchivosBlob });
 require('./book-editor-routes')(app, {

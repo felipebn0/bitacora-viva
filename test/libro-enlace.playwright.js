@@ -8,6 +8,8 @@ try { ({ chromium } = require('playwright')); } catch (e) { console.error('Falta
 let fallos = 0;
 const ok = (c, m) => { if (c) console.log('✓ ' + m); else { fallos++; console.error('✗ ' + m); } };
 const AUDIO = 'https://x.public.blob.vercel-storage.com/audio/1/uno.webm';
+// 1 segundo de tono (WAV) como si fuera la grabación original: el navegador la decodifica y la guarda otra vez en WAV de 16 kHz.
+const wavOriginal = (() => { const n = 8000, b = Buffer.alloc(44 + n * 2); b.write('RIFF', 0); b.writeUInt32LE(36 + n * 2, 4); b.write('WAVEfmt ', 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22); b.writeUInt32LE(8000, 24); b.writeUInt32LE(16000, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write('data', 36); b.writeUInt32LE(n * 2, 40); for (let i = 0; i < n; i++) b.writeInt16LE(Math.round(Math.sin(i / 8) * 12000), 44 + i * 2); return b; })();
 const capitulos = [
   { id: 1, title: 'Infancia', theme: 'infancia', generated_text: 'Primer párrafo de la infancia.\n\nSegundo párrafo.', story_ids: [1], audios: [AUDIO], preguntas: ['¿Cómo era la finca?'], created_at: new Date().toISOString() },
   { id: 2, title: 'El trabajo', theme: 'trabajo', generated_text: 'Texto del trabajo.', story_ids: [2], audios: [], created_at: new Date().toISOString() },
@@ -21,7 +23,7 @@ const capitulos = [
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' }).catch(() => chromium.launch());
   const ctx = await browser.newContext({ viewport: { width: 1300, height: 900 }, acceptDownloads: true });
   const page = await ctx.newPage();
-  const t = { posts: [], deletes: 0, activo: false, descargas: 0, pedidosDeMedios: 0, borrador: { title: 'Mi libro de prueba', subtitle: '', order: ['1', '2'], edits: {}, qr: {}, qrOff: {} }, version: 1, errores: [] };
+  const t = { copias: {}, puts: [], ordenPost: [], posts: [], deletes: 0, activo: false, descargas: 0, pedidosDeMedios: 0, borrador: { title: 'Mi libro de prueba', subtitle: '', order: ['1', '2'], edits: {}, qr: {}, qrOff: {} }, version: 1, errores: [] };
   page.on('pageerror', (e) => t.errores.push(e.message));
   page.on('download', () => t.descargas++);
   await page.addInitScript(() => { try { localStorage.setItem('eco_tour_done__capitulos_html', '1'); } catch (e) { /* nada */ } });
@@ -30,9 +32,11 @@ const capitulos = [
     const json = (o) => r.fulfill({ json: o });
     if (u.pathname === '/api/book-demo/status') return json({ approved: true });
     if (u.pathname === '/api/book-demo/purchase') return json({ approved: true });
-    if (u.pathname === '/api/media-file') { t.pedidosDeMedios++; return r.fulfill({ status: 200, contentType: 'image/jpeg', body: Buffer.from('x') }); }
+    if (u.pathname === '/api/media-file') { t.pedidosDeMedios++; return u.searchParams.get('u') === AUDIO ? r.fulfill({ status: 200, contentType: 'audio/wav', body: wavOriginal }) : r.fulfill({ status: 200, contentType: 'image/jpeg', body: Buffer.from('x') }); }
+    if (u.pathname === '/api/libro-compartido/audios') return json({ copias: t.copias });
+    if (u.pathname === '/api/libro-compartido/audio' && m === 'PUT') { const cuerpo = r.request().postDataBuffer(); t.puts.push({ u: u.searchParams.get('u'), tipo: r.request().headers()['content-type'], riff: cuerpo.toString('latin1', 0, 4), wave: cuerpo.toString('latin1', 8, 12), tasa: cuerpo.readUInt32LE(24), canales: cuerpo.readUInt16LE(22), bytes: cuerpo.length }); t.ordenPost.push('put'); t.copias[u.searchParams.get('u')] = base + '/copia.wav'; return json({ ok: true, url: base + '/copia.wav' }); }
     if (u.pathname === '/api/libro-compartido') {
-      if (m === 'POST') { t.posts.push(JSON.parse(r.request().postData())); t.activo = true; return json({ ok: true, token: 'a'.repeat(48), url: base + '/libro/' + 'a'.repeat(48) }); }
+      if (m === 'POST') { t.ordenPost.push('post'); t.posts.push(JSON.parse(r.request().postData())); t.activo = true; return json({ ok: true, token: 'a'.repeat(48), url: base + '/libro/' + 'a'.repeat(48) }); }
       if (m === 'DELETE') { t.deletes++; t.activo = false; return json({ ok: true }); }
       return json(t.activo ? { activo: true, url: base + '/libro/' + 'a'.repeat(48) } : { activo: false });
     }
@@ -58,11 +62,16 @@ const capitulos = [
   ok(t.posts[0].datos.capitulos.length === 2 && t.posts[0].datos.capitulos[0].audios[0].url === AUDIO && t.posts[0].datos.capitulos[0].audios[0].pregunta === '¿Cómo era la finca?', 'el enlace lleva los capítulos, el audio y su pregunta');
   ok(/\/libro\/a{48}$/.test(await page.inputValue('#ecoEditorialShareUrl')), 'se muestra el enlace del libro');
 
+  ok(t.puts.length === 1 && t.puts[0].u === AUDIO && t.puts[0].tipo === 'audio/wav' && t.puts[0].riff === 'RIFF' && t.puts[0].wave === 'WAVE', 'antes de crear el enlace, cada audio se convierte a WAV y se guarda (para que suene en todos los iPhone)');
+  ok(t.puts[0].tasa === 16000 && t.puts[0].canales === 1 && t.puts[0].bytes < 4.2 * 1024 * 1024, 'en mono y a 16 kHz, liviano para el celular');
+  ok(t.ordenPost.join(',') === 'put,post', 'y la copia se guarda antes de armar el enlace');
+
   // Cambiar el libro lo actualiza solo
   await page.locator('[data-sec="ch-1"] h2').fill('Infancia (editado)');
   const t0 = Date.now(); while (t.posts.length < 2 && Date.now() - t0 < 15000) await page.waitForTimeout(150);
   ok(t.posts.length === 2, 'si cambias el libro, el enlace se actualiza solo');
   ok(JSON.stringify(t.posts[1]).includes('(editado)'), 'con el cambio nuevo');
+  ok(t.puts.length === 1, 'los audios que ya tienen copia no se vuelven a convertir');
   ok(t.descargas === 0, 'sin descargar nada');
 
   // Dejar de compartir

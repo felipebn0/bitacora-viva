@@ -27,7 +27,7 @@ const PAGINA_NO_DISPONIBLE = '<!doctype html><html lang="es"><head><meta charset
   + '<style>body{margin:0;background:#f3ecdd;color:#1f1b14;font-family:"Source Serif 4",Georgia,serif;display:grid;min-height:100vh;place-items:center;text-align:center;padding:24px}main{max-width:26rem}h1{font-size:26px;margin:0 0 10px}p{font-size:18px;line-height:1.5;margin:0;color:#6b6454}</style></head>'
   + '<body><main><h1>Este libro ya no está disponible</h1><p>Quien lo compartió retiró el enlace o la dirección no es correcta. Pídele que te mande uno nuevo.</p></main></body></html>';
 
-module.exports = (app, { sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob }) => {
+module.exports = (app, { sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob, almacenarArchivo, express }) => {
   const ready = () => ensureSchema();
   const tokenValido = (t) => typeof t === 'string' && /^[a-f0-9]{48}$/.test(t);
   const sinCache = (res) => res.set('Cache-Control', 'private, no-store');
@@ -41,7 +41,8 @@ module.exports = (app, { sql, ensureSchema, requireAuth, bloquearColaborador, ra
 
   // Deja solo lo que se puede compartir: textos con tope de largo y fotos/audios que de verdad son de esta cuenta (la
   // dueña del archivo va en su propia ruta). Las fotos y audios se guardan una vez en "medios" y el libro los nombra por posición.
-  function limpiar(crudo, ownerId) {
+  // copias: original -> copia en WAV (los .webm de Chrome no suenan en todos los iPhone); si la hay, el enlace usa la copia.
+  function limpiar(crudo, ownerId, copias = new Map()) {
     if (!crudo || typeof crudo !== 'object' || !Array.isArray(crudo.capitulos)) return null;
     const medios = [];
     const urlPropia = (u) => {
@@ -53,7 +54,7 @@ module.exports = (app, { sql, ensureSchema, requireAuth, bloquearColaborador, ra
     const capitulos = crudo.capitulos.slice(0, 250).map((c) => {
       const cap = c && typeof c === 'object' ? c : {};
       const fotos = (Array.isArray(cap.fotos) ? cap.fotos : []).slice(0, 12).filter((f) => f && urlPropia(f.url)).map((f) => ({ m: posicion(f.url), pie: texto(f.pie, 180) })).filter((f) => f.m >= 0);
-      const audios = (Array.isArray(cap.audios) ? cap.audios : []).slice(0, 40).filter((a) => a && urlPropia(a.url)).map((a) => ({ m: posicion(a.url), pregunta: texto(a.pregunta, 300) })).filter((a) => a.m >= 0);
+      const audios = (Array.isArray(cap.audios) ? cap.audios : []).slice(0, 40).filter((a) => a && urlPropia(a.url)).map((a) => ({ a, destino: copias.get(a.url) || a.url })).filter((x) => urlPropia(x.destino)).map((x) => ({ m: posicion(x.destino), pregunta: texto(x.a.pregunta, 300) })).filter((a) => a.m >= 0);
       return { id: Number.isSafeInteger(cap.id) ? cap.id : null, titulo: texto(cap.titulo, 200).trim() || 'Capítulo', tema: texto(cap.tema, 120), texto: texto(cap.texto, 120000), fotos, audios };
     });
     return { datos: { titulo: texto(crudo.titulo, 200).trim() || 'Mi libro', subtitulo: texto(crudo.subtitulo, 300), dedicatoria: texto(crudo.dedicatoria, 4000), fecha: texto(crudo.fecha, 40), capitulos }, medios };
@@ -62,10 +63,11 @@ module.exports = (app, { sql, ensureSchema, requireAuth, bloquearColaborador, ra
   // Crea el enlace del libro o, si ya hay uno activo, lo actualiza con el libro de ahora (mismo enlace).
   app.post('/api/libro-compartido', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
     sinCache(res);
-    const limpio = limpiar(req.body && req.body.datos, req.profileUserId);
-    if (!limpio || !limpio.datos.capitulos.length) return res.status(400).json({ error: 'El libro no tiene capítulos para compartir.' });
     try {
       await ready();
+      const filas = await sql`SELECT original_url, wav_url FROM libro_audios WHERE owner_id=${req.profileUserId}`;
+      const limpio = limpiar(req.body && req.body.datos, req.profileUserId, new Map(filas.map((f) => [f.original_url, f.wav_url])));
+      if (!limpio || !limpio.datos.capitulos.length) return res.status(400).json({ error: 'El libro no tiene capítulos para compartir.' });
       const previo = (await sql`SELECT token FROM libros_compartidos WHERE owner_id=${req.profileUserId} AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 1`)[0];
       const datos = JSON.stringify(limpio.datos), medios = JSON.stringify(limpio.medios);
       let token;
@@ -80,6 +82,38 @@ module.exports = (app, { sql, ensureSchema, requireAuth, bloquearColaborador, ra
     } catch (e) {
       console.error('Enlace del libro', e);
       res.status(500).json({ error: 'No se pudo preparar el enlace para compartir.' });
+    }
+  });
+
+  // Qué audios ya tienen su copia en WAV (para que el navegador solo convierta los que faltan).
+  app.get('/api/libro-compartido/audios', requireAuth, bloquearColaborador, async (req, res) => {
+    sinCache(res);
+    try {
+      await ready();
+      const filas = await sql`SELECT original_url, wav_url FROM libro_audios WHERE owner_id=${req.profileUserId}`;
+      res.json({ copias: Object.fromEntries(filas.map((f) => [f.original_url, f.wav_url])) });
+    } catch (e) {
+      console.error('Copias de audio del libro (consulta)', e);
+      res.status(500).json({ error: 'No se pudieron consultar los audios.' });
+    }
+  });
+
+  // Guarda la copia en WAV de un audio de la cuenta (la convierte el navegador, que ya sabe leer el .webm).
+  app.put('/api/libro-compartido/audio', requireAuth, bloquearColaborador, rateLimit, express.raw({ type: () => true, limit: '4500kb' }), async (req, res) => {
+    sinCache(res);
+    const original = typeof req.query.u === 'string' ? req.query.u : '';
+    const datos = original.length <= 1000 && !original.includes('..') && /^https:\/\//i.test(original) ? datosDelArchivoDeBlob(original) : null;
+    if (!datos || datos.ownerId !== req.profileUserId) return res.status(400).json({ error: 'Ese audio no es de tu cuenta.' });
+    const cuerpo = req.body;
+    if (!Buffer.isBuffer(cuerpo) || cuerpo.length < 100 || cuerpo.toString('latin1', 0, 4) !== 'RIFF' || cuerpo.toString('latin1', 8, 12) !== 'WAVE') return res.status(400).json({ error: 'El audio no es un WAV válido.' });
+    try {
+      await ready();
+      const guardado = await almacenarArchivo(`media/libros/${req.profileUserId}/audio-${crypto.randomBytes(12).toString('hex')}.wav`, cuerpo, 'audio/wav');
+      await sql`INSERT INTO libro_audios(owner_id, original_url, wav_url) VALUES(${req.profileUserId}, ${original}, ${guardado.url}) ON CONFLICT (owner_id, original_url) DO UPDATE SET wav_url = EXCLUDED.wav_url`;
+      res.json({ ok: true, url: guardado.url });
+    } catch (e) {
+      console.error('Copia de audio del libro', e);
+      res.status(500).json({ error: 'No se pudo guardar el audio.' });
     }
   });
 
