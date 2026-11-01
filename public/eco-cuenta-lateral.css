@@ -65,3 +65,7 @@
    Afecta solo al panel de Cuenta.
 #userMenuPanel hr{display:none!important}
 #appContent .eco-lateral-footer{border-top:0!important;}
+
+/* Pie de Cuenta (Cerrar sesión): sin línea, sin caja ni esquinas. */
+.eco-lateral-footer,#appContent .eco-lateral-footer{border:0!important;border-top:0!important;box-shadow:none!important;border-radius:0!important;background:none!important;margin-top:8px!important;}
+.eco-lateral-layout hr,#userMenuPanel hr{display:none!important;}
