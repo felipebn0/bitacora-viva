@@ -45,6 +45,7 @@ const armar = (datos) => plantilla.replace(/(<script type="application\/json" id
   ok(await t.page.locator('.tape').count() === 36, 'con 12 capítulos la estantería se repite 3 veces (36 libros)');
   ok(/^Cómo conocí a tu abuela.* 7$/.test(await titulo(t.page)), 'abre en el capítulo del medio');
   ok(/CAPÍTULO 7 DE 12/.test(await t.page.locator('#indice').innerText()), 'el indicador dice en qué capítulo va');
+  ok(await t.page.evaluate(() => { const ids = [...document.querySelectorAll('[id]')].map((e) => e.id); return ids.length === new Set(ids).size; }), 'no hay dos elementos con el mismo id (si no, el indicador de capítulo queda vacío)');
   ok(await t.page.locator('#abrir, .abrir').count() === 0, 'no hay círculo de play: el libro del centro se abre al hacerle clic');
   ok(await t.page.locator('.cursor').count() === 0 && await t.page.evaluate(() => getComputedStyle(document.body).cursor !== 'none'), 'usa el puntero normal del sistema (sin círculo)');
   ok(/PARA MIS NIETOS/i.test(await t.page.locator('#pieIzq').innerText()), 'el pie muestra la dedicatoria del libro');

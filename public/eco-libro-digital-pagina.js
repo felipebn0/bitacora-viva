@@ -39,7 +39,7 @@
     if (datos.dedicatoria) p.push('<p class="dedic">' + esc(datos.dedicatoria) + '</p>');
     p.push('</header>');
     if (datos.capitulos.length) {
-      p.push('<nav class="plano-indice" id="indice" aria-label="Contenido"><h2>Contenido</h2><ol>');
+      p.push('<nav class="plano-indice" id="contenido-lectura" aria-label="Contenido"><h2>Contenido</h2><ol>');
       datos.capitulos.forEach((c, i) => p.push('<li><a href="#cap-' + (i + 1) + '"><span class="n">' + (i + 1) + '</span><span class="t">' + esc(c.titulo) + '</span></a></li>'));
       p.push('</ol></nav>');
     }
@@ -55,7 +55,7 @@
       const audios = c.audios || [];
       if (audios.length) p.push('<h3 class="tema">' + (audios.length === 1 ? 'Escucha la historia original' : 'Escucha las historias originales') + '</h3>');
       audios.forEach((a) => { if (a.pregunta) p.push('<p class="pregunta">' + esc(a.pregunta) + '</p>'); p.push('<audio id="' + a.ref + '" controls preload="' + (ligero ? 'none' : 'metadata') + '" src="' + esc(a.src) + '"></audio>'); });
-      p.push('<a class="subir" href="#indice">↑ Volver al contenido</a></section>');
+      p.push('<a class="subir" href="#contenido-lectura">↑ Volver al contenido</a></section>');
     });
     p.push('<p class="aviso">Para recorrer tu libro como una estantería, ábrelo en un navegador (Safari o Chrome). En la vista previa de Archivos del iPhone se ve así, como un texto para leer.</p></main>');
     return p.join('');

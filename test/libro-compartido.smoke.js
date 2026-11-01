@@ -106,7 +106,8 @@ const libro = (extra = {}) => Object.assign({
   r = await request(server, { path: `/libro/${token}` });
   ok(r.status === 200 && /text\/html/.test(r.headers['content-type']), 'sin cuenta ni cookie, el enlace abre la página del libro (200)');
   ok(/<title>Los recuerdos de Ana · Eco<\/title>/.test(r.texto) && /property="og:title" content="Los recuerdos de Ana"/.test(r.texto), 'con el título del libro y vista previa para WhatsApp');
-  ok(/<main class="plano">/.test(r.texto) && /id="indice"/.test(r.texto) && /href="#cap-2"/.test(r.texto) && /id="cap-1"/.test(r.texto), 'trae la versión de lectura con índice con enlaces y cada capítulo en su tarjeta');
+  ok((r.texto.match(/id="indice"/g) || []).length === 1, 'el id "indice" (el cuadro "CAPÍTULO X DE N") está una sola vez en la página');
+  ok(/<main class="plano">/.test(r.texto) && /id="contenido-lectura"/.test(r.texto) && /href="#cap-2"/.test(r.texto) && /id="cap-1"/.test(r.texto), 'trae la versión de lectura con índice con enlaces y cada capítulo en su tarjeta');
   ok(!/<b>x<\/b>/.test(r.texto) && /El trabajo &lt;b&gt;x&lt;\/b&gt;/.test(r.texto), 'el texto del libro se escapa (no entra HTML ajeno)');
   ok(new RegExp(`<img id="f-0-0" loading="lazy" src="/api/libro/${token}/m/0"`).test(r.texto) && new RegExp(`<audio id="a-0-0" controls preload="none" src="/api/libro/${token}/m/1"`).test(r.texto), 'las fotos y audios se piden por posición, no por la dirección del archivo');
   ok(!r.texto.includes(BASE) && !r.texto.includes('data:audio') && !r.texto.includes('fake.public'), 'la página no muestra las direcciones reales de los archivos');
