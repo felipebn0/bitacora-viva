@@ -37,9 +37,8 @@
     const grupos = [
       ['perfil', 'Mi perfil','Datos personales'],
       ['preferencias','Preferencias','Voz, letra y avisos'],
-      ['datos','Mis recuerdos y datos','Descargas y privacidad'],
-      ['seguridad','Acceso y seguridad','Contraseña y protección'],
-      ['planes','Perfiles y plan','Bitácoras y suscripción']
+      ['datos','Recuerdos, datos y seguridad','Copia, contraseña y cuenta'],
+      ['planes','Perfiles y plan','Bitácoras, suscripción y diario de un bebé']
     ];
     const panels = {};
     const botones = {};
@@ -72,13 +71,13 @@
 
     // El diario de un bebé lleva a su propia página, así que va como una
     // tarjeta más del menú (si no, quedaba escondido con el menú viejo).
+    // El diario de un bebé ahora vive dentro de "Perfiles y plan" (ver abajo).
     const bebe=panel.querySelector('#umBebeLink');
     if(bebe){
       bebe.className='eco-lateral-item';
       bebe.innerHTML='<span class="eco-lateral-item-name"></span><small></small><span class="eco-lateral-chevron" aria-hidden="true">›</span>';
       bebe.querySelector('.eco-lateral-item-name').textContent='Diario de un bebé';
       bebe.querySelector('small').textContent='Fotos y momentos del día';
-      nav.appendChild(bebe);
     }
 
     function moverSeccion(id,destino) {
@@ -89,13 +88,21 @@
       destino.appendChild(el);
     }
     // Primero extraer las secciones que antes estaban anidadas.
-    const seguridad = panels.seguridad;
-    moverSeccion('umSecClave',seguridad);
-    moverSeccion('umSecInstalacion',seguridad);
-    moverSeccion('umSecRiesgo',seguridad);
-    ['umSecVoz','umSecFuente','umSecRecordatorios'].forEach(id=>moverSeccion(id,panels.preferencias));
+    // "Recuerdos, datos y seguridad": primero la copia, luego el acceso y el riesgo.
+    const subtitulo=(texto)=>{const h=document.createElement('h3');h.className='eco-lateral-subtitulo';h.textContent=texto;return h;};
+    panels.datos.appendChild(subtitulo('Tus recuerdos'));
     moverSeccion('umSecCopia',panels.datos);
+    panels.datos.appendChild(subtitulo('Acceso y seguridad'));
+    moverSeccion('umSecClave',panels.datos);
+    moverSeccion('umSecInstalacion',panels.datos);
+    moverSeccion('umSecRiesgo',panels.datos);
+    ['umSecVoz','umSecFuente','umSecRecordatorios'].forEach(id=>moverSeccion(id,panels.preferencias));
     moverSeccion('umSecPlan',panels.planes);
+    if(bebe) panels.planes.appendChild(bebe);
+    // Avisos por correo: se quita de la vista por ahora (el botón de avisos del celular sigue).
+    const avisoCorreo=panel.querySelector('#umRecordatoriosActivos');
+    if(avisoCorreo&&avisoCorreo.closest('label')) avisoCorreo.closest('label').style.display='none';
+    ['umRecordatoriosFrecuencia','umRecordatoriosGuardar','umRecordatoriosMsg'].forEach(id=>{const el=document.getElementById(id); if(el) el.style.display='none';});
     const linkPerfil=panel.querySelector('#umPerfilesLink');
     const admin=panel.querySelector('#umAdminLink');
     if(linkPerfil) panels.planes.insertBefore(linkPerfil,panels.planes.children[2]||null);
@@ -104,6 +111,8 @@
     perfil.hidden=false;
     perfil.classList.remove('um-nested-group');
     panels.perfil.appendChild(perfil);
+    // Quedaba un contenedor vacío debajo de "Guardar perfil" (la barra verde): se quita.
+    perfil.querySelectorAll('.um-nested-group').forEach((g)=>{ if(!g.querySelector('.um-section-toggle,.um-section-body')) g.remove(); });
     // Los acordeones originales siguen trabajando dentro de las vistas.
     // No se modifican sus IDs ni su código de guardar.
     const logout=panel.querySelector('#umLogoutBtn');

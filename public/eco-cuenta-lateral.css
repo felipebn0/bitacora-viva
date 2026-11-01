@@ -53,3 +53,6 @@
 /* Telón oscuro detrás del panel lateral */
 .eco-lateral-backdrop{display:none;position:fixed;inset:0;z-index:9998;background:rgba(20,30,15,.44);}
 .eco-lateral-backdrop.eco-lateral-backdrop-abierto{display:block;}
+
+/* Subtítulos dentro de "Recuerdos, datos y seguridad". */
+#appContent .eco-lateral-subtitulo{margin:22px 0 10px;font:700 .82rem "Atkinson Hyperlegible",system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#777568;}
