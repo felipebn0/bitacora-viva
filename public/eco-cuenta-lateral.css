@@ -56,3 +56,6 @@
 
 /* Subtítulos dentro de "Recuerdos, datos y seguridad". */
 #appContent .eco-lateral-subtitulo{margin:22px 0 10px;font:700 .82rem "Atkinson Hyperlegible",system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#777568;}
+
+/* Aviso por correo de recordatorios: oculto por ahora (el control sigue en el código). */
+#umSecRecordatorios label:has(#umRecordatoriosActivos),#umRecordatoriosFrecuencia,#umRecordatoriosGuardar,#umRecordatoriosMsg{display:none!important}
