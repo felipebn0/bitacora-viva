@@ -174,7 +174,7 @@
 <link rel="stylesheet" href="/eco-interior.css?v=1">
 <link rel="stylesheet" href="/eco-colaboraciones.css?v=1">
 <script src="/eco-colaboraciones.js?v=1" defer></script>
-<link rel="stylesheet" href="/eco-colaboraciones-vista.css?v=11">
+<link rel="stylesheet" href="/eco-colaboraciones-vista.css?v=12">
 <script src="/eco-colaboraciones-vista.js?v=3" defer></script>
 <link rel="stylesheet" href="/eco-volver-unificado.css?v=3">
 <script src="/eco-volver-unificado.js?v=1" defer></script>
@@ -488,53 +488,45 @@
     }
 
     const media = (Array.isArray(n.media_urls) ? n.media_urls : []).filter((m) => m && typeof m.url === 'string' && /^https?:\/\//.test(m.url));
-    if (media.length) {
-      // Vista compacta: un botón que abre la foto en una vista ampliada,
-      // así la tarjeta no crece con la imagen.
-      const fotoBox = document.createElement('div');
-      fotoBox.className = 'ap-box';
-      const fotoTitulo = document.createElement('h4');
-      fotoTitulo.textContent = media.length === 1 ? 'Foto adjunta' : `Fotos adjuntas (${media.length})`;
-      const verBtn = document.createElement('button');
+    // "Ver foto" va dentro de Acciones (ver más abajo), no en una caja propia.
+    const verBtn = media.length ? document.createElement('button') : null;
+    if (verBtn) {
       verBtn.type = 'button';
       verBtn.className = 'ap-ver-foto';
       verBtn.textContent = media.length === 1 ? 'Ver foto' : 'Ver fotos';
       verBtn.addEventListener('click', () => abrirVistaFotos(media));
-      fotoBox.append(fotoTitulo, verBtn);
-      colDer.appendChild(fotoBox);
     }
 
-    if (opts && opts.desarchivar) {
+    const hayAcciones = !!(verBtn || (opts && (opts.acciones || opts.desarchivar)));
+    if (hayAcciones) {
       const accBox = document.createElement('div');
       accBox.className = 'ap-box ap-acc';
       const accTitulo = document.createElement('h4');
       accTitulo.textContent = 'Acciones';
-      const des = document.createElement('button');
-      des.type = 'button';
-      des.textContent = 'Desarchivar';
-      des.addEventListener('click', opts.desarchivar);
-      accBox.append(accTitulo, des);
-      colDer.appendChild(accBox);
-    }
-
-    if (opts && opts.acciones) {
-      const accBox = document.createElement('div');
-      accBox.className = 'ap-box ap-acc';
-      const accTitulo = document.createElement('h4');
-      accTitulo.textContent = 'Acciones';
-      const acciones = document.createElement('div');
-      acciones.className = 'aporte-acciones';
-      const privBtn = document.createElement('button');
-      privBtn.type = 'button';
-      privBtn.textContent = n.is_private ? 'Quitar privado' : 'Marcar privado';
-      privBtn.addEventListener('click', () => cambiarPrivacidadAporte(n.id, !n.is_private));
-      const archBtn = document.createElement('button');
-      archBtn.type = 'button';
-      archBtn.className = 'archivar-btn';
-      archBtn.textContent = 'Archivar';
-      archBtn.addEventListener('click', () => archivarAporte(n.id));
-      acciones.append(privBtn, archBtn);
-      accBox.append(accTitulo, acciones);
+      accBox.appendChild(accTitulo);
+      if (verBtn) accBox.appendChild(verBtn);
+      if (opts && opts.desarchivar) {
+        const des = document.createElement('button');
+        des.type = 'button';
+        des.textContent = 'Desarchivar';
+        des.addEventListener('click', opts.desarchivar);
+        accBox.appendChild(des);
+      }
+      if (opts && opts.acciones) {
+        const acciones = document.createElement('div');
+        acciones.className = 'aporte-acciones';
+        const privBtn = document.createElement('button');
+        privBtn.type = 'button';
+        privBtn.textContent = n.is_private ? 'Quitar privado' : 'Marcar privado';
+        privBtn.addEventListener('click', () => cambiarPrivacidadAporte(n.id, !n.is_private));
+        const archBtn = document.createElement('button');
+        archBtn.type = 'button';
+        archBtn.className = 'archivar-btn';
+        archBtn.textContent = 'Archivar';
+        archBtn.addEventListener('click', () => archivarAporte(n.id));
+        acciones.append(privBtn, archBtn);
+        accBox.appendChild(acciones);
+      }
       colDer.appendChild(accBox);
     }
 
