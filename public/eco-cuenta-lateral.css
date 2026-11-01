@@ -59,3 +59,9 @@
 
 /* Aviso por correo de recordatorios: oculto por ahora (el control sigue en el código). */
 #umSecRecordatorios label:has(#umRecordatoriosActivos),#umRecordatoriosFrecuencia,#umRecordatoriosGuardar,#umRecordatoriosMsg{display:none!important}
+
+/* Panel Cuenta: sin líneas separadoras sobre 'Cerrar sesión'.
+   (el hr de app.html y el borde superior del pie).
+   Afecta solo al panel de Cuenta.
+#userMenuPanel hr{display:none!important}
+#appContent .eco-lateral-footer{border-top:0!important;}
