@@ -132,3 +132,7 @@ body>main.wrap .ap-short{white-space:normal;overflow:visible;text-overflow:clip;
 /* Paginación de Aportes recibidos. */
 .aportes-paginas{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:16px 0 0;}
 .aportes-paginas-info{color:var(--eco-muted);font-size:.92rem;}
+.aportes-pag-btn{cursor:pointer;background:#fffdf6;color:#4d6542;border:1.5px solid #4d6542;border-radius:12px;min-height:44px;padding:10px 16px;font:700 .93rem "Atkinson Hyperlegible",system-ui,sans-serif;box-shadow:none;}
+.aportes-pag-btn:hover:not(:disabled){background:#edf0e5;}
+.aportes-pag-btn:disabled{cursor:default;color:#777568;border-color:#dadaca;opacity:.55;}
+.aportes-paginas-info{color:#293d30;font:700 .92rem "Atkinson Hyperlegible",system-ui,sans-serif;}
