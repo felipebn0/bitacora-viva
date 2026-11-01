@@ -1,7 +1,7 @@
 /* ECO · Tour de bienvenida.
    Muestra un tour paso a paso la primera vez que un usuario visita cada página.
    Usa spotlight (4 paneles oscuros) + tooltip flotante.
-   Guarda el estado en localStorage para no repetirlo. */
+   Se recuerda por usuario en el servidor (/api/tour) y también en localStorage, que cubre a los invitados y la falta de conexión. */
 (() => {
   'use strict';
 
@@ -110,10 +110,10 @@
   let tourEl = null;
   let shadeT, shadeB, shadeL, shadeR, ring;
 
+  const avisarAlServidor = () => fetch('/api/tour/visto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ pagina: page }) }).catch(() => {});
+
   /* ─── Inicialización ───────────────────────────────────────────────── */
   function init() {
-    try { if (localStorage.getItem(STORAGE_KEY)) return; } catch (e) {}
-
     if (page === '/app.html') {
       // Esperar a que appContent sea visible (tras el login)
       const appContent = document.getElementById('appContent');
@@ -130,8 +130,20 @@
   }
 
   /* ─── Construcción del DOM del tour ───────────────────────────────── */
-  function buildAndStart() {
-    try { if (localStorage.getItem(STORAGE_KEY)) return; } catch (e) {}
+  async function buildAndStart() {
+    let vistoAqui = false;
+    try { vistoAqui = !!localStorage.getItem(STORAGE_KEY); } catch (e) {}
+    let vistoEnServidor = false;
+    try {
+      const r = await fetch('/api/tour', { credentials: 'same-origin' });
+      if (r.ok) {
+        const d = await r.json();
+        vistoEnServidor = Array.isArray(d.vistos) && d.vistos.includes(page);
+        if (d.aplica && vistoAqui && !vistoEnServidor) avisarAlServidor();
+      }
+    } catch (e) { /* sin conexión: se decide con lo que recuerda este navegador */ }
+    if (vistoEnServidor) { try { localStorage.setItem(STORAGE_KEY, '1'); } catch (e) {} return; }
+    if (vistoAqui) return;
 
     // La intro de la primera vez (eco-intro.js) va antes que el recorrido por los botones.
     const intro = document.documentElement.dataset.ecoIntro;
@@ -261,6 +273,7 @@
     if (tip) tip.remove();
     if (tourEl) { tourEl.remove(); tourEl = null; }
     try { localStorage.setItem(STORAGE_KEY, '1'); } catch (e) {}
+    avisarAlServidor();
   }
 
   /* ─── Arranque ─────────────────────────────────────────────────────── */

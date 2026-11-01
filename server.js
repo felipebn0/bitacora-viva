@@ -1268,6 +1268,7 @@ function ensureSchema() {
       sql`ALTER TABLE bitacoras ADD COLUMN IF NOT EXISTS mensaje_regalo_at TIMESTAMPTZ`,
       sql`ALTER TABLE bitacoras ADD COLUMN IF NOT EXISTS intro_vista_at TIMESTAMPTZ`,
       sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS intro_vista_at TIMESTAMPTZ`,
+      sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS tours_vistos JSONB NOT NULL DEFAULT '[]'::jsonb`,
 
       // Las 8 tablas de contenido de arriba declaraban su "user_id" como
       // REFERENCES users(id) — correcto mientras cada bitácora era siempre
@@ -3654,6 +3655,37 @@ app.get('/api/intro', requireAuth, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo cargar la introducción.' });
+  }
+});
+
+// Recorrido con focos sobre los botones (public/eco-tour.js): qué páginas ya le mostramos a cada usuario, para que no
+// reaparezca en otro celular, en la app instalada o al borrar el almacenamiento del navegador. Los invitados no tienen
+// cuenta propia y siguen recordándolo solo en su navegador.
+const PAGINAS_CON_TOUR = ['/app.html', '/colaboraciones.html', '/capitulos.html', '/arbol.html'];
+
+app.get('/api/tour', requireAuth, async (req, res) => {
+  try {
+    if (req.isGuest) return res.json({ aplica: false, vistos: [] });
+    await ensureSchema();
+    const filas = await sql`SELECT tours_vistos FROM users WHERE id = ${req.userId}`;
+    res.json({ aplica: true, vistos: filas.length && Array.isArray(filas[0].tours_vistos) ? filas[0].tours_vistos : [] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo cargar el recorrido.' });
+  }
+});
+
+app.post('/api/tour/visto', requireAuth, rateLimit, async (req, res) => {
+  try {
+    const pagina = req.body && req.body.pagina;
+    if (!PAGINAS_CON_TOUR.includes(pagina)) return res.status(400).json({ error: 'Página no válida.' });
+    if (req.isGuest) return res.json({ ok: true });
+    await ensureSchema();
+    await sql`UPDATE users SET tours_vistos = (COALESCE(tours_vistos, '[]'::jsonb) - ${pagina}::text) || to_jsonb(${pagina}::text) WHERE id = ${req.userId}`;
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo guardar.' });
   }
 });
 
