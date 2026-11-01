@@ -174,7 +174,7 @@
 <link rel="stylesheet" href="/eco-interior.css?v=1">
 <link rel="stylesheet" href="/eco-colaboraciones.css?v=1">
 <script src="/eco-colaboraciones.js?v=1" defer></script>
-<link rel="stylesheet" href="/eco-colaboraciones-vista.css?v=14">
+<link rel="stylesheet" href="/eco-colaboraciones-vista.css?v=15">
 <script src="/eco-colaboraciones-vista.js?v=3" defer></script>
 <link rel="stylesheet" href="/eco-volver-unificado.css?v=4">
 <script src="/eco-volver-unificado.js?v=1" defer></script>
@@ -241,7 +241,7 @@
         <p id="aportesStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
         <div id="aportesLista"><p class="empty">Cargando…</p></div>
         <details id="archivadosBox" class="ap-archivados">
-          <summary>Archivados</summary>
+          <summary id="archivadosTitulo">Archivados</summary>
           <p class="sub">Los aportes archivados no se borran: siguen aquí y puedes desarchivarlos cuando quieras.</p>
           <div id="archivadosLista"><p class="empty">Abre esta sección para ver los archivados.</p></div>
         </details>
@@ -387,12 +387,10 @@
 
   // Resumen corto: el que guardó el servidor (IA) o, si todavía no existe,
   // la primera frase del texto como respaldo.
+  // Sin resumen todavía: no se muestra el texto crudo como si fuera resumen.
   function resumenDeAporte(n) {
     const r = (n.resumen || '').trim();
-    if (r) return r;
-    const t = (n.texto || '').replace(/\s+/g, ' ').trim();
-    const m = t.match(/^.*?[.!?](?=\s|$)/);
-    return m ? m[0] : t.slice(0, 160);
+    return r || 'Preparando resumen…';
   }
 
   // Vista ampliada de las fotos de un aporte (overlay). Cierra con el botón,
@@ -625,6 +623,19 @@
     cargarTodo();
   }
 
+  // Cuántos aportes hay archivados (se ve en el título, sin tener que abrirlo).
+  function pintarContadorArchivados(n) {
+    const t = document.getElementById('archivadosTitulo');
+    if (t) t.textContent = n ? `Archivados (${n})` : 'Archivados (ninguno)';
+  }
+  async function contarArchivados() {
+    try {
+      const r = await fetch('/api/contributions/archived', { credentials: 'same-origin' });
+      const data = await r.json();
+      if (r.ok) pintarContadorArchivados((data.notes || []).length);
+    } catch (e) {}
+  }
+
   async function cargarArchivados() {
     const lista = document.getElementById('archivadosLista');
     if (!lista) return;
@@ -634,6 +645,7 @@
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || 'No se pudieron cargar los archivados.');
       lista.innerHTML = '';
+      pintarContadorArchivados(data.notes.length);
       if (!data.notes.length) {
         lista.innerHTML = '<p class="empty">No tienes aportes archivados.</p>';
         return;
@@ -650,6 +662,7 @@
             } catch (e) { alert('No se pudo desarchivar. Intenta de nuevo.'); return; }
             cargarTodo();
             cargarArchivados();
+            contarArchivados();
           },
         }));
       });
@@ -657,10 +670,16 @@
       lista.innerHTML = '<p class="empty">' + (e.message || 'No se pudieron cargar los archivados.') + '</p>';
     }
   }
+  contarArchivados();
   const archivadosBox = document.getElementById('archivadosBox');
   if (archivadosBox) archivadosBox.addEventListener('toggle', () => { if (archivadosBox.open) cargarArchivados(); });
 
+  let refrescoResumenesHecho = false;
   function pintarAportes(resultado) {
+    if (!refrescoResumenesHecho && (resultado.notes || []).some((n) => !n.resumen && n.texto)) {
+      refrescoResumenesHecho = true;
+      setTimeout(() => cargarTodo(), 8000);
+    }
     if (resultado.error) {
       aportesStatus.textContent = resultado.error;
       aportesLista.innerHTML = '<p class="empty">' + resultado.error + '</p>';
