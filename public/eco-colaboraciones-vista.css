@@ -100,3 +100,11 @@ body>main.wrap .ap-acc .aporte-acciones button{flex:1 1 130px}
  body>main.wrap .ap-chev{grid-column:2;grid-row:1/3}
  body>main.wrap .ap-grid{grid-template-columns:minmax(0,1fr);padding:14px}
 }
+
+/* Fotos sin deformar: alto automático, sin el tope de alto de la vista vieja */
+body>main.wrap .ap-box .media-adjunta img,body>main.wrap .ap-box .media-adjunta video{width:100%;max-width:260px;height:auto;max-height:none;object-fit:contain}
+
+/* Archivados: al final de Lo que contaron, plegado por defecto */
+body>main.wrap .ap-archivados{margin-top:24px;border-top:1px solid #dadaca;padding-top:14px}
+body>main.wrap .ap-archivados>summary{cursor:pointer;font:700 1rem "Atkinson Hyperlegible",system-ui,sans-serif;color:#293d30;padding:6px 0}
+body>main.wrap .ap-archivados>.sub{color:#777568;font-size:.92rem;margin:4px 0 12px}

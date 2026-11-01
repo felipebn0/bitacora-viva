@@ -6877,6 +6877,44 @@ app.post('/api/contributions/:id/privacy', requireAuth, rateLimit, async (req, r
 
 // Igual que POST /api/subprofiles/:id/archive: no es un borrado real, solo
 // deja de aparecer (ni para el dueño ni para quien lo aportó).
+// Aportes archivados (solo el dueño de la bitácora los ve y los puede
+// desarchivar). Archivar no borra nada: el aporte sigue en la base.
+app.get('/api/contributions/archived', requireAuth, async (req, res) => {
+  try {
+    await ensureSchema();
+    const ownerId = await resolveProfileUserId(req);
+    if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
+    if (!(await puedeAdministrarBitacora(ownerId, req))) return res.status(403).json({ error: 'Solo quien administra la bitácora puede ver los archivados.' });
+    const rows = await sql`SELECT id, contributor, parentesco, protagonista, texto, audio_url, audio_urls, media_urls, created_at, archived_at, resumen, is_private FROM family_notes WHERE user_id = ${ownerId} AND archived_at IS NOT NULL ORDER BY archived_at DESC LIMIT 100`;
+    res.json({ notes: rows.map((n) => ({
+      ...n,
+      contributor: capitalizarNombre(n.contributor),
+      texto: capitalizarInicio(n.texto),
+      audio_urls: parseJsonArray(n.audio_urls),
+      media_urls: parseJsonArray(n.media_urls),
+    })) });
+  } catch (err) {
+    console.error('contributions/archived', err);
+    res.status(500).json({ error: 'No se pudieron cargar los archivados.' });
+  }
+});
+
+app.post('/api/contributions/:id/unarchive', requireAuth, rateLimit, async (req, res) => {
+  try {
+    await ensureSchema();
+    const id = parseInt(req.params.id, 10);
+    const ownerId = await resolveProfileUserId(req);
+    if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
+    if (!(await puedeAdministrarBitacora(ownerId, req))) return res.status(403).json({ error: 'Solo quien administra la bitácora puede desarchivar.' });
+    const updated = await sql`UPDATE family_notes SET archived_at = NULL WHERE id = ${id} AND user_id = ${ownerId} AND archived_at IS NOT NULL RETURNING id`;
+    if (!updated.length) return res.status(404).json({ error: 'No se encontró ese aporte archivado.' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('contributions/unarchive', err);
+    res.status(500).json({ error: 'No se pudo desarchivar el aporte.' });
+  }
+});
+
 app.post('/api/contributions/:id/archive', requireAuth, rateLimit, async (req, res) => {
   try {
     await ensureSchema();

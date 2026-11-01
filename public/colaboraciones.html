@@ -174,7 +174,7 @@
 <link rel="stylesheet" href="/eco-interior.css?v=1">
 <link rel="stylesheet" href="/eco-colaboraciones.css?v=1">
 <script src="/eco-colaboraciones.js?v=1" defer></script>
-<link rel="stylesheet" href="/eco-colaboraciones-vista.css?v=9">
+<link rel="stylesheet" href="/eco-colaboraciones-vista.css?v=10">
 <script src="/eco-colaboraciones-vista.js?v=3" defer></script>
 <link rel="stylesheet" href="/eco-volver-unificado.css?v=3">
 <script src="/eco-volver-unificado.js?v=1" defer></script>
@@ -240,6 +240,11 @@
         </div>
         <p id="aportesStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
         <div id="aportesLista"><p class="empty">Cargando…</p></div>
+        <details id="archivadosBox" class="ap-archivados">
+          <summary>Archivados</summary>
+          <p class="sub">Los aportes archivados no se borran: siguen aquí y puedes desarchivarlos cuando quieras.</p>
+          <div id="archivadosLista"><p class="empty">Abre esta sección para ver los archivados.</p></div>
+        </details>
       </section>
     </div>
 
@@ -472,6 +477,19 @@
       colDer.appendChild(fotoBox);
     }
 
+    if (opts && opts.desarchivar) {
+      const accBox = document.createElement('div');
+      accBox.className = 'ap-box ap-acc';
+      const accTitulo = document.createElement('h4');
+      accTitulo.textContent = 'Acciones';
+      const des = document.createElement('button');
+      des.type = 'button';
+      des.textContent = 'Desarchivar';
+      des.addEventListener('click', opts.desarchivar);
+      accBox.append(accTitulo, des);
+      colDer.appendChild(accBox);
+    }
+
     if (opts && opts.acciones) {
       const accBox = document.createElement('div');
       accBox.className = 'ap-box ap-acc';
@@ -501,6 +519,13 @@
       body.hidden = !abrir;
       head.setAttribute('aria-expanded', String(abrir));
       chev.textContent = abrir ? '⌃' : '⌄';
+      if (abrir) {
+        // La duración solo se sabe cuando el navegador carga los metadatos;
+        // con preload="none" sale 0:00. Se piden al abrir la tarjeta.
+        body.querySelectorAll('audio').forEach((a) => {
+          if (a.preload !== 'metadata') { a.preload = 'metadata'; a.load(); }
+        });
+      }
     });
     item.append(head, body);
     return item;
@@ -573,12 +598,47 @@
   }
 
   async function archivarAporte(id) {
-    if (!confirm('¿Archivar este aporte? Deja de verse (tuyo y de quien lo mandó) — no se borra nada.')) return;
+    if (!confirm('¿Archivar este aporte? Deja de verse para el resto. No se borra: lo encuentras en "Archivados", al final de esta página, y ahí lo puedes desarchivar.')) return;
     try {
       await fetch(`/api/contributions/${id}/archive`, { method: 'POST' });
     } catch (e) {}
     cargarTodo();
   }
+
+  async function cargarArchivados() {
+    const lista = document.getElementById('archivadosLista');
+    if (!lista) return;
+    lista.innerHTML = '<p class="empty">Cargando…</p>';
+    try {
+      const r = await fetch('/api/contributions/archived', { credentials: 'same-origin' });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'No se pudieron cargar los archivados.');
+      lista.innerHTML = '';
+      if (!data.notes.length) {
+        lista.innerHTML = '<p class="empty">No tienes aportes archivados.</p>';
+        return;
+      }
+      data.notes.forEach((n) => {
+        const quien = n.contributor ? n.contributor + (n.parentesco ? ` (${n.parentesco})` : '') : 'Familia';
+        const etiqueta = n.protagonista ? `Historia de ${n.protagonista} — compartida por ${quien}` : quien;
+        lista.appendChild(armarTarjetaAporte(n, etiqueta, {
+          acciones: false,
+          desarchivar: async () => {
+            try {
+              const res = await fetch(`/api/contributions/${n.id}/unarchive`, { method: 'POST', credentials: 'same-origin' });
+              if (!res.ok) throw new Error();
+            } catch (e) { alert('No se pudo desarchivar. Intenta de nuevo.'); return; }
+            cargarTodo();
+            cargarArchivados();
+          },
+        }));
+      });
+    } catch (e) {
+      lista.innerHTML = '<p class="empty">' + (e.message || 'No se pudieron cargar los archivados.') + '</p>';
+    }
+  }
+  const archivadosBox = document.getElementById('archivadosBox');
+  if (archivadosBox) archivadosBox.addEventListener('toggle', () => { if (archivadosBox.open) cargarArchivados(); });
 
   function pintarAportes(resultado) {
     if (resultado.error) {
