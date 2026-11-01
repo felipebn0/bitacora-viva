@@ -122,3 +122,9 @@ body>main.wrap .ap-acc>.ap-ver-foto,body>main.wrap .ap-acc>button:not(.ap-ver-fo
 /* Desarchivar: mismo estilo que los demás botones de Acciones */
 body>main.wrap .ap-acc>.ap-desarchivar{cursor:pointer;min-height:44px;padding:10px 16px;border:1.5px solid #4d6542;border-radius:12px;background:#fffdf6;color:#4d6542;font:700 .93rem "Atkinson Hyperlegible",system-ui,sans-serif}
 body>main.wrap .ap-acc>.ap-desarchivar:hover{background:#edf0e5}
+
+/* Un solo resumen, completo (sin "…"): va en el encabezado de la tarjeta */
+body>main.wrap .ap-short{white-space:normal;overflow:visible;text-overflow:clip;color:#4d6542;font-size:.94rem;line-height:1.45}
+@media(max-width:720px){
+ body>main.wrap .ap-short{-webkit-line-clamp:unset;display:block}
+}
