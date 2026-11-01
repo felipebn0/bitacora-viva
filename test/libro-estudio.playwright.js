@@ -100,17 +100,24 @@ const capitulos = [
   ok((await t.page.locator('#ecoEditorialBook [data-sec^="ch-"] small').allInnerTexts()).join('|') === 'CAPÍTULO 01|CAPÍTULO 02|CAPÍTULO 03' && await t.page.locator('#ecoEditorialBook [data-sec^="ch-"]').first().getAttribute('data-sec') === 'ch-2', 'y el libro se reordena y renumera');
 
   // 6) Los botones de arriba: las dos descargas pasan por la pantalla de pago, aunque la compra de prueba ya estuviera aprobada
+  let descargas = 0; t.page.on('download', () => { descargas++; });
   await t.page.click('#ecoEditorialPdf');
   await t.page.waitForSelector('#ecoDemoPay:not([hidden])');
-  ok(await t.page.evaluate(() => window.__imprimio) === 0, '«Descargar PDF» muestra primero la pantalla de pago (aunque ya se había aprobado antes)');
+  ok(descargas === 0, '«Descargar PDF» muestra primero la pantalla de pago (aunque ya se había aprobado antes)');
   await t.page.click('#ecoDemoContinue');
-  await t.page.waitForTimeout(300);
-  ok(await t.page.evaluate(() => window.__imprimio) === 0 && /compra de prueba/.test(await t.page.locator('#ecoEditorialStatus').innerText()), 'si se cierra la pantalla de pago sin comprar, no se descarga nada');
+  await t.page.waitForTimeout(400);
+  ok(descargas === 0 && /compra de prueba/.test(await t.page.locator('#ecoEditorialStatus').innerText()), 'si se cierra la pantalla de pago sin comprar, no se descarga nada');
   await t.page.click('#ecoEditorialPdf');
   await t.page.waitForSelector('#ecoDemoPay:not([hidden])');
-  await t.page.click('#ecoDemoConfirm');
-  await t.page.waitForFunction(() => window.__imprimio === 1);
-  ok(/A4/.test(await t.page.locator('#ecoEditorialStatus').innerText()), 'al pagar, «Descargar PDF» abre la impresión y avisa que la hoja es A4');
+  const [pdf] = await Promise.all([t.page.waitForEvent('download', { timeout: 60000 }), t.page.click('#ecoDemoConfirm')]);
+  const bytesPdf = fs.readFileSync(await pdf.path());
+  const textoPdf = bytesPdf.toString('latin1');
+  ok(/\.pdf$/.test(pdf.suggestedFilename()) && bytesPdf.slice(0, 5).toString() === '%PDF-', 'al pagar, el PDF se descarga de una, como archivo (' + pdf.suggestedFilename() + ')');
+  ok(await t.page.evaluate(() => window.__imprimio) === 0, 'sin abrir la ventana de impresión (que en el celular no hace nada)');
+  const caja = textoPdf.match(/\/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)\s*\]/);
+  ok(caja && Math.abs(caja[1] - 595.28) < 1 && Math.abs(caja[2] - 841.89) < 1, 'en hoja A4 (' + (caja ? caja[1] + ' x ' + caja[2] + ' pt' : 'sin medida') + ')');
+  ok((textoPdf.match(/\/Type \/Page\b/g) || []).length >= 6, 'con portada, dedicatoria, contenido y una página por capítulo (' + (textoPdf.match(/\/Type \/Page\b/g) || []).length + ' páginas)');
+  ok(/Listo: se descargó tu PDF en hoja A4/.test(await t.page.locator('#ecoEditorialStatus').innerText()), 'y avisa arriba que ya se descargó');
   await t.page.click('#ecoEditorialDigital');
   await t.page.waitForSelector('#ecoDemoPay:not([hidden])');
   ok(await t.page.locator('#ecoDemoConfirm').isVisible(), '«Descargar libro digital» también muestra la pantalla de pago');
@@ -156,10 +163,9 @@ const capitulos = [
   await t.page.waitForFunction(() => /sincronizado/.test((document.getElementById('ecoEditorialStatus') || {}).textContent || ''));
   await t.page.click('#ecoEditorialPdf');
   await t.page.waitForSelector('#ecoDemoPay:not([hidden])');
-  ok(await t.page.evaluate(() => window.__imprimio) === 0, 'sin comprar, «Descargar PDF» primero abre la compra de prueba');
-  await t.page.click('#ecoDemoConfirm');
-  await t.page.waitForFunction(() => window.__imprimio === 1);
-  ok(t.compras === 1, 'y al aprobarla sigue con la descarga');
+  ok(t.compras === 0, 'sin comprar, «Descargar PDF» primero abre la compra de prueba');
+  const [pdf2] = await Promise.all([t.page.waitForEvent('download', { timeout: 60000 }), t.page.click('#ecoDemoConfirm')]);
+  ok(t.compras === 1 && /\.pdf$/.test(pdf2.suggestedFilename()), 'y al aprobarla sigue con la descarga del PDF');
   await t.ctx.close();
 
   // 9) Sin capítulos todavía: el libro vacío invita a actualizar el libro

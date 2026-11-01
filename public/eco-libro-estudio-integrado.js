@@ -49,10 +49,16 @@ function create(){if(dialog)return;
  <div class="eco-editorial-top"><div class="eco-editorial-heading"><small>ECO · MI LIBRO</small><h2 id="ecoEditorialTitle">Mi libro</h2><p id="ecoEditorialStatus" role="status" aria-live="polite"></p></div>
  <div class="eco-editorial-topbuttons"><button id="ecoEditorialIndexToggle" type="button" class="eco-outline-toggle" aria-expanded="false">☰ Índice</button><button id="ecoEditorialPdf" type="button" class="eco-primary">Descargar PDF</button><button id="ecoEditorialDigital" type="button" class="eco-primary">Descargar libro digital</button><a id="ecoEditorialBack" class="eco-editorial-back" href="/app.html">← Volver a la bitácora</a></div></div>
  <div class="eco-editorial-layout"><aside class="eco-editorial-sidebar"><nav id="ecoEditorialOutline" aria-label="Índice del libro"></nav>
- <div class="eco-outline-update"><label for="ecoEditorialVoz">Voz del libro</label><select id="ecoEditorialVoz"><option value="tercera">tercera persona («contó que…»)</option><option value="primera">primera persona («yo conté…»)</option></select><button id="ecoEditorialUpdate" type="button">Actualizar libro</button><p class="eco-editorial-hint">Vuelve a escribir los capítulos con tus historias más recientes. Se pierden los cambios que hiciste a los capítulos.</p></div></aside>
+ <div class="eco-outline-update"><label for="ecoEditorialVoz">Voz del libro</label><select id="ecoEditorialVoz"><option value="tercera">tercera persona («contó que…»)</option><option value="primera">primera persona («yo conté…»)</option></select><button id="ecoEditorialUpdate" type="button">Actualizar libro</button><p class="eco-editorial-hint">Vuelve a escribir los capítulos con tus historias más recientes. Se pierden los cambios que hiciste a los capítulos.</p></div>
+ <div class="eco-outline-share" id="ecoEditorialShare" hidden><label for="ecoEditorialShareUrl">Enlace para compartir</label><input id="ecoEditorialShareUrl" type="text" readonly aria-label="Enlace para compartir tu libro"><button id="ecoEditorialShareCopy" type="button">Copiar enlace</button><button id="ecoEditorialShareSend" type="button" hidden>Compartir…</button><button id="ecoEditorialShareStop" type="button" class="eco-share-stop">Dejar de compartir</button><p class="eco-editorial-hint">Cualquiera que tenga este enlace puede ver tu libro y oír los audios, en el celular o el computador. Se actualiza cada vez que descargas el libro digital.</p></div></aside>
  <section class="eco-editorial-preview" aria-label="Libro"><div id="ecoEditorialBook" class="eco-editorial-pages"></div></section></div></div>`;
  document.body.appendChild(dialog);book=byId('ecoEditorialBook');outline=byId('ecoEditorialOutline');status=byId('ecoEditorialStatus');
  byId('ecoEditorialUpdate').addEventListener('click',actualizarLibro);
+ byId('ecoEditorialShareCopy').addEventListener('click',copiarEnlace);
+ byId('ecoEditorialShareSend').addEventListener('click',compartirEnlace);
+ byId('ecoEditorialShareStop').addEventListener('click',dejarDeCompartir);
+ byId('ecoEditorialShareUrl').addEventListener('focus',e=>e.target.select());
+ if(navigator.share)byId('ecoEditorialShareSend').hidden=false;
  byId('ecoEditorialPdf').addEventListener('click',descargarPdf);
  byId('ecoEditorialDigital').addEventListener('click',descargarDigital);
  byId('ecoEditorialIndexToggle').addEventListener('click',()=>alternarIndice());
@@ -73,6 +79,7 @@ async function open(){create();dialog.hidden=false;document.body.classList.add('
  status.textContent='Libro sincronizado con tu cuenta ECO ✓';
  if(chapters[0]?.persona==='primera')byId('ecoEditorialVoz').value='primera';
  autoQr();
+ consultarEnlace();
  }catch(e){chapters=[];state=read();status.textContent=e.message+' Se cargó el respaldo local cuando estaba disponible.'}
  drawBook();renderOutline();dialog.querySelector('.eco-editorial-preview').scrollTop=0;marcarSeccionActual();byId('ecoEditorialPdf').focus()}
 // Por defecto, todos los capítulos que tienen grabaciones llevan su QR de voz; quien retiró uno a propósito
@@ -96,24 +103,44 @@ async function autoQr(){
  }finally{autoQrEnCurso=false}
 }
 
-/* ── Descargas ─────────────────────────────────────────────────────────────── */
-async function esperarImagenes(){
- const imgs=[...book.querySelectorAll('img')];
- await Promise.all(imgs.map(im=>im.complete?null:Promise.race([new Promise(ok=>{im.addEventListener('load',ok,{once:true});im.addEventListener('error',ok,{once:true})}),new Promise(ok=>setTimeout(ok,5000))])));
+/* ── Enlace para compartir el libro ────────────────────────────────────────── */
+function mostrarEnlace(url){const caja=byId('ecoEditorialShare');byId('ecoEditorialShareUrl').value=url||'';caja.hidden=!url}
+async function consultarEnlace(){
+ try{const r=await fetch('/api/libro-compartido',{credentials:'same-origin'});const d=await r.json().catch(()=>({}));mostrarEnlace(r.ok&&d.activo?d.url:'')}catch{/* sin enlace a la vista */}
 }
+async function copiarEnlace(){
+ const campo=byId('ecoEditorialShareUrl'),btn=byId('ecoEditorialShareCopy'),texto=btn.textContent;
+ let copiado=false;
+ try{await navigator.clipboard.writeText(campo.value);copiado=true}catch{campo.focus();campo.select();try{copiado=document.execCommand('copy')}catch{}}
+ btn.textContent=copiado?'¡Copiado!':'Selecciona y copia el enlace';
+ setTimeout(()=>{btn.textContent=texto},2200);
+}
+async function compartirEnlace(){
+ try{await navigator.share({title:state.title||'Mi libro',text:'Mi libro de recuerdos, hecho con Eco',url:byId('ecoEditorialShareUrl').value})}catch{/* la persona cerró el menú de compartir */}
+}
+async function dejarDeCompartir(){
+ if(!confirm('Quien tenga el enlace dejará de poder ver tu libro. ¿Dejar de compartir?'))return;
+ try{const r=await fetch('/api/libro-compartido',{method:'DELETE',credentials:'same-origin'});if(!r.ok)throw Error();mostrarEnlace('');status.classList.remove('eco-editorial-status-error');status.textContent='Dejaste de compartir el libro: el enlace ya no abre.'}
+ catch{status.textContent='No se pudo retirar el enlace. Intenta de nuevo.';status.classList.add('eco-editorial-status-error')}
+}
+
+/* ── Descargas ─────────────────────────────────────────────────────────────── */
 async function descargarPdf(){
  const btn=byId('ecoEditorialPdf'),texto=btn.textContent;
  if(!chapters.length){status.textContent='Todavía no tienes capítulos. Genera tus capítulos primero y luego descarga tu libro.';return}
+ if(!window.EcoLibroPdf||!window.EcoLibroDigital){status.textContent='No se pudo preparar el PDF. Recarga la página e intenta de nuevo.';return}
  btn.disabled=true;
  try{
   if(!(await pagar())){status.textContent='Para descargar el PDF primero hay que completar la compra de prueba.';return}
-  btn.textContent='Preparando…';
+  btn.textContent='Preparando…';status.classList.remove('eco-editorial-status-error');
+  status.textContent='Preparando tu PDF: reduciendo las fotos y armando las páginas…';
   document.activeElement?.blur?.();
   await flush();
-  await esperarImagenes();
-  status.textContent='Se abrió la ventana de impresión: elige «Guardar como PDF» (la hoja ya está en tamaño A4).';
-  window.print();
- }finally{btn.disabled=false;btn.textContent=texto}
+  const datos=await window.EcoLibroDigital.armarDatos({conAudios:false});
+  const r=await window.EcoLibroPdf.descargar(datos,state.qr||{});
+  status.textContent='Listo: se descargó tu PDF en hoja A4 ('+(r.bytes/1048576).toFixed(1)+' MB).';
+ }catch(e){status.textContent=e.message||'No se pudo preparar el PDF.';status.classList.add('eco-editorial-status-error')}
+ finally{btn.disabled=false;btn.textContent=texto}
 }
 // Las dos descargas muestran la pantalla de pago (compra de prueba) antes de bajar el libro.
 const pagar=async()=>!window.EcoLibroCompra||(await window.EcoLibroCompra.asegurar({siempre:true}));
@@ -123,7 +150,7 @@ async function descargarDigital(){
  if(!chapters.length){status.textContent='Todavía no tienes capítulos. Genera tus capítulos primero y luego descarga tu libro.';return}
  if(!(await pagar())){status.textContent='Para descargar el libro digital primero hay que completar la compra de prueba.';return}
  await flush();
- await window.EcoLibroDigital.exportar({boton:btn,yaPagado:true,aviso:(t,error)=>{status.textContent=t||'';status.classList.toggle('eco-editorial-status-error',!!error)}});
+ await window.EcoLibroDigital.exportar({boton:btn,yaPagado:true,alEnlace:mostrarEnlace,aviso:(t,error)=>{status.textContent=t||'';status.classList.toggle('eco-editorial-status-error',!!error)}});
 }
 
 /* ── Actualizar el libro y eliminar capítulos ──────────────────────────────── */
@@ -370,21 +397,6 @@ function herramientas(c){
   cuerpo.appendChild(node('h3','',grabaciones.length===1?'Nota de voz original':'Notas de voz originales'));
   grabaciones.forEach((u,k)=>{const q=(c.preguntas||[])[k];if(typeof q==='string'&&q)cuerpo.appendChild(node('p','eco-editorial-pregunta',q));const au=node('audio');au.controls=true;au.preload='metadata';au.src='/api/media-file?u='+encodeURIComponent(u);cuerpo.appendChild(au)});
  }
- cuerpo.appendChild(node('h3','','Escucha este recuerdo'));
- const qr=state.qr?.[id];if(qr?.token){const a=node('a','eco-editorial-qr-link','Probar enlace de escucha ↗');a.href=qr.url;a.target='_blank';a.rel='noopener noreferrer';cuerpo.appendChild(a)}
- const msg=node('p','eco-editorial-hint','Cualquier persona que escanee este QR podrá escuchar las grabaciones originales de este capítulo, sin necesidad de cuenta. Puedes retirar el enlace cuando quieras.');
- // Sin QR (se retiró o no se pudo crear solo): botón para crearlo. Con QR ya no hay nada que "comprobar".
- if(!qr?.token){
-  const btn=node('button','eco-editorial-makeqr','Crear QR de voz');btn.type='button';
-  btn.addEventListener('click',async()=>{btn.disabled=true;msg.textContent='Preparando enlace de voz…';try{const r=await fetch('/api/book-qr/chapters/'+encodeURIComponent(c.id),{method:'POST',credentials:'same-origin'});const d=await r.json();if(!r.ok)throw Error(d.error||'No se pudo generar el QR');
-   state.qr??={};state.qr[id]={token:d.token,url:d.url};if(state.qrOff)delete state.qrOff[id];persist();volver();}catch(e){msg.textContent=e.message}finally{btn.disabled=false}});
-  cuerpo.appendChild(btn);
- }
- cuerpo.appendChild(msg);
- if(qr?.token){const quitar=node('button','eco-editorial-revokeqr','Retirar el enlace del QR');quitar.type='button';
-  quitar.addEventListener('click',async()=>{if(!confirm('Los códigos QR ya impresos de este capítulo dejarán de funcionar. ¿Retirar el enlace?'))return;quitar.disabled=true;
-   try{const r=await fetch('/api/book-qr/chapters/'+encodeURIComponent(c.id),{method:'DELETE',credentials:'same-origin'});if(!r.ok)throw Error('No se pudo retirar el enlace.');delete state.qr[id];state.qrOff={...(state.qrOff||{}),[id]:true};persist();volver();}catch(e){msg.textContent=e.message;quitar.disabled=false}});
-  cuerpo.append(quitar)}
  return caja;
 }
 // Solo suena una nota de voz a la vez.

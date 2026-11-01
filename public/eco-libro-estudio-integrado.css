@@ -81,7 +81,6 @@ body.eco-editorial-open-body{overflow:hidden}
 .eco-editorial-photo-fields label{display:flex;align-items:center;gap:6px;font-size:.85rem}
 .eco-editorial-photo-fields select,.eco-editorial-photo-fields input:not([type=checkbox]){width:100%;min-width:0;border:1px solid #dadaca;border-radius:9px;background:white;padding:8px;font:inherit}
 .eco-editorial-makeqr{min-height:44px;padding:10px 14px;background:#4d6542;color:#fff;border:0;border-radius:12px;font-weight:700;cursor:pointer}
-.eco-editorial-qr-link{color:#293d30;display:block;margin:8px 0}
 .eco-editorial-qr{display:flex;align-items:center;gap:18px;border-top:1px solid #dadaca;margin-top:20px;padding-top:15px;break-inside:avoid}
 .eco-editorial-qr img{width:105px;height:105px;flex-shrink:0}.eco-editorial-qr p{font-size:.85rem;color:#777568}
 @media(max-width:600px){.eco-editorial-photo-config{grid-template-columns:55px minmax(0,1fr)}.eco-editorial-photo-config>img{width:55px;height:72px}}
@@ -97,7 +96,6 @@ body.eco-editorial-open-body{overflow:hidden}
 .eco-editorial-tools-body{display:grid;gap:10px;padding:6px 0 14px}
 .eco-editorial-tools h3{font:700 20px 'Source Serif 4',Georgia,serif;margin:10px 0 0}
 .eco-editorial-tools select,.eco-editorial-tools .eco-editorial-photo-fields input:not([type=checkbox]){font:16px 'Atkinson Hyperlegible',sans-serif}
-.eco-editorial-revokeqr{justify-self:start;background:#fffdf6;border:1px solid #bca99c;color:#7d4132;border-radius:10px;padding:10px 14px;cursor:pointer;font:700 14px 'Atkinson Hyperlegible',sans-serif}
 @media print{.eco-editorial-tools,.eco-editorial-vacia,.eco-editorial-sin-capitulos{display:none!important}#ecoEditorialBook [contenteditable][data-ph]:empty::before{content:none}#ecoEditorialBook [contenteditable]{outline:none!important}}
 
 /* Volver a la bitácora, actualizar libro, eliminar capítulo y subida de fotos con un solo botón */
@@ -122,5 +120,15 @@ body.eco-editorial-open-body{overflow:hidden}
 .eco-editorial-tools .eco-editorial-photo-fields input:not([type=checkbox]){min-height:44px}
 .eco-editorial-photo-fields label{min-height:44px}
 .eco-editorial-photo-fields input[type=checkbox]{width:22px;height:22px}
-.eco-editorial-remove-photo,.eco-editorial-revokeqr,.eco-editorial-makeqr{min-height:44px}
-.eco-editorial-qr-link{display:inline-flex;align-items:center;min-height:44px}
+.eco-editorial-remove-photo,.eco-editorial-makeqr{min-height:44px}
+
+/* Enlace para compartir */
+.eco-outline-share{margin-top:22px;padding:14px 8px 0;border-top:1px solid #dadaca;display:grid;gap:8px}
+.eco-outline-share[hidden]{display:none}
+.eco-outline-share label{font:700 11px 'Atkinson Hyperlegible',sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#4d6542}
+.eco-outline-share input{width:100%;min-height:44px;font:14px 'Atkinson Hyperlegible',sans-serif;padding:9px;border:1px solid #dadaca;border-radius:10px;background:#fff;color:#302d25}
+.eco-outline-share button{min-height:44px;border-radius:11px;border:1px solid #4d6542;background:#fffdf6;color:#293d30;font:700 14px 'Atkinson Hyperlegible',sans-serif;cursor:pointer}
+.eco-outline-share button:hover{background:#e3eadb}
+.eco-outline-share button[hidden]{display:none}
+.eco-outline-share .eco-share-stop{border-color:#bca99c;color:#7d4132}
+.eco-outline-share .eco-share-stop:hover{background:#f6e9e3}

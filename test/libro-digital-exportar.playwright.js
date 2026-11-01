@@ -91,7 +91,7 @@ const capitulos = [
   await p3.goto('file://' + copia); await p3.waitForTimeout(500);
   const texto3 = await p3.locator('body').innerText();
   ok(/El libro de Ana/.test(texto3) && /El trabajo/.test(texto3) && /Infancia editada/.test(texto3) && /Texto del segundo capítulo/.test(texto3), 'sin JavaScript se ve el texto del libro (títulos y capítulos)');
-  ok(/abre este archivo en un navegador/.test(texto3) && /¿Cómo se llamaban tus papás\?/.test(texto3), 'y explica cómo ver la estantería, y deja las preguntas de los audios');
+  ok(/ábrelo en un navegador/.test(texto3) && /¿Cómo se llamaban tus papás\?/.test(texto3), 'y explica cómo ver la estantería, y deja las preguntas de los audios');
   ok(await p3.evaluate(() => document.querySelectorAll('.plano img').length === 1 && document.querySelectorAll('.plano audio').length === 1 && !!document.querySelector('.plano img').naturalWidth), 'con su foto y su reproductor de audio a la vista');
   ok(await p3.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1 && getComputedStyle(document.body).overflowY !== 'hidden'), 'sin JavaScript se puede recorrer hacia abajo y no se sale de la pantalla');
   await ctx3.close();

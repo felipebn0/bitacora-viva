@@ -45,6 +45,7 @@ const db = {
   // original que la migración borra.
   book_audio_links: [{ token: 'qr1', audio_urls: JSON.stringify([BUENA]) }],
   book_editor_drafts: [{ owner_id: 1, draft: JSON.stringify({ bookPhotos: { 3: [{ url: LIBRO, caption: 'x' }] } }) }],
+  libros_compartidos: [{ token: 'lc1', medios: JSON.stringify([LIBRO]) }],
 };
 const contiene = (v) => typeof v === 'string' && v.includes('.blob.vercel-storage.com/');
 
@@ -73,6 +74,8 @@ function fakeSql(strings, ...values) {
   if (text.startsWith('SELECT id, mensaje_regalo_url FROM bitacoras')) return Promise.resolve(db.bitacoras.filter((r) => contiene(r.mensaje_regalo_url)));
   if (text.startsWith('SELECT token, audio_urls FROM book_audio_links')) return Promise.resolve(db.book_audio_links.filter((r) => contiene(r.audio_urls)));
   if (text.startsWith('SELECT owner_id, draft::text AS draft FROM book_editor_drafts')) return Promise.resolve(db.book_editor_drafts.filter((r) => contiene(r.draft)));
+  if (text.startsWith('SELECT token, medios FROM libros_compartidos')) return Promise.resolve(db.libros_compartidos.filter((r) => contiene(r.medios)));
+  if (text.includes('count(*)::int AS n FROM libros_compartidos')) return Promise.resolve([{ n: db.libros_compartidos.filter((r) => contiene(r.medios)).length }]);
   if (text.includes('count(*)::int AS n FROM diario_bebe_entradas')) return Promise.resolve([{ n: db.diario_bebe_entradas.filter((r) => contiene(r.media_url) || contiene(r.audio_urls)).length }]);
   if (text.includes('count(*)::int AS n FROM bitacoras')) return Promise.resolve([{ n: db.bitacoras.filter((r) => contiene(r.mensaje_regalo_url)).length }]);
   if (text.includes('count(*)::int AS n FROM book_audio_links')) return Promise.resolve([{ n: db.book_audio_links.filter((r) => contiene(r.audio_urls)).length }]);
@@ -81,6 +84,7 @@ function fakeSql(strings, ...values) {
   if (text.startsWith('UPDATE diario_bebe_entradas SET media_url = replace')) { const rep = reemplazar(values); db.diario_bebe_entradas.forEach((r) => { r.media_url = rep(r.media_url); r.audio_urls = rep(r.audio_urls); }); return Promise.resolve([]); }
   if (text.startsWith('UPDATE bitacoras SET mensaje_regalo_url = replace')) { const rep = reemplazar(values); db.bitacoras.forEach((r) => { r.mensaje_regalo_url = rep(r.mensaje_regalo_url); }); return Promise.resolve([]); }
   if (text.startsWith('UPDATE book_audio_links SET audio_urls = replace')) { const rep = reemplazar(values); db.book_audio_links.forEach((r) => { r.audio_urls = rep(r.audio_urls); }); return Promise.resolve([]); }
+  if (text.startsWith('UPDATE libros_compartidos SET medios = replace')) { const rep = reemplazar(values); db.libros_compartidos.forEach((r) => { r.medios = rep(r.medios); }); return Promise.resolve([]); }
   if (text.startsWith('UPDATE book_editor_drafts SET draft = replace')) { const rep = reemplazar(values); db.book_editor_drafts.forEach((r) => { r.draft = rep(r.draft); }); return Promise.resolve([]); }
   if (text.includes('UNION ALL SELECT url AS u FROM media')) {
     const all = [...db.story_log.map((r) => r.audio_url), ...db.media.map((r) => r.url)].filter((u) => typeof u === 'string' && u.startsWith('https://pub-abc123.r2.dev/'));
@@ -199,6 +203,7 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
   ok(db.diario_bebe_entradas[0].media_url === R2URL('media/1/bebe/foto-1.jpg'), 'diario del bebé: foto reemplazada');
   ok(db.bitacoras[0].mensaje_regalo_url === R2URL('audio/7/regalo/mensaje-1.webm'), 'mensaje de regalo reemplazado');
   ok(JSON.parse(db.book_editor_drafts[0].draft).bookPhotos[3][0].url === R2URL('media/libros/1/abc.jpg'), 'foto del libro reemplazada dentro del borrador (JSON)');
+  ok(JSON.parse(db.libros_compartidos[0].medios)[0] === R2URL('media/libros/1/abc.jpg'), 'foto del libro compartido (enlace) reemplazada');
   ok(borradosDeBlob.includes(BUENA) && borradosDeBlob.includes(FOTO), 'los originales se borran de Blob solo después de reemplazar');
   ok(db.story_log[1].audio_url === MALA && !borradosDeBlob.includes(MALA), 'el que falló: URL vieja intacta y el original NO se borra');
 

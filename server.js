@@ -999,6 +999,15 @@ function ensureSchema() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         revoked_at TIMESTAMPTZ
       )`,
+      // Enlace para compartir el libro digital (libro-compartido-routes.js): el libro de ese momento y la lista de fotos y audios.
+      sql`CREATE TABLE IF NOT EXISTS libros_compartidos (
+        token TEXT PRIMARY KEY, owner_id INTEGER NOT NULL,
+        datos TEXT NOT NULL, medios TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        revoked_at TIMESTAMPTZ
+      )`,
+      sql`CREATE INDEX IF NOT EXISTS idx_libros_compartidos_owner ON libros_compartidos(owner_id)`,
       sql`CREATE TABLE IF NOT EXISTS tree_v4_state (profile_user_id INTEGER PRIMARY KEY, state JSONB NOT NULL DEFAULT '{}'::jsonb, updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`,
       sql`ALTER TABLE tree_v4_state ADD COLUMN IF NOT EXISTS revision INTEGER NOT NULL DEFAULT 0`,
       // Item 12 (pedido de Felipe, 2026-09-08): A/B test de DÓNDE se
@@ -4059,6 +4068,7 @@ app.post('/api/reset-bitacora', requireAuth, bloquearColaborador, bloquearInvita
       sql`DELETE FROM book_editor_drafts WHERE owner_id = ${req.userId}`,
       sql`DELETE FROM book_demo_purchases WHERE owner_id = ${req.userId}`,
       sql`DELETE FROM book_audio_links WHERE owner_id = ${req.userId}`,
+      sql`DELETE FROM libros_compartidos WHERE owner_id = ${req.userId}`,
       sql`DELETE FROM tree_v4_state WHERE profile_user_id = ${req.userId}`,
       sql`DELETE FROM diario_bebe_entradas WHERE profile_user_id = ${req.userId}`,
       sql`DELETE FROM diario_bebe WHERE profile_user_id = ${req.userId}`,
@@ -4196,6 +4206,7 @@ app.post('/api/delete-account', requireAuth, rateLimit, async (req, res) => {
       sql`DELETE FROM book_editor_drafts WHERE owner_id = ${req.userId}`,
       sql`DELETE FROM book_demo_purchases WHERE owner_id = ${req.userId}`,
       sql`DELETE FROM book_audio_links WHERE owner_id = ${req.userId}`,
+      sql`DELETE FROM libros_compartidos WHERE owner_id = ${req.userId}`,
       sql`DELETE FROM tree_v4_state WHERE profile_user_id = ${req.userId}`,
       sql`DELETE FROM diario_bebe_entradas WHERE profile_user_id = ${req.userId}`,
       sql`DELETE FROM diario_bebe WHERE profile_user_id = ${req.userId}`,
@@ -7664,6 +7675,7 @@ app.delete('/api/chapters/:id', requireAuth, bloquearColaborador, rateLimit, asy
 pushWeb = require('./push-web-routes')(app, { sql, ensureSchema, requireAuth, bloquearColaborador, bloquearInvitado, rateLimit });
 require('./push-recordatorios-routes')(app, { sql, ensureSchema, requireAuth, requireAdmin, bloquearColaborador, bloquearInvitado, rateLimit, pushWeb });
 require('./book-qr-routes')(app, { preguntasPorAudio, sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob });
+require('./libro-compartido-routes')(app, { sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob });
 require('./recuperar-clave-routes')(app, { sql, ensureSchema, rateLimit, limitePorClave, claveDemasiadoLarga });
 require('./bebe-routes')(app, { sql, ensureSchema, requireAuth, rateLimit, bloquearEscritura: [bloquearColaborador, bloquearSiNoPuedeNarrar, bloquearSiReadOnly], resolveProfileUserId, almacenarArchivo, verificarArchivoReal, MEDIA_MIME_PERMITIDOS, AUDIO_MIME_PERMITIDOS, enviarArchivoAlmacenado, datosDelArchivoDeBlob, borrarArchivosBlob });
 require('./book-editor-routes')(app, {
@@ -9887,6 +9899,7 @@ app.post('/api/admin/migrar-blob-a-r2', requireAuth, requireAdmin, rateLimit, as
     const bt = await sql`SELECT id, mensaje_regalo_url FROM bitacoras WHERE mensaje_regalo_url LIKE ${LIKE_BLOB} ORDER BY id LIMIT ${limite}`;
     const ba = await sql`SELECT token, audio_urls FROM book_audio_links WHERE audio_urls LIKE ${LIKE_BLOB} ORDER BY token LIMIT ${limite}`;
     const be = await sql`SELECT owner_id, draft::text AS draft FROM book_editor_drafts WHERE draft::text LIKE ${LIKE_BLOB} ORDER BY owner_id LIMIT ${limite}`;
+    const lc = await sql`SELECT token, medios FROM libros_compartidos WHERE medios LIKE ${LIKE_BLOB} ORDER BY token LIMIT ${limite}`;
 
     const pendientes = new Set();
     sl.forEach((r) => urlsDeBlobEn(r.audio_url, r.audio_urls, r.media_urls).forEach((u) => pendientes.add(u)));
@@ -9896,6 +9909,7 @@ app.post('/api/admin/migrar-blob-a-r2', requireAuth, requireAdmin, rateLimit, as
     bt.forEach((r) => urlsDeBlobEn(r.mensaje_regalo_url).forEach((u) => pendientes.add(u)));
     ba.forEach((r) => urlsDeBlobEn(r.audio_urls).forEach((u) => pendientes.add(u)));
     be.forEach((r) => urlsDeBlobEn(r.draft).forEach((u) => pendientes.add(u)));
+    lc.forEach((r) => urlsDeBlobEn(r.medios).forEach((u) => pendientes.add(u)));
     const lote = [...pendientes].slice(0, limite);
 
     const filas = {
@@ -9906,6 +9920,7 @@ app.post('/api/admin/migrar-blob-a-r2', requireAuth, requireAdmin, rateLimit, as
       bitacoras: (await sql`SELECT count(*)::int AS n FROM bitacoras WHERE mensaje_regalo_url LIKE ${LIKE_BLOB}`)[0].n,
       book_audio_links: (await sql`SELECT count(*)::int AS n FROM book_audio_links WHERE audio_urls LIKE ${LIKE_BLOB}`)[0].n,
       book_editor_drafts: (await sql`SELECT count(*)::int AS n FROM book_editor_drafts WHERE draft::text LIKE ${LIKE_BLOB}`)[0].n,
+      libros_compartidos: (await sql`SELECT count(*)::int AS n FROM libros_compartidos WHERE medios LIKE ${LIKE_BLOB}`)[0].n,
     };
     const totalFilas = Object.values(filas).reduce((a, n) => a + n, 0);
 
@@ -9950,6 +9965,7 @@ app.post('/api/admin/migrar-blob-a-r2', requireAuth, requireAdmin, rateLimit, as
           sql`UPDATE bitacoras SET mensaje_regalo_url = replace(mensaje_regalo_url, ${vieja}, ${nueva}) WHERE mensaje_regalo_url LIKE ${like}`,
           sql`UPDATE book_audio_links SET audio_urls = replace(audio_urls, ${vieja}, ${nueva}) WHERE audio_urls LIKE ${like}`,
           sql`UPDATE book_editor_drafts SET draft = replace(draft::text, ${vieja}, ${nueva})::jsonb WHERE draft::text LIKE ${like}`,
+          sql`UPDATE libros_compartidos SET medios = replace(medios, ${vieja}, ${nueva}) WHERE medios LIKE ${like}`,
         ]);
         let originalBorrado = true;
         try { await del(vieja); } catch (e) { originalBorrado = false; }

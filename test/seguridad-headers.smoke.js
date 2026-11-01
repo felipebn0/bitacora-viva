@@ -92,7 +92,7 @@ function check(nombre, cond) {
 
     // --- CSP: en las páginas estáticas (que en prod no pasan por Express) también debe estar declarada en vercel.json ---
     const vercelJson = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', 'vercel.json'), 'utf8'));
-    const rutaEstatica = vercelJson.routes.find((r) => r.src === '^/(?!api/).*');
+    const rutaEstatica = vercelJson.routes.find((r) => r.src === '^/(?!api/|libro/).*');
     check('vercel.json tiene una regla de headers para las rutas no-api', !!(rutaEstatica && rutaEstatica.headers));
     const cspEstatica = rutaEstatica && rutaEstatica.headers['Content-Security-Policy-Report-Only'];
     check('esa regla incluye Content-Security-Policy-Report-Only', typeof cspEstatica === 'string' && cspEstatica.length > 0);

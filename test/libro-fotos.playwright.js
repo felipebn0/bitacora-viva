@@ -58,8 +58,9 @@ const capitulos = [
   await page.waitForSelector('[data-sec="ch-1"] .eco-editorial-photo-config');
   ok(await page.locator('[data-sec="ch-1"] .eco-editorial-photo-fields select').count() === 0, 'por cada foto ya no hay opciones de tamaño ni de posición');
   ok(await page.locator('[data-sec="ch-1"] .eco-editorial-photo-fields input[type=checkbox]').count() === 1 && await page.locator('[data-sec="ch-1"] .eco-editorial-photo-fields input:not([type=checkbox])').count() === 1, 'solo queda "Incluir" y el pie de foto');
-  ok(!/Volver a comprobar/.test(await page.textContent('[data-sec="ch-1"] .eco-editorial-tools')) && await page.locator('[data-sec="ch-1"] .eco-editorial-makeqr').count() === 0, 'ya no existe "Volver a comprobar el QR" (con QR no hay botón de crear)');
-  ok(await page.locator('[data-sec="ch-1"] .eco-editorial-revokeqr').count() === 1 && await page.locator('[data-sec="ch-1"] .eco-editorial-qr-link').count() === 1, 'quedan "Probar enlace" y "Retirar el enlace"');
+  const herramientas = await page.textContent('[data-sec="ch-1"] .eco-editorial-tools');
+  ok(!/Escucha este recuerdo|Probar enlace|Retirar el enlace|Crear QR|Volver a comprobar/.test(herramientas) && await page.locator('[data-sec="ch-1"] .eco-editorial-revokeqr, [data-sec="ch-1"] .eco-editorial-qr-link, [data-sec="ch-1"] .eco-editorial-makeqr').count() === 0, 'en "Fotos y voz de este capítulo" ya no hay controles del QR (ni probar, ni crear, ni retirar el enlace)');
+  ok(await page.locator('[data-sec="ch-1"] .eco-editorial-qr img').count() === 1, 'pero el QR sigue en el capítulo del libro');
   await page.fill('[data-sec="ch-1"] .eco-editorial-photo-fields input:not([type=checkbox])', 'En la finca, 1985');
   await page.press('[data-sec="ch-1"] .eco-editorial-photo-fields input:not([type=checkbox])', 'Tab');
   await page.waitForSelector('#ecoEditorialBook [data-sec="ch-1"] .eco-foto-flota');

@@ -52,19 +52,14 @@ const capitulos = [
   ok(await page.locator('#ecoEditorialBook .eco-editorial-qr img').first().getAttribute('src') === '/api/book-qr/image/' + TOKEN(1) + '.svg', 'el QR apunta al código de su capítulo');
 
   await page.click('[data-sec="ch-1"] .eco-editorial-tools > summary');
-  await page.waitForSelector('[data-sec="ch-1"] .eco-editorial-revokeqr');
-  page.once('dialog', (d) => d.accept());
-  await page.click('[data-sec="ch-1"] .eco-editorial-revokeqr');
-  await page.waitForFunction(() => !document.querySelector('[data-sec="ch-1"] .eco-editorial-revokeqr'));
-  ok(retirados.join(',') === '1', 'retirar el QR del capítulo 1 lo revoca en el servidor');
-  const t1 = Date.now(); while (!(borrador.qrOff && borrador.qrOff['1']) && Date.now() - t1 < 5000) await page.waitForTimeout(100);
-  ok(borrador.qrOff && borrador.qrOff['1'] === true, 'y queda anotado en el borrador que se retiró a propósito');
-
+  const panel = await page.textContent('[data-sec="ch-1"] .eco-editorial-tools');
+  ok(!/Escucha este recuerdo|Probar enlace|Retirar el enlace|Crear QR/.test(panel) && await page.locator('.eco-editorial-revokeqr, .eco-editorial-qr-link').count() === 0, 'el panel de fotos y voz ya no tiene botones para probar, crear ni retirar el QR');
+  ok(retirados.length === 0, 'y los QR ya creados se quedan como están');
   creados.length = 0;
   await page.reload();
   await page.waitForFunction(() => /sincronizado|Guardado en tu cuenta/.test(document.getElementById('ecoEditorialStatus').textContent));
   await page.waitForTimeout(800);
-  ok(!creados.includes(1), 'al volver a abrir, el QR retirado no se vuelve a crear solo');
+  ok(creados.length === 0, 'al volver a abrir, no se vuelven a crear los QR que ya existen');
   ok(errores.length === 0, 'sin errores de JavaScript' + (errores.length ? ': ' + errores.join(' | ') : ''));
   await browser.close();
   server.close();
