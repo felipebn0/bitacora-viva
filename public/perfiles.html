@@ -113,6 +113,38 @@
   .editar-box .btn { margin-right: 8px; }
   .form-nueva .eco-check-fila { display: flex; align-items: center; gap: 8px; font-size: 0.95rem; color: var(--ink); margin: 0 0 14px; }
   .form-nueva .eco-check-fila input { width: 22px; min-height: 22px; height: 22px; margin: 0; }
+
+  /* Tarjeta de perfil: arriba quién es y el botón principal; lo demás queda ordenado dentro de «Más opciones». */
+  .perfil-card .fila-principal { flex-wrap: nowrap; }
+  .perfil-card .identidad { min-width: 0; flex: 1 1 auto; }
+  .perfil-card .identidad > div:last-child { min-width: 0; }
+  .perfil-card .nombre { overflow-wrap: anywhere; }
+  .perfil-card .acciones-fila { flex: 0 0 auto; align-items: center; }
+  .perfil-card .activo-tag { display: inline-flex; align-items: center; min-height: 36px; padding: 0 12px; border-radius: 999px; background: #e3eadb; color: var(--moss); font-weight: 700; font-size: 0.82rem; white-space: nowrap; }
+  .btn.outline { background: #fff; color: var(--moss); border: 1px solid var(--moss); }
+  .btn.outline:hover { background: #eef2e8; }
+  .btn.outline.warn { color: #a33; border-color: #d3b4b4; }
+  .btn.outline.warn:hover { background: #f7ebeb; }
+  .mas-opciones { margin-top: 12px; border-top: 1px solid #E7DFCC; }
+  .mas-opciones > summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 48px; cursor: pointer; list-style: none; color: var(--moss); font-weight: 700; font-size: 0.92rem; }
+  .mas-opciones > summary::-webkit-details-marker { display: none; }
+  .mas-opciones > summary::after { content: ""; width: 9px; height: 9px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); margin: -4px 4px 0 0; transition: transform .15s; }
+  .mas-opciones[open] > summary::after { transform: rotate(-135deg); margin-top: 4px; }
+  .opciones-botones { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; padding-bottom: 4px; }
+  .opciones-botones .btn { width: 100%; text-align: center; }
+  .mas-opciones .trato-fila { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  .mas-opciones .trato-fila select { margin-left: 0; min-height: 44px; flex: 1 1 170px; }
+  .opciones-peligro { margin-top: 14px; padding-top: 12px; border-top: 1px dashed #E7DFCC; }
+  .opciones-peligro .btn { width: 100%; }
+  .mas-opciones .editar-box .btn { margin-top: 4px; }
+  @media (max-width: 480px) {
+    .perfil-card { padding: 14px 14px; }
+    .perfil-card .fila-principal { flex-wrap: wrap; }
+    .perfil-card .acciones-fila { width: 100%; }
+    .perfil-card .acciones-fila .btn { width: 100%; }
+    .perfil-card .acciones-fila .activo-tag { width: 100%; justify-content: center; }
+    .opciones-botones { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body class="eco-brand-v1 eco-page-perfiles">
@@ -260,6 +292,7 @@
   }
 
   let perfilesCache = [];
+  const opcionesAbiertas = new Set(); // perfiles cuyo «Más opciones» está abierto (para que no se cierre al repintar)
   let editandoId = null; // perfil cuyos datos se están editando
   let diarioBebe = null; // diario de un bebé de tu propia bitácora, si hay uno sin archivar
   let enlaceAbiertoId = null;
@@ -302,22 +335,32 @@
       ? `<span class="principal-tag">${escaparHtml(p.especie || 'Mascota')}${p.raza ? ' · ' + escaparHtml(p.raza) : ''}</span>`
       : (p.relacion ? `<span class="principal-tag">${escaparHtml(p.relacion)}</span>` : '');
     const cambiarBtn = esActivo
-      ? `<span class="activo-tag">Bitácora activa ahora</span>`
-      : `<button class="btn small" data-cambiar="${p.id}" type="button">Ingresar a perfil</button>`;
-    const enlaceToggleBtn = p.esPropia ? '' : `<button class="btn small plain" data-enlace="${p.id}" type="button">${enlaceAbiertoId === p.id ? 'Ocultar enlace' : 'Compartir enlace'}</button>`;
+      ? `<span class="activo-tag">✓ Bitácora activa</span>`
+      : `<button class="btn small" data-cambiar="${p.id}" type="button">Ingresar</button>`;
+    const enlaceToggleBtn = p.esPropia ? '' : `<button class="btn small outline" data-enlace="${p.id}" type="button">${enlaceAbiertoId === p.id ? 'Ocultar enlace' : 'Compartir enlace'}</button>`;
     // Onboarding hablado (item 15, pedido de Felipe 2026-09-08): contarle
     // a la IA gustos/contexto de esta persona antes de su primera charla.
-    const onboardingBtn = (p.esPropia || esMascota) ? '' : `<a class="btn small plain" href="/perfilar.html?id=${p.id}">${p.tieneOnboarding ? 'Editar lo que sabemos de esta persona' : 'Contarle a la IA sobre esta persona'}</a>`;
+    const onboardingBtn = (p.esPropia || esMascota) ? '' : `<a class="btn small outline" href="/perfilar.html?id=${p.id}">${p.tieneOnboarding ? 'Editar lo que sabemos de esta persona' : 'Contarle a la IA sobre esta persona'}</a>`;
     // Archivar (pedido de Felipe, 2026-09-08): no borra nada, solo lo saca
     // de esta lista y corta sus enlaces — ver POST /api/subprofiles/:id/archive.
     // No se ofrece para "tú" (esPropia) ni para el perfil activo ahora
     // mismo (el servidor lo rechazaría igual, pero es más claro no
     // ofrecer un botón que va a fallar).
-    const archivarBtn = (!p.esPropia && !esActivo) ? `<button class="btn small plain warn" data-archivar="${p.id}" type="button">Archivar</button>` : '';
+    const archivarBtn = (!p.esPropia && !esActivo) ? `<button class="btn small outline warn" data-archivar="${p.id}" type="button">Archivar este perfil</button>` : '';
     const tratoFila = (p.esPropia || esMascota) ? '' : `<label class="trato-fila">Cómo quiere que lo traten:<select data-tratamiento="${p.id}" aria-label="Cómo quiere que lo traten"><option value=""${p.tratamiento ? '' : ' selected'}>Sin elegir</option><option value="masculino"${p.tratamiento === 'masculino' ? ' selected' : ''}>En masculino (él)</option><option value="femenino"${p.tratamiento === 'femenino' ? ' selected' : ''}>En femenino (ella)</option></select></label>`;
-    const editarBtn = p.esPropia ? '' : `<button class="btn small plain" data-editar="${p.id}" type="button">${editandoId === p.id ? 'Cerrar edición' : 'Editar datos'}</button>`;
+    const editarBtn = p.esPropia ? '' : `<button class="btn small outline" data-editar="${p.id}" type="button">${editandoId === p.id ? 'Cerrar edición' : 'Editar datos'}</button>`;
     const editarBox = editandoId === p.id ? formularioEdicion(p) : '';
     const enlaceBox = enlaceAbiertoId === p.id ? `<div class="enlace-box" id="enlaceBox-${p.id}"><p class="msg">Cargando…</p></div>` : '';
+    const hayOpciones = !!(editarBtn || enlaceToggleBtn || onboardingBtn || tratoFila || archivarBtn);
+    const abiertas = editandoId === p.id || enlaceAbiertoId === p.id || opcionesAbiertas.has(p.id);
+    const masOpciones = hayOpciones ? `<details class="mas-opciones" data-id="${p.id}"${abiertas ? ' open' : ''}>
+        <summary>Más opciones</summary>
+        <div class="opciones-botones">${editarBtn}${enlaceToggleBtn}${onboardingBtn}</div>
+        ${editarBox}
+        ${enlaceBox}
+        ${tratoFila}
+        ${archivarBtn ? `<div class="opciones-peligro">${archivarBtn}</div>` : ''}
+      </details>` : '';
     return `<div class="perfil-card">
       <div class="fila-principal">
         <div class="identidad">
@@ -327,11 +370,9 @@
             ${tagPrincipal}
           </div>
         </div>
-        <div class="acciones-fila">${cambiarBtn}${editarBtn}${enlaceToggleBtn}${onboardingBtn}${archivarBtn}</div>
+        <div class="acciones-fila">${cambiarBtn}</div>
       </div>
-      ${editarBox}
-      ${tratoFila}
-      ${enlaceBox}
+      ${masOpciones}
     </div>`;
   }
 
@@ -430,6 +471,14 @@
       listaStatus.textContent = 'No se pudo conectar. Intenta de nuevo.';
     }
   });
+
+  // toggle no sube por el DOM: se escucha en captura para recordar qué «Más opciones» están abiertos.
+  lista.addEventListener('toggle', (e) => {
+    const caja = e.target;
+    if (!caja.matches || !caja.matches('details.mas-opciones')) return;
+    const id = Number(caja.dataset.id);
+    if (caja.open) opcionesAbiertas.add(id); else opcionesAbiertas.delete(id);
+  }, true);
 
   lista.addEventListener('click', async (e) => {
     if (e.target.dataset.editar) {

@@ -236,26 +236,29 @@ const enOrden = (page) => page.locator('.eco-especiales button:visible').evaluat
   await p7.waitForSelector('.perfil-card:has-text("Roma")');
   ok(await p7.locator('.perfil-card', { hasText: 'Felipe' }).locator('[data-editar]').count() === 0, 'editar: tu propio perfil no tiene "Editar datos" (eso se hace en el menú de la cuenta)');
   const card = (n) => p7.locator('.perfil-card', { hasText: n });
-  await card('Roma').locator('[data-editar]').click();
+  // Las acciones de cada perfil están dentro de «Más opciones»: se abre antes de usarlas.
+  const editar = async (n) => { const d = card(n).locator('details.mas-opciones'); if (!(await d.evaluate((e) => e.open))) await d.locator('summary').click(); await card(n).locator('[data-editar]').click(); };
+  await editar('Roma');
   ok(await p7.inputValue('#ed-nombre') === 'Roma' && await p7.inputValue('#ed-especie') === 'perro' && await p7.inputValue('#ed-raza') === 'Criolla' && await p7.inputValue('#ed-trato') === 'femenino' && await p7.inputValue('#ed-fecha') === '2020-05-01', 'editar una mascota: aparecen sus datos (animal, raza, sexo y fecha)');
   await p7.fill('#ed-raza', 'Labrador');
   await p7.click('[data-guardar-edicion="77"]');
   await p7.waitForFunction(() => !document.getElementById('ed-nombre'));
   ok(editados['77'] && editados['77'].raza === 'Labrador' && editados['77'].especie === 'perro' && editados['77'].tratamiento === 'femenino' && editados['77'].fechaNacimiento === '2020-05-01', 'al guardar se manda lo editado y el panel se cierra');
-  await card('Rafaela').locator('[data-editar]').click();
+  ok(await card('Roma').locator('details.mas-opciones').evaluate((e) => e.open) && !(await card('Papá').locator('details.mas-opciones').evaluate((e) => e.open)), '«Más opciones» queda abierto en el perfil que se estaba usando y cerrado en los demás, aunque se repinte la lista');
+  await editar('Rafaela');
   ok(await p7.locator('#ed-especie').count() === 0 && await p7.inputValue('#ed-trato') === 'femenino' && await p7.inputValue('#ed-nacio') === '', 'editar un bebé: nombre, sexo y fecha de nacimiento (vacía si todavía no nace)');
   await p7.fill('#ed-nacio', '2026-10-20');
   await p7.click('[data-guardar-edicion="78"]');
   await p7.waitForFunction(() => !document.getElementById('ed-nombre'));
   ok(editados['78'] && editados['78'].nacioEn === '2026-10-20' && editados['78'].tratamiento === 'femenino', 'al poner la fecha de nacimiento se manda para que pase a "ya llegó"');
-  await card('Papá').locator('[data-editar]').click();
+  await editar('Papá');
   ok(await p7.inputValue('#ed-relacion') === 'Papá' && await p7.inputValue('#ed-fecha') === '1950-03-04' && await p7.locator('#ed-trato').count() === 0, 'editar una persona: nombre, fecha y para quién es (el trato sigue en su lista de siempre)');
   await p7.fill('#ed-nombre', '');
   await p7.click('[data-guardar-edicion="50"]');
   ok(/nombre/i.test(await p7.textContent('#ed-msg')) && !editados['50'], 'sin nombre no se guarda');
   await p7.click('[data-cancelar-edicion]');
   ok(await p7.locator('#ed-nombre').count() === 0, 'Cancelar cierra el panel sin guardar');
-  if (CAPTURAS) { await card('Roma').locator('[data-editar]').click(); await p7.screenshot({ path: path.join(CAPTURAS, 'perfiles-editar.png'), fullPage: true }); }
+  if (CAPTURAS) { await editar('Roma'); await p7.screenshot({ path: path.join(CAPTURAS, 'perfiles-editar.png'), fullPage: true }); }
 
   ok(errores.length === 0, 'sin errores de JavaScript' + (errores.length ? ': ' + errores.join(' | ') : ''));
   await browser.close();
