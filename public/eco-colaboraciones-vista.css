@@ -118,3 +118,7 @@ body>main.wrap .ap-ver-foto:hover{background:#edf0e5}
 
 /* Botones sueltos dentro de Acciones (Ver foto, Desarchivar) */
 body>main.wrap .ap-acc>.ap-ver-foto,body>main.wrap .ap-acc>button:not(.ap-ver-foto){display:block;width:100%;margin-top:10px;box-sizing:border-box}
+
+/* Desarchivar: mismo estilo que los demás botones de Acciones */
+body>main.wrap .ap-acc>.ap-desarchivar{cursor:pointer;min-height:44px;padding:10px 16px;border:1.5px solid #4d6542;border-radius:12px;background:#fffdf6;color:#4d6542;font:700 .93rem "Atkinson Hyperlegible",system-ui,sans-serif}
+body>main.wrap .ap-acc>.ap-desarchivar:hover{background:#edf0e5}
