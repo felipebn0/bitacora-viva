@@ -11,7 +11,7 @@ function init(){
  if(!root||!header||!wrap||!orbZone||root.dataset.ecoColabCompacto)return;
  root.dataset.ecoColabCompacto='1';
  const h2=wrap.querySelector('h2');
- if(h2)h2.textContent='Cuenta tu recuerdo';
+ // El título de la tarjeta lo pone colaborar.html (con el nombre de la persona).
  // Barra de acciones compacta encima del panel principal.
  const barra=document.createElement('div');
  barra.className='eco-colab-barra';
@@ -102,7 +102,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 (()=>{
   function init(){
     const title=document.querySelector('#appContent > header h1');
-    if(title) title.textContent='Aportar a una historia';
+    // El título lo pone colaborar.html (Comparte tus recuerdos).
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
   else init();
