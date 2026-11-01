@@ -1356,10 +1356,10 @@
   // junto a /api/transcribe en server.js). Una historia contada de
   // corrido, sin pausas de más de SILENCE_MS, podía superar ese tope y
   // perder el audio o la transcripción entera ("No se pudo entender el
-  // audio"). A los 150 segundos se corta el turno igual que con un
+  // audio"). A los 180 segundos (3 minutos) se corta el turno igual que con un
   // silencio real — no se pierde nada, sigue escuchando el resto como el
   // turno siguiente.
-  const MAX_TURN_MS = 150 * 1000;
+  const MAX_TURN_MS = 180 * 1000;
   // Grabaciones muy cortas (un ruido, un carraspeo, el micrófono captando
   // algo apenas antes de cortar) no se procesan como una respuesta real.
   // Bajado de 5000ms: descartaba respuestas cortas legítimas (una

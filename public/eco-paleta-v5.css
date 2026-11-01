@@ -5,3 +5,6 @@
 body{background:#f7f4eb;color:#302d25}
 .hero{position:relative;isolation:isolate}.hero:before{content:'';position:absolute;inset:0 0 0 auto;width:65%;z-index:-1;background:radial-gradient(ellipse at 70% 35%,#e4ecdf,transparent 68%);pointer-events:none}
 .hero h1 em{color:#4d6542}.hero-device-wrap{filter:drop-shadow(0 24px 35px rgba(41,61,48,.09))}
+
+/* Los menús desplegables usan la misma tipografía que el resto de la página (antes salían en Arial). */
+select,option{font-family:inherit}

@@ -108,6 +108,36 @@ const armar = (datos) => plantilla.replace(/(<script type="application\/json" id
   ok(/^CREADO CON ECO/.test(await t.page.locator('#pieIzq').innerText()), 'sin dedicatoria, el pie dice "Creado con Eco"');
   await t.ctx.close();
 
+  // Tocar o hacer clic en la portada abierta la abre (con el mouse y con el dedo)
+  t = await abrir(libro(12));
+  const centroCubierta = () => t.page.evaluate(() => { const z = document.getElementById('zonaAbrir').getBoundingClientRect(); return { x: z.left + z.width / 2, y: z.top + z.height / 2 }; });
+  let c = await centroCubierta();
+  await t.page.mouse.click(c.x, c.y);
+  await t.page.waitForTimeout(2200);
+  ok(await t.page.evaluate(() => document.getElementById('detalle').classList.contains('vivo')), 'un clic sobre la portada abierta abre el capítulo');
+  await t.ctx.close();
+
+  {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    const page = await ctx.newPage();
+    const errs = []; page.on('pageerror', (e) => errs.push(e.message));
+    await page.setContent(armar(libro(12)), { waitUntil: 'load' });
+    await page.waitForTimeout(1500);
+    const cdp = await ctx.newCDPSession(page);
+    const deslizar = async (x1, x2, y) => { await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x1, y }] }); for (let i = 1; i <= 8; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x1 + (x2 - x1) * i / 8, y }] }); await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); };
+    const antes = await page.locator('#indice').innerText();
+    await deslizar(300, 120, 420);
+    await page.waitForTimeout(1500);
+    ok(antes !== await page.locator('#indice').innerText(), 'en el celular, deslizar el dedo cambia de capítulo');
+    const z = await page.evaluate(() => { const r = document.getElementById('zonaAbrir').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height }; });
+    ok(z.w > 90 && z.h > 200, 'la portada abierta es grande en el celular (' + Math.round(z.w) + ' x ' + Math.round(z.h) + ')');
+    await page.touchscreen.tap(z.x, z.y);
+    await page.waitForTimeout(2400);
+    ok(await page.evaluate(() => document.getElementById('detalle').classList.contains('vivo')), 'en el celular, tocar la portada (después de deslizar) abre el capítulo');
+    ok(errs.length === 0, 'sin errores en el celular al tocar: ' + JSON.stringify(errs));
+    await ctx.close();
+  }
+
   // Libro sin capítulos
   t = await abrir(libro(0));
   ok(/TODAVÍA NO TIENE CAPÍTULOS/.test(await t.page.locator('body').innerText()), 'un libro sin capítulos lo dice');

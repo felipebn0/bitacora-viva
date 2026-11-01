@@ -14,7 +14,7 @@
   --sans: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
   color-scheme: light;
 }
-@media (max-width: 767px) { :root { --H: min(60vw, 40svh); } }
+@media (max-width: 767px) { :root { --H: min(84vw, 52svh); } }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
 body { background: var(--paper); color: var(--ink); font-family: var(--sans); overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-font-smoothing: antialiased; }
@@ -71,6 +71,8 @@ a { color: inherit; text-decoration: none; }
 .cv .pie svg { width: calc(var(--k) * 6); height: calc(var(--k) * 6); }
 
 /* Anillo de abrir */
+.zona-abrir { position: absolute; z-index: 6; pointer-events: none; background: transparent; -webkit-tap-highlight-color: transparent; }
+.zona-abrir.activa { pointer-events: auto; cursor: pointer; }
 .abrir { position: fixed; width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--accent); color: var(--accent); background: rgba(243,236,221,.75); display: grid; place-items: center; z-index: 12; transform: scale(0); will-change: transform; }
 .abrir svg { width: 14px; height: 14px; margin-left: 2px; }
 
@@ -81,7 +83,6 @@ a { color: inherit; text-decoration: none; }
 .pie-cap .mask > span + span { position: absolute; left: 0; right: 0; top: 0; }
 .cap-t { font-family: var(--serif); font-weight: 600; font-size: 31px; line-height: 1.12; letter-spacing: -.01em; }
 .cap-s { color: var(--accent); }
-.cap-a { font-family: var(--sans); font-weight: 700; font-size: 11px; letter-spacing: .08em; }
 
 .flecha { position: fixed; top: calc(50% + var(--H) / 2 + 40px); width: 44px; height: 44px; display: grid; place-items: center; z-index: 12; border-radius: 50%; }
 .flecha svg { width: 18px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1.2; }
@@ -104,7 +105,7 @@ a { color: inherit; text-decoration: none; }
 .d-titulo { margin: 0; font-family: var(--serif); font-weight: 600; font-size: clamp(40px, 4.8vw, 74px); line-height: 1.02; letter-spacing: -.025em; text-wrap: balance; overflow-wrap: anywhere; }
 .d-meta { color: var(--muted); }
 .d-cuerpo { font-family: var(--serif); font-size: var(--tam, 19px); line-height: 1.6; max-width: 46ch; }
-.d-cuerpo p { margin: 0 0 1em; white-space: pre-wrap; }
+.d-cuerpo p { margin: 0 0 1em; white-space: pre-wrap; text-align: justify; text-justify: inter-word; hyphens: auto; -webkit-hyphens: auto; }
 .d-cuerpo figure { float: right; width: 42%; margin: .3em 0 .8em 1.1em; }
 .d-cuerpo figure img { width: 100%; display: block; border-radius: 3px; }
 .d-cuerpo figcaption { font-family: var(--sans); font-size: .72em; color: var(--muted); margin-top: .4em; line-height: 1.35; }
@@ -137,9 +138,23 @@ a { color: inherit; text-decoration: none; }
   .d-col { overflow: visible; flex: none; padding: 0; } .d-in { margin: 0; }
   .d-titulo { font-size: 38px; } .d-cuerpo { font-size: var(--tam, 18px); }
 }
+/* Foco visible con los colores de Eco */
+:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
 </style>
+<noscript><style>
+html, body { height: auto; overflow: auto; user-select: text; -webkit-user-select: text; }
+.barra, .indice, .estante, .abrir, .pie-cap, .flecha, .pie-pag, .detalle, .grano { display: none !important; }
+.plano { max-width: 40rem; margin: 0 auto; padding: 28px 22px 60px; font-family: var(--serif); line-height: 1.6; font-size: 19px; }
+.plano h1 { font-size: 34px; line-height: 1.1; margin: 0 0 6px; color: var(--accent); }
+.plano .sub { margin: 0 0 28px; font-family: var(--sans); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.plano h2 { font-size: 26px; line-height: 1.15; margin: 34px 0 4px; }
+.plano .tema { margin: 0 0 12px; font-family: var(--sans); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
+.plano p { text-align: justify; hyphens: auto; -webkit-hyphens: auto; margin: 0 0 1em; }
+.plano .aviso { margin-top: 36px; padding-top: 14px; border-top: 1px solid rgba(31,27,20,.25); font-family: var(--sans); font-size: 14px; color: var(--muted); text-align: left; }
+</style></noscript>
 </head>
 <body>
+<!--__ESTATICO__-->
 <header class="barra">
   <div class="izq"><svg viewBox="0 0 200 200" aria-hidden="true"><path d="M127.57 95.14A28 28 0 1 1 90.06 73.82" fill="none" stroke="#4F5D3A" stroke-width="12" stroke-linecap="round"/><path d="M146.36 81.27A50 50 0 1 1 72.91 57.97" fill="none" stroke="#4F5D3A" stroke-width="12" stroke-linecap="round"/><path d="M159.69 59.74A72 72 0 1 1 49.27 48.91" fill="none" stroke="#4F5D3A" stroke-width="12" stroke-linecap="round"/><circle cx="100" cy="100" r="13" fill="#B7791F"/></svg><span>Eco</span></div>
   <div class="logo"><b id="libroTitulo"></b><i id="libroSub"></i></div>
@@ -148,7 +163,7 @@ a { color: inherit; text-decoration: none; }
 
 <div class="indice lbl box" id="indice" aria-hidden="true"></div>
 
-<section class="estante" id="estante" aria-label="Estantería de capítulos"><div class="stage" id="stage"></div></section>
+<section class="estante" id="estante" aria-label="Estantería de capítulos"><div class="stage" id="stage"></div><div class="zona-abrir" id="zonaAbrir" aria-hidden="true"></div></section>
 
 <button class="abrir" id="abrir" type="button" aria-label="Abrir capítulo"><svg viewBox="0 0 14 14"><path d="M1 1 L13 7 L1 13 Z" fill="currentColor"/></svg></button>
 
@@ -223,6 +238,7 @@ let H = 400, ws = 68, d = 211, gap = 12;
 function medir() {
   H = sonda.getBoundingClientRect().height || 400;
   ws = H * 142 / 840; d = H * 474 / 900; gap = H * 0.03;
+  const zona = $('zonaAbrir'); if (zona) { zona.style.width = d + 'px'; zona.style.height = H + 'px'; zona.style.left = Math.round(innerWidth / 2 - d / 2) + 'px'; zona.style.top = Math.round(($('estante').offsetHeight - H) / 2) + 'px'; }
   stage.style.setProperty('--H', H + 'px'); stage.style.setProperty('--ws', ws + 'px'); stage.style.setProperty('--d', d + 'px'); stage.style.setProperty('--k', (H / 100) + 'px');
 }
 medir();
@@ -266,11 +282,11 @@ const indiceActivo = () => ((Math.round(s) % N) + N) % N;
 
 /* Título del capítulo activo (se desliza dentro de una máscara) */
 const pieCap = $('pieCap');
-const mT = E('div', 'mask'), mS = E('div', 'mask'), mA = E('div', 'mask');
-pieCap.append(mT, mS, mA);
+const mT = E('div', 'mask'), mS = E('div', 'mask');
+pieCap.append(mT, mS);
 function pie(i, dir, inmediato) {
   const ch = CAPS[i];
-  const hechos = [[mT, ch.titulo, 'cap-t'], [mS, (ch.tema || '').toUpperCase(), 'cap-s lbl'], [mA, 'CAPÍTULO ' + (i + 1) + ' DE ' + N, 'cap-a']];
+  const hechos = [[mT, ch.titulo, 'cap-t'], [mS, (ch.tema || '').toUpperCase(), 'cap-s lbl']];
   for (const [m, txt, cls] of hechos) {
     const nuevo = E('span', cls, txt);
     const viejos = [...m.children];
@@ -287,6 +303,10 @@ function pie(i, dir, inmediato) {
 }
 activo = indiceActivo(); pie(activo, 1, true);
 
+/* Tocar la portada abierta la abre. Las caras 3D no reciben toques de forma confiable (sobre todo en el celular), por eso hay
+   una zona transparente encima de ella. */
+$('zonaAbrir').addEventListener('click', () => { if (hubo || abierto) return; abrirDetalle(); });
+
 /* Puntero */
 document.addEventListener('pointermove', (e) => { mx = e.clientX; my = e.clientY; });
 
@@ -297,7 +317,7 @@ tapes.forEach((t) => {
   t.el.addEventListener('click', () => {
     if (hubo || abierto) return;
     const r = relativo(t.v);
-    if (Math.abs(r) < .5) abrirDetalle(); else T = limitar(Math.round(T + r));
+    if (Math.abs(r) >= .5) T = limitar(Math.round(T + r));
   });
 });
 let x0 = 0, T0 = 0, presionado = false;
@@ -307,7 +327,10 @@ addEventListener('pointermove', (e) => {
   if (!arrastrando && Math.abs(e.clientX - x0) > 5) { arrastrando = true; hubo = true; }
   if (arrastrando) T = limitar(T0 - (e.clientX - x0) / (ws + gap));
 });
-addEventListener('pointerup', () => { if (!presionado) return; presionado = false; if (arrastrando) { arrastrando = false; T = limitar(Math.round(T)); setTimeout(() => { hubo = false; }, 0); } });
+// En el celular el navegador a veces cancela el gesto (pointercancel) en vez de terminarlo: se trata igual que soltar el dedo.
+const soltar = () => { if (!presionado) return; presionado = false; if (arrastrando) { arrastrando = false; T = limitar(Math.round(T)); setTimeout(() => { hubo = false; }, 0); } };
+addEventListener('pointerup', soltar);
+addEventListener('pointercancel', soltar);
 let rueda = 0;
 addEventListener('wheel', (e) => {
   if (abierto) return;
@@ -363,6 +386,7 @@ function cuadro(ahora) {
   abrirEscala += (objAbrir - abrirEscala) * (reducir ? 1 : 1 - Math.exp(-14 * dt));
   const ab = $('abrir');
   ab.style.left = (cx0 - 0.5 * d - 6 - 21) + 'px'; ab.style.top = (cyShelf + 0.36 * H - 21) + 'px'; ab.style.transform = `scale(${abrirEscala.toFixed(3)})`;
+  $('zonaAbrir').classList.toggle('activa', !abierto && Math.abs(T - s) < .3);
   estante.style.cursor = enCubierta || (hover >= 0 && !abierto) ? 'pointer' : '';
   requestAnimationFrame(cuadro);
 }
@@ -427,7 +451,7 @@ function llenarDetalle(i) {
   const aud = ch.audios || [];
   if (aud.length) {
     zona.appendChild(E('h3', '', aud.length === 1 ? 'Escucha la historia original' : 'Escucha las historias originales'));
-    aud.forEach((a) => { if (a.pregunta) zona.appendChild(E('p', '', a.pregunta)); const au = E('audio'); au.controls = true; au.preload = 'none'; au.src = a.src; zona.appendChild(au); });
+    aud.forEach((a) => { if (a.pregunta) zona.appendChild(E('p', '', a.pregunta)); const au = E('audio'); au.controls = true; au.preload = 'metadata'; au.src = a.src; zona.appendChild(au); });
   }
   $('dCol').scrollTop = 0;
   armarPoster(i);

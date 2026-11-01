@@ -29,6 +29,7 @@ let chaptersTable = [];
 let nextChapterId = 1;
 let capturedAnthropicCalls = [];
 let trato = 'femenino';
+let gruposFalsos = [{ theme: 'La infancia', story_ids: [10, 11] }];
 
 function fakeSql(strings, ...values) {
   const text = strings.join('?');
@@ -96,7 +97,7 @@ require.cache[require.resolve('@anthropic-ai/sdk')] = {
           capturedAnthropicCalls.push(opts);
           const toolName = opts.tool_choice && opts.tool_choice.name;
           if (toolName === 'agrupar_historias_por_tema') {
-            return { content: [{ type: 'tool_use', id: 't1', name: toolName, input: { grupos: [{ theme: 'La infancia', story_ids: [10, 11] }] } }] };
+            return { content: [{ type: 'tool_use', id: 't1', name: toolName, input: { grupos: gruposFalsos } }] };
           }
           if (toolName === 'escribir_capitulo') {
             return { content: [{ type: 'tool_use', id: 't2', name: toolName, input: { title: 'La infancia', generated_text: 'Un capítulo corto y fiel a lo contado.' } }] };
@@ -158,6 +159,8 @@ function check(nombre, cond) {
 
     const promptEscribir = capturedAnthropicCalls.find((c) => c.tool_choice && c.tool_choice.name === 'escribir_capitulo');
     check('el prompt le pidió a la IA narrar en PRIMERA persona', promptEscribir.messages[0].content.includes('PRIMERA persona'));
+    check('cada historia llega con la pregunta de Eco que la originó (para saber de quién habla)', promptEscribir.messages[0].content.includes('Eco le preguntó: «¿cómo era la finca donde vivían en Boyacá?»'));
+    check('el prompt prohíbe contarle a la persona la vida de otra, la charla técnica y los datos que se contradicen', /REGLAS: \(1\) Si en una respuesta la persona habla de OTRA persona/.test(promptEscribir.messages[0].content) && /pruebas de audio/.test(promptEscribir.messages[0].content) && /se contradicen/.test(promptEscribir.messages[0].content));
 
     const lista = await request(server, { path: '/api/chapters' }, cookie);
     check('GET /api/chapters -> 200', lista.status === 200);
@@ -184,6 +187,12 @@ function check(nombre, cond) {
     check('chapters/generate sin persona -> 200', genDefault.status === 200);
     const promptDefault = capturedAnthropicCalls.find((c) => c.tool_choice && c.tool_choice.name === 'escribir_capitulo');
     check('sin especificar, narra en tercera persona (compatibilidad con lo de antes)', promptDefault.messages[0].content.includes('tercera persona') && !promptDefault.messages[0].content.includes('PRIMERA persona'));
+
+    // --- Una historia no se repite en dos capítulos ---
+    gruposFalsos = [{ theme: 'La infancia', story_ids: [10, 11] }, { theme: 'La mudanza', story_ids: [10] }];
+    const genRep = await request(server, { path: '/api/chapters/generate', method: 'POST', body: {} }, cookie);
+    const repData = JSON.parse(genRep.body);
+    check('una historia repetida en dos temas se queda solo en el primer capítulo', repData.chapters.length === 1 && JSON.stringify(repData.chapters[0].story_ids) === '[10,11]');
   } finally {
     server.close();
   }

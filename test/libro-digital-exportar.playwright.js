@@ -80,6 +80,16 @@ const capitulos = [
   ok(await p2.evaluate(() => document.fonts.check('16px "Source Serif 4"')), 'y usa la tipografía incluida');
   ok(err2.length === 0, 'sin errores al abrir el archivo' + (err2.length ? ': ' + err2.join(' | ') : ''));
   await ctx2.close();
+
+  // Sin JavaScript (vista previa de Archivos en el iPhone, correo...): se lee el texto del libro
+  const ctx3 = await browser.newContext({ viewport: { width: 390, height: 844 }, javaScriptEnabled: false });
+  const p3 = await ctx3.newPage();
+  await p3.goto('file://' + copia); await p3.waitForTimeout(500);
+  const texto3 = await p3.locator('body').innerText();
+  ok(/El libro de Ana/.test(texto3) && /El trabajo/.test(texto3) && /Infancia editada/.test(texto3) && /Texto del segundo capítulo/.test(texto3), 'sin JavaScript se ve el texto del libro (títulos y capítulos)');
+  ok(/abre este archivo en un navegador/.test(texto3), 'y explica cómo ver las fotos y audios');
+  ok(await p3.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1 && getComputedStyle(document.body).overflowY !== 'hidden'), 'sin JavaScript se puede recorrer hacia abajo y no se sale de la pantalla');
+  await ctx3.close();
   await t.ctx.close();
 
   // Sin comprar: pide la compra y no descarga hasta pagar. El PDF no se dispara solo.

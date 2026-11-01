@@ -24,7 +24,7 @@ body.eco-studio-active{overflow:hidden}
 .eco-paper-brand{text-align:center;font:700 9pt 'Atkinson Hyperlegible',sans-serif;color:#4d6542;letter-spacing:.15em;margin-bottom:9mm}
 .eco-studio-paper h1{text-align:center;color:#293d30;font:700 25pt/1.2 'Source Serif 4',Georgia,serif;margin:0 0 5mm}
 .eco-paper-theme{text-align:center;color:#58744d;font-size:11pt;margin:0 0 13mm}
-.eco-paper-paragraph{font-size:12pt;line-height:1.75;text-align:left;white-space:pre-wrap;overflow-wrap:anywhere;margin:0 0 5mm;orphans:3;widows:3}
+.eco-paper-paragraph{font-size:12pt;line-height:1.75;text-align:justify;text-justify:inter-word;hyphens:auto;-webkit-hyphens:auto;white-space:pre-wrap;overflow-wrap:anywhere;margin:0 0 5mm;orphans:3;widows:3}
 .eco-paper-foto{margin:7mm auto;text-align:center;break-inside:avoid;page-break-inside:avoid;clear:both}
 .eco-paper-foto img{display:block;max-width:100%;height:auto;max-height:175mm;object-fit:contain;margin:0 auto}
 .eco-paper-foto figcaption{font:italic 9pt/1.5 'Source Serif 4',Georgia,serif;color:#777568;margin-top:2mm}

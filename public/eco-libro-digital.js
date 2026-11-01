@@ -106,6 +106,20 @@
     };
   }
 
+  // Versión de solo texto para quien abre el archivo sin JavaScript (por ejemplo la vista previa de Archivos en el iPhone).
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  function versionDeTexto(datos) {
+    const partes = ['<noscript><main class="plano"><h1>' + esc(datos.titulo) + '</h1><p class="sub">' + esc(datos.subtitulo || 'Una historia contada con Eco') + '</p>'];
+    if (datos.dedicatoria) partes.push('<p><em>' + esc(datos.dedicatoria) + '</em></p>');
+    datos.capitulos.forEach((c, i) => {
+      partes.push('<section><h2>' + (i + 1) + '. ' + esc(c.titulo) + '</h2>' + (c.tema ? '<p class="tema">' + esc(c.tema) + '</p>' : ''));
+      String(c.texto || '').split(/\n\s*\n/).filter((x) => x.trim()).forEach((p) => partes.push('<p>' + esc(p.trim()) + '</p>'));
+      partes.push('</section>');
+    });
+    partes.push('<p class="aviso">Aquí está el texto de tu libro. Para ver las fotos, escuchar los audios y pasar los capítulos como libros en una estantería, abre este archivo en un navegador (Safari o Chrome).</p></main></noscript>');
+    return partes.join('');
+  }
+
   const nombreDeArchivo = (titulo) => (titulo.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase().slice(0, 60) || 'mi-libro') + '-eco.html';
 
   async function exportar() {
@@ -128,6 +142,7 @@
       delete datos.audiosOmitidos;
       const json = JSON.stringify(datos).replace(/</g, '\\u003c').replace(/[\u2028\u2029]/g, ' ');
       const html = plantilla
+        .replace('<!--__ESTATICO__-->', () => versionDeTexto(datos))
         .replace('/*__FUENTES__*/', () => fuentes)
         .replace(/(<script type="application\/json" id="datos">)[\s\S]*?(<\/script>)/, (m, a, b) => a + json + b);
       const archivo = new Blob([html], { type: 'text/html;charset=utf-8' });

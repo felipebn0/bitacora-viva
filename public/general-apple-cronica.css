@@ -29,8 +29,7 @@
       --radius-m: 18px;
       --radius-l: 24px;
       --nav-bg: rgba(250, 247, 242, 0.72);
-      --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
-              "Helvetica Neue", "Segoe UI", Roboto, system-ui, sans-serif;
+      --sans: "Atkinson Hyperlegible", system-ui, sans-serif;
       --serif: "Source Serif 4", Georgia, serif;
       --measure: 42rem;
     }
