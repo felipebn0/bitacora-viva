@@ -4289,7 +4289,8 @@ function inicioMascota(mascota) {
 
 async function loadFamilyContext(profileUserId, esPropia) {
   await ensureSchema();
-  const notes = await sql`SELECT contributor, parentesco, texto FROM family_notes WHERE user_id = ${profileUserId} AND en_progreso = false ORDER BY created_at DESC LIMIT 20`;
+  // Los aportes archivados no entran al contexto de la IA (ni a los resúmenes que salen de la charla).
+  const notes = await sql`SELECT contributor, parentesco, texto FROM family_notes WHERE user_id = ${profileUserId} AND en_progreso = false AND archived_at IS NULL ORDER BY created_at DESC LIMIT 20`;
   const perfil = await leerPerfilBitacora(profileUserId, esPropia);
 
   const especial = esPropia ? null : await leerTipoPerfil(profileUserId);
@@ -4332,7 +4333,8 @@ async function loadFamilyContext(profileUserId, esPropia) {
 // repetirla en la próxima sesión.
 async function loadPendingFamilyNote(userId) {
   await ensureSchema();
-  const rows = await sql`SELECT id, contributor, parentesco, texto, media_urls, ab_variant FROM family_notes WHERE user_id = ${userId} AND discussed = false ORDER BY created_at ASC LIMIT 1`;
+  // Un aporte archivado nunca abre una charla: la IA no debe preguntar por él.
+  const rows = await sql`SELECT id, contributor, parentesco, texto, media_urls, ab_variant FROM family_notes WHERE user_id = ${userId} AND discussed = false AND archived_at IS NULL ORDER BY created_at ASC LIMIT 1`;
   if (!rows.length) return null;
   const nota = rows[0];
   // Si mientras contaba esta historia también subió una foto/video (ver
