@@ -352,3 +352,7 @@ Con esto ya puedes probar toda la charla apretando solo el botón físico, sin t
 6. La pantalla es opcional: la charla funciona por voz y el botón. Si no quieres pantalla, alcanza con que Chromium corra en segundo plano (headless) mientras el audio funcione igual.
 
 Avisame cuando tengas la Pi en mano y armamos el paso 2 en detalle (el service de systemd y el modo kiosco exactos dependen de qué versión de Raspberry Pi OS instales).
+
+## Botón «Fin» de la charla
+
+Botón «Fin»: el primer toque pide un mensaje de cierre (empieza con una frase clara tipo «Perfecto, hemos llegado al fin por hoy», con mini resumen y sin preguntas) y manda `fin: true` a `/api/next`, así el servidor NO menciona ni muestra la historia o la foto de un familiar en ese turno (esa nota queda para la próxima charla). Un segundo toque cierra la charla de inmediato, sin decir nada más. Pruebas: `test/next.smoke.js` (11c2) y `test/pause-resume.playwright.js` (escenario 5).

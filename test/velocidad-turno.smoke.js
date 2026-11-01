@@ -257,7 +257,7 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
   ok(/Tómate tu tiempo\. Cuando quieras retomar, presiona el botón/.test(app_) && /avisoPausaHabla\.cancelar\(\)/.test(app_), 'app: tras 3 intentos sin voz, Eco dice que se tome su tiempo y que apriete el botón (y se calla si retoma)');
   ok(/if \(especulacion && especulacion\.loudAt !== lastLoudTime\) cancelarEspeculacion\(\);/.test(app_), 'app: si la persona vuelve a hablar, la especulación se descarta');
   ok(/const esp = especulacion && !especulacion\.cancelada && especulacion\.loudAt === lastLoudTime/.test(app_), 'app: al cerrar el turno solo se aprovecha si no volvió a hablar');
-  ok(/if \(!esp && !interpretarRespuestaPausa/.test(app_), 'app: un turno especulado nunca ofrece la pausa (no se especula si le toca)');
+  ok(/if \(!esp && !finPedido && !interpretarRespuestaPausa/.test(app_), 'app: un turno especulado nunca ofrece la pausa (no se especula si le toca)');
   const e0 = app_.indexOf('async function* leerEventos');
   const e1 = app_.indexOf('async function fetchNext(');
   ok(e0 !== -1 && e1 > e0, 'app: existe el bloque de especulación');

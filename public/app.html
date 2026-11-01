@@ -3512,7 +3512,7 @@
       // de pausar en vez de dejar que la sesión siga sin límite — una sola
       // vez por sesión, no en cada turno.
       let ofrecerPausa = false;
-      if (!esp && !interpretarRespuestaPausa && sessionMode === 'historia' && pausaDebida()) {
+      if (!esp && !finPedido && !interpretarRespuestaPausa && sessionMode === 'historia' && pausaDebida()) {
         ofrecerPausa = true;
         indicePausa++;
         esperandoRespuestaPausa = true; // para el PRÓXIMO turno, no este
@@ -3520,7 +3520,7 @@
       const pedirTurno = () => fetch('/api/next', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stream: true, history, lastAudioUrl, mode: sessionMode, modoBebe: !!(globalThis.EcoBebe && globalThis.EcoBebe.activo()), bebeFotoId, ofrecerPausa, interpretarRespuestaPausa, mediaUrls, fotoRecienSubida: fotoRecienSubidaAAvisar ? { caption: fotoRecienSubidaAAvisar.caption } : null }),
+        body: JSON.stringify({ stream: true, history, lastAudioUrl, mode: sessionMode, modoBebe: !!(globalThis.EcoBebe && globalThis.EcoBebe.activo()), bebeFotoId, fin: finPedido, ofrecerPausa, interpretarRespuestaPausa, mediaUrls, fotoRecienSubida: fotoRecienSubidaAAvisar ? { caption: fotoRecienSubidaAAvisar.caption } : null }),
       });
       const abrirReal = async () => {
         let resp = await pedirTurno();
@@ -3649,6 +3649,8 @@
   }
 
   async function endConversation() {
+    // Segunda vez que toca «Fin» (el cierre ya se pidió): se cierra la charla de una, sin decir nada más.
+    const yaSeEstabaCerrando = finPedido;
     finPedido = true;
     quitarFotoDelOrbe();
     cancelarEspeculacion();
@@ -3660,10 +3662,16 @@
     await stopRecordingAudio();
     writeRow.classList.remove('visible');
 
+    if (yaSeEstabaCerrando) {
+      finPedido = false;
+      finishSession();
+      return;
+    }
+
     history.push({
       role: 'user',
       content:
-        '(La persona quiere terminar la charla por ahora, a mitad de la conversación. Cierra con un mensaje cálido y empático que incluya un mini resumen de 1 o 2 frases de lo que se habló hoy, y las ganas de seguir charlando otro día. Termina ese mensaje, y solo ese, con [FIN].)',
+        '(La persona tocó el botón «Fin»: quiere terminar la charla por hoy. Tu mensaje es el cierre y tiene que dejar clarísimo que la charla termina. Empieza con una frase de cierre como «Perfecto, hemos llegado al fin por hoy», «Listo, llegamos al final de la charla de hoy» o «Muy bien, cerramos por hoy» (cambia la frase cada vez). Después, un mini resumen de 1 o 2 frases de lo que se habló hoy y las ganas de seguir charlando otro día. No hagas ninguna pregunta, no abras temas nuevos y no menciones historias, fotos ni mensajes de otros familiares. Si todavía no se habló de nada, solo despídete con calidez. Termina ese mensaje, y solo ese, con [FIN].)',
     });
 
     fetchNext();

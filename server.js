@@ -5623,7 +5623,9 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
     // de "===" para no depender de que el conteo caiga justo en ese
     // número exacto.
     const UMBRAL_MEDIO_APORTE = 6;
-    const candidataPendiente = mode === 'historia' && !esPrimeraVez
+    // «Fin»: el turno de cierre nunca trae la historia ni la foto de un familiar (eso queda para la próxima charla).
+    const esCierre = req.body.fin === true;
+    const candidataPendiente = mode === 'historia' && !esPrimeraVez && !esCierre
       ? await loadPendingFamilyNote(req.profileUserId)
       : null;
     const notaPendiente = candidataPendiente && (
@@ -5634,7 +5636,7 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
     // Solo se busca si no hay ya una nota pendiente (esa tiene prioridad) —
     // no hace falta resolver ambas a la vez porque solo una puede ser el
     // arranque de ESTA charla; la otra sigue esperando para la próxima.
-    const mediaPendiente = mode === 'historia' && !esPrimeraVez && !history.length && !notaPendiente
+    const mediaPendiente = mode === 'historia' && !esPrimeraVez && !esCierre && !history.length && !notaPendiente
       ? await loadPendingMedia(req.profileUserId)
       : null;
     // Turno ESPECULATIVO: el cliente lo pide cuando la persona lleva un rato
@@ -5684,7 +5686,9 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
     // "messages[i]" es la MISMA referencia que "history[i]", y history se
     // usa después para lo que se guarda en story_log — no puede quedar
     // contaminado con esta instrucción.
-    const promptTurnoExtra = req.body.interpretarRespuestaPausa
+    const promptTurnoExtra = esCierre
+      ? null
+      : req.body.interpretarRespuestaPausa
       ? INTERPRETAR_RESPUESTA_PAUSA_PROMPT
       : req.body.ofrecerPausa
       ? OFRECER_PAUSA_PROMPT

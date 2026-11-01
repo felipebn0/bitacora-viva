@@ -564,6 +564,23 @@ async function main() {
   check('variante medio, turno tardío: se pega al ÚLTIMO mensaje del usuario (no reemplaza la charla)', ultimoMensajeMedio.role === 'user' && ultimoMensajeMedio.content.includes('Sí, los domingos en familia.') && ultimoMensajeMedio.content.includes('cumpleaños sorpresa'));
   check('variante medio, turno tardío: se marca como discutida', familyNoteMarkedDiscussed.includes(45));
 
+  // --- 11c2) «Fin»: el turno de cierre NUNCA trae la historia ni la foto de un familiar (reportado en el perfil de Diego:
+  // al tocar Fin con la charla ya avanzada, la variante 'medio' mencionó una colaboración con su foto).
+  user.pendingFamilyNote = { id: 46, contributor: 'María', parentesco: 'hija', texto: 'Contó del paseo a Villa de Leyva.', ab_variant: 'medio', media_urls: JSON.stringify([{ url: 'https://fake.blob.vercel-storage.com/media/1/foto-paseo.jpg', type: 'foto' }]) };
+  const historialFin = historialLargo.concat([{ role: 'user', content: '(La persona tocó el botón «Fin»: quiere terminar la charla por hoy.)' }]);
+  resetAnthropicMock();
+  pushAnthropicResponse('Perfecto, hemos llegado al fin por hoy. Hablamos de tu casa y de los domingos en familia. Nos vemos pronto. [FIN]');
+  const cierreConNota = await nextForUser(server, cookie, { history: historialFin, mode: 'historia', fin: true });
+  const cierreNotaBody = JSON.parse(cierreConNota.body);
+  check('Fin con una nota de familiar pendiente -> 200 y cierra la charla', cierreConNota.status === 200 && cierreNotaBody.done === true);
+  check('Fin: el mensaje de cierre NO lleva la historia del familiar', !capturedCalls[0].messages[capturedCalls[0].messages.length - 1].content.includes('Villa de Leyva'));
+  check('Fin: la respuesta NO trae la foto del familiar', !cierreNotaBody.media);
+  check('Fin: la nota del familiar NO se marca como discutida (queda para la próxima charla)', !familyNoteMarkedDiscussed.includes(46));
+  resetAnthropicMock();
+  pushAnthropicResponse('Qué lindo. Y antes de seguir, María me contó del paseo a Villa de Leyva. ¿Qué recuerdas?');
+  const sinFin = await nextForUser(server, cookie, { history: historialLargo, mode: 'historia' });
+  check('sin Fin, la misma nota sí se menciona con su foto (control del caso de arriba)', sinFin.status === 200 && JSON.parse(sinFin.body).media && familyNoteMarkedDiscussed.includes(46));
+
   user.pendingFamilyNote = null;
 
   // --- 11c) Foto/video pendiente arma un arranque dedicado (como la nota de

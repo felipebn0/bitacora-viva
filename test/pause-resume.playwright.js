@@ -266,6 +266,33 @@ async function scenarioFinConError(browser, base) {
   await context.close();
 }
 
+async function scenarioFinDosVeces(browser, base) {
+  console.log('\n--- Escenario 5: "Fin" pide el cierre una sola vez; tocarlo otra vez cierra sin decir nada más ---');
+  const { context, page, callCounts, nextCalls } = await setupPage(browser, { transcript: 'algo' });
+  await page.goto(base + '/app.html');
+  await page.waitForSelector('#orb', { state: 'visible' });
+  await page.click('#orb');
+  await esperarEstado(page, 'listening');
+  // El cierre tarda en llegar: da tiempo a tocar «Fin» por segunda vez.
+  await page.route('**/api/next', async (route) => {
+    callCounts.next += 1;
+    nextCalls.push(route.request().postDataJSON());
+    await new Promise((r) => setTimeout(r, 1500));
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ message: 'Perfecto, hemos llegado al fin por hoy.', done: true }) }).catch(() => {});
+  });
+  await page.click('#endBtn');
+  await esperarEstado(page, 'thinking');
+  assert(nextCalls[nextCalls.length - 1].fin === true, 'el primer «Fin» pide el cierre avisándole al servidor que es un cierre (fin: true)');
+  assert(/hemos llegado al fin por hoy|llegamos al final|cerramos por hoy/.test(JSON.stringify(nextCalls[nextCalls.length - 1].history)), 'y le pide empezar con una frase clara de cierre');
+  const pedidosAntes = callCounts.next;
+  await page.click('#endBtn');
+  await esperarEstado(page, 'ended');
+  await page.waitForTimeout(2200);
+  assert(callCounts.next === pedidosAntes, 'el segundo «Fin» no pide nada más: la charla se cierra sin decir ni mostrar nada');
+  assert(await page.evaluate(() => document.getElementById('orb').dataset.state) === 'ended', 'y la charla queda terminada (no vuelve a hablar con el cierre que llegó tarde)');
+  await context.close();
+}
+
 (async () => {
   const server = await startStaticServer();
   const port = server.address().port;
@@ -276,6 +303,7 @@ async function scenarioFinConError(browser, base) {
     await scenarioSinNadaQueGuardar(browser, base);
     await scenarioFinSiempreTermina(browser, base);
     await scenarioFinConError(browser, base);
+    await scenarioFinDosVeces(browser, base);
   } catch (err) {
     failures++;
     console.error('✗ error inesperado:', err && err.stack ? err.stack : err);
