@@ -13,7 +13,7 @@ const ok = (c, m) => { if (c) console.log('✓ ' + m); else { fallos++; console.
 
 const foto = fs.readFileSync(path.join(__dirname, '..', 'public', 'images', 'voces', 'voz-1.jpg'));
 const capitulos = [
-  { id: 1, title: 'Infancia en Bogotá', theme: 'infancia', generated_text: 'Había una casa grande.\n\nSegundo párrafo.', story_ids: [1], created_at: new Date().toISOString() },
+  { id: 1, title: 'Infancia en Bogotá', theme: 'infancia', generated_text: 'Había una casa grande.\n\nSegundo párrafo.', story_ids: [1], audios: ['https://ejemplo.blob/audio-1.webm', 'https://ejemplo.blob/audio-enorme.webm'], preguntas: ['¿Cómo se llamaban tus papás?', ''], created_at: new Date().toISOString() },
   { id: 2, title: 'El trabajo', theme: 'trabajo', generated_text: 'Texto del segundo capítulo.', story_ids: [2], created_at: new Date().toISOString() },
 ];
 
@@ -35,6 +35,8 @@ const capitulos = [
       const u = r.request().url(), m = r.request().method();
       if (u.includes('/api/book-demo/status')) return r.fulfill({ json: { approved: estado.aprobada } });
       if (u.includes('/api/book-demo/purchase') && m === 'POST') { estado.compras++; estado.aprobada = true; return r.fulfill({ json: { approved: true } }); }
+      if (u.includes('/api/media-file') && u.includes('audio-enorme')) return r.fulfill({ status: 200, contentType: 'audio/webm', body: Buffer.alloc(9 * 1024 * 1024, 1) });
+      if (u.includes('/api/media-file') && u.includes('audio')) return r.fulfill({ status: 200, contentType: 'audio/webm', body: Buffer.from('audio-de-prueba') });
       if (u.includes('/api/media-file')) return r.fulfill({ status: 200, contentType: 'image/jpeg', body: foto });
       if (u.includes('/api/chapters')) return r.fulfill({ json: { chapters: sinCapitulos ? [] : capitulos } });
       if (u.includes('/api/story-log')) return r.fulfill({ json: { stories: [{ id: 1, texto: 'x', created_at: new Date().toISOString(), media_urls: [{ type: 'image', url: 'https://ejemplo.blob/foto1.jpg', caption: 'Con mamá' }] }] } });
@@ -57,6 +59,10 @@ const capitulos = [
   ok(datos.capitulos.map((c) => c.titulo).join('|') === 'El trabajo|Infancia editada', 'respeta el orden elegido y los títulos editados');
   ok(datos.capitulos[1].fotos.length === 1 && datos.capitulos[1].fotos[0].src.startsWith('data:image/jpeg;base64,') && datos.capitulos[1].fotos[0].pie === 'Con mamá', 'las fotos van dentro del archivo (reducidas) con su pie de foto');
   ok(/@font-face\{font-family:"Source Serif 4"[^}]*data:font\/woff2;base64,/.test(html) && /font-family:"Atkinson Hyperlegible"/.test(html), 'las tipografías van incluidas');
+  const conAudio = datos.capitulos[1].audios;
+  ok(conAudio.length === 1 && conAudio[0].src.startsWith('data:audio/webm;base64,') && conAudio[0].pregunta === '¿Cómo se llamaban tus papás?', 'los audios originales van dentro del archivo, con su pregunta');
+  ok(/Un audio pesaba demasiado/.test(await t.page.locator('.eco-libro-exportar-msg').innerText()), 'un audio demasiado pesado se deja fuera y se avisa');
+  ok(datos.audiosOmitidos === undefined, 'el conteo de audios omitidos no se cuela en el archivo');
   ok(!html.includes('/*__FUENTES__*/') && !html.includes('/*__DATOS__*/'), 'no quedan marcas sin llenar');
   ok(html.length < 3 * 1024 * 1024, 'pesa poco (' + (html.length / 1048576).toFixed(2) + ' MB)');
   ok(/Listo: se descargó/.test(await t.page.locator('.eco-libro-exportar-msg').innerText()), 'avisa que ya se descargó');

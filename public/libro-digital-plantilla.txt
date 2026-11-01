@@ -19,8 +19,8 @@
 html, body { height: 100%; margin: 0; }
 body { background: var(--paper); color: var(--ink); font-family: var(--sans); overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-font-smoothing: antialiased; }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+button:disabled { cursor: default; }
 a { color: inherit; text-decoration: none; }
-@media (pointer: fine) { html, body, button, a { cursor: none; } }
 .lbl { font-family: var(--sans); font-weight: 700; font-size: 10.5px; line-height: 1; letter-spacing: .09em; text-transform: uppercase; }
 .box { display: inline-flex; align-items: center; height: 21px; padding: 0 8px; border: 1px solid var(--rule); }
 .mask { overflow: hidden; }
@@ -90,16 +90,6 @@ a { color: inherit; text-decoration: none; }
 .pie-pag { position: fixed; left: 32px; right: 32px; bottom: 26px; display: flex; justify-content: space-between; gap: 16px; z-index: 10; }
 .pie-pag span { max-width: 60vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* Cursor */
-.cursor { position: fixed; left: 0; top: 0; width: 58px; height: 58px; margin: -29px 0 0 -29px; z-index: 100; pointer-events: none; display: none; will-change: transform; }
-@media (pointer: fine) { .cursor { display: block; } }
-.cursor .aro { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid var(--ink); transition: transform .5s var(--ease), background-color .4s var(--ease), border-color .4s var(--ease); }
-.cursor .punto { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: var(--ink); transition: transform .4s var(--ease); }
-.cursor .txt { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: #fff; font-family: var(--sans); font-weight: 700; font-size: 10px; line-height: 1.25; letter-spacing: .1em; transform: scale(0); transition: transform .45s var(--ease); }
-.cursor.spine .aro { transform: scale(.72); }
-.cursor.btn .aro { transform: scale(.55); } .cursor.btn .punto { transform: scale(0); }
-.cursor.open .aro { transform: scale(1.75); background: var(--accent); border-color: var(--accent); } .cursor.open .punto { transform: scale(0); } .cursor.open .txt { transform: scale(1); }
-
 /* Detalle del capítulo */
 .detalle { position: fixed; inset: 0; z-index: 60; background: var(--sheet); visibility: hidden; display: block; overflow: hidden; }
 .detalle.vivo { visibility: visible; }
@@ -119,7 +109,13 @@ a { color: inherit; text-decoration: none; }
 .d-cuerpo figure img { width: 100%; display: block; border-radius: 3px; }
 .d-cuerpo figcaption { font-family: var(--sans); font-size: .72em; color: var(--muted); margin-top: .4em; line-height: 1.35; }
 .d-fin { clear: both; text-align: center; color: var(--accent-2); letter-spacing: .4em; margin: 1.2em 0 .2em; }
-.d-ded { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--muted); }
+.d-ded { font-family: var(--serif); font-style: italic; font-size: 17px; color: var(--muted); }
+.d-ded:empty { display: none; }
+.d-audios { max-width: 46ch; border-top: 1px solid rgba(31,27,20,.25); padding-top: 18px; }
+.d-audios:empty { display: none; }
+.d-audios h3 { margin: 0 0 12px; font-family: var(--sans); font-weight: 700; font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--accent); }
+.d-audios p { margin: 14px 0 6px; font-family: var(--serif); font-style: italic; font-size: 16px; line-height: 1.4; color: var(--muted); }
+.d-audios audio { width: 100%; display: block; }
 .d-lado { display: grid; place-items: center; min-height: 0; }
 .d-poster { height: min(100%, 78vh); aspect-ratio: 474 / 900; max-width: 100%; }
 .d-poster svg { width: 100%; height: 100%; display: block; overflow: visible; }
@@ -141,7 +137,6 @@ a { color: inherit; text-decoration: none; }
   .d-col { overflow: visible; flex: none; padding: 0; } .d-in { margin: 0; }
   .d-titulo { font-size: 38px; } .d-cuerpo { font-size: var(--tam, 18px); }
 }
-@media (prefers-reduced-motion: reduce) { .cursor .aro, .cursor .punto, .cursor .txt { transition: none; } }
 </style>
 </head>
 <body>
@@ -171,8 +166,9 @@ a { color: inherit; text-decoration: none; }
       <div class="mask"><div class="d-sub lbl" id="dSub"></div></div>
       <div class="mask"><h2 class="d-titulo" id="dTitulo"></h2></div>
       <div class="mask"><div class="d-meta lbl" id="dMeta"></div></div>
-      <div class="mask"><div class="d-cuerpo" id="dCuerpo"></div></div>
       <div class="mask"><div class="d-ded" id="dDed"></div></div>
+      <div class="mask"><div class="d-cuerpo" id="dCuerpo"></div></div>
+      <div class="mask"><div class="d-audios" id="dAudios"></div></div>
     </div></div>
     <div class="d-lado"><div class="d-poster"><svg id="dPoster" viewBox="0 0 474 900" aria-hidden="true">
       <defs>
@@ -185,7 +181,6 @@ a { color: inherit; text-decoration: none; }
   </div>
 </div>
 
-<div class="cursor" id="cursor" aria-hidden="true"><div class="aro"></div><div class="punto"></div><div class="txt">ABRIR</div></div>
 <div class="grano" aria-hidden="true"></div>
 
 <script type="application/json" id="datos">/*__DATOS__*/{"titulo":"Mi libro","subtitulo":"","dedicatoria":"","fecha":"","capitulos":[]}</script>
@@ -200,7 +195,6 @@ const $ = (id) => document.getElementById(id);
 const E = (tag, cls, txt) => { const x = document.createElement(tag); if (cls) x.className = cls; if (txt !== undefined) x.textContent = txt; return x; };
 const S = (tag, attrs) => { const x = document.createElementNS(NS, tag); for (const k in attrs) x.setAttribute(k, attrs[k]); return x; };
 const reducir = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const fino = matchMedia('(pointer: fine)').matches;
 const smooth = (x) => x * x * (3 - 2 * x);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
@@ -263,7 +257,7 @@ const B = (r) => (Math.abs(r) < 1 ? (r + Math.sin(Math.PI * r) / Math.PI) / 2 : 
 const F = (r) => r * (ws + gap) + (d - ws + 1.6 * gap) * B(r);
 
 /* Estado */
-let s = INFINITO ? 0 + N : 0, T = s, hover = -1, activo = -1, mx = innerWidth / 2, my = innerHeight / 2, cx = mx, cy = my, tiltX = 0, tiltY = 0, enCubierta = false, abierto = false, arrastrando = false, hubo = false;
+let s = INFINITO ? 0 + N : 0, T = s, hover = -1, activo = -1, mx = innerWidth / 2, my = innerHeight / 2, tiltX = 0, tiltY = 0, enCubierta = false, abierto = false, arrastrando = false, hubo = false;
 const act0 = Math.min(N - 1, Math.floor(N / 2));
 s = T = (INFINITO ? N : 0) + act0;
 const relativo = (v) => { let r = v - s; if (INFINITO) { r = ((r + TOTAL / 2) % TOTAL + TOTAL) % TOTAL - TOTAL / 2; } return r; };
@@ -293,10 +287,8 @@ function pie(i, dir, inmediato) {
 }
 activo = indiceActivo(); pie(activo, 1, true);
 
-/* Cursor */
-const cursor = $('cursor');
+/* Puntero */
 document.addEventListener('pointermove', (e) => { mx = e.clientX; my = e.clientY; });
-document.addEventListener('mouseover', (e) => { const b = e.target.closest && e.target.closest('button, a'); cursor.classList.toggle('btn', !!b && !e.target.closest('.estante')); });
 
 /* Estantería: hover, clic, arrastre, rueda, teclado */
 tapes.forEach((t) => {
@@ -371,12 +363,7 @@ function cuadro(ahora) {
   abrirEscala += (objAbrir - abrirEscala) * (reducir ? 1 : 1 - Math.exp(-14 * dt));
   const ab = $('abrir');
   ab.style.left = (cx0 - 0.5 * d - 6 - 21) + 'px'; ab.style.top = (cyShelf + 0.36 * H - 21) + 'px'; ab.style.transform = `scale(${abrirEscala.toFixed(3)})`;
-  if (fino) {
-    const ck = 1 - Math.exp(-16 * dt); cx += (mx - cx) * ck; cy += (my - cy) * ck;
-    cursor.style.transform = `translate3d(${cx.toFixed(1)}px, ${cy.toFixed(1)}px, 0)`;
-    cursor.classList.toggle('open', enCubierta);
-    cursor.classList.toggle('spine', !enCubierta && hover >= 0 && Math.abs(relativo(hover)) > .5 && !abierto);
-  }
+  estante.style.cursor = enCubierta || (hover >= 0 && !abierto) ? 'pointer' : '';
   requestAnimationFrame(cuadro);
 }
 addEventListener('resize', medir);
@@ -436,6 +423,12 @@ function llenarDetalle(i) {
   if (!pars.length) fotos.forEach((f) => { const fig = E('figure'); const im = E('img'); im.src = f.src; im.alt = f.pie || 'Foto familiar'; fig.appendChild(im); cuerpo.appendChild(fig); });
   cuerpo.appendChild(E('div', 'd-fin', '✦'));
   $('dDed').textContent = i === 0 && DATOS.dedicatoria ? DATOS.dedicatoria : '';
+  const zona = $('dAudios'); zona.replaceChildren();
+  const aud = ch.audios || [];
+  if (aud.length) {
+    zona.appendChild(E('h3', '', aud.length === 1 ? 'Escucha la historia original' : 'Escucha las historias originales'));
+    aud.forEach((a) => { if (a.pregunta) zona.appendChild(E('p', '', a.pregunta)); const au = E('audio'); au.controls = true; au.preload = 'none'; au.src = a.src; zona.appendChild(au); });
+  }
   $('dCol').scrollTop = 0;
   armarPoster(i);
 }
@@ -466,7 +459,6 @@ function abrirDetalle() {
     if (!fin || t < 2400) tinta = requestAnimationFrame(paso);
   };
   tinta = requestAnimationFrame(paso);
-  cursor.classList.remove('open', 'spine');
   setTimeout(() => $('dCerrar').focus({ preventScroll: true }), reducir ? 0 : 700);
 }
 function cerrarDetalle() {
@@ -474,6 +466,7 @@ function cerrarDetalle() {
   const r = rectCubierta();
   detalle.style.transformOrigin = `${r.left + r.width / 2}px ${r.top + r.height / 2}px`;
   const a = detalle.animate([{ clipPath: 'inset(0px 0px 0px 0px round 0px)', transform: 'rotate(0deg)' }, { clipPath: inset(r), transform: 'rotate(-4.5deg)' }], { duration: reducir ? 1 : 850, easing: EASE_HOJA, fill: 'both' });
+  detalle.querySelectorAll('audio').forEach((x) => x.pause());
   a.onfinish = () => { detalle.classList.remove('vivo'); detalle.getAnimations().forEach((x) => x.cancel()); abierto = false; cancelAnimationFrame(tinta); if (focoPrevio && focoPrevio.focus) focoPrevio.focus({ preventScroll: true }); };
 }
 $('dCerrar').addEventListener('click', cerrarDetalle);

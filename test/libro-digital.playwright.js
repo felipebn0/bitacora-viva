@@ -18,7 +18,7 @@ function libro(n, extra = {}) {
     '',
   ];
   const caps = [];
-  for (let i = 0; i < n; i++) caps.push({ id: i + 1, titulo: ['Mi infancia en la finca', 'Mi primer trabajo', 'Cómo conocí a tu abuela y todo lo que pasó después en aquel pueblo', 'La casa de los domingos'][i % 4] + (i >= 4 ? ' ' + (i + 1) : ''), tema: i % 2 ? 'Trabajo' : 'Infancia', texto: textos[i % 3], fotos: i % 2 === 0 ? [{ src: foto, pie: 'Con mi mamá, 1962' }] : [] });
+  for (let i = 0; i < n; i++) caps.push({ id: i + 1, titulo: ['Mi infancia en la finca', 'Mi primer trabajo', 'Cómo conocí a tu abuela y todo lo que pasó después en aquel pueblo', 'La casa de los domingos'][i % 4] + (i >= 4 ? ' ' + (i + 1) : ''), tema: i % 2 ? 'Trabajo' : 'Infancia', texto: textos[i % 3], fotos: i % 2 === 0 ? [{ src: foto, pie: 'Con mi mamá, 1962' }] : [], audios: i === 4 ? [{ src: 'data:audio/webm;base64,GkXfowEAAAAAAAAfQoaBAUL3gQFC8oEEQvOBCEKCQAR3ZWJtQoeBAkKFgQIYU4BnQI0VSalmQCgq17FAAw9CQE2AQAZ3aGFtbXlXQUAGd2hhbW15RIlACECPQAAAAAAAFlSua0AxrkAu14EBY8WBAZyBACK1nEADdW5khkAFVl9WUDglhohAA1ZQOIOBAeBABrCBCLqBCB9DtnVAIueBAKNAHIEAAIAwAQCdASoIAAgAAUAmJaQAA3AA/vz0AAA=', pregunta: '¿Cómo se llamaban tus papás?' }] : [] });
   return Object.assign({ titulo: 'Los recuerdos de Felipe', subtitulo: 'Una historia contada con Eco', dedicatoria: 'Para mis nietos', fecha: 'Octubre de 2026', capitulos: caps }, extra);
 }
 const armar = (datos) => plantilla.replace(/(<script type="application\/json" id="datos">)[\s\S]*?(<\/script>)/, (m, a, b) => a + JSON.stringify(datos).replace(/</g, '\\u003c') + b);
@@ -43,6 +43,8 @@ const armar = (datos) => plantilla.replace(/(<script type="application\/json" id
   ok(await t.page.locator('.tape').count() === 36, 'con 12 capítulos la estantería se repite 3 veces (36 libros)');
   ok(/^Cómo conocí a tu abuela.* 7$/.test(await titulo(t.page)), 'abre en el capítulo del medio');
   ok(/CAPÍTULO 7 DE 12/.test(await t.page.locator('#indice').innerText()), 'el indicador dice en qué capítulo va');
+  ok(await t.page.locator('.cursor').count() === 0 && await t.page.evaluate(() => getComputedStyle(document.body).cursor !== 'none'), 'usa el puntero normal del sistema (sin círculo)');
+  ok(/PARA MIS NIETOS/i.test(await t.page.locator('#pieIzq').innerText()), 'el pie muestra la dedicatoria del libro');
   await t.page.keyboard.press('ArrowRight');
   await t.page.waitForTimeout(1400);
   ok(await titulo(t.page) === 'La casa de los domingos 8', 'la flecha derecha pasa al capítulo siguiente');
@@ -57,6 +59,7 @@ const armar = (datos) => plantilla.replace(/(<script type="application\/json" id
   await t.page.waitForTimeout(2600);
   ok(await t.page.evaluate(() => document.getElementById('detalle').classList.contains('vivo')), 'Enter abre el capítulo');
   ok(/Mi infancia en la finca 5/.test(await t.page.locator('#dTitulo').innerText()), 'muestra el título del capítulo abierto');
+  ok(await t.page.locator('#dAudios audio').count() === 1 && /Cómo se llamaban tus papás/.test(await t.page.locator('#dAudios').innerText()) && /escucha la historia original/i.test(await t.page.locator('#dAudios').innerText()), 'muestra el audio original con su pregunta');
   ok((await t.page.locator('#dCuerpo p').count()) >= 1 && (await t.page.locator('#dCuerpo figure img').count()) >= 1, 'muestra el texto en párrafos y su foto');
   await t.page.screenshot({ path: path.join(process.env.CAPTURAS || '/tmp', 'libro-digital-detalle.png') });
   await t.page.locator('#dMas').click();
@@ -94,6 +97,11 @@ const armar = (datos) => plantilla.replace(/(<script type="application\/json" id
   await t.page.waitForTimeout(2600);
   ok(await t.page.evaluate(() => document.getElementById('detalle').classList.contains('vivo')), 'en el celular también abre el capítulo');
   await t.page.screenshot({ path: path.join(process.env.CAPTURAS || '/tmp', 'libro-digital-movil-detalle.png') });
+  await t.ctx.close();
+
+  // Sin dedicatoria, el pie dice "Creado con Eco"
+  t = await abrir(libro(3, { dedicatoria: '' }));
+  ok(/^CREADO CON ECO/.test(await t.page.locator('#pieIzq').innerText()), 'sin dedicatoria, el pie dice "Creado con Eco"');
   await t.ctx.close();
 
   // Libro sin capítulos
