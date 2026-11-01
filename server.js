@@ -6606,7 +6606,11 @@ async function finalizarAporte(ownerId, draftId, fullHistory, audioUrls, contrib
     // puede no mencionarlo ni una vez, y la extracción de aquí vendría
     // vacía. parentescoConocido es el respaldo para ese caso: nunca se
     // pierde el dato solo porque no hizo falta repetirlo.
-    const cleanParentesco = capitalizarNombre(String(toolUse.input.parentesco || '').trim().slice(0, 60)) || parentescoConocido || null;
+    // Si ya se sabía, ese dato manda: la IA a veces devuelve "unknown" o
+    // "desconocido" en vez de vacío, y eso se guardaba como parentesco.
+    const parentescoDicho = String(toolUse.input.parentesco || '').trim().slice(0, 60);
+    const parentescoDichoValido = parentescoDicho && !/unknown|desconocid|null|undefined|[<>]/i.test(parentescoDicho) ? parentescoDicho : '';
+    const cleanParentesco = parentescoConocido || capitalizarNombre(parentescoDichoValido) || null;
     const texto = capitalizarInicio(String(toolUse.input.texto).trim().slice(0, 4000));
     const audioUrlsLimpias = Array.isArray(audioUrls)
       ? audioUrls.map((u) => urlHttpValida(u)).filter(Boolean).slice(0, 10)
