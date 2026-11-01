@@ -49,3 +49,11 @@ body > header a.volver[href^='/app.html']:focus-visible,
     font-size: .9rem !important;
   }
 }
+
+/* "Volver a mi bitácora" siempre arriba a la izquierda: en colaboraciones e historias
+   el enlace vive dentro del bloque del título, que no debe bajar ni centrarse. */
+body > header > div.eco-colab-heading,
+body > header > div.eco-story-heading {
+  align-self: flex-start !important;
+  text-align: left !important;
+}
