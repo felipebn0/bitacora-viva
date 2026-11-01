@@ -128,3 +128,7 @@ body>main.wrap .ap-short{white-space:normal;overflow:visible;text-overflow:clip;
 @media(max-width:720px){
  body>main.wrap .ap-short{-webkit-line-clamp:unset;display:block}
 }
+
+/* Paginación de Aportes recibidos. */
+.aportes-paginas{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:16px 0 0;}
+.aportes-paginas-info{color:var(--eco-muted);font-size:.92rem;}

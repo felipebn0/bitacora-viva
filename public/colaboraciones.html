@@ -174,7 +174,7 @@
 <link rel="stylesheet" href="/eco-interior.css?v=1">
 <link rel="stylesheet" href="/eco-colaboraciones.css?v=1">
 <script src="/eco-colaboraciones.js?v=1" defer></script>
-<link rel="stylesheet" href="/eco-colaboraciones-vista.css?v=15">
+<link rel="stylesheet" href="/eco-colaboraciones-vista.css?v=16">
 <script src="/eco-colaboraciones-vista.js?v=3" defer></script>
 <link rel="stylesheet" href="/eco-volver-unificado.css?v=4">
 <script src="/eco-volver-unificado.js?v=1" defer></script>
@@ -555,6 +555,40 @@
     container.appendChild(armarTarjetaAporte(it, etiqueta, { acciones: false }));
   }
 
+  // Aportes recibidos de 5 en 5: con muchos aportes la lista completa no se lee bien.
+  const APORTES_POR_PAGINA = 5;
+  function paginarAportes(notes, pagina = 1) {
+    const total = Math.max(1, Math.ceil(notes.length / APORTES_POR_PAGINA));
+    const actual = Math.min(Math.max(1, pagina), total);
+    aportesLista.innerHTML = '';
+    notes.slice((actual - 1) * APORTES_POR_PAGINA, actual * APORTES_POR_PAGINA).forEach((n) => {
+      const quien = n.contributor ? n.contributor + (parentescoLimpio(n.parentesco) ? ` (${parentescoLimpio(n.parentesco)})` : '') : 'Familia';
+      const etiqueta = n.protagonista ? `Historia de ${n.protagonista} — compartida por ${quien}` : quien;
+      aportesLista.appendChild(armarTarjetaAporte(n, etiqueta, { acciones: true }));
+    });
+    if (total <= 1) return;
+    const nav = document.createElement('nav');
+    nav.className = 'aportes-paginas';
+    nav.setAttribute('aria-label', 'Páginas de aportes');
+    const boton = (destino, texto) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'write-toggle';
+      b.textContent = texto;
+      b.disabled = destino < 1 || destino > total;
+      b.addEventListener('click', () => {
+        paginarAportes(notes, destino);
+        aportesLista.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      });
+      return b;
+    };
+    const info = document.createElement('span');
+    info.className = 'aportes-paginas-info';
+    info.textContent = `Página ${actual} de ${total}`;
+    nav.append(boton(actual - 1, '← Anterior'), info, boton(actual + 1, 'Siguiente →'));
+    aportesLista.appendChild(nav);
+  }
+
   async function cargarAportesDados(ownerId) {
     dadosLista.innerHTML = '<p class="empty">Cargando…</p>';
     try {
@@ -710,12 +744,7 @@
       return;
     }
     aportesStatus.textContent = notes.length === 1 ? 'Se cargó 1 aporte.' : `Se cargaron ${notes.length} aportes.`;
-    aportesLista.innerHTML = '';
-    notes.forEach((n) => {
-      const quien = n.contributor ? n.contributor + (parentescoLimpio(n.parentesco) ? ` (${parentescoLimpio(n.parentesco)})` : '') : 'Familia';
-      const etiqueta = n.protagonista ? `Historia de ${n.protagonista} — compartida por ${quien}` : quien;
-      aportesLista.appendChild(armarTarjetaAporte(n, etiqueta, { acciones: true }));
-    });
+    paginarAportes(notes);
   }
 
 
