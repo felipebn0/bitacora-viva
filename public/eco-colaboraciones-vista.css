@@ -115,3 +115,6 @@ body>main.wrap .ap-ver-foto:hover{background:#edf0e5}
 .ap-foto-overlay{position:fixed;inset:0;z-index:9999;background:rgba(30,35,28,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:56px 16px 16px;box-sizing:border-box;overflow:auto}
 .ap-foto-overlay img,.ap-foto-overlay video{max-width:100%;max-height:calc(100vh - 90px);width:auto;height:auto;object-fit:contain;border-radius:12px;background:#fff}
 .ap-foto-cerrar{position:fixed;top:12px;right:14px;width:44px;height:44px;border-radius:50%;border:0;background:#fffdf6;color:#293d30;font-size:1.6rem;line-height:1;cursor:pointer}
+
+/* Botones sueltos dentro de Acciones (Ver foto, Desarchivar) */
+body>main.wrap .ap-acc>.ap-ver-foto,body>main.wrap .ap-acc>button:not(.ap-ver-foto){display:block;width:100%;margin-top:10px;box-sizing:border-box}
