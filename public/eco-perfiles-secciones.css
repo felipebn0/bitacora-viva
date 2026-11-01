@@ -1,0 +1,4 @@
+/* Perfiles: cada sección tiene borde y aire interior, como en Colaboración.
+   Las secciones heredan el radio y la sombra de eco-interior.css, pero no tenían
+   grosor de borde ni relleno, así que el contenido quedaba pegado al borde. */
+body>main.wrap>section{padding:20px 18px;border:1px solid var(--eco-edge);border-radius:22px;background:var(--eco-surface);}
