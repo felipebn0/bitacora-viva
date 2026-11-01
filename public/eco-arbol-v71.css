@@ -28,3 +28,6 @@
  #eco7Root .eco7-person{min-height:60px!important}
  #eco7Root .eco7-branch>.eco7-person,#eco7Root .eco7-center>.eco7-person{width:min(100%,230px)}
 }
+
+/* Búsqueda en árbol completo: la persona encontrada se marca y se centra en pantalla. */
+.person.search-hit{outline:3px solid #9b6734;outline-offset:4px;}
