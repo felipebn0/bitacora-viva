@@ -1,5 +1,5 @@
 // Mi libro: al entrar se abre el estudio, que funciona como un documento de Word: índice del libro a la izquierda, el libro
-// editable a la derecha, y arriba "Descargar PDF" (hoja A4) y "Descargar libro digital".
+// editable a la derecha, y arriba "Descargar PDF" (hoja A4) y "Compartir libro digital".
 //
 //   node test/libro-estudio.playwright.js   (o: npm run test:libro-estudio)
 const fs = require('fs');
@@ -41,6 +41,7 @@ const capitulos = [
       if (u.pathname === '/api/chapters/generate' && m === 'POST') { t.generados.push(JSON.parse(r.request().postData())); t.capitulos = [{ id: 11, title: 'Capítulo nuevo uno', theme: 'infancia', generated_text: 'Texto nuevo uno.', story_ids: [1], audios: [], persona: 'primera' }, { id: 12, title: 'Capítulo nuevo dos', theme: 'trabajo', generated_text: 'Texto nuevo dos.', story_ids: [2], audios: [] }]; return json({ ok: true, chapters: t.capitulos }); }
       if (/^\/api\/chapters\/\d+$/.test(u.pathname) && m === 'DELETE') { const id = Number(u.pathname.split('/').pop()); t.borrados.push(id); t.capitulos = t.capitulos.filter((c) => c.id !== id); return json({ ok: true }); }
       if (u.pathname === '/api/book-editor/photo' && m === 'POST') { t.fotosSubidas.push({ tipo: r.request().headers()['content-type'], bytes: r.request().postDataBuffer().length }); return json({ ok: true, url: 'https://x.test/subida' + t.fotosSubidas.length + '.jpg' }); }
+      if (u.pathname === '/api/libro-compartido') { if (m === 'POST') { t.enlaces = (t.enlaces || []).concat([JSON.parse(r.request().postData())]); return json({ ok: true, url: base + '/libro/' + 'b'.repeat(48) }); } return json({ activo: false }); }
       if (u.pathname === '/api/chapters') return json({ chapters: t.capitulos });
       if (u.pathname === '/api/story-log') return json({ stories: [] });
       if (u.pathname === '/api/book-editor/draft' && m === 'PUT') { t.borrador = JSON.parse(r.request().postData()).book; t.guardados.push(t.borrador); t.version++; return json({ ok: true, version: t.version }); }
@@ -56,7 +57,7 @@ const capitulos = [
   let t = await abrir();
   await t.page.waitForFunction(() => /sincronizado/.test((document.getElementById('ecoEditorialStatus') || {}).textContent || ''));
   ok(await t.page.evaluate(() => document.getElementById('ecoEditorialDialog') && !document.getElementById('ecoEditorialDialog').hidden), 'al entrar a Mi libro se abre el estudio solo');
-  ok(await t.page.locator('#ecoEditorialPdf').innerText() === 'Descargar PDF' && await t.page.locator('#ecoEditorialDigital').innerText() === 'Descargar libro digital', 'arriba hay dos botones: "Descargar PDF" y "Descargar libro digital"');
+  ok(await t.page.locator('#ecoEditorialPdf').innerText() === 'Descargar PDF' && await t.page.locator('#ecoEditorialDigital').innerText() === 'Compartir libro digital', 'arriba hay dos botones: "Descargar PDF" y "Compartir libro digital"');
   ok(await t.page.locator('[data-view], #ecoEditorialForm').count() === 0, 'ya no está el menú de opciones de antes');
 
   // 2) El índice de la izquierda: todo el libro, en el orden del libro
@@ -120,11 +121,12 @@ const capitulos = [
   ok(/Listo: se descargó tu PDF en hoja A4/.test(await t.page.locator('#ecoEditorialStatus').innerText()), 'y avisa arriba que ya se descargó');
   await t.page.click('#ecoEditorialDigital');
   await t.page.waitForSelector('#ecoDemoPay:not([hidden])');
-  ok(await t.page.locator('#ecoDemoConfirm').isVisible(), '«Descargar libro digital» también muestra la pantalla de pago');
-  const [descarga] = await Promise.all([t.page.waitForEvent('download', { timeout: 30000 }), t.page.click('#ecoDemoConfirm')]);
-  const html = fs.readFileSync(await descarga.path(), 'utf8');
-  ok(/\.html$/.test(descarga.suggestedFilename()) && /Los recuerdos de Ana/.test(html) && /Mi infancia en la finca/.test(html), 'al pagar baja el libro digital con lo que se editó (' + descarga.suggestedFilename() + ')');
-  ok(/Listo: se descargó/.test(await t.page.locator('#ecoEditorialStatus').innerText()), 'y avisa arriba, junto al libro');
+  ok(await t.page.locator('#ecoDemoConfirm').isVisible(), '«Compartir libro digital» también muestra la pantalla de pago');
+  let bajadas = 0; t.page.on('download', () => bajadas++);
+  await t.page.click('#ecoDemoConfirm');
+  await t.page.waitForSelector('#ecoEditorialShare:not([hidden])');
+  ok(/\/libro\/b{48}$/.test(await t.page.inputValue('#ecoEditorialShareUrl')) && bajadas === 0, 'al pagar no se descarga nada: aparece el enlace del libro para copiar');
+  ok(t.enlaces.length === 1 && /Mi infancia en la finca/.test(JSON.stringify(t.enlaces[0])) && /Los recuerdos de Ana/.test(JSON.stringify(t.enlaces[0])), 'y el enlace lleva el libro con lo que se editó');
   if (CAPTURAS) await t.page.screenshot({ path: path.join(CAPTURAS, 'estudio-escritorio.png') });
 
   // 7) Volver a la bitácora, eliminar un capítulo y actualizar el libro

@@ -96,7 +96,8 @@ a { color: inherit; text-decoration: none; }
 .d-cerrar { position: absolute; left: 32px; top: 31px; z-index: 3; }
 .d-tam { position: absolute; right: 32px; top: 28px; z-index: 3; display: flex; }
 .d-tam button { height: 27px; min-width: 38px; border: 1px solid var(--rule); margin-left: -1px; font-weight: 700; font-size: 13px; }
-.d-logo { position: absolute; left: 0; right: 0; top: 0; height: 84px; display: flex; justify-content: center; align-items: center; pointer-events: none; }
+.detalle::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 84px; background: var(--sheet); z-index: 2; }
+.d-logo { position: absolute; left: 0; right: 0; top: 0; height: 84px; display: flex; justify-content: center; align-items: center; pointer-events: none; z-index: 3; }
 .d-grid { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4vw; padding: 110px 6vw 40px 7vw; }
 .d-col { overflow-y: auto; min-height: 0; display: flex; padding-right: 10px; scrollbar-width: thin; }
 .d-in { margin: auto 0; max-width: 560px; width: 100%; display: flex; flex-direction: column; gap: 18px; padding: 8px 0; }
@@ -131,7 +132,7 @@ a { color: inherit; text-decoration: none; }
   .pie-pag { left: 16px; right: 16px; bottom: 18px; }
   .indice { top: calc(50% - var(--H) / 2 - 70px); }
   .d-cerrar { left: 16px; top: 21px; } .d-tam { right: 16px; top: 18px; }
-  .d-logo { height: 64px; } .d-logo .logo { max-width: 36vw; }
+  .detalle::before { height: 64px; } .d-logo { display: none; }
   .d-grid { display: flex; flex-direction: column; gap: 24px; padding: 84px 22px 40px; overflow-y: auto; }
   .d-lado { order: -1; flex: none; height: 46svh; } .d-poster { height: 46svh; }
   .d-col { overflow: visible; flex: none; padding: 0; } .d-in { margin: 0; }
@@ -192,7 +193,7 @@ html:not(.con-js) :is(.barra, .indice, .estante, .pie-cap, .flecha, .pie-pag, .d
 <footer class="pie-pag lbl"><span id="pieIzq"></span><a href="https://mieco.app" target="_blank" rel="noopener">MIECO.APP</a></footer>
 
 <div class="detalle" id="detalle" role="dialog" aria-modal="true" aria-labelledby="dTitulo">
-  <button class="d-cerrar lbl box" id="dCerrar" type="button">CERRAR</button>
+  <button class="d-cerrar lbl box" id="dCerrar" type="button">VOLVER AL ESTANTE</button>
   <div class="d-tam"><button type="button" id="dMenos" aria-label="Letra más pequeña">A-</button><button type="button" id="dMas" aria-label="Letra más grande">A+</button></div>
   <div class="d-logo"><div class="logo"><b id="dLogoT"></b></div></div>
   <div class="d-grid" id="dGrid">

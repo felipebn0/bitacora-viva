@@ -1,6 +1,6 @@
 /* ECO · Estudio del libro. Funciona como un documento de Word: a la izquierda el índice del libro (portada, dedicatoria,
    contenido y capítulos) para recorrerlo, y a la derecha el libro mismo, que se edita directamente. Arriba: "Descargar PDF"
-   (hoja A4) y "Descargar libro digital". No modifica las historias originales; lo que se edita queda en el borrador del libro. */
+   (hoja A4) y "Compartir libro digital". No modifica las historias originales; lo que se edita queda en el borrador del libro. */
 (()=>{'use strict';
 const KEY='eco-editorial-borrador-v1';
 let chapters=[],stories=[],state={},dialog,book,outline,status;
@@ -48,21 +48,20 @@ function create(){if(dialog)return;
  dialog=node('div','eco-editorial-overlay');dialog.id='ecoEditorialDialog';dialog.hidden=true;
  dialog.innerHTML=`<div class="eco-editorial-shell" role="dialog" aria-modal="true" aria-labelledby="ecoEditorialTitle">
  <div class="eco-editorial-top"><div class="eco-editorial-heading"><small>ECO · MI LIBRO</small><h2 id="ecoEditorialTitle">Mi libro</h2><p id="ecoEditorialStatus" role="status" aria-live="polite"></p></div>
- <div class="eco-editorial-topbuttons"><button id="ecoEditorialIndexToggle" type="button" class="eco-outline-toggle" aria-expanded="false">☰ Índice</button><button id="ecoEditorialPdf" type="button" class="eco-primary">Descargar PDF</button><button id="ecoEditorialDigital" type="button" class="eco-primary">Descargar libro digital</button><a id="ecoEditorialBack" class="eco-editorial-back" href="/app.html">← Volver a la bitácora</a></div></div>
+ <div class="eco-editorial-topbuttons"><button id="ecoEditorialIndexToggle" type="button" class="eco-outline-toggle" aria-expanded="false">☰ Índice</button><button id="ecoEditorialPdf" type="button" class="eco-primary">Descargar PDF</button><button id="ecoEditorialDigital" type="button" class="eco-primary">Compartir libro digital</button><a id="ecoEditorialBack" class="eco-editorial-back" href="/app.html">← Volver a la bitácora</a></div></div>
  <div class="eco-editorial-layout"><aside class="eco-editorial-sidebar"><nav id="ecoEditorialOutline" aria-label="Índice del libro"></nav>
  <div class="eco-outline-update"><label for="ecoEditorialVoz">Voz del libro</label><select id="ecoEditorialVoz"><option value="tercera">tercera persona («contó que…»)</option><option value="primera">primera persona («yo conté…»)</option></select><button id="ecoEditorialUpdate" type="button">Actualizar libro</button><p class="eco-editorial-hint">Vuelve a escribir los capítulos con tus historias más recientes. Se pierden los cambios que hiciste a los capítulos.</p></div>
- <div class="eco-outline-share" id="ecoEditorialShare"><label for="ecoEditorialShareMake">Libro en línea</label><button id="ecoEditorialShareMake" type="button">Compartir libro en línea</button><div class="eco-share-box" id="ecoEditorialShareBox" hidden><input id="ecoEditorialShareUrl" type="text" readonly aria-label="Enlace para compartir tu libro"><button id="ecoEditorialShareCopy" type="button">Copiar enlace</button><button id="ecoEditorialShareSend" type="button" hidden>Compartir…</button><button id="ecoEditorialShareStop" type="button" class="eco-share-stop">Dejar de compartir</button></div><p class="eco-editorial-hint">Un enlace que se abre en el celular o el computador, sin cuenta y con los audios. Una vez creado, se actualiza solo cuando cambias tu libro.</p></div></aside>
+ <div class="eco-outline-share" id="ecoEditorialShare" hidden><label for="ecoEditorialShareUrl">Enlace de tu libro</label><div class="eco-share-box" id="ecoEditorialShareBox"><input id="ecoEditorialShareUrl" type="text" readonly aria-label="Enlace para compartir tu libro"><button id="ecoEditorialShareCopy" type="button">Copiar enlace</button><button id="ecoEditorialShareSend" type="button" hidden>Compartir…</button><button id="ecoEditorialShareStop" type="button" class="eco-share-stop">Dejar de compartir</button></div><p class="eco-editorial-hint">Cualquiera que tenga este enlace ve tu libro y oye los audios, en el celular o el computador, sin cuenta. Se actualiza solo cuando cambias tu libro.</p></div></aside>
  <section class="eco-editorial-preview" aria-label="Libro"><div id="ecoEditorialBook" class="eco-editorial-pages"></div></section></div></div>`;
  document.body.appendChild(dialog);book=byId('ecoEditorialBook');outline=byId('ecoEditorialOutline');status=byId('ecoEditorialStatus');
  byId('ecoEditorialUpdate').addEventListener('click',actualizarLibro);
- byId('ecoEditorialShareMake').addEventListener('click',compartirEnLinea);
  byId('ecoEditorialShareCopy').addEventListener('click',copiarEnlace);
  byId('ecoEditorialShareSend').addEventListener('click',compartirEnlace);
  byId('ecoEditorialShareStop').addEventListener('click',dejarDeCompartir);
  byId('ecoEditorialShareUrl').addEventListener('focus',e=>e.target.select());
  if(navigator.share)byId('ecoEditorialShareSend').hidden=false;
  byId('ecoEditorialPdf').addEventListener('click',descargarPdf);
- byId('ecoEditorialDigital').addEventListener('click',descargarDigital);
+ byId('ecoEditorialDigital').addEventListener('click',compartirEnLinea);
  byId('ecoEditorialIndexToggle').addEventListener('click',()=>alternarIndice());
  dialog.addEventListener('keydown',e=>{if(e.key==='Escape'&&dialog.classList.contains('eco-outline-abierto'))alternarIndice(false);if(e.key==='Tab')trap(e)});
  byId('ecoEditorialBook').parentElement.addEventListener('scroll',marcarSeccionActual,{passive:true});
@@ -106,19 +105,19 @@ async function autoQr(){
 }
 
 /* ── Enlace para compartir el libro ────────────────────────────────────────── */
-function mostrarEnlace(url){byId('ecoEditorialShareUrl').value=url||'';byId('ecoEditorialShareBox').hidden=!url;byId('ecoEditorialShareMake').hidden=!!url;enlaceActivo=!!url}
+function mostrarEnlace(url){byId('ecoEditorialShareUrl').value=url||'';byId('ecoEditorialShare').hidden=!url;enlaceActivo=!!url}
 async function compartirEnLinea(){
- const btn=byId('ecoEditorialShareMake'),texto=btn.textContent;
+ const btn=byId('ecoEditorialDigital'),texto=btn.textContent;
  if(!window.EcoLibroDigital||!window.EcoLibroDigital.compartirEnLinea){status.textContent='No se pudo preparar el enlace. Recarga la página e intenta de nuevo.';return}
  if(!chapters.length){status.textContent='Todavía no tienes capítulos. Genera tus capítulos primero y luego comparte tu libro.';return}
- if(!(await pagar())){status.textContent='Para compartir el libro en línea primero hay que completar la compra de prueba.';return}
+ if(!(await pagar())){status.textContent='Para compartir el libro digital primero hay que completar la compra de prueba.';return}
  status.classList.remove('eco-editorial-status-error');
  btn.disabled=true;btn.textContent='Preparando tu enlace…';
  try{
   await flush();
   const url=await window.EcoLibroDigital.compartirEnLinea();
   if(!url)throw Error('No se pudo preparar el enlace. Intenta de nuevo.');
-  mostrarEnlace(url);status.textContent='Listo: tu libro está en línea. Copia el enlace y mándalo; se actualiza solo cuando cambias tu libro.';
+  mostrarEnlace(url);alternarIndice(true);status.textContent='Listo: copia el enlace de tu libro (a la izquierda) y mándalo. Se actualiza solo cuando cambias tu libro.';
  }catch(e){status.textContent=e.message;status.classList.add('eco-editorial-status-error')}
  finally{btn.disabled=false;btn.textContent=texto}
 }
@@ -170,16 +169,8 @@ async function descargarPdf(){
  }catch(e){status.textContent=e.message||'No se pudo preparar el PDF.';status.classList.add('eco-editorial-status-error')}
  finally{btn.disabled=false;btn.textContent=texto}
 }
-// Las dos descargas muestran la pantalla de pago (compra de prueba) antes de bajar el libro.
+// El PDF y el enlace del libro digital muestran la pantalla de pago (compra de prueba) antes de entregar el libro.
 const pagar=async()=>!window.EcoLibroCompra||(await window.EcoLibroCompra.asegurar({siempre:true}));
-async function descargarDigital(){
- const btn=byId('ecoEditorialDigital');
- if(!window.EcoLibroDigital){status.textContent='No se pudo preparar el libro digital. Recarga la página e intenta de nuevo.';return}
- if(!chapters.length){status.textContent='Todavía no tienes capítulos. Genera tus capítulos primero y luego descarga tu libro.';return}
- if(!(await pagar())){status.textContent='Para descargar el libro digital primero hay que completar la compra de prueba.';return}
- await flush();
- await window.EcoLibroDigital.exportar({boton:btn,yaPagado:true,alEnlace:mostrarEnlace,aviso:(t,error)=>{status.textContent=t||'';status.classList.toggle('eco-editorial-status-error',!!error)}});
-}
 
 /* ── Actualizar el libro y eliminar capítulos ──────────────────────────────── */
 // Vuelve a escribir los capítulos con las historias más recientes. Los capítulos nuevos tienen otros números, así que lo que

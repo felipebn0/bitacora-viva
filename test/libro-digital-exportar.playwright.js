@@ -49,10 +49,9 @@ const capitulos = [
   }
 
   let t = await abrir();
-  ok((await t.page.textContent('#ecoEditorialDigital')) === 'Descargar libro digital', 'Mi libro tiene el botón "Descargar libro digital"');
-  await t.page.click('#ecoEditorialDigital');
-  await t.page.waitForSelector('#ecoDemoPay:not([hidden])');
-  const [descarga] = await Promise.all([t.page.waitForEvent('download', { timeout: 30000 }), t.page.click('#ecoDemoConfirm')]);
+  ok((await t.page.textContent('#ecoEditorialDigital')) === 'Compartir libro digital', 'Mi libro tiene el botón "Compartir libro digital" (ya no descarga)');
+  // El archivo sigue existiendo en EcoLibroDigital.exportar (el estudio ya no lo ofrece): se prueba directo.
+  const [descarga] = await Promise.all([t.page.waitForEvent('download', { timeout: 30000 }), t.page.evaluate(() => window.EcoLibroDigital.exportar({ yaPagado: true, aviso: (txt) => { document.getElementById('ecoEditorialStatus').textContent = txt || ''; } }))]);
   ok(descarga.suggestedFilename() === 'el-libro-de-ana-eco.html', 'el archivo se llama como el libro: ' + descarga.suggestedFilename());
   const ruta = await descarga.path();
   const html = fs.readFileSync(ruta, 'utf8');
@@ -69,7 +68,7 @@ const capitulos = [
   ok(!html.includes('/*__FUENTES__*/') && !html.includes('/*__DATOS__*/'), 'no quedan marcas sin llenar');
   ok(html.length < 3 * 1024 * 1024, 'pesa poco (' + (html.length / 1048576).toFixed(2) + ' MB)');
   ok(/Listo: se descargó/.test(await t.page.locator('#ecoEditorialStatus').innerText()), 'avisa que ya se descargó');
-  ok(!(await t.page.isDisabled('#ecoEditorialDigital')) && (await t.page.textContent('#ecoEditorialDigital')) === 'Descargar libro digital', 'el botón queda listo para volver a usarse');
+  ok(!(await t.page.isDisabled('#ecoEditorialDigital')), 'el botón de compartir sigue disponible');
   ok(t.errores.length === 0, 'sin errores de JavaScript' + (t.errores.length ? ': ' + t.errores.join(' | ') : ''));
 
   // El archivo descargado abre solo, sin servidor ni internet.
@@ -100,7 +99,7 @@ const capitulos = [
   // Sin comprar: pide la compra y no descarga hasta pagar. El PDF no se dispara solo.
   t = await abrir({ aprobada: false });
   await t.page.evaluate(() => { window.__imprimio = 0; window.print = () => { window.__imprimio++; }; });
-  await t.page.click('#ecoEditorialDigital');
+  await t.page.evaluate(() => { window.EcoLibroDigital.exportar({ aviso: () => {} }); });
   await t.page.waitForSelector('#ecoDemoPay:not([hidden])');
   const [d2] = await Promise.all([t.page.waitForEvent('download', { timeout: 30000 }), t.page.click('#ecoDemoConfirm')]);
   ok(t.estado.compras === 1 && !!d2.suggestedFilename(), 'sin comprar: pide la compra de prueba y al pagar descarga');
@@ -112,7 +111,7 @@ const capitulos = [
   t = await abrir({ sinCapitulos: true });
   await t.page.click('#ecoEditorialDigital');
   await t.page.waitForTimeout(600);
-  ok(/Todavía no tienes capítulos/.test(await t.page.locator('#ecoEditorialStatus').innerText()), 'sin capítulos lo explica y no descarga');
+  ok(/Todavía no tienes capítulos/.test(await t.page.locator('#ecoEditorialStatus').innerText()), 'sin capítulos lo explica y no crea el enlace');
   await t.ctx.close();
 
   await browser.close(); server.close();

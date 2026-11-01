@@ -117,6 +117,8 @@ const armar = (datos) => plantilla.replace(/(<script type="application\/json" id
   await t.page.mouse.click(c.x, c.y);
   await t.page.waitForTimeout(2200);
   ok(await t.page.evaluate(() => document.getElementById('detalle').classList.contains('vivo')), 'un clic sobre la portada abierta abre el capítulo');
+  ok((await t.page.locator('#dCerrar').innerText()).trim() === 'VOLVER AL ESTANTE', 'dentro del capítulo el botón dice «Volver al estante»');
+  ok(await t.page.evaluate(() => { const b = getComputedStyle(document.getElementById('detalle'), '::before'); return b.content !== 'none' && b.backgroundColor !== 'rgba(0, 0, 0, 0)' && parseFloat(b.height) >= 64; }), 'la barra de arriba del capítulo tiene fondo: el título y la portada no se montan sobre el botón al bajar');
   await t.ctx.close();
 
   {
@@ -136,6 +138,7 @@ const armar = (datos) => plantilla.replace(/(<script type="application\/json" id
     await page.touchscreen.tap(z.x, z.y);
     await page.waitForTimeout(2400);
     ok(await page.evaluate(() => document.getElementById('detalle').classList.contains('vivo')), 'en el celular, tocar la portada (después de deslizar) abre el capítulo');
+    ok(await page.evaluate(() => { const r = document.getElementById('dCerrar').getBoundingClientRect(); return r.right < innerWidth - 100 && r.height >= 20; }), 'en el celular, «Volver al estante» cabe sin tapar los botones de tamaño de letra');
     ok(errs.length === 0, 'sin errores en el celular al tocar: ' + JSON.stringify(errs));
     await ctx.close();
   }

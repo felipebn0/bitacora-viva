@@ -1,4 +1,4 @@
-// Mi libro: "Compartir libro en línea" crea un enlace sin descargar nada y, una vez creado, se actualiza solo cuando cambia el libro.
+// Mi libro: el botón «Compartir libro digital» crea un enlace sin descargar nada y, una vez creado, se actualiza solo cuando cambia el libro.
 //
 //   node test/libro-enlace.playwright.js   (o: npm run test:libro-enlace)
 const path = require('path');
@@ -45,18 +45,18 @@ const capitulos = [
   await page.goto(base + '/capitulos.html');
   await page.waitForFunction(() => /sincronizado/.test((document.getElementById('ecoEditorialStatus') || {}).textContent || ''));
 
-  ok(await page.locator('#ecoEditorialShareMake').isVisible() && await page.locator('#ecoEditorialShareBox').isHidden(), 'sin enlace: se ve el botón «Compartir libro en línea» y no el cuadro del enlace');
+  ok(await page.locator('#ecoEditorialDigital').innerText() === 'Compartir libro digital' && await page.locator('#ecoEditorialShare').isHidden(), 'sin enlace: arriba está «Compartir libro digital» y el cuadro del enlace no se ve');
 
-  await page.click('#ecoEditorialShareMake');
+  await page.click('#ecoEditorialDigital');
   await page.waitForSelector('#ecoDemoPay:not([hidden])');
   ok(t.posts.length === 0, 'antes de crear el enlace se muestra la pantalla de pago');
   await page.click('#ecoDemoConfirm');
-  await page.waitForSelector('#ecoEditorialShareBox:not([hidden])');
+  await page.waitForSelector('#ecoEditorialShare:not([hidden])');
   ok(t.posts.length === 1 && t.descargas === 0, 'al aprobar se crea el enlace sin descargar ningún archivo');
   const cuerpo = JSON.stringify(t.posts[0]);
   ok(!/data:(image|audio)/.test(cuerpo), 'y sin fotos ni audios pegados al enlace: solo se mandan sus direcciones');
   ok(t.posts[0].datos.capitulos.length === 2 && t.posts[0].datos.capitulos[0].audios[0].url === AUDIO && t.posts[0].datos.capitulos[0].audios[0].pregunta === '¿Cómo era la finca?', 'el enlace lleva los capítulos, el audio y su pregunta');
-  ok(/\/libro\/a{48}$/.test(await page.inputValue('#ecoEditorialShareUrl')) && await page.locator('#ecoEditorialShareMake').isHidden(), 'se muestra el enlace y se esconde el botón de crear');
+  ok(/\/libro\/a{48}$/.test(await page.inputValue('#ecoEditorialShareUrl')), 'se muestra el enlace del libro');
 
   // Cambiar el libro lo actualiza solo
   await page.locator('[data-sec="ch-1"] h2').fill('Infancia (editado)');
@@ -68,8 +68,8 @@ const capitulos = [
   // Dejar de compartir
   page.once('dialog', (d) => d.accept());
   await page.click('#ecoEditorialShareStop');
-  await page.waitForSelector('#ecoEditorialShareMake:not([hidden])');
-  ok(t.deletes === 1 && await page.locator('#ecoEditorialShareBox').isHidden(), 'dejar de compartir retira el enlace y vuelve el botón de crear');
+  await page.waitForSelector('#ecoEditorialShare', { state: 'hidden' });
+  ok(t.deletes === 1, 'dejar de compartir retira el enlace y esconde el cuadro');
   const antes = t.posts.length;
   await page.locator('[data-sec="ch-1"] h2').fill('Infancia más');
   await page.waitForTimeout(7500);
