@@ -1,20 +1,9 @@
-/* ECO · Fase 4 · mismo lenguaje visual que Árbol y Mi libro */
-.eco-print4-settings{display:none;background:#fffdf6;border:1px solid #dadaca;color:#302d25;border-radius:17px;padding:16px;max-width:670px;margin:14px auto;font-family:"Atkinson Hyperlegible",sans-serif}
-.eco-print4-settings.eco-print4-visible{display:grid;gap:12px}
-.eco-print4-header{display:flex;justify-content:space-between;gap:10px;align-items:center}
-.eco-print4-header strong{font:700 20px "Source Serif 4",Georgia,serif;color:#293d30}
-.eco-print4-header button{border:0;background:none;font-size:23px;cursor:pointer}
-.eco-print4-settings label{display:grid;gap:6px;font-weight:700}
-.eco-print4-settings select{padding:10px;border-radius:10px;border:1px solid #dadaca;font:inherit;background:white}
-.eco-print4-help{font-size:13px;line-height:1.5;color:#777568;margin:0}
-#ecoPrint4Checks{background:#edf0e5;border-radius:10px;padding:11px;font-size:13px;color:#293d30}
-.eco-print4-primary{border-radius:12px;border:1px solid #4d6542;background:#4d6542;color:white;padding:13px;font-weight:700;cursor:pointer}
+/* ECO · Impresión del libro (hoja A4): al imprimir solo se ve el libro; el índice, los botones y las herramientas no salen. */
 @media print{
  html,body{background:white!important;overflow:visible!important}
- .eco-print4-settings{display:none!important}
  .eco-editorial-overlay,.eco-editorial-overlay[hidden]{display:block!important;position:static!important;overflow:visible!important;background:white!important;padding:0!important;margin:0!important}
  .eco-editorial-shell{display:block!important;position:static!important;overflow:visible!important;height:auto!important;max-height:none!important;max-width:none!important;width:100%!important;margin:0!important;padding:0!important;border:0!important;box-shadow:none!important}
- .eco-editorial-top,.eco-editorial-sidebar,.eco-editorial-warning,.eco-editorial-topbuttons{display:none!important}
+ .eco-editorial-top,.eco-editorial-sidebar,.eco-editorial-topbuttons{display:none!important}
  .eco-editorial-layout{display:block!important;width:100%!important;margin:0!important;padding:0!important}
  .eco-editorial-preview{display:block!important;width:100%!important;margin:0!important;padding:0!important;border:0!important;background:white!important;overflow:visible!important}
  #ecoEditorialBook{display:block!important;max-width:none!important;width:100%!important;margin:0!important;padding:0!important}

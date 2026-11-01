@@ -43,7 +43,7 @@ const capitulos = [
       if (u.includes('/api/book-editor/draft')) return r.fulfill({ json: { book: { title: 'El libro de Ana', subtitle: 'Para los nietos', dedication: 'Para Lucía', order: [2, 1], edits: { 1: { title: 'Infancia editada' } } }, version: 1 } });
       return r.fulfill({ json: {} });
     });
-    await page.goto(base + '/capitulos.html');
+    await page.goto(base + '/capitulos.html#capitulos');
     await page.waitForSelector('#ecoLibroDigital', { timeout: 10000 });
     return { page, ctx, estado, errores };
   }

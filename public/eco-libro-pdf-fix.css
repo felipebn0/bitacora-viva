@@ -30,8 +30,7 @@
  #ecoEditorialDialog #ecoEditorialBook>.eco-editorial-cover{display:flex!important;flex-direction:column!important;
   align-items:center!important;justify-content:center!important;text-align:center!important;min-height:calc(var(--eco-print-alto,259mm) - 2mm)!important;box-sizing:border-box!important}
  #ecoEditorialDialog .eco-editorial-top,#ecoEditorialDialog .eco-editorial-topbuttons,
- #ecoEditorialDialog .eco-editorial-warning,#ecoEditorialDialog .eco-editorial-sidebar,
- #ecoEditorialDialog .eco-print4-settings{display:none!important}
+ #ecoEditorialDialog .eco-editorial-sidebar{display:none!important}
  #ecoEditorialDialog img{max-width:100%!important;object-fit:contain!important}
  #ecoEditorialDialog figure,#ecoEditorialDialog .eco-editorial-qr{break-inside:avoid!important;page-break-inside:avoid!important}
 }

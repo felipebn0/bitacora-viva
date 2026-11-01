@@ -12,7 +12,7 @@
     ['Atkinson Hyperlegible', 'normal', '400', 'atkinson-hyperlegible-latin-400-normal.woff2'],
     ['Atkinson Hyperlegible', 'normal', '700', 'atkinson-hyperlegible-latin-700-normal.woff2'],
   ];
-  let ocupado = false, boton = null;
+  let ocupado = false, botonLista = null;
 
   const mensaje = () => document.querySelector('.eco-libro-exportar-msg');
   function aviso(texto, error) {
@@ -122,18 +122,20 @@
 
   const nombreDeArchivo = (titulo) => (titulo.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase().slice(0, 60) || 'mi-libro') + '-eco.html';
 
-  async function exportar() {
+  async function exportar(opciones) {
+    const boton = (opciones && opciones.boton) || botonLista;
+    const avisar = (opciones && opciones.aviso) || aviso;
     if (ocupado) return;
     ocupado = true;
     const texto = boton ? boton.textContent : '';
     if (boton) { boton.disabled = true; boton.textContent = 'Preparando tu libro…'; }
-    aviso('');
+    avisar('');
     try {
       let hay = true;
       try { const r = await fetch('/api/chapters', { credentials: 'same-origin' }); if (r.ok) hay = ((await r.json()).chapters || []).length > 0; } catch (e) { /* sin conexión: se intenta igual */ }
-      if (!hay) { aviso('Todavía no tienes capítulos. Genera tus capítulos primero y luego exporta tu libro.', true); return; }
-      if (window.EcoLibroCompra && !(await window.EcoLibroCompra.asegurar())) { aviso('Para exportar el libro primero hay que completar la compra de prueba.'); return; }
-      aviso('Preparando tu libro: reduciendo las fotos y juntando los audios…');
+      if (!hay) { avisar('Todavía no tienes capítulos. Genera tus capítulos primero y luego exporta tu libro.', true); return; }
+      if (window.EcoLibroCompra && !(await window.EcoLibroCompra.asegurar())) { avisar('Para exportar el libro primero hay que completar la compra de prueba.'); return; }
+      avisar('Preparando tu libro: reduciendo las fotos y juntando los audios…');
       const [datos, fuentes, plantilla] = await Promise.all([
         armarDatos(), cssDeFuentes(),
         fetch('/libro-digital-plantilla.txt').then((r) => (r.ok ? r.text() : Promise.reject(new Error('No se pudo preparar el libro. Intenta de nuevo.')))),
@@ -151,9 +153,9 @@
       a.href = url; a.download = nombreDeArchivo(datos.titulo);
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 30000);
-      aviso('Listo: se descargó tu libro digital (' + (archivo.size / 1048576).toFixed(1) + ' MB). Ábrelo con doble clic o envíaselo a tu familia.' + (omitidos ? ' ' + (omitidos === 1 ? 'Un audio pesaba demasiado y no se incluyó.' : omitidos + ' audios pesaban demasiado y no se incluyeron.') : ''));
+      avisar('Listo: se descargó tu libro digital (' + (archivo.size / 1048576).toFixed(1) + ' MB). Ábrelo con doble clic o envíaselo a tu familia.' + (omitidos ? ' ' + (omitidos === 1 ? 'Un audio pesaba demasiado y no se incluyó.' : omitidos + ' audios pesaban demasiado y no se incluyeron.') : ''));
     } catch (e) {
-      aviso(e.message || 'No se pudo preparar el libro digital.', true);
+      avisar(e.message || 'No se pudo preparar el libro digital.', true);
     } finally {
       ocupado = false;
       if (boton) { boton.disabled = false; boton.textContent = texto; }
@@ -164,14 +166,16 @@
     if ($('ecoLibroDigital')) return;
     const previo = $('ecoLibroExportar');
     if (!previo) return;
-    boton = document.createElement('button');
-    boton.type = 'button';
-    boton.id = 'ecoLibroDigital';
-    boton.className = 'eco-libro-exportar';
-    boton.textContent = 'Exportar libro digital';
-    boton.addEventListener('click', exportar);
-    previo.insertAdjacentElement('afterend', boton);
+    botonLista = document.createElement('button');
+    botonLista.type = 'button';
+    botonLista.id = 'ecoLibroDigital';
+    botonLista.className = 'eco-libro-exportar';
+    botonLista.textContent = 'Exportar libro digital';
+    botonLista.addEventListener('click', () => exportar());
+    previo.insertAdjacentElement('afterend', botonLista);
   }
+
+  window.EcoLibroDigital = { exportar };
 
   new MutationObserver(montar).observe(document.documentElement, { childList: true, subtree: true });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', montar); else montar();

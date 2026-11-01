@@ -42,28 +42,27 @@ const capitulos = [
   });
   await page.goto(base + '/capitulos.html');
   await page.waitForSelector('#ecoEditorialOpen');
-
-  await page.click('#ecoEditorialOpen');
+  // Al entrar a Mi libro el estudio se abre solo
   await page.waitForFunction(() => /sincronizado|Guardado en tu cuenta/.test(document.getElementById('ecoEditorialStatus').textContent));
   const t0 = Date.now(); while (creados.length < 2 && Date.now() - t0 < 6000) await page.waitForTimeout(50);
   ok(creados.sort().join(',') === '1,3', 'al abrir el estudio se crean solos los QR de los capítulos con grabaciones (1 y 3)');
   ok(!creados.includes(2), 'y no se pide uno para el capítulo sin grabaciones');
 
-  await page.click('[data-view="preview"]');
   await page.waitForSelector('#ecoEditorialBook .eco-editorial-qr');
   ok(await page.locator('#ecoEditorialBook .eco-editorial-qr img').count() === 2, 'la vista del libro lleva el QR en esos dos capítulos');
   ok(await page.locator('#ecoEditorialBook .eco-editorial-qr img').first().getAttribute('src') === '/api/book-qr/image/' + TOKEN(1) + '.svg', 'el QR apunta al código de su capítulo');
 
-  await page.click('[data-view="media"]');
-  await page.waitForSelector('.eco-editorial-revokeqr');
+  await page.click('[data-sec="ch-1"] .eco-editorial-tools > summary');
+  await page.waitForSelector('[data-sec="ch-1"] .eco-editorial-revokeqr');
   page.once('dialog', (d) => d.accept());
-  await page.click('.eco-editorial-revokeqr');
-  await page.waitForFunction(() => !document.querySelector('.eco-editorial-revokeqr'));
+  await page.click('[data-sec="ch-1"] .eco-editorial-revokeqr');
+  await page.waitForFunction(() => !document.querySelector('[data-sec="ch-1"] .eco-editorial-revokeqr'));
   ok(retirados.join(',') === '1', 'retirar el QR del capítulo 1 lo revoca en el servidor');
   const t1 = Date.now(); while (!(borrador.qrOff && borrador.qrOff['1']) && Date.now() - t1 < 5000) await page.waitForTimeout(100);
   ok(borrador.qrOff && borrador.qrOff['1'] === true, 'y queda anotado en el borrador que se retiró a propósito');
 
   await page.click('#ecoEditorialClose');
+  ok(await page.evaluate(() => document.getElementById('ecoEditorialDialog').hidden) && /#capitulos$/.test(page.url()), 'al cerrar el estudio se vuelve a la lista de capítulos');
   creados.length = 0;
   await page.click('#ecoEditorialOpen');
   await page.waitForFunction(() => /sincronizado|Guardado en tu cuenta/.test(document.getElementById('ecoEditorialStatus').textContent));

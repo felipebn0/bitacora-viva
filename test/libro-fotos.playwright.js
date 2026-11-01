@@ -42,7 +42,7 @@ const capitulos = [
     if (u.pathname === '/api/book-editor/draft') return json({ book: borrador, version });
     return json({});
   });
-  await page.goto(base + '/capitulos.html');
+  await page.goto(base + '/capitulos.html#capitulos');
   await page.waitForSelector('#lista .chapter');
 
   // 1) La lista sigue lo diseñado: orden y títulos
@@ -72,29 +72,29 @@ const capitulos = [
   if (CAPTURAS) await page.screenshot({ path: path.join(CAPTURAS, 'libro-lectura.png') });
   await page.click('#ecoReaderClose');
 
-  // 3) El estudio: sin tamaño ni posición, pie editable, sin "Volver a comprobar"
+  // 3) El estudio: el libro se edita directamente; las fotos y el QR de cada capítulo están debajo del texto
   await page.click('#ecoEditorialOpen');
   await page.waitForFunction(() => /sincronizado|Guardado en tu cuenta/.test(document.getElementById('ecoEditorialStatus').textContent));
-  ok(await page.locator('#ecoPrint4Size').count() === 0 && /size:210mm 297mm/.test(await page.evaluate(() => document.getElementById('ecoPrint4Page').textContent)), 'el libro siempre es A4: ya no hay selector de tamaño de página y la hoja de impresión es 210 x 297 mm');
-  await page.click('[data-view="media"]');
-  await page.selectOption('#ecoEditorialForm select', '1');
-  await page.waitForSelector('.eco-editorial-photo-config');
-  ok(await page.locator('.eco-editorial-photo-fields select').count() === 0, 'por cada foto ya no hay opciones de tamaño ni de posición');
-  ok(await page.locator('.eco-editorial-photo-fields input[type=checkbox]').count() === 1 && await page.locator('.eco-editorial-photo-fields input:not([type=checkbox])').count() === 1, 'solo queda "Incluir" y el pie de foto');
-  ok(!/Volver a comprobar/.test(await page.textContent('#ecoEditorialForm')) && await page.locator('.eco-editorial-makeqr').count() === 0, 'ya no existe "Volver a comprobar el QR" (con QR no hay botón de crear)');
-  ok(await page.locator('.eco-editorial-revokeqr').count() === 1 && await page.locator('.eco-editorial-qr-link').count() === 1, 'quedan "Probar enlace" y "Retirar el enlace"');
-  await page.fill('.eco-editorial-photo-fields input:not([type=checkbox])', 'En la finca, 1985');
-  await page.click('[data-view="preview"]');
-  await page.waitForSelector('#ecoEditorialBook .eco-foto-flota');
-  const libro = await page.evaluate(() => { const pag = [...document.querySelectorAll('#ecoEditorialBook .eco-editorial-page')].find((p) => p.querySelector('figure')); const f = pag.querySelector('figure'); return { pie: f.querySelector('figcaption')?.textContent, antesDelPrimerParrafo: f.nextElementSibling?.classList.contains('eco-editorial-paragraph') && !f.previousElementSibling?.classList.contains('eco-editorial-paragraph'), flota: getComputedStyle(f).float }; });
-  ok(libro.pie === 'En la finca, 1985' && libro.antesDelPrimerParrafo && libro.flota === 'right', 'en la vista del libro la foto va arriba a la derecha con el pie que se editó');
+  const pdf = await (async () => { await page.emulateMedia({ media: 'print' }); const b = await page.pdf({ preferCSSPageSize: true }); await page.emulateMedia({ media: 'screen' }); return b.toString('latin1'); })();
+  const caja = pdf.match(/\/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)\s*\]/);
+  ok(caja && Math.abs(caja[1] - 595.28) < 1.5 && Math.abs(caja[2] - 841.89) < 1.5, 'el libro siempre se imprime en hoja A4 (' + (caja ? caja[1] + ' x ' + caja[2] + ' pt' : 'sin medida') + ')');
+  await page.click('[data-sec="ch-1"] .eco-editorial-tools > summary');
+  await page.waitForSelector('[data-sec="ch-1"] .eco-editorial-photo-config');
+  ok(await page.locator('[data-sec="ch-1"] .eco-editorial-photo-fields select').count() === 0, 'por cada foto ya no hay opciones de tamaño ni de posición');
+  ok(await page.locator('[data-sec="ch-1"] .eco-editorial-photo-fields input[type=checkbox]').count() === 1 && await page.locator('[data-sec="ch-1"] .eco-editorial-photo-fields input:not([type=checkbox])').count() === 1, 'solo queda "Incluir" y el pie de foto');
+  ok(!/Volver a comprobar/.test(await page.textContent('[data-sec="ch-1"] .eco-editorial-tools')) && await page.locator('[data-sec="ch-1"] .eco-editorial-makeqr').count() === 0, 'ya no existe "Volver a comprobar el QR" (con QR no hay botón de crear)');
+  ok(await page.locator('[data-sec="ch-1"] .eco-editorial-revokeqr').count() === 1 && await page.locator('[data-sec="ch-1"] .eco-editorial-qr-link').count() === 1, 'quedan "Probar enlace" y "Retirar el enlace"');
+  await page.fill('[data-sec="ch-1"] .eco-editorial-photo-fields input:not([type=checkbox])', 'En la finca, 1985');
+  await page.press('[data-sec="ch-1"] .eco-editorial-photo-fields input:not([type=checkbox])', 'Tab');
+  await page.waitForSelector('#ecoEditorialBook [data-sec="ch-1"] .eco-foto-flota');
+  const libro = await page.evaluate(() => { const pag = document.querySelector('#ecoEditorialBook [data-sec="ch-1"]'); const f = pag.querySelector('figure'); return { pie: f.querySelector('figcaption').textContent, antesDelPrimerParrafo: f.compareDocumentPosition(pag.querySelector('p.eco-editorial-paragraph')) & Node.DOCUMENT_POSITION_FOLLOWING, flota: getComputedStyle(f).float }; });
+  ok(libro.pie === 'En la finca, 1985' && libro.antesDelPrimerParrafo && libro.flota === 'right', 'en el libro la foto va arriba a la derecha con el pie que se editó');
   if (CAPTURAS) await page.screenshot({ path: path.join(CAPTURAS, 'libro-vista.png') });
-  await page.click('[data-view="media"]');
-  await page.uncheck('.eco-editorial-photo-fields input[type=checkbox]');
-  await page.click('[data-view="preview"]');
+  await page.uncheck('[data-sec="ch-1"] .eco-editorial-photo-fields input[type=checkbox]');
+  await page.waitForFunction(() => !document.querySelector('#ecoEditorialBook .eco-foto-flota'));
   ok(await page.locator('#ecoEditorialBook .eco-foto-flota').count() === 0, 'si se quita la foto con "Incluir", desaparece del libro');
-  await page.click('[data-view="media"]');
-  await page.check('.eco-editorial-photo-fields input[type=checkbox]');
+  await page.check('[data-sec="ch-1"] .eco-editorial-photo-fields input[type=checkbox]');
+  await page.waitForSelector('#ecoEditorialBook .eco-foto-flota');
 
   // 4) Lo diseñado vuelve a verse al salir del estudio y entrar al capítulo
   await page.waitForFunction(() => borradorListo = true).catch(() => {});

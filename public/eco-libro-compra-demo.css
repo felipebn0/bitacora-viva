@@ -10,5 +10,4 @@
 .eco-demo-panel .eco-demo-note{background:#edf0e5;border-radius:9px;padding:12px;color:#293d30}
 .eco-demo-main,.eco-demo-light{display:block;width:100%;border-radius:12px;padding:12px 16px;min-height:46px;font:700 15px 'Atkinson Hyperlegible',sans-serif;cursor:pointer}
 .eco-demo-main{background:#4d6542;color:#fff;border:1px solid #4d6542;margin-bottom:8px}.eco-demo-light{background:#fffdf6;color:#293d30;border:1px solid #dadaca}
-.eco-demo-badge{padding:9px 22px;margin:0;background:#edf0e5;color:#293d30;font:700 12px 'Atkinson Hyperlegible',sans-serif}
-@media print{#ecoDemoPay,.eco-demo-badge{display:none!important}}
+@media print{#ecoDemoPay{display:none!important}}

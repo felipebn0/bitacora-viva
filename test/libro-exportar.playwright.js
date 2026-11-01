@@ -40,7 +40,7 @@ const capitulos = [
       if (u.includes('/api/book-editor/draft')) return r.fulfill({ json: { book: {}, version: 1 } });
       return r.fulfill({ json: {} });
     });
-    await page.goto(base + '/capitulos.html');
+    await page.goto(base + '/capitulos.html#capitulos');
     await page.waitForSelector('#ecoLibroExportar', { timeout: 10000 });
     return { page, ctx, estado, errores };
   }
@@ -94,7 +94,7 @@ const capitulos = [
   t = await abrir();
   await t.page.click('#ecoEditorialOpen');
   await t.page.waitForFunction(() => /✓/.test((document.getElementById('ecoEditorialStatus') || {}).textContent || ''), null, { timeout: 15000 });
-  await t.page.click('#ecoEditorialPrint');
+  await t.page.click('#ecoEditorialPdf');
   await t.page.waitForSelector('#ecoDemoPay:not([hidden])');
   await t.page.click('#ecoDemoConfirm');
   await t.page.waitForFunction(() => window.__imprimio === 1, null, { timeout: 20000 });
