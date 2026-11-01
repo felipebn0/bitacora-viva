@@ -81,22 +81,8 @@ function init(){
    sw.addEventListener('change',sync);
    sync();
  }
- if(list){
-   const hr=wrap.querySelector('hr');
-   const details=document.createElement('details');
-   details.className='eco-colab-historial';
-   const sum=document.createElement('summary');
-   sum.textContent='Ver historias que he aportado';
-   details.append(sum);
-   if(hr)details.appendChild(hr);
-   details.appendChild(list);
-   barra.appendChild(details);
-   const watch=new MutationObserver(()=>{
-     const count=list.querySelectorAll('.item').length;
-     sum.textContent='Ver historias que he aportado'+(count?' ('+count+')':'');
-   });
-   watch.observe(list,{childList:true});
- }
+ // Se quitó el desplegable "Ver historias que he aportado": el historial ya no se muestra aquí.
+ if(list){ list.hidden=true; }
  // Insertar barra antes del panel principal.
  wrap.parentNode.insertBefore(barra,wrap);
  // Agrupa opciones para adjuntar, pero no mueve los inputs ni los controles.

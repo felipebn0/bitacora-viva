@@ -3229,6 +3229,13 @@ app.get('/api/my-collaborations', requireAuth, async (req, res) => {
         historias.unshift({ ownerId: req.profileUserId, ownerName: capitalizarNombre(ownerRows[0].name || ownerRows[0].username) });
       }
     }
+    // Cuántas historias ha aportado esta cuenta a cada bitácora (sin contar
+    // las archivadas). Sirve para no listar bitácoras donde no aportó nada.
+    const conteo = req.userId && !req.isGuest
+      ? await sql`SELECT user_id, count(*)::int AS n FROM family_notes WHERE contributed_by = ${req.userId} AND archived_at IS NULL GROUP BY user_id`
+      : [];
+    const porOwner = new Map(conteo.map((r) => [Number(r.user_id), r.n]));
+    for (const h of historias) h.aportes = porOwner.get(Number(h.ownerId)) || 0;
     res.json({ historias });
   } catch (err) {
     console.error(err);
