@@ -42,7 +42,7 @@ for (const [n, h] of [['privacidad', priv], ['terminos', term]]) {
 }
 
 // --- Las dos landings de la prueba A/B ---
-for (const f of ['index.html', 'index-v2.html']) {
+for (const f of ['index.html', 'index-v2.html', 'index-voces.html', 'index-v2-voces.html']) {
   const h = pub(f);
   ok(h.includes('href="/privacidad.html"') && h.includes('href="/terminos.html"'), `${f}: enlaza a la política y a los términos`);
   ok(/<input id="suTerms" name="acceptTerms" type="checkbox" required>/.test(h), `${f}: casilla de aceptación obligatoria`);

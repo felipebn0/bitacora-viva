@@ -9,7 +9,7 @@ const leer = (f) => fs.readFileSync(path.join(raiz, f), 'utf8');
 let pasaron = 0, fallaron = 0;
 const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { fallaron++; console.error('FAIL - ' + m); } };
 
-for (const f of ['public/index.html', 'public/index-v2.html']) {
+for (const f of ['public/index.html', 'public/index-v2.html', 'public/index-voces.html', 'public/index-v2-voces.html']) {
   const h = leer(f);
   ok(/<input[^>]*id="suTerms"[^>]*type="checkbox"[^>]*required|<input[^>]*id="suTerms"[^>]*required[^>]*type="checkbox"/.test(h), `${f}: el registro tiene el checkbox de términos obligatorio`);
   ok(/for="suTerms">[^<]*<a href="\/terminos\.html"[^>]*>[^<]*<\/a>[^<]*<a href="\/privacidad\.html"/.test(h), `${f}: el checkbox enlaza los Términos y la Política de Privacidad`);

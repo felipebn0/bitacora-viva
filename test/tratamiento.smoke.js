@@ -32,7 +32,7 @@ ok(/instruccionTratamiento\(tratamientoValido\(perfil && perfil\.tratamiento\)\)
 ok(/ARBOL_SYSTEM_PROMPT \+ instruccionTratamiento/.test(server), 'la charla del árbol también');
 ok(/instruccionTratamientoDeTercero\(nombre, ownerTratamiento\)/.test(server), 'los aportes de familiares también');
 
-for (const f of ['index.html', 'index-v2.html']) {
+for (const f of ['index.html', 'index-v2.html', 'index-voces.html', 'index-v2-voces.html']) {
   const h = leer(f);
   ok(/id="suTratamiento"[^>]*required/.test(h) && /tratamiento, password/.test(h), `${f}: el registro pide y envía el trato`);
 }

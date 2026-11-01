@@ -51,7 +51,7 @@ function textoVisible(html) {
     .replace(/\/\*[\s\S]*?\*\//g, ' ');
 }
 const publico = path.join(raiz, 'public');
-const paginas = ['index.html', 'index-v2.html', 'app.html', 'colaborar.html', 'colaboraciones.html', 'historias.html', 'capitulos.html', 'arbol.html',
+const paginas = ['index.html', 'index-v2.html', 'index-voces.html', 'index-v2-voces.html', 'app.html', 'colaborar.html', 'colaboraciones.html', 'historias.html', 'capitulos.html', 'arbol.html',
   'perfiles.html', 'perfilar.html', 'admin.html', 'privacidad.html', 'terminos.html', 'audiencias/adulto.html', 'audiencias/mayor.html', 'audiencias/nina.html'];
 for (const f of paginas) {
   const ruta = path.join(publico, f);
