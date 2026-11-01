@@ -67,6 +67,12 @@ const capitulos = [
   const libro = await page.evaluate(() => { const pag = document.querySelector('#ecoEditorialBook [data-sec="ch-1"]'); const f = pag.querySelector('figure'); return { pie: f.querySelector('figcaption').textContent, antesDelPrimerParrafo: f.compareDocumentPosition(pag.querySelector('p.eco-editorial-paragraph')) & Node.DOCUMENT_POSITION_FOLLOWING, flota: getComputedStyle(f).float }; });
   ok(libro.pie === 'En la finca, 1985' && libro.antesDelPrimerParrafo && libro.flota === 'right', 'en el libro la foto va arriba a la derecha con el pie que se editó');
   if (CAPTURAS) await page.screenshot({ path: path.join(CAPTURAS, 'libro-vista.png') });
+  ok(await page.locator('[data-sec="ch-1"] .eco-editorial-remove-photo').count() === 1, 'toda foto incluida se puede quitar: también la que viene de la historia tiene «Quitar del libro»');
+  await page.click('[data-sec="ch-1"] .eco-editorial-remove-photo');
+  await page.waitForFunction(() => !document.querySelector('#ecoEditorialBook .eco-foto-flota'));
+  ok(!(await page.locator('[data-sec="ch-1"] .eco-editorial-photo-fields input[type=checkbox]').isChecked()) && await page.locator('[data-sec="ch-1"] .eco-editorial-remove-photo').count() === 0, '«Quitar del libro» la saca del libro y queda sin marcar, por si la quieres volver a incluir');
+  await page.check('[data-sec="ch-1"] .eco-editorial-photo-fields input[type=checkbox]');
+  await page.waitForSelector('#ecoEditorialBook .eco-foto-flota');
   await page.uncheck('[data-sec="ch-1"] .eco-editorial-photo-fields input[type=checkbox]');
   await page.waitForFunction(() => !document.querySelector('#ecoEditorialBook .eco-foto-flota'));
   ok(await page.locator('#ecoEditorialBook .eco-foto-flota').count() === 0, 'si se quita la foto con "Incluir", desaparece del libro');

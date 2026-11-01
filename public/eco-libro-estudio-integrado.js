@@ -409,6 +409,8 @@ function herramientas(c){
    remove.addEventListener('click',()=>{if(!confirm('¿Quitar esta fotografía del libro? No se borrará de los archivos de ECO.'))return;
     state.bookPhotos[id]=state.bookPhotos[id].filter(x=>x.url!==img.url);
     if(state.media?.[id])delete state.media[id][img.url];persist();volver()});controls.appendChild(remove)}
+  else if(chk.checked){const remove=node('button','eco-editorial-remove-photo','Quitar del libro');remove.type='button';
+   remove.addEventListener('click',()=>{chk.checked=false;save();volver()});controls.appendChild(remove)}
   wrap.appendChild(controls);cuerpo.appendChild(wrap);
  }
  const grabaciones=(Array.isArray(c.audios)?c.audios:[]).filter(u=>typeof u==='string'&&/^https?:\/\//.test(u));

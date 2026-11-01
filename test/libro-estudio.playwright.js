@@ -158,6 +158,11 @@ const capitulos = [
   const t0 = Date.now(); while (!t.fotosSubidas.length && Date.now() - t0 < 30000) await t.page.waitForTimeout(100);
   ok(original.length > 20 * 1024 * 1024, 'la foto de prueba es enorme (' + (original.length / 1048576).toFixed(0) + ' MB, como una del iPhone Pro)');
   ok(t.fotosSubidas.length === 1 && t.fotosSubidas[0].tipo === 'image/jpeg' && t.fotosSubidas[0].bytes < 2.9 * 1024 * 1024, 'se sube reducida: JPEG de ' + (t.fotosSubidas[0] ? (t.fotosSubidas[0].bytes / 1048576).toFixed(1) : '?') + ' MB (el libro acepta hasta 3 MB)');
+  await t.page.waitForSelector('[data-sec="ch-2"] .eco-editorial-remove-photo');
+  t.page.once('dialog', (d) => d.accept());
+  await t.page.click('[data-sec="ch-2"] .eco-editorial-remove-photo');
+  await t.page.waitForFunction(() => !document.querySelector('[data-sec="ch-2"] .eco-editorial-photo-config'));
+  ok(await t.page.locator('[data-sec="ch-2"] .eco-editorial-photo-config').count() === 0 && await t.page.locator('#ecoEditorialBook [data-sec="ch-2"] .eco-foto-flota').count() === 0, 'la foto que se acaba de subir se puede quitar del libro');
   await t.ctx.close();
 
   // 8) Sin comprar: pide la compra de prueba antes de bajar el PDF
