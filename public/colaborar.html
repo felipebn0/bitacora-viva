@@ -582,7 +582,7 @@
     if (stickyOwnerName) stickyOwnerName.textContent = data.ownerName || '';
     // Textos de la pantalla con el nombre de quien escribe y de la bitácora.
     const primerNombre = (n) => String(n || '').trim().split(/\s+/)[0] || '';
-    const quienEscribe = primerNombre(data.guestName || data.name || data.username);
+    const quienEscribe = primerNombre(data.guestName || data.name || data.username).replace(/^\p{Ll}/u, (c) => c.toUpperCase());
     const ownerPrimero = primerNombre(data.ownerName);
     const saludo = document.getElementById('pageSaludo');
     if (saludo) {
