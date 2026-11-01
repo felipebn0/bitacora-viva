@@ -17,6 +17,7 @@ if(parent){sec.append(E('div','eco7-arrow','↓'));sec.append(card(parent))}
 if(siblings.length){const show=openBranches.has(key),btn=E('button','eco7-expand',`${siblings.length} hermanos de ${title==='Familia paterna'?'papá':'mamá'} · ${show?'Ocultar':'Ver'}`);btn.type='button';btn.setAttribute('aria-expanded',String(show));btn.onclick=()=>{show?openBranches.delete(key):openBranches.add(key);render()};sec.append(btn);if(show){const group=E('div','eco7-grid');siblings.forEach(p=>group.append(card(p)));sec.append(group)}}return sec}
 function render(){if(active!=='family'||!root)return;root.replaceChildren();root.append(E('h2','eco7-title','Tu familia, de un vistazo'));
 if(!loaded){root.append(E('p','eco7-note','Cargando familiares…'));return}
+const q=norm($('searchInput')?.value||'');if(q){const toks=q.split(/\s+/);const hits=people.filter(p=>toks.every(t=>norm(p.nombre).includes(t)));root.append(E('h2','eco7-title','Resultados de búsqueda'));if(!hits.length){root.append(E('p','eco7-note','Ningún familiar coincide con esa búsqueda.'))}else{const g=E('div','eco7-grid');hits.forEach(p=>g.append(card(p)));root.append(g)}return}
 if(!principal){root.append(E('p','eco7-note','No hay una persona principal identificada. Revisa los datos en Árbol completo.'));return}
 const mp=parentMap(),anc=mp.get(String(principal.id))||[];const dad=anc.find(p=>/^(papa|padre)$/.test(norm(p.relacion)))||anc.find(p=>/(papa|padre)/.test(norm(p.relacion)))||anc[0]||null;const mom=anc.find(p=>/^(mama|madre)$/.test(norm(p.relacion)))||anc.find(p=>p!==dad)||null;
 const gp=dad?(mp.get(String(dad.id))||[]):[],gm=mom?(mp.get(String(mom.id))||[]):[];
@@ -51,7 +52,7 @@ root=E('div','eco7-root');root.id='eco7Root';stage.insertAdjacentElement('before
 nav=E('div','eco7-nav');for(const [mode,label] of [['family','Vista familiar'],['tree','Árbol completo']]){const b=E('button','btn',label);b.type='button';b.dataset.mode=mode;b.onclick=()=>switchMode(mode);nav.append(b)}toolbar.append(nav);
 const org=E('button','btn eco7-organize','Organizar árbol');org.type='button';org.addEventListener('click',organize);toolbar.insertBefore(org,nav);
 const notice=document.querySelector('.notice');if(notice)notice.textContent='Las personas, fotografías y vínculos se guardan en tu cuenta. Organizar solo modifica las posiciones de las tarjetas.';
-const observer=new MutationObserver(()=>fixLabels());observer.observe($('relations'),{childList:true,subtree:true});
+$('searchInput')?.addEventListener('input',()=>render());const observer=new MutationObserver(()=>fixLabels());observer.observe($('relations'),{childList:true,subtree:true});
 const requested=(()=>{try{return sessionStorage.getItem('eco-tree-v7-view')}catch{return null}})();switchMode(['family','tree'].includes(requested)?requested:'family');reload().catch(e=>{loaded=true;root.append(E('p','eco7-note',e.message))});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)reload().catch(()=>{})});
 }
