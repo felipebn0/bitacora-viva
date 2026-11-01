@@ -160,6 +160,7 @@ module.exports = (app, { sql, ensureSchema, requireAuth, requireAdmin, bloquearC
         if (r.enviados > 0) enviados++;
         else await sql`DELETE FROM push_recordatorio_envios WHERE id = ${nuevo[0].id}`;
       }
+      console.log(`recordatorio-push: candidatas ${cuentas.length}, enviados ${enviados}, ya usaron Eco hoy ${yaUsaron}, ya tenían aviso hoy ${yaTenianAviso}`);
       res.json({ ok: true, candidatas: cuentas.length, enviados, yaUsaron, yaTenianAviso });
     } catch (err) {
       console.error(err);
