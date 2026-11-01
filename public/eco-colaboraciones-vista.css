@@ -108,3 +108,10 @@ body>main.wrap .ap-box .media-adjunta img,body>main.wrap .ap-box .media-adjunta 
 body>main.wrap .ap-archivados{margin-top:24px;border-top:1px solid #dadaca;padding-top:14px}
 body>main.wrap .ap-archivados>summary{cursor:pointer;font:700 1rem "Atkinson Hyperlegible",system-ui,sans-serif;color:#293d30;padding:6px 0}
 body>main.wrap .ap-archivados>.sub{color:#777568;font-size:.92rem;margin:4px 0 12px}
+
+/* Foto: botón "Ver foto" y vista ampliada */
+body>main.wrap .ap-ver-foto{cursor:pointer;min-height:44px;padding:10px 16px;border:1.5px solid #4d6542;border-radius:12px;background:#fffdf6;color:#4d6542;font:700 .93rem "Atkinson Hyperlegible",system-ui,sans-serif}
+body>main.wrap .ap-ver-foto:hover{background:#edf0e5}
+.ap-foto-overlay{position:fixed;inset:0;z-index:9999;background:rgba(30,35,28,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:56px 16px 16px;box-sizing:border-box;overflow:auto}
+.ap-foto-overlay img,.ap-foto-overlay video{max-width:100%;max-height:calc(100vh - 90px);width:auto;height:auto;object-fit:contain;border-radius:12px;background:#fff}
+.ap-foto-cerrar{position:fixed;top:12px;right:14px;width:44px;height:44px;border-radius:50%;border:0;background:#fffdf6;color:#293d30;font-size:1.6rem;line-height:1;cursor:pointer}

@@ -174,7 +174,7 @@
 <link rel="stylesheet" href="/eco-interior.css?v=1">
 <link rel="stylesheet" href="/eco-colaboraciones.css?v=1">
 <script src="/eco-colaboraciones.js?v=1" defer></script>
-<link rel="stylesheet" href="/eco-colaboraciones-vista.css?v=10">
+<link rel="stylesheet" href="/eco-colaboraciones-vista.css?v=11">
 <script src="/eco-colaboraciones-vista.js?v=3" defer></script>
 <link rel="stylesheet" href="/eco-volver-unificado.css?v=3">
 <script src="/eco-volver-unificado.js?v=1" defer></script>
@@ -387,6 +387,35 @@
     return m ? m[0] : t.slice(0, 160);
   }
 
+  // Vista ampliada de las fotos de un aporte (overlay). Cierra con el botón,
+  // con clic fuera de la imagen o con Escape.
+  function abrirVistaFotos(media) {
+    const overlay = document.createElement('div');
+    overlay.className = 'ap-foto-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    const cerrar = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (e) => { if (e.key === 'Escape') cerrar(); };
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'ap-foto-cerrar';
+    close.setAttribute('aria-label', 'Cerrar');
+    close.textContent = '×';
+    close.addEventListener('click', cerrar);
+    overlay.appendChild(close);
+    media.forEach((m) => {
+      const src = '/api/media-file?u=' + encodeURIComponent(m.url);
+      const el = m.type === 'video' ? document.createElement('video') : document.createElement('img');
+      if (m.type === 'video') { el.controls = true; el.src = src; }
+      else { el.src = src; el.alt = m.caption || 'Foto de la historia'; }
+      overlay.appendChild(el);
+    });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) cerrar(); });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(overlay);
+    close.focus();
+  }
+
   // Tarjeta de un aporte: encabezado con nombre y resumen; al abrirla,
   // "Resumen", "Historia completa", grabaciones, foto y acciones.
   function armarTarjetaAporte(n, etiqueta, opts) {
@@ -460,20 +489,18 @@
 
     const media = (Array.isArray(n.media_urls) ? n.media_urls : []).filter((m) => m && typeof m.url === 'string' && /^https?:\/\//.test(m.url));
     if (media.length) {
+      // Vista compacta: un botón que abre la foto en una vista ampliada,
+      // así la tarjeta no crece con la imagen.
       const fotoBox = document.createElement('div');
       fotoBox.className = 'ap-box';
       const fotoTitulo = document.createElement('h4');
       fotoTitulo.textContent = media.length === 1 ? 'Foto adjunta' : `Fotos adjuntas (${media.length})`;
-      const galeria = document.createElement('div');
-      galeria.className = 'media-adjunta';
-      media.forEach((m) => {
-        const src = '/api/media-file?u=' + encodeURIComponent(m.url);
-        const el = m.type === 'video' ? document.createElement('video') : document.createElement('img');
-        if (m.type === 'video') { el.controls = true; el.preload = 'none'; el.src = src; }
-        else { el.loading = 'lazy'; el.src = src; el.alt = m.caption || 'Foto de la historia'; }
-        galeria.appendChild(el);
-      });
-      fotoBox.append(fotoTitulo, galeria);
+      const verBtn = document.createElement('button');
+      verBtn.type = 'button';
+      verBtn.className = 'ap-ver-foto';
+      verBtn.textContent = media.length === 1 ? 'Ver foto' : 'Ver fotos';
+      verBtn.addEventListener('click', () => abrirVistaFotos(media));
+      fotoBox.append(fotoTitulo, verBtn);
       colDer.appendChild(fotoBox);
     }
 
