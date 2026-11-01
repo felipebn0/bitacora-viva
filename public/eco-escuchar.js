@@ -11,8 +11,17 @@
   (d.audios||[]).forEach((u,i)=>{
    const q=(d.preguntas||[])[i];
    if(q){const p=document.createElement('p');p.className='eco-escuchar-pregunta';p.textContent=q;box.appendChild(p)}
-   const a=document.createElement('audio');a.controls=true;a.preload='metadata';a.src=u;box.appendChild(a)
+   const a=document.createElement('audio');a.controls=true;a.preload='metadata';a.src=u;box.appendChild(a);
+   // Si una grabación no carga (la conexión tardó, el servidor estaba dormido), se vuelve a intentar sola; si sigue fallando se avisa.
+   const aviso=document.createElement('p');aviso.className='eco-escuchar-error';aviso.hidden=true;aviso.textContent='Esta grabación no cargó. Toca aquí para intentarlo de nuevo.';aviso.tabIndex=0;aviso.setAttribute('role','button');box.appendChild(aviso);
+   let intentos=0;
+   const reintentar=()=>{intentos++;aviso.hidden=true;a.src=u+(u.includes('?')?'&':'?')+'r='+intentos;a.load()};
+   a.addEventListener('error',()=>{if(intentos<2)setTimeout(reintentar,1200*(intentos+1));else aviso.hidden=false});
+   a.addEventListener('loadedmetadata',()=>{aviso.hidden=true});
+   aviso.addEventListener('click',()=>{intentos=0;reintentar()});aviso.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();aviso.click()}})
   });
-  if(!(d.audios||[]).length)msg.textContent='No hay grabaciones disponibles.';
+  // Solo suena una grabación a la vez: al darle play a una, se pausan las demás.
+  box.addEventListener('play',e=>{if(e.target instanceof HTMLAudioElement)box.querySelectorAll('audio').forEach(x=>{if(x!==e.target)x.pause()})},true);
+ if(!(d.audios||[]).length)msg.textContent='No hay grabaciones disponibles.';
  }catch(e){title.textContent='Recuerdo no disponible';msg.textContent=e.message}
 })();

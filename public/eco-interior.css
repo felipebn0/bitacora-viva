@@ -78,3 +78,4 @@ button:disabled{cursor:not-allowed;opacity:.58;}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation-duration:.01ms!important;}}
 .eco-escuchar-pregunta{margin:18px 0 0;font:italic 1.05rem/1.5 'Source Serif 4',Georgia,serif;color:#4d6542}
 .eco-escuchar-pregunta+audio{margin-top:6px}
+.eco-escuchar-error{margin:6px 0 0;padding:10px 12px;border-radius:10px;background:#f6e9e3;color:#7d4132;font:700 .95rem/1.4 'Atkinson Hyperlegible',sans-serif;cursor:pointer}.eco-escuchar-error[hidden]{display:none}
