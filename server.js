@@ -2084,7 +2084,7 @@ async function leerPerfilBitacora(profileUserId, esPropia) {
 // deduce del nombre: antes la IA asumía mujer para todas las personas nuevas.
 function tratamientoValido(valor) {
   const v = String(valor || '').trim().toLowerCase();
-  return v === 'masculino' || v === 'femenino' ? v : null;
+  return v === 'masculino' || v === 'femenino' || v === 'no_decir' ? v : null;
 }
 
 // Género con el que hay que escribir de la persona (o mascota/bebé) de una bitácora en textos que se leen después
