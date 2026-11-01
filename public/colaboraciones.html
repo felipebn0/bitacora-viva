@@ -211,7 +211,7 @@
              mismo, debajo del botón, sin mandar a nadie a la pantalla principal. -->
         <button class="empty-cta" id="invitarToggle" type="button" aria-expanded="false" aria-controls="invitarPanel">Invitar familiares →</button>
         <div id="invitarPanel" hidden>
-          <p class="sub">Escribe el nombre y el celular de la persona: le llega SU enlace personal por WhatsApp y entra a sumar historias sin crear cuenta. Cada enlace es de una sola persona y lo puedes quitar cuando quieras.</p>
+          <p class="sub">Escribe el nombre y el celular de la persona: le llega su enlace personal por WhatsApp y entra a sumar historias sin crear cuenta. Cada enlace es de una sola persona y lo puedes quitar cuando quieras.</p>
           <label for="inviteNombre">Nombre</label>
           <input type="text" id="inviteNombre" maxlength="60" placeholder="Ej: Tía Marta" autocomplete="off">
           <label for="invitePhone">Celular con WhatsApp</label>
@@ -645,15 +645,15 @@
         reenviar.href = inv.whatsapp;
         reenviar.target = '_blank';
         reenviar.rel = 'noopener';
-        reenviar.textContent = 'enviar de nuevo';
+        reenviar.textContent = 'Enviar de nuevo';
         acciones.appendChild(reenviar);
-        acciones.appendChild(accion('quitar acceso', async () => {
+        acciones.appendChild(accion('Quitar acceso', async () => {
           if (!confirm('¿Quitarle el acceso a ' + inv.nombre + '? Deja de poder entrar con su enlace; lo que ya aportó se queda.')) return;
           try { await fetch(conOwnerInv('/api/invitaciones/' + encodeURIComponent(inv.id) + '/revocar'), { method: 'POST' }); } catch (e) {}
           cargarInvitaciones();
         }));
       }
-      acciones.appendChild(accion(inv.activa ? 'enlace nuevo' : 'volver a invitar', async () => {
+      acciones.appendChild(accion(inv.activa ? 'Enlace nuevo' : 'Volver a invitar', async () => {
         if (inv.activa && !confirm('¿Generar un enlace nuevo para ' + inv.nombre + '? El anterior deja de servir.')) return;
         try {
           const resp = await fetch(conOwnerInv('/api/invitaciones/' + encodeURIComponent(inv.id) + '/renovar'), { method: 'POST' });
