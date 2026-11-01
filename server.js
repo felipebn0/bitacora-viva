@@ -3153,11 +3153,16 @@ app.get('/api/my-contributed-notes', requireAuth, async (req, res) => {
     await ensureSchema();
     const rows = await sql`
       SELECT id, contributor, parentesco, protagonista, texto, audio_url,
-             audio_urls, media_urls, created_at, is_private
+             audio_urls, media_urls, created_at, is_private, resumen_v2 AS resumen
       FROM family_notes
       WHERE user_id = ${ownerId} AND contributed_by = ${req.userId}
         AND archived_at IS NULL
       ORDER BY created_at DESC LIMIT 100`;
+    // Mismo respaldo que la lista de aportes: si a un aporte le falta el
+    // resumen (falló la IA al guardarlo, o es anterior a los resúmenes),
+    // se genera ahora en segundo plano para que no se quede en "Preparando".
+    rows.filter((n) => !n.resumen && n.texto).slice(0, 20)
+      .forEach((n) => resumirAporteEnSegundoPlano(n.id, ownerId, n.texto));
     res.json({ notes: rows.map(n => ({
       ...n, contributor: capitalizarNombre(n.contributor),
       texto: capitalizarInicio(n.texto),
