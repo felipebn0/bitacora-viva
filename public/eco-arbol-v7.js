@@ -48,11 +48,11 @@ fetch('/api/tree/v4-state',{credentials:'same-origin',cache:'no-store'})
 function setup(){const toolbar=document.querySelector('.toolbar'),stage=$('stage');if(!toolbar||!stage)return;
 for(const id of ['treeBtn','listBtn'])$(id)?.classList.add('eco7-hidden-control');$('resetPlaces')?.classList.add('eco7-hidden-control');
 root=E('div','eco7-root');root.id='eco7Root';stage.insertAdjacentElement('beforebegin',root);
-nav=E('div','eco7-nav');for(const [mode,label] of [['family','Vista familiar'],['list','Lista de familiares'],['tree','Árbol completo']]){const b=E('button','btn',label);b.type='button';b.dataset.mode=mode;b.onclick=()=>switchMode(mode);nav.append(b)}toolbar.append(nav);
+nav=E('div','eco7-nav');for(const [mode,label] of [['family','Vista familiar'],['tree','Árbol completo']]){const b=E('button','btn',label);b.type='button';b.dataset.mode=mode;b.onclick=()=>switchMode(mode);nav.append(b)}toolbar.append(nav);
 const org=E('button','btn eco7-organize','Organizar árbol');org.type='button';org.addEventListener('click',organize);toolbar.insertBefore(org,nav);
 const notice=document.querySelector('.notice');if(notice)notice.textContent='Las personas, fotografías y vínculos se guardan en tu cuenta. Organizar solo modifica las posiciones de las tarjetas.';
 const observer=new MutationObserver(()=>fixLabels());observer.observe($('relations'),{childList:true,subtree:true});
-const requested=(()=>{try{return sessionStorage.getItem('eco-tree-v7-view')}catch{return null}})();switchMode(['family','list','tree'].includes(requested)?requested:'family');reload().catch(e=>{loaded=true;root.append(E('p','eco7-note',e.message))});
+const requested=(()=>{try{return sessionStorage.getItem('eco-tree-v7-view')}catch{return null}})();switchMode(['family','tree'].includes(requested)?requested:'family');reload().catch(e=>{loaded=true;root.append(E('p','eco7-note',e.message))});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)reload().catch(()=>{})});
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',setup);else setup();
