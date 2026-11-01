@@ -116,3 +116,4 @@ dialog.eco-codigo-dlg .eco-dlg-close:hover{color:#293d30}
   #appContent > header h1 {font-size:clamp(32px, 8vw, 42px);}
   #appContent > header {margin-bottom: 15px;}
 }
+.aportes > h2 + .eco-colab-subtitulo{text-align:center;margin:0 0 18px}

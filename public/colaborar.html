@@ -310,9 +310,9 @@
 <link rel="stylesheet" href="/eco-interior.css?v=1">
 <link rel="stylesheet" href="/eco-colaborar-orbe.css?v=1">
 <script src="/eco-colaborar-orbe.js?v=1" defer></script>
-<link rel="stylesheet" href="/eco-colaborar-rediseno.css?v=3">
+<link rel="stylesheet" href="/eco-colaborar-rediseno.css?v=4">
 <link rel="stylesheet" href="/eco-crisis-banner.css?v=3">
-<script src="/eco-colaborar-rediseno.js?v=2" defer></script>
+<script src="/eco-colaborar-rediseno.js?v=4" defer></script>
 <script src="/eco-crisis-banner.js?v=3" defer></script>
 <script src="/eco-audio-exclusivo.js" defer></script>
 <script src="/eco-audio-player.js?v=2" defer></script>
@@ -425,9 +425,9 @@
     </nav>
 
     <header>
-      <h1>Aportar a la bitácora</h1>
+      <h1 id="pageTitulo">Comparte tus recuerdos</h1>
       <p class="owner-name" id="ownerName">&nbsp;</p>
-      <p class="sub">Cuenta una historia — la entrevistadora te va guiando.</p>
+      <p class="sub" id="pageSaludo">Cuenta una anécdota o un recuerdo para compartir.</p>
     </header>
 
     <!-- <main>: el resto del contenido autenticado — antes no estaba en
@@ -578,8 +578,28 @@
     hubScreen.style.display = 'none';
     appContent.style.display = 'flex';
     whoami.textContent = data.guestName || data.username || '';
-    ownerName.textContent = data.ownerName || '';
+    ownerName.textContent = data.ownerName ? 'Para la bitácora de ' + data.ownerName : '';
     if (stickyOwnerName) stickyOwnerName.textContent = data.ownerName || '';
+    // Textos de la pantalla con el nombre de quien escribe y de la bitácora.
+    const primerNombre = (n) => String(n || '').trim().split(/\s+/)[0] || '';
+    const quienEscribe = primerNombre(data.guestName || data.name || data.username);
+    const ownerPrimero = primerNombre(data.ownerName);
+    const saludo = document.getElementById('pageSaludo');
+    if (saludo) {
+      saludo.textContent = quienEscribe && ownerPrimero
+        ? `Hola, ${quienEscribe}. Cuéntale a ${ownerPrimero} una anécdota, un momento especial o cualquier recuerdo que quieras compartir.`
+        : 'Cuéntale una anécdota, un momento especial o cualquier recuerdo que quieras compartir.';
+    }
+    const tituloCard = document.querySelector('.aportes > h2');
+    if (tituloCard) {
+      tituloCard.textContent = ownerPrimero ? `¿Qué recuerdas de ${ownerPrimero}?` : '¿Qué recuerdas?';
+      if (!tituloCard.nextElementSibling || !tituloCard.nextElementSibling.classList.contains('eco-colab-subtitulo')) {
+        const sub = document.createElement('p');
+        sub.className = 'sub eco-colab-subtitulo';
+        sub.textContent = 'Habla con naturalidad. Nosotros te iremos guiando.';
+        tituloCard.insertAdjacentElement('afterend', sub);
+      }
+    }
     // Un invitado sin cuenta no tiene nada que borrar — la ruta de borrar
     // cuenta ya lo rechaza del lado del servidor, pero mostrar el botón
     // igual sería confuso ("¿cuál cuenta?").
