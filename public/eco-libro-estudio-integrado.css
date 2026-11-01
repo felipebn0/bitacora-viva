@@ -7,7 +7,7 @@ body.eco-editorial-open-body{overflow:hidden}
 .eco-editorial-top{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px clamp(12px,3vw,32px);background:#fffdf6;border-bottom:1px solid #dadaca;flex-wrap:wrap}
 .eco-editorial-top small{font-size:11px;letter-spacing:.12em;color:#4d6542}
 .eco-editorial-top h2{font:700 clamp(23px,3vw,31px) 'Source Serif 4',Georgia,serif;margin:4px 0}
-.eco-editorial-topbuttons{display:flex;gap:7px;flex-wrap:wrap}
+.eco-editorial-topbuttons{display:flex;gap:7px;flex-wrap:wrap;align-items:flex-start;align-self:flex-start}
 .eco-editorial-topbuttons button{font:700 14px 'Atkinson Hyperlegible',sans-serif;cursor:pointer;min-height:44px;border-radius:11px;border:1px solid #dadaca;background:#fffdf6;color:#293d30;padding:9px 13px}
 .eco-editorial-topbuttons button:disabled{opacity:.6;cursor:default}
 .eco-editorial-topbuttons .eco-primary{background:#4d6542;color:white;border-color:#4d6542}
@@ -63,7 +63,7 @@ body.eco-editorial-open-body{overflow:hidden}
 .eco-editorial-top small{display:none}
 .eco-editorial-top h2{font-size:20px;margin:0}
 #ecoEditorialStatus{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.eco-editorial-topbuttons{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.eco-editorial-topbuttons{display:grid;grid-template-columns:1fr 1fr;gap:6px;align-content:start;align-items:start}
 .eco-editorial-topbuttons button{font-size:13px;padding:8px 6px;min-height:44px}
 #ecoEditorialPdf{order:1}#ecoEditorialDigital{order:2}.eco-outline-toggle{order:3;display:inline-block}.eco-editorial-back{order:4;justify-content:center;min-height:44px;font-size:13px;padding:8px 6px}
 .eco-editorial-layout{display:block;position:relative;overflow:hidden}
@@ -99,7 +99,7 @@ body.eco-editorial-open-body{overflow:hidden}
 @media print{.eco-editorial-tools,.eco-editorial-vacia,.eco-editorial-sin-capitulos{display:none!important}#ecoEditorialBook [contenteditable][data-ph]:empty::before{content:none}#ecoEditorialBook [contenteditable]{outline:none!important}}
 
 /* Volver a la bitácora, actualizar libro, eliminar capítulo y subida de fotos con un solo botón */
-.eco-editorial-back{display:inline-flex;align-items:center;min-height:44px;padding:9px 13px;border-radius:11px;border:1px solid #dadaca;background:#fffdf6;color:#293d30;font:700 14px 'Atkinson Hyperlegible',sans-serif;text-decoration:none}
+.eco-editorial-back{box-sizing:border-box;display:inline-flex;align-items:center;min-height:44px;padding:9px 13px;border-radius:11px;border:1px solid #dadaca;background:#fffdf6;color:#293d30;font:700 14px 'Atkinson Hyperlegible',sans-serif;text-decoration:none}
 .eco-editorial-back:hover{background:#f1f3ec}
 .eco-outline-update{margin-top:26px;padding:14px 8px 0;border-top:1px solid #dadaca;display:grid;gap:8px}
 .eco-outline-update label{font:700 11px 'Atkinson Hyperlegible',sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#4d6542}
