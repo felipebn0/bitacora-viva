@@ -38,6 +38,8 @@
     "test:push-web-smoke": "node test/push-web.smoke.js",
     "test:push-recordatorios": "node test/push-recordatorios.smoke.js",
     "test:tour": "node test/tour-por-usuario.playwright.js",
+    "test:libro-digital": "node test/libro-digital.playwright.js",
+    "test:libro-digital-exportar": "node test/libro-digital-exportar.playwright.js",
     "test:diario-bebe": "node test/diario-bebe.playwright.js",
     "test:admin": "node test/admin-routes.smoke.js"
   },

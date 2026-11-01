@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mi libro · Eco</title>
+<style>
+/*__FUENTES__*/
+:root {
+  --paper: #F3ECDD; --sheet: #FAF5E9; --ink: #1F1B14; --muted: #6B6454; --accent: #4F5D3A; --accent-2: #B7791F;
+  --rule: rgba(31,27,20,.9); --ease: cubic-bezier(.2,.8,.2,1);
+  --H: min(46vh, 31vw);
+  --serif: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+  --sans: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light;
+}
+@media (max-width: 767px) { :root { --H: min(60vw, 40svh); } }
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--paper); color: var(--ink); font-family: var(--sans); overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+a { color: inherit; text-decoration: none; }
+@media (pointer: fine) { html, body, button, a { cursor: none; } }
+.lbl { font-family: var(--sans); font-weight: 700; font-size: 10.5px; line-height: 1; letter-spacing: .09em; text-transform: uppercase; }
+.box { display: inline-flex; align-items: center; height: 21px; padding: 0 8px; border: 1px solid var(--rule); }
+.mask { overflow: hidden; }
+.mask > * { display: block; will-change: transform; }
+
+/* Textura de papel */
+.grano { position: fixed; inset: 0; z-index: 40; pointer-events: none; mix-blend-mode: multiply; opacity: .55;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .45  0 0 0 0 .42  0 0 0 0 .38  0 0 0 .22 0'/></filter><rect width='220' height='220' filter='url(%23n)'/></svg>"); }
+
+/* Barra superior */
+.barra { position: fixed; left: 0; right: 0; top: 0; height: 84px; padding: 0 32px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; z-index: 10; }
+.barra .izq { justify-self: start; display: flex; align-items: center; gap: 9px; }
+.barra .izq svg { width: 26px; height: 26px; display: block; }
+.barra .izq span { font-family: var(--serif); font-weight: 600; font-size: 21px; letter-spacing: -.01em; color: var(--accent); }
+.logo { display: flex; flex-direction: column; align-items: center; gap: 5px; color: var(--accent); text-align: center; max-width: min(46vw, 560px); }
+.logo b { font-family: var(--serif); font-weight: 600; font-size: 22px; letter-spacing: .01em; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.logo i { font-style: normal; font-family: var(--sans); font-weight: 700; font-size: 9px; letter-spacing: .3em; padding-left: .3em; text-transform: uppercase; }
+.barra .der { justify-self: end; }
+
+/* Indicador de capítulo */
+.indice { position: fixed; left: 50%; top: calc(50% - var(--H) / 2 - 86px); transform: translateX(-50%); z-index: 10; background: transparent; }
+
+/* Estantería 3D */
+.estante { position: fixed; left: 0; right: 0; top: calc(50% - var(--H) / 2 - 40px); height: calc(var(--H) + 80px); perspective: 2200px; perspective-origin: 50% 50%; touch-action: pan-y; z-index: 5; }
+.stage { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform-style: preserve-3d; }
+.tape { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-style: preserve-3d; will-change: transform; }
+.face { position: absolute; top: calc(var(--H) / -2); height: var(--H); backface-visibility: hidden; border-radius: 2px; overflow: hidden; background-size: cover; background-position: center; }
+.face::after { content: ""; position: absolute; inset: 0; background: #000; opacity: var(--shade, 0); pointer-events: none; }
+.sp { width: var(--ws); left: calc(var(--ws) / -2); transform: translateZ(calc(var(--d) / 2)); display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: calc(var(--k) * 4) 0 calc(var(--k) * 3.4); color: var(--fg); background-color: var(--bg); }
+.sp::before { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(0,0,0,.22), rgba(255,255,255,.06) 30%, rgba(0,0,0,.16)); pointer-events: none; }
+.sp .anillos { width: calc(var(--k) * 8.6); height: calc(var(--k) * 8.6); flex: none; }
+.sp .tit { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: calc(var(--k) * 3) 0; }
+.sp .tit span { writing-mode: vertical-rl; transform: rotate(180deg); font-family: var(--serif); font-weight: 600; font-size: calc(var(--k) * 5.2); line-height: 1.1; max-height: 100%; overflow: hidden; text-overflow: ellipsis; letter-spacing: .01em; }
+.sp .tit span.chico { font-size: calc(var(--k) * 4.3); }
+.sp .pie { flex: none; display: flex; flex-direction: column; align-items: center; gap: calc(var(--k) * 1.6); font-family: var(--sans); font-weight: 700; font-size: calc(var(--k) * 2.7); letter-spacing: .12em; }
+.sp .pie b { border: 1px solid currentColor; padding: calc(var(--k) * .6) calc(var(--k) * 1.1); font-size: calc(var(--k) * 2.8); }
+.cv { width: var(--d); left: calc(var(--d) / -2); transform: rotateY(90deg) translateZ(calc(var(--ws) / 2)); box-shadow: 0 30px 60px -28px rgba(20,16,10,.55); background-color: var(--bg); color: var(--fg); padding: calc(var(--k) * 6) calc(var(--k) * 6) calc(var(--k) * 5); display: flex; flex-direction: column; }
+.cv .velo { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.18) 0%, rgba(0,0,0,.05) 35%, var(--bg) 100%); opacity: .94; pointer-events: none; }
+.cv.sinfoto .velo { display: none; }
+.cv > *:not(.velo):not(.adorno) { position: relative; z-index: 1; }
+.cv .adorno { position: absolute; right: calc(var(--k) * -14); top: calc(var(--k) * 8); width: calc(var(--k) * 52); height: calc(var(--k) * 52); opacity: .22; pointer-events: none; }
+.cv .arriba { font-family: var(--sans); font-weight: 700; font-size: calc(var(--k) * 2.7); letter-spacing: .16em; text-transform: uppercase; opacity: .9; }
+.cv .nombre { margin-top: auto; font-family: var(--serif); font-weight: 600; font-size: calc(var(--k) * 8.6); line-height: 1.02; letter-spacing: -.015em; text-wrap: balance; overflow-wrap: anywhere; }
+.cv .nombre.largo { font-size: calc(var(--k) * 6.4); }
+.cv .nombre.muylargo { font-size: calc(var(--k) * 5); }
+.cv .tema { margin-top: calc(var(--k) * 2.6); font-family: var(--serif); font-style: italic; font-size: calc(var(--k) * 3.4); line-height: 1.25; opacity: .92; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cv .pie { margin-top: calc(var(--k) * 4); display: flex; align-items: center; justify-content: space-between; font-family: var(--sans); font-weight: 700; font-size: calc(var(--k) * 2.5); letter-spacing: .12em; }
+.cv .pie svg { width: calc(var(--k) * 6); height: calc(var(--k) * 6); }
+
+/* Anillo de abrir */
+.abrir { position: fixed; width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--accent); color: var(--accent); background: rgba(243,236,221,.75); display: grid; place-items: center; z-index: 12; transform: scale(0); will-change: transform; }
+.abrir svg { width: 14px; height: 14px; margin-left: 2px; }
+
+/* Título del capítulo activo */
+.pie-cap { position: fixed; left: 0; right: 0; top: calc(50% + var(--H) / 2 + 30px); display: flex; flex-direction: column; align-items: center; gap: 9px; pointer-events: none; z-index: 10; }
+.pie-cap .mask { position: relative; width: min(92vw, 760px); text-align: center; }
+.pie-cap .mask > span { display: block; }
+.pie-cap .mask > span + span { position: absolute; left: 0; right: 0; top: 0; }
+.cap-t { font-family: var(--serif); font-weight: 600; font-size: 31px; line-height: 1.12; letter-spacing: -.01em; }
+.cap-s { color: var(--accent); }
+.cap-a { font-family: var(--sans); font-weight: 700; font-size: 11px; letter-spacing: .08em; }
+
+.flecha { position: fixed; top: calc(50% + var(--H) / 2 + 40px); width: 44px; height: 44px; display: grid; place-items: center; z-index: 12; border-radius: 50%; }
+.flecha svg { width: 18px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1.2; }
+.flecha.ant { left: 20px; } .flecha.sig { right: 20px; }
+
+.pie-pag { position: fixed; left: 32px; right: 32px; bottom: 26px; display: flex; justify-content: space-between; gap: 16px; z-index: 10; }
+.pie-pag span { max-width: 60vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Cursor */
+.cursor { position: fixed; left: 0; top: 0; width: 58px; height: 58px; margin: -29px 0 0 -29px; z-index: 100; pointer-events: none; display: none; will-change: transform; }
+@media (pointer: fine) { .cursor { display: block; } }
+.cursor .aro { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid var(--ink); transition: transform .5s var(--ease), background-color .4s var(--ease), border-color .4s var(--ease); }
+.cursor .punto { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: var(--ink); transition: transform .4s var(--ease); }
+.cursor .txt { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: #fff; font-family: var(--sans); font-weight: 700; font-size: 10px; line-height: 1.25; letter-spacing: .1em; transform: scale(0); transition: transform .45s var(--ease); }
+.cursor.spine .aro { transform: scale(.72); }
+.cursor.btn .aro { transform: scale(.55); } .cursor.btn .punto { transform: scale(0); }
+.cursor.open .aro { transform: scale(1.75); background: var(--accent); border-color: var(--accent); } .cursor.open .punto { transform: scale(0); } .cursor.open .txt { transform: scale(1); }
+
+/* Detalle del capítulo */
+.detalle { position: fixed; inset: 0; z-index: 60; background: var(--sheet); visibility: hidden; display: block; overflow: hidden; }
+.detalle.vivo { visibility: visible; }
+.d-cerrar { position: absolute; left: 32px; top: 31px; z-index: 3; }
+.d-tam { position: absolute; right: 32px; top: 28px; z-index: 3; display: flex; }
+.d-tam button { height: 27px; min-width: 38px; border: 1px solid var(--rule); margin-left: -1px; font-weight: 700; font-size: 13px; }
+.d-logo { position: absolute; left: 0; right: 0; top: 0; height: 84px; display: flex; justify-content: center; align-items: center; pointer-events: none; }
+.d-grid { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4vw; padding: 110px 6vw 40px 7vw; }
+.d-col { overflow-y: auto; min-height: 0; display: flex; padding-right: 10px; scrollbar-width: thin; }
+.d-in { margin: auto 0; max-width: 560px; width: 100%; display: flex; flex-direction: column; gap: 18px; padding: 8px 0; }
+.d-sub { color: var(--accent); }
+.d-titulo { margin: 0; font-family: var(--serif); font-weight: 600; font-size: clamp(40px, 4.8vw, 74px); line-height: 1.02; letter-spacing: -.025em; text-wrap: balance; overflow-wrap: anywhere; }
+.d-meta { color: var(--muted); }
+.d-cuerpo { font-family: var(--serif); font-size: var(--tam, 19px); line-height: 1.6; max-width: 46ch; }
+.d-cuerpo p { margin: 0 0 1em; white-space: pre-wrap; }
+.d-cuerpo figure { float: right; width: 42%; margin: .3em 0 .8em 1.1em; }
+.d-cuerpo figure img { width: 100%; display: block; border-radius: 3px; }
+.d-cuerpo figcaption { font-family: var(--sans); font-size: .72em; color: var(--muted); margin-top: .4em; line-height: 1.35; }
+.d-fin { clear: both; text-align: center; color: var(--accent-2); letter-spacing: .4em; margin: 1.2em 0 .2em; }
+.d-ded { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--muted); }
+.d-lado { display: grid; place-items: center; min-height: 0; }
+.d-poster { height: min(100%, 78vh); aspect-ratio: 474 / 900; max-width: 100%; }
+.d-poster svg { width: 100%; height: 100%; display: block; overflow: visible; }
+
+@media (max-width: 767px) {
+  .barra { height: 64px; padding: 0 16px; }
+  .barra { grid-template-columns: 1fr auto 1fr; } .barra .izq span { display: none; } .barra .izq svg { width: 24px; height: 24px; }
+  .logo { max-width: 64vw; } .logo b { font-size: 17px; } .logo i { font-size: 7px; letter-spacing: .2em; padding-left: .2em; white-space: nowrap; }
+  .barra .der { display: none; }
+  .lbl { font-size: 9px; }
+  .cap-t { font-size: 24px; }
+  .flecha { top: auto; bottom: 56px; } .flecha.ant { left: 16px; } .flecha.sig { right: 16px; }
+  .pie-pag { left: 16px; right: 16px; bottom: 18px; }
+  .indice { top: calc(50% - var(--H) / 2 - 70px); }
+  .d-cerrar { left: 16px; top: 21px; } .d-tam { right: 16px; top: 18px; }
+  .d-logo { height: 64px; } .d-logo .logo { max-width: 36vw; }
+  .d-grid { display: flex; flex-direction: column; gap: 24px; padding: 84px 22px 40px; overflow-y: auto; }
+  .d-lado { order: -1; flex: none; height: 46svh; } .d-poster { height: 46svh; }
+  .d-col { overflow: visible; flex: none; padding: 0; } .d-in { margin: 0; }
+  .d-titulo { font-size: 38px; } .d-cuerpo { font-size: var(--tam, 18px); }
+}
+@media (prefers-reduced-motion: reduce) { .cursor .aro, .cursor .punto, .cursor .txt { transition: none; } }
+</style>
+</head>
+<body>
+<header class="barra">
+  <div class="izq"><svg viewBox="0 0 200 200" aria-hidden="true"><path d="M127.57 95.14A28 28 0 1 1 90.06 73.82" fill="none" stroke="#4F5D3A" stroke-width="12" stroke-linecap="round"/><path d="M146.36 81.27A50 50 0 1 1 72.91 57.97" fill="none" stroke="#4F5D3A" stroke-width="12" stroke-linecap="round"/><path d="M159.69 59.74A72 72 0 1 1 49.27 48.91" fill="none" stroke="#4F5D3A" stroke-width="12" stroke-linecap="round"/><circle cx="100" cy="100" r="13" fill="#B7791F"/></svg><span>Eco</span></div>
+  <div class="logo"><b id="libroTitulo"></b><i id="libroSub"></i></div>
+  <div class="der lbl" id="libroCuenta"></div>
+</header>
+
+<div class="indice lbl box" id="indice" aria-hidden="true"></div>
+
+<section class="estante" id="estante" aria-label="Estantería de capítulos"><div class="stage" id="stage"></div></section>
+
+<button class="abrir" id="abrir" type="button" aria-label="Abrir capítulo"><svg viewBox="0 0 14 14"><path d="M1 1 L13 7 L1 13 Z" fill="currentColor"/></svg></button>
+
+<div class="pie-cap" id="pieCap" aria-live="polite" aria-atomic="true"></div>
+<button class="flecha ant" id="ant" type="button" aria-label="Capítulo anterior"><svg viewBox="0 0 18 10"><path d="M5 1 L1 5 L5 9 M1 5 L17 5"/></svg></button>
+<button class="flecha sig" id="sig" type="button" aria-label="Capítulo siguiente"><svg viewBox="0 0 18 10"><path d="M13 1 L17 5 L13 9 M17 5 L1 5"/></svg></button>
+<footer class="pie-pag lbl"><span id="pieIzq"></span><a href="https://mieco.app" target="_blank" rel="noopener">MIECO.APP</a></footer>
+
+<div class="detalle" id="detalle" role="dialog" aria-modal="true" aria-labelledby="dTitulo">
+  <button class="d-cerrar lbl box" id="dCerrar" type="button">CERRAR</button>
+  <div class="d-tam"><button type="button" id="dMenos" aria-label="Letra más pequeña">A-</button><button type="button" id="dMas" aria-label="Letra más grande">A+</button></div>
+  <div class="d-logo"><div class="logo"><b id="dLogoT"></b></div></div>
+  <div class="d-grid" id="dGrid">
+    <div class="d-col" id="dCol"><div class="d-in">
+      <div class="mask"><div class="d-sub lbl" id="dSub"></div></div>
+      <div class="mask"><h2 class="d-titulo" id="dTitulo"></h2></div>
+      <div class="mask"><div class="d-meta lbl" id="dMeta"></div></div>
+      <div class="mask"><div class="d-cuerpo" id="dCuerpo"></div></div>
+      <div class="mask"><div class="d-ded" id="dDed"></div></div>
+    </div></div>
+    <div class="d-lado"><div class="d-poster"><svg id="dPoster" viewBox="0 0 474 900" aria-hidden="true">
+      <defs>
+        <filter id="tinta" x="-30%" y="-30%" width="160%" height="160%"><feTurbulence type="fractalNoise" baseFrequency=".011" numOctaves="3" seed="7" result="r"/><feDisplacementMap in="SourceGraphic" in2="r" scale="120" xChannelSelector="R" yChannelSelector="G"/></filter>
+        <mask id="mTinta" maskUnits="userSpaceOnUse" x="-200" y="-200" width="874" height="1300"><g filter="url(#tinta)" fill="#fff" id="gBlots"></g></mask>
+        <clipPath id="cPoster"><rect width="474" height="900"/></clipPath>
+      </defs>
+      <g mask="url(#mTinta)"><g clip-path="url(#cPoster)" id="gPoster"></g></g>
+    </svg></div></div>
+  </div>
+</div>
+
+<div class="cursor" id="cursor" aria-hidden="true"><div class="aro"></div><div class="punto"></div><div class="txt">ABRIR</div></div>
+<div class="grano" aria-hidden="true"></div>
+
+<script type="application/json" id="datos">/*__DATOS__*/{"titulo":"Mi libro","subtitulo":"","dedicatoria":"","fecha":"","capitulos":[]}</script>
+<script>
+(() => {
+'use strict';
+const NS = 'http://www.w3.org/2000/svg';
+const DATOS = JSON.parse(document.getElementById('datos').textContent);
+const CAPS = DATOS.capitulos || [];
+const N = CAPS.length;
+const $ = (id) => document.getElementById(id);
+const E = (tag, cls, txt) => { const x = document.createElement(tag); if (cls) x.className = cls; if (txt !== undefined) x.textContent = txt; return x; };
+const S = (tag, attrs) => { const x = document.createElementNS(NS, tag); for (const k in attrs) x.setAttribute(k, attrs[k]); return x; };
+const reducir = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const fino = matchMedia('(pointer: fine)').matches;
+const smooth = (x) => x * x * (3 - 2 * x);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+$('libroTitulo').textContent = DATOS.titulo || 'Mi libro';
+$('dLogoT').textContent = DATOS.titulo || 'Mi libro';
+$('libroSub').textContent = DATOS.subtitulo || 'Una historia contada con Eco';
+$('libroCuenta').textContent = N === 1 ? '1 CAPÍTULO' : N + ' CAPÍTULOS';
+$('pieIzq').textContent = DATOS.dedicatoria ? DATOS.dedicatoria : ('CREADO CON ECO' + (DATOS.fecha ? ' · ' + DATOS.fecha : ''));
+document.title = (DATOS.titulo || 'Mi libro') + ' · Eco';
+if (!N) { $('estante').remove(); const p = E('p', 'lbl', 'ESTE LIBRO TODAVÍA NO TIENE CAPÍTULOS'); p.style.cssText = 'position:fixed;left:0;right:0;top:50%;text-align:center'; document.body.appendChild(p); return; }
+
+/* Colores de cada libro, todos de la paleta de Eco */
+const PAL = [
+  { bg: '#4F5D3A', fg: '#F6EEDC', ac: '#D9A441' }, { bg: '#8C5A1C', fg: '#FBF3E2', ac: '#F0CB7C' },
+  { bg: '#3B4429', fg: '#EADFC4', ac: '#D9A441' }, { bg: '#7A3F2E', fg: '#FBEFE4', ac: '#E6B77E' },
+  { bg: '#2F4A4F', fg: '#EFE9D6', ac: '#E3B65A' }, { bg: '#5B5A44', fg: '#F6EEDC', ac: '#D9A441' },
+];
+const color = (i) => PAL[i % PAL.length];
+const SERIF = '"Source Serif 4", "Iowan Old Style", Georgia, serif', SANS = '"Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif';
+const ANILLOS = (c) => `<svg class="anillos" viewBox="0 0 200 200" aria-hidden="true"><path d="M127.57 95.14A28 28 0 1 1 90.06 73.82" fill="none" stroke="${c.fg}" stroke-width="12" stroke-linecap="round"/><path d="M146.36 81.27A50 50 0 1 1 72.91 57.97" fill="none" stroke="${c.fg}" stroke-width="12" stroke-linecap="round"/><path d="M159.69 59.74A72 72 0 1 1 49.27 48.91" fill="none" stroke="${c.fg}" stroke-width="12" stroke-linecap="round"/><circle cx="100" cy="100" r="13" fill="${c.ac}"/></svg>`;
+
+/* Geometría. H sale de --H (se mide con una sonda) */
+const sonda = E('div'); sonda.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:var(--H)'; document.body.appendChild(sonda);
+const stage = $('stage'), estante = $('estante');
+let H = 400, ws = 68, d = 211, gap = 12;
+function medir() {
+  H = sonda.getBoundingClientRect().height || 400;
+  ws = H * 142 / 840; d = H * 474 / 900; gap = H * 0.03;
+  stage.style.setProperty('--H', H + 'px'); stage.style.setProperty('--ws', ws + 'px'); stage.style.setProperty('--d', d + 'px'); stage.style.setProperty('--k', (H / 100) + 'px');
+}
+medir();
+
+/* Los libros. Con 8 o más capítulos la estantería es infinita (3 copias); con menos, termina en los extremos. */
+const INFINITO = N >= 8;
+const COPIAS = INFINITO ? 3 : 1;
+const TOTAL = N * COPIAS;
+const tapes = [];
+for (let v = 0; v < TOTAL; v++) {
+  const i = v % N, ch = CAPS[i], c = color(i);
+  const t = E('div', 'tape'); t.dataset.v = v;
+  const sp = E('div', 'face sp'); sp.style.setProperty('--bg', c.bg); sp.style.setProperty('--fg', c.fg);
+  sp.insertAdjacentHTML('beforeend', ANILLOS(c));
+  const tit = E('div', 'tit'); const corto = ch.titulo.length > 34 ? ch.titulo.slice(0, 32).trim() + '…' : ch.titulo; const ts = E('span', ch.titulo.length > 20 ? 'chico' : '', corto); tit.appendChild(ts);
+  const pie = E('div', 'pie'); pie.appendChild(E('span', '', 'ECO')); pie.appendChild(E('b', '', String(i + 1)));
+  sp.append(tit, pie);
+  const cv = E('div', 'face cv'); cv.style.setProperty('--bg', c.bg); cv.style.setProperty('--fg', c.fg);
+  const foto = ch.fotos && ch.fotos[0] && ch.fotos[0].src;
+  if (foto) { cv.style.backgroundImage = 'url("' + foto + '")'; cv.appendChild(E('div', 'velo')); } else { cv.classList.add('sinfoto'); cv.insertAdjacentHTML('beforeend', ANILLOS({ fg: c.fg, ac: c.ac }).replace('class="anillos"', 'class="adorno"')); }
+  cv.appendChild(E('div', 'arriba', 'Capítulo ' + (i + 1)));
+  const largo = ch.titulo.length;
+  cv.appendChild(E('div', 'nombre' + (largo > 44 ? ' muylargo' : largo > 22 ? ' largo' : ''), ch.titulo));
+  if (ch.tema) cv.appendChild(E('div', 'tema', ch.tema));
+  const cpie = E('div', 'pie'); cpie.appendChild(E('span', '', 'ECO')); cpie.insertAdjacentHTML('beforeend', ANILLOS(c)); cv.appendChild(cpie);
+  t.append(sp, cv); stage.appendChild(t);
+  tapes.push({ el: t, sp, cv, v, i, lift: 0 });
+}
+
+/* Posición horizontal: los lomos avanzan ancho + hueco y el libro abierto separa a sus vecinos. */
+const B = (r) => (Math.abs(r) < 1 ? (r + Math.sin(Math.PI * r) / Math.PI) / 2 : Math.sign(r) * 0.5);
+const F = (r) => r * (ws + gap) + (d - ws + 1.6 * gap) * B(r);
+
+/* Estado */
+let s = INFINITO ? 0 + N : 0, T = s, hover = -1, activo = -1, mx = innerWidth / 2, my = innerHeight / 2, cx = mx, cy = my, tiltX = 0, tiltY = 0, enCubierta = false, abierto = false, arrastrando = false, hubo = false;
+const act0 = Math.min(N - 1, Math.floor(N / 2));
+s = T = (INFINITO ? N : 0) + act0;
+const relativo = (v) => { let r = v - s; if (INFINITO) { r = ((r + TOTAL / 2) % TOTAL + TOTAL) % TOTAL - TOTAL / 2; } return r; };
+const limitar = (x) => (INFINITO ? x : clamp(x, 0, N - 1));
+const indiceActivo = () => ((Math.round(s) % N) + N) % N;
+
+/* Título del capítulo activo (se desliza dentro de una máscara) */
+const pieCap = $('pieCap');
+const mT = E('div', 'mask'), mS = E('div', 'mask'), mA = E('div', 'mask');
+pieCap.append(mT, mS, mA);
+function pie(i, dir, inmediato) {
+  const ch = CAPS[i];
+  const hechos = [[mT, ch.titulo, 'cap-t'], [mS, (ch.tema || '').toUpperCase(), 'cap-s lbl'], [mA, 'CAPÍTULO ' + (i + 1) + ' DE ' + N, 'cap-a']];
+  for (const [m, txt, cls] of hechos) {
+    const nuevo = E('span', cls, txt);
+    const viejos = [...m.children];
+    m.appendChild(nuevo);
+    if (inmediato || reducir) { viejos.forEach((x) => x.remove()); continue; }
+    nuevo.animate([{ transform: `translateY(${dir * 105}%)` }, { transform: 'translateY(0)' }], { duration: 650, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'both' });
+    viejos.forEach((x) => {
+      if (x.dataset.sale) return; x.dataset.sale = '1';
+      const a = x.animate([{ transform: getComputedStyle(x).transform === 'none' ? 'translateY(0)' : getComputedStyle(x).transform }, { transform: `translateY(${-dir * 105}%)` }], { duration: 650, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'both' });
+      a.onfinish = () => x.remove();
+    });
+  }
+  $('indice').textContent = 'CAPÍTULO ' + (i + 1) + ' DE ' + N;
+}
+activo = indiceActivo(); pie(activo, 1, true);
+
+/* Cursor */
+const cursor = $('cursor');
+document.addEventListener('pointermove', (e) => { mx = e.clientX; my = e.clientY; });
+document.addEventListener('mouseover', (e) => { const b = e.target.closest && e.target.closest('button, a'); cursor.classList.toggle('btn', !!b && !e.target.closest('.estante')); });
+
+/* Estantería: hover, clic, arrastre, rueda, teclado */
+tapes.forEach((t) => {
+  t.el.addEventListener('pointerenter', () => { hover = t.v; });
+  t.el.addEventListener('pointerleave', () => { if (hover === t.v) hover = -1; });
+  t.el.addEventListener('click', () => {
+    if (hubo || abierto) return;
+    const r = relativo(t.v);
+    if (Math.abs(r) < .5) abrirDetalle(); else T = limitar(Math.round(T + r));
+  });
+});
+let x0 = 0, T0 = 0, presionado = false;
+estante.addEventListener('pointerdown', (e) => { presionado = true; hubo = false; x0 = e.clientX; T0 = T; });
+addEventListener('pointermove', (e) => {
+  if (!presionado || abierto) return;
+  if (!arrastrando && Math.abs(e.clientX - x0) > 5) { arrastrando = true; hubo = true; }
+  if (arrastrando) T = limitar(T0 - (e.clientX - x0) / (ws + gap));
+});
+addEventListener('pointerup', () => { if (!presionado) return; presionado = false; if (arrastrando) { arrastrando = false; T = limitar(Math.round(T)); setTimeout(() => { hubo = false; }, 0); } });
+let rueda = 0;
+addEventListener('wheel', (e) => {
+  if (abierto) return;
+  const dl = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+  T = limitar(T + dl / (ws + gap) * 0.5);
+  clearTimeout(rueda); rueda = setTimeout(() => { T = limitar(Math.round(T)); }, 160);
+}, { passive: true });
+const mover = (n) => { if (!abierto) T = limitar(Math.round(T) + n); };
+$('ant').addEventListener('click', () => mover(-1));
+$('sig').addEventListener('click', () => mover(1));
+addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && abierto) { e.preventDefault(); cerrarDetalle(); return; }
+  if (abierto) return;
+  if (e.key === 'ArrowLeft') { e.preventDefault(); mover(-1); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); mover(1); }
+  else if (e.key === 'Enter' && (document.activeElement === document.body)) { e.preventDefault(); abrirDetalle(); }
+});
+$('abrir').addEventListener('click', () => abrirDetalle());
+
+/* Bucle de animación */
+let ultimo = performance.now(), abrirEscala = 0;
+function cuadro(ahora) {
+  const dt = Math.min(0.05, (ahora - ultimo) / 1000); ultimo = ahora;
+  const k = reducir ? 1 : 1 - Math.exp(-(arrastrando ? 18 : 5.2) * dt);
+  s += (T - s) * k; if (Math.abs(T - s) < 1e-4) s = T;
+  if (INFINITO && Math.abs(s) > 4 * TOTAL) { const sh = Math.floor(s / N) * N - N; s -= sh; T -= sh; }
+  const ia = indiceActivo();
+  if (ia !== activo && !abierto) { const dir = Math.sign(T - s) || 1; activo = ia; pie(ia, dir); }
+
+  const cx0 = innerWidth / 2, cyShelf = estante.getBoundingClientRect().top + estante.offsetHeight / 2;
+  enCubierta = !abierto && Math.abs(mx - cx0) < 0.55 * d && Math.abs(my - cyShelf) < 0.55 * H && Math.abs(T - s) < .3;
+  const ex = 1 - Math.exp(-7 * dt);
+  const objY = enCubierta ? clamp((mx - cx0) / (0.55 * d), -1, 1) * 9 : (mx - cx0) / innerWidth * 5;
+  const objX = enCubierta ? -clamp((my - cyShelf) / (H / 2), -1, 1) * 6 : 0;
+  tiltY += (objY - tiltY) * ex; tiltX += (objX - tiltX) * ex;
+  const el = 1 - Math.exp(-12 * dt);
+  const lim = innerWidth / 2 + 1.5 * d;
+  for (const t of tapes) {
+    const r = relativo(t.v);
+    const x = F(r);
+    if (Math.abs(x) > lim) { if (!t.oculto) { t.el.style.visibility = 'hidden'; t.oculto = true; } continue; }
+    if (t.oculto) { t.el.style.visibility = ''; t.oculto = false; }
+    const o = smooth(Math.max(0, 1 - Math.abs(r)));
+    const objLift = hover === t.v && Math.abs(r) > .5 && !abierto ? 1 : 0;
+    t.lift += (objLift - t.lift) * (reducir ? 1 : el);
+    t.el.style.transform = `translate3d(${x.toFixed(2)}px, ${(-o * 0.025 * H - t.lift * 0.045 * H).toFixed(2)}px, ${(o * 0.2 * H).toFixed(2)}px) rotateZ(${(-4.5 * o).toFixed(3)}deg) rotateX(${(tiltX * o).toFixed(3)}deg) rotateY(${(-90 * o + tiltY * o).toFixed(3)}deg)`;
+    t.el.style.zIndex = Math.round(100 - Math.abs(r) * 4);
+    t.sp.style.setProperty('--shade', (o * .55).toFixed(3));
+    t.cv.style.setProperty('--shade', ((1 - o) * .5).toFixed(3));
+  }
+  // Anillo de abrir y cursor
+  const objAbrir = abierto ? 0 : smooth(Math.max(0, 1 - Math.abs(T - s) * 3));
+  abrirEscala += (objAbrir - abrirEscala) * (reducir ? 1 : 1 - Math.exp(-14 * dt));
+  const ab = $('abrir');
+  ab.style.left = (cx0 - 0.5 * d - 6 - 21) + 'px'; ab.style.top = (cyShelf + 0.36 * H - 21) + 'px'; ab.style.transform = `scale(${abrirEscala.toFixed(3)})`;
+  if (fino) {
+    const ck = 1 - Math.exp(-16 * dt); cx += (mx - cx) * ck; cy += (my - cy) * ck;
+    cursor.style.transform = `translate3d(${cx.toFixed(1)}px, ${cy.toFixed(1)}px, 0)`;
+    cursor.classList.toggle('open', enCubierta);
+    cursor.classList.toggle('spine', !enCubierta && hover >= 0 && Math.abs(relativo(hover)) > .5 && !abierto);
+  }
+  requestAnimationFrame(cuadro);
+}
+addEventListener('resize', medir);
+requestAnimationFrame(cuadro);
+
+/* Detalle del capítulo: una hoja de papel sale de la portada; el póster se revela como manchas de tinta */
+const detalle = $('detalle');
+const BLOTS = [[150, 330, 0], [340, 600, 120], [250, 120, 220], [90, 760, 300], [400, 250, 360], [260, 860, 420], [230, 470, 180]];
+const circulos = BLOTS.map(([x, y]) => { const c = S('circle', { cx: x, cy: y, r: 0 }); $('gBlots').appendChild(c); return c; });
+let tinta = null, tam = 19;
+try { tam = clamp(parseInt(localStorage.getItem('eco-libro-tam') || '19', 10) || 19, 16, 28); } catch (e) { /* nada */ }
+detalle.style.setProperty('--tam', tam + 'px');
+const cambiarTam = (n) => { tam = clamp(tam + n, 16, 28); detalle.style.setProperty('--tam', tam + 'px'); try { localStorage.setItem('eco-libro-tam', String(tam)); } catch (e) { /* nada */ } };
+$('dMenos').addEventListener('click', () => cambiarTam(-1));
+$('dMas').addEventListener('click', () => cambiarTam(1));
+
+function lineas(texto, max) {
+  const out = []; let linea = '';
+  for (const w of String(texto).split(/\s+/)) { if ((linea + ' ' + w).trim().length > max && linea) { out.push(linea); linea = w; } else linea = (linea + ' ' + w).trim(); }
+  if (linea) out.push(linea); return out.slice(0, 6);
+}
+function armarPoster(i) {
+  const ch = CAPS[i], c = color(i), g = $('gPoster');
+  g.replaceChildren();
+  g.appendChild(S('rect', { width: 474, height: 900, fill: c.bg }));
+  const foto = ch.fotos && ch.fotos[0] && ch.fotos[0].src;
+  if (foto) {
+    const im = S('image', { x: 0, y: 0, width: 474, height: 900, preserveAspectRatio: 'xMidYMid slice' }); im.setAttribute('href', foto); g.appendChild(im);
+    const gr = S('linearGradient', { id: 'gVelo', x1: 0, y1: 0, x2: 0, y2: 1 });
+    [[0, .18], [.35, .05], [1, .96]].forEach(([o, a]) => gr.appendChild(S('stop', { offset: o, 'stop-color': a > .5 ? c.bg : '#000', 'stop-opacity': a })));
+    g.appendChild(gr); g.appendChild(S('rect', { width: 474, height: 900, fill: 'url(#gVelo)' }));
+  } else {
+    [[320, 80, 150], [320, 80, 100], [320, 80, 52]].forEach(([x, y, r]) => g.appendChild(S('circle', { cx: x + 80, cy: y + 140, r, fill: 'none', stroke: c.fg, 'stroke-width': 18, 'stroke-opacity': .16, 'stroke-linecap': 'round', 'stroke-dasharray': (2 * Math.PI * r * .72) + ' 999' })));
+  }
+  const tx = (x, y, txt, attrs) => { const t = S('text', Object.assign({ x, y, fill: c.fg }, attrs)); t.textContent = txt; g.appendChild(t); return t; };
+  tx(42, 72, ('Capítulo ' + (i + 1)).toUpperCase(), { 'font-family': SANS, 'font-weight': 700, 'font-size': 15, 'letter-spacing': 3 });
+  const ls = lineas(ch.titulo, ch.titulo.length > 40 ? 16 : 13), tam = ch.titulo.length > 40 ? 44 : 58, base = 660 - (ls.length - 1) * tam * 1.04;
+  ls.forEach((l, k) => tx(42, base + k * tam * 1.04, l, { 'font-family': SERIF, 'font-weight': 600, 'font-size': tam }));
+  if (ch.tema) lineas(ch.tema, 34).slice(0, 2).forEach((l, k) => tx(42, 720 + k * 28 + (ls.length > 3 ? 20 : 0), l, { 'font-family': SERIF, 'font-style': 'italic', 'font-size': 22, 'fill-opacity': .92 }));
+  tx(42, 858, 'ECO', { 'font-family': SANS, 'font-weight': 700, 'font-size': 15, 'letter-spacing': 4 });
+}
+function llenarDetalle(i) {
+  const ch = CAPS[i];
+  $('dSub').textContent = (ch.tema || 'Capítulo ' + (i + 1)).toUpperCase();
+  $('dTitulo').textContent = ch.titulo;
+  const palabras = (ch.texto || '').trim().split(/\s+/).filter(Boolean).length;
+  $('dMeta').textContent = 'CAPÍTULO ' + (i + 1) + ' DE ' + N + ' / ' + Math.max(1, Math.round(palabras / 180)) + ' MIN DE LECTURA';
+  const cuerpo = $('dCuerpo'); cuerpo.replaceChildren();
+  const pars = String(ch.texto || '').split(/\n\s*\n/).filter((p) => p.trim());
+  const fotos = ch.fotos || [];
+  const antes = new Map();
+  fotos.forEach((f, k) => { const j = pars.length ? Math.min(pars.length - 1, Math.round((k * pars.length) / fotos.length)) : 0; if (!antes.has(j)) antes.set(j, []); antes.get(j).push(f); });
+  pars.forEach((t, j) => {
+    (antes.get(j) || []).forEach((f) => { const fig = E('figure'); const im = E('img'); im.src = f.src; im.alt = f.pie || 'Foto familiar'; fig.appendChild(im); if (f.pie) fig.appendChild(E('figcaption', '', f.pie)); cuerpo.appendChild(fig); });
+    cuerpo.appendChild(E('p', '', t));
+  });
+  if (!pars.length) fotos.forEach((f) => { const fig = E('figure'); const im = E('img'); im.src = f.src; im.alt = f.pie || 'Foto familiar'; fig.appendChild(im); cuerpo.appendChild(fig); });
+  cuerpo.appendChild(E('div', 'd-fin', '✦'));
+  $('dDed').textContent = i === 0 && DATOS.dedicatoria ? DATOS.dedicatoria : '';
+  $('dCol').scrollTop = 0;
+  armarPoster(i);
+}
+const rectCubierta = () => { const t = tapes.find((x) => Math.abs(relativo(x.v)) < .5) || tapes[0]; return t.cv.getBoundingClientRect(); };
+const inset = (r) => `inset(${r.top}px ${innerWidth - r.right}px ${innerHeight - r.bottom}px ${r.left}px round 3px)`;
+const EASE_HOJA = 'cubic-bezier(.76,0,.18,1)';
+let focoPrevio = null;
+
+function abrirDetalle() {
+  if (abierto) return;
+  abierto = true; focoPrevio = document.activeElement; T = limitar(Math.round(T));
+  const i = indiceActivo();
+  llenarDetalle(i);
+  circulos.forEach((c) => c.setAttribute('r', 0));
+  const r = rectCubierta();
+  detalle.classList.add('vivo');
+  detalle.style.transformOrigin = `${r.left + r.width / 2}px ${r.top + r.height / 2}px`;
+  detalle.getAnimations().forEach((a) => a.cancel());
+  const dur = reducir ? 1 : 1050;
+  detalle.animate([{ clipPath: inset(r), transform: 'rotate(-4.5deg)' }, { clipPath: 'inset(0px 0px 0px 0px round 0px)', transform: 'rotate(0deg)' }], { duration: dur, easing: EASE_HOJA, fill: 'both' });
+  const masks = [...detalle.querySelectorAll('.mask > *')];
+  masks.forEach((m, k) => m.animate([{ transform: 'translateY(110%)' }, { transform: 'translateY(0)' }], { duration: reducir ? 1 : 900, delay: reducir ? 0 : 620 + k * 75, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'both' }));
+  const t0 = performance.now() + (reducir ? -5000 : 520);
+  cancelAnimationFrame(tinta);
+  const paso = (ahora) => {
+    const t = ahora - t0; let fin = true;
+    circulos.forEach((c, k) => { const p = clamp((t - BLOTS[k][2]) / 1250, 0, 1); if (p < 1) fin = false; c.setAttribute('r', (720 * (1 - Math.pow(1 - p, 3))).toFixed(1)); });
+    if (!fin || t < 2400) tinta = requestAnimationFrame(paso);
+  };
+  tinta = requestAnimationFrame(paso);
+  cursor.classList.remove('open', 'spine');
+  setTimeout(() => $('dCerrar').focus({ preventScroll: true }), reducir ? 0 : 700);
+}
+function cerrarDetalle() {
+  if (!abierto) return;
+  const r = rectCubierta();
+  detalle.style.transformOrigin = `${r.left + r.width / 2}px ${r.top + r.height / 2}px`;
+  const a = detalle.animate([{ clipPath: 'inset(0px 0px 0px 0px round 0px)', transform: 'rotate(0deg)' }, { clipPath: inset(r), transform: 'rotate(-4.5deg)' }], { duration: reducir ? 1 : 850, easing: EASE_HOJA, fill: 'both' });
+  a.onfinish = () => { detalle.classList.remove('vivo'); detalle.getAnimations().forEach((x) => x.cancel()); abierto = false; cancelAnimationFrame(tinta); if (focoPrevio && focoPrevio.focus) focoPrevio.focus({ preventScroll: true }); };
+}
+$('dCerrar').addEventListener('click', cerrarDetalle);
+detalle.addEventListener('keydown', (e) => {
+  if (e.key !== 'Tab') return;
+  const cs = [...detalle.querySelectorAll('button')].filter((x) => x.getClientRects().length);
+  if (!cs.length) return;
+  if (e.shiftKey && document.activeElement === cs[0]) { e.preventDefault(); cs[cs.length - 1].focus(); }
+  else if (!e.shiftKey && document.activeElement === cs[cs.length - 1]) { e.preventDefault(); cs[0].focus(); }
+});
+window.__libro = { abrir: abrirDetalle, cerrar: cerrarDetalle };
+})();
+</script>
+</body>
+</html>

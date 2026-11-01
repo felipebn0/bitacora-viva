@@ -33,7 +33,7 @@
     acciones.append(grupoLibro,grupoCapitulos);
     // Otros scripts agregan sus botones al final de la barra (Diseñar mi libro, Exportar en PDF): se llevan al grupo del libro.
     const reubicar=()=>{
-      ['ecoEditorialOpen','ecoLibroExportar'].forEach(id=>{const b=document.getElementById(id);if(b&&b.parentNode!==grupoLibro)grupoLibro.appendChild(b)});
+      ['ecoEditorialOpen','ecoLibroExportar','ecoLibroDigital'].forEach(id=>{const b=document.getElementById(id);if(b&&b.parentNode!==grupoLibro)grupoLibro.appendChild(b)});
       const msg=document.querySelector('.eco-libro-exportar-msg');
       if(msg&&msg.parentNode!==grupoLibro)grupoLibro.appendChild(msg);
     };
