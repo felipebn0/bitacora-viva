@@ -47,12 +47,12 @@ section.portada-bloque{display:flex; padding:0; min-height:clamp(480px, 82svh, 7
 .portada-bloque--familia .portada-bloque__texto{text-align:center}
 .portada-bloque--familia .portada-bloque__texto > *{margin-left:auto; margin-right:auto; max-width:40rem}
 
-.portada-demo .section-head{margin-bottom:0}
-
-.portada-bloque--manos .portada-bloque__foto{object-position:50% 50%}
 .portada-bloque--pagina{min-height:clamp(420px, 62svh, 600px)}
 .portada-bloque--corto{min-height:clamp(480px, 70svh, 720px)}
-.problem--bajo{padding-top:clamp(32px, 4vw, 48px)}
+.problem--bajo{padding-top:clamp(56px, 7vw, 88px)}
+.problem--bajo .section-head{margin-bottom:clamp(28px, 4vw, 40px)}
+.problem--bajo .eyebrow,.problem--bajo h2 em{color:#F2C98A}
+.problem--bajo .eyebrow:before{background:#F2C98A}
 .problem--bajo .questions{grid-template-columns:1fr 1fr}
 .portada-retrato{width:min(400px, 100%); aspect-ratio:1; object-fit:cover; border-radius:var(--radius-l); box-shadow:var(--shadow-float)}
 .portada-teaser__mas{text-align:center; margin-top:32px}
@@ -64,12 +64,10 @@ section.portada-bloque{display:flex; padding:0; min-height:clamp(480px, 82svh, 7
   .portada-hero__foto{object-position:64% 20%}
   .portada-hero:after{background:linear-gradient(0deg, rgba(20,14,8,.95) 0%, rgba(20,14,8,.82) 46%, rgba(20,14,8,.1) 80%)}
   .portada-hero .hero-actions .btn{flex:1 1 100%}
-  .portada-hero .trust-row{display:none}
+  .portada-hero .trust-row{margin-top:18px; gap:8px 16px; font-size:.9rem}
   section.portada-bloque{min-height:clamp(460px, 78svh, 640px); align-items:flex-end}
   .portada-bloque--album .portada-bloque__foto{width:100%; -webkit-mask-image:none; mask-image:none}
   .portada-bloque--album:after{background:linear-gradient(0deg, rgba(20,14,8,.94) 0%, rgba(20,14,8,.7) 48%, rgba(20,14,8,.25) 100%)}
-  .portada-bloque--manos .portada-bloque__foto{top:0; height:52%; object-position:72% 50%}
-  .portada-bloque--manos:after{background:linear-gradient(0deg, #1c150e 0%, #1c150e 46%, rgba(28,21,14,.15) 100%)}
   .portada-bloque--escucha:after{background:linear-gradient(0deg, rgba(20,14,8,.94) 0%, rgba(20,14,8,.7) 46%, rgba(20,14,8,.05) 85%)}
   .portada-bloque--escucha .portada-bloque__texto{align-items:flex-start}
   .portada-bloque--escucha .portada-bloque__foto{object-position:30% 50%}
