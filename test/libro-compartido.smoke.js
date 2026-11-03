@@ -22,6 +22,7 @@ const AUDIO_ANA = 'audio/1/sesion-a/user-0.webm';
 const FOTO_AJENA = 'media/libros/2/xyz.jpg';
 const CONTENIDO = Buffer.from('0123456789abcdefghij');
 let enlaces = [];
+const compras = new Set([1]); // cuentas con la compra aprobada
 const copias = [];
 const guardadosWav = [];
 
@@ -34,6 +35,7 @@ function fakeSql(strings, ...values) {
     return Promise.resolve(u ? [{ id: u.id, username: u.username, password_hash: u.password_hash, token_version: u.token_version }] : []);
   }
   if (text.includes('SELECT owner_user_id, token_version FROM users WHERE id')) { const u = users[values[0]]; return Promise.resolve(u ? [{ owner_user_id: null, token_version: u.token_version }] : []); }
+  if (text.includes('FROM book_demo_purchases WHERE owner_id')) return Promise.resolve(compras.has(values[0]) ? [{ '?column?': 1 }] : []);
   if (text.includes('SELECT original_url, wav_url FROM libro_audios')) return Promise.resolve(copias.filter((x) => x.owner_id === values[0]).map((x) => ({ original_url: x.original_url, wav_url: x.wav_url })));
   if (text.includes('INSERT INTO libro_audios')) { copias.push({ owner_id: values[0], original_url: values[1], wav_url: values[2] }); return Promise.resolve([]); }
   if (text.includes('INSERT INTO libros_compartidos')) { enlaces.push({ token: values[0], owner_id: values[1], datos: values[2], medios: values[3], revoked_at: null, updated_at: new Date() }); return Promise.resolve([]); }
@@ -108,6 +110,9 @@ const libro = (extra = {}) => Object.assign({
   ok(r.status === 401, 'sin sesión no se puede crear el enlace (401)');
   r = await request(server, { path: '/api/libro-compartido', method: 'POST', body: { datos: { titulo: 'x', capitulos: [] } } }, ana);
   ok(r.status === 400, 'un libro sin capítulos no se comparte (400)');
+
+  r = await request(server, { path: '/api/libro-compartido', method: 'POST', body: { datos: libro() } }, otra);
+  ok(r.status === 402 && enlaces.length === 0, 'sin la compra hecha no se crea el enlace (402)');
 
   r = await request(server, { path: '/api/libro-compartido', method: 'POST', body: { datos: libro() } }, ana);
   ok(r.status === 200 && /^http:\/\/127\.0\.0\.1:\d+\/libro\/[a-f0-9]{48}$/.test(r.json.url) && r.json.nuevo === true, 'la cuenta dueña crea su enlace');

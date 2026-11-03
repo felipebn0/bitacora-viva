@@ -100,7 +100,7 @@ const capitulos = [
   ok(await esperarGuardado(t, (b) => b.order.join(',') === '2,3,1'), 'subir un capítulo en el índice cambia el orden del libro');
   ok((await t.page.locator('#ecoEditorialBook [data-sec^="ch-"] small').allInnerTexts()).join('|') === 'CAPÍTULO 01|CAPÍTULO 02|CAPÍTULO 03' && await t.page.locator('#ecoEditorialBook [data-sec^="ch-"]').first().getAttribute('data-sec') === 'ch-2', 'y el libro se reordena y renumera');
 
-  // 6) Los botones de arriba: las dos descargas pasan por la pantalla de pago, aunque la compra de prueba ya estuviera aprobada
+  // 6) Los botones de arriba: el PDF pasa por la pantalla de pago en cada descarga, aunque la compra ya estuviera aprobada; el enlace solo la primera vez
   let descargas = 0; t.page.on('download', () => { descargas++; });
   await t.page.click('#ecoEditorialPdf');
   await t.page.waitForSelector('#ecoDemoPay:not([hidden])');
@@ -119,13 +119,11 @@ const capitulos = [
   ok(caja && Math.abs(caja[1] - 595.28) < 1 && Math.abs(caja[2] - 841.89) < 1, 'en hoja A4 (' + (caja ? caja[1] + ' x ' + caja[2] + ' pt' : 'sin medida') + ')');
   ok((textoPdf.match(/\/Type \/Page\b/g) || []).length >= 6, 'con portada, dedicatoria, contenido y una página por capítulo (' + (textoPdf.match(/\/Type \/Page\b/g) || []).length + ' páginas)');
   ok(/Listo: se descargó tu PDF en hoja A4/.test(await t.page.locator('#ecoEditorialStatus').innerText()), 'y avisa arriba que ya se descargó');
-  await t.page.click('#ecoEditorialDigital');
-  await t.page.waitForSelector('#ecoDemoPay:not([hidden])');
-  ok(await t.page.locator('#ecoDemoConfirm').isVisible(), '«Compartir libro digital» también muestra la pantalla de pago');
   let bajadas = 0; t.page.on('download', () => bajadas++);
-  await t.page.click('#ecoDemoConfirm');
+  await t.page.click('#ecoEditorialDigital');
   await t.page.waitForSelector('#ecoEditorialShare:not([hidden])');
-  ok(/\/libro\/b{48}$/.test(await t.page.inputValue('#ecoEditorialShareUrl')) && bajadas === 0, 'al pagar no se descarga nada: aparece el enlace del libro para copiar');
+  ok(await t.page.locator('#ecoDemoPay').isHidden(), 'con la compra ya hecha, «Compartir libro digital» no vuelve a pedir el pago');
+  ok(/\/libro\/b{48}$/.test(await t.page.inputValue('#ecoEditorialShareUrl')) && bajadas === 0, 'no se descarga nada: aparece el enlace del libro para copiar');
   ok(t.enlaces.length === 1 && /Mi infancia en la finca/.test(JSON.stringify(t.enlaces[0])) && /Los recuerdos de Ana/.test(JSON.stringify(t.enlaces[0])), 'y el enlace lleva el libro con lo que se editó');
   if (CAPTURAS) await t.page.screenshot({ path: path.join(CAPTURAS, 'estudio-escritorio.png') });
 

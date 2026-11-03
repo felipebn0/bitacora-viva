@@ -65,6 +65,8 @@ module.exports = (app, { sql, ensureSchema, requireAuth, bloquearColaborador, ra
     sinCache(res);
     try {
       await ready();
+      const compra = await sql`SELECT 1 FROM book_demo_purchases WHERE owner_id=${req.profileUserId} AND status='approved'`;
+      if (!compra.length) return res.status(402).json({ error: 'Para compartir el libro primero hay que completar la compra.' });
       const filas = await sql`SELECT original_url, wav_url FROM libro_audios WHERE owner_id=${req.profileUserId}`;
       const limpio = limpiar(req.body && req.body.datos, req.profileUserId, new Map(filas.map((f) => [f.original_url, f.wav_url])));
       if (!limpio || !limpio.datos.capitulos.length) return res.status(400).json({ error: 'El libro no tiene capítulos para compartir.' });

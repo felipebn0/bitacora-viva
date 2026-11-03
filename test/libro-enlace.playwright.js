@@ -23,15 +23,15 @@ const capitulos = [
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' }).catch(() => chromium.launch());
   const ctx = await browser.newContext({ viewport: { width: 1300, height: 900 }, acceptDownloads: true });
   const page = await ctx.newPage();
-  const t = { copias: {}, puts: [], ordenPost: [], posts: [], deletes: 0, activo: false, descargas: 0, pedidosDeMedios: 0, borrador: { title: 'Mi libro de prueba', subtitle: '', order: ['1', '2'], edits: {}, qr: {}, qrOff: {} }, version: 1, errores: [] };
+  const t = { copias: {}, puts: [], ordenPost: [], posts: [], deletes: 0, activo: false, aprobado: false, descargas: 0, pedidosDeMedios: 0, borrador: { title: 'Mi libro de prueba', subtitle: '', order: ['1', '2'], edits: {}, qr: {}, qrOff: {} }, version: 1, errores: [] };
   page.on('pageerror', (e) => t.errores.push(e.message));
   page.on('download', () => t.descargas++);
   await page.addInitScript(() => { try { localStorage.setItem('eco_tour_done__capitulos_html', '1'); } catch (e) { /* nada */ } });
   await page.route('**/api/**', (r) => {
     const u = new URL(r.request().url()), m = r.request().method();
     const json = (o) => r.fulfill({ json: o });
-    if (u.pathname === '/api/book-demo/status') return json({ approved: true });
-    if (u.pathname === '/api/book-demo/purchase') return json({ approved: true });
+    if (u.pathname === '/api/book-demo/status') return json({ approved: t.aprobado });
+    if (u.pathname === '/api/book-demo/purchase') { t.aprobado = true; return json({ approved: true }); }
     if (u.pathname === '/api/media-file') { t.pedidosDeMedios++; return u.searchParams.get('u') === AUDIO ? r.fulfill({ status: 200, contentType: 'audio/wav', body: wavOriginal }) : r.fulfill({ status: 200, contentType: 'image/jpeg', body: Buffer.from('x') }); }
     if (u.pathname === '/api/libro-compartido/audios') return json({ copias: t.copias });
     if (u.pathname === '/api/libro-compartido/audio' && m === 'PUT') { const cuerpo = r.request().postDataBuffer(); t.puts.push({ u: u.searchParams.get('u'), tipo: r.request().headers()['content-type'], riff: cuerpo.toString('latin1', 0, 4), wave: cuerpo.toString('latin1', 8, 12), tasa: cuerpo.readUInt32LE(24), canales: cuerpo.readUInt16LE(22), bytes: cuerpo.length }); t.ordenPost.push('put'); t.copias[u.searchParams.get('u')] = base + '/copia.wav'; return json({ ok: true, url: base + '/copia.wav' }); }
@@ -66,11 +66,24 @@ const capitulos = [
   ok(t.puts[0].tasa === 16000 && t.puts[0].canales === 1 && t.puts[0].bytes < 4.2 * 1024 * 1024, 'en mono y a 16 kHz, liviano para el celular');
   ok(t.ordenPost.join(',') === 'put,post', 'y la copia se guarda antes de armar el enlace');
 
+  // Con el enlace ya hecho y la compra aprobada, el botón solo muestra el enlace
+  const postsAntes = t.posts.length, putsAntes = t.puts.length, medios0 = t.pedidosDeMedios;
+  await page.click('#ecoEditorialDigital');
+  await page.waitForTimeout(800);
+  ok(await page.locator('#ecoDemoPay').isHidden(), 'con la compra hecha, el botón ya no vuelve a mostrar la pantalla de pago');
+  ok(t.posts.length === postsAntes && t.puts.length === putsAntes && t.pedidosDeMedios === medios0, 'y no rearma el libro: ni nuevo envío, ni audios convertidos, ni fotos pedidas');
+  ok(/siempre el mismo/.test(await page.locator('#ecoEditorialStatus').innerText()) && /\/libro\/a{48}$/.test(await page.inputValue('#ecoEditorialShareUrl')), 'avisa que es el mismo enlace y lo deja a la vista');
+  ok(await page.locator('#ecoEditorialShareRefresh').isVisible(), 'queda el botón «Actualizar ahora»');
+  await page.click('#ecoEditorialShareRefresh');
+  const tr = Date.now(); while (t.posts.length === postsAntes && Date.now() - tr < 15000) await page.waitForTimeout(150);
+  ok(t.posts.length === postsAntes + 1, '«Actualizar ahora» sí vuelve a armar y actualizar el enlace');
+
   // Cambiar el libro lo actualiza solo
+  const antesDeEditar = t.posts.length;
   await page.locator('[data-sec="ch-1"] h2').fill('Infancia (editado)');
-  const t0 = Date.now(); while (t.posts.length < 2 && Date.now() - t0 < 15000) await page.waitForTimeout(150);
-  ok(t.posts.length === 2, 'si cambias el libro, el enlace se actualiza solo');
-  ok(JSON.stringify(t.posts[1]).includes('(editado)'), 'con el cambio nuevo');
+  const t0 = Date.now(); while (t.posts.length === antesDeEditar && Date.now() - t0 < 15000) await page.waitForTimeout(150);
+  ok(t.posts.length === antesDeEditar + 1, 'si cambias el libro, el enlace se actualiza solo');
+  ok(JSON.stringify(t.posts[t.posts.length - 1]).includes('(editado)'), 'con el cambio nuevo');
   ok(t.puts.length === 1, 'los audios que ya tienen copia no se vuelven a convertir');
   ok(t.descargas === 0, 'sin descargar nada');
 
@@ -83,6 +96,15 @@ const capitulos = [
   await page.locator('[data-sec="ch-1"] h2').fill('Infancia más');
   await page.waitForTimeout(7500);
   ok(t.posts.length === antes, 'sin enlace, los cambios ya no lo vuelven a crear');
+  // Al volver a abrir el libro con un enlace ya activo: se ve el enlace y el botón no rearma nada
+  t.activo = true;
+  await page.reload();
+  await page.waitForFunction(() => /sincronizado/.test((document.getElementById('ecoEditorialStatus') || {}).textContent || ''));
+  await page.waitForSelector('#ecoEditorialShare:not([hidden])');
+  const postsRecarga = t.posts.length;
+  await page.click('#ecoEditorialDigital');
+  await page.waitForTimeout(800);
+  ok(t.posts.length === postsRecarga && await page.locator('#ecoDemoPay').isHidden(), 'al volver otro día: el botón muestra el enlace sin pantalla de pago ni rearmar el libro');
   ok(t.errores.length === 0, 'sin errores en la página' + (t.errores.length ? ': ' + t.errores.join(' | ') : ''));
 
   await browser.close(); server.close();

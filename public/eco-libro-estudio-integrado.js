@@ -51,13 +51,14 @@ function create(){if(dialog)return;
  <div class="eco-editorial-topbuttons"><button id="ecoEditorialIndexToggle" type="button" class="eco-outline-toggle" aria-expanded="false">☰ Índice</button><button id="ecoEditorialPdf" type="button" class="eco-primary">Descargar PDF</button><button id="ecoEditorialDigital" type="button" class="eco-primary">Compartir libro digital</button><a id="ecoEditorialBack" class="eco-editorial-back" href="/app.html">← Volver a la bitácora</a></div></div>
  <div class="eco-editorial-layout"><aside class="eco-editorial-sidebar"><nav id="ecoEditorialOutline" aria-label="Índice del libro"></nav>
  <div class="eco-outline-update"><label for="ecoEditorialVoz">Voz del libro</label><select id="ecoEditorialVoz"><option value="tercera">tercera persona («contó que…»)</option><option value="primera">primera persona («yo conté…»)</option></select><button id="ecoEditorialUpdate" type="button">Actualizar libro</button><p class="eco-editorial-hint">Vuelve a escribir los capítulos con tus historias más recientes. Se pierden los cambios que hiciste a los capítulos.</p></div>
- <div class="eco-outline-share" id="ecoEditorialShare" hidden><label for="ecoEditorialShareUrl">Enlace de tu libro</label><div class="eco-share-box" id="ecoEditorialShareBox"><input id="ecoEditorialShareUrl" type="text" readonly aria-label="Enlace para compartir tu libro"><button id="ecoEditorialShareCopy" type="button">Copiar enlace</button><button id="ecoEditorialShareSend" type="button" hidden>Compartir…</button><button id="ecoEditorialShareStop" type="button" class="eco-share-stop">Dejar de compartir</button></div><p class="eco-editorial-hint">Cualquiera que tenga este enlace ve tu libro y oye los audios, en el celular o el computador, sin cuenta. Se actualiza solo cuando cambias tu libro.</p></div></aside>
+ <div class="eco-outline-share" id="ecoEditorialShare" hidden><label for="ecoEditorialShareUrl">Enlace de tu libro</label><div class="eco-share-box" id="ecoEditorialShareBox"><input id="ecoEditorialShareUrl" type="text" readonly aria-label="Enlace para compartir tu libro"><button id="ecoEditorialShareCopy" type="button">Copiar enlace</button><button id="ecoEditorialShareSend" type="button" hidden>Compartir…</button><button id="ecoEditorialShareRefresh" type="button">Actualizar ahora</button><button id="ecoEditorialShareStop" type="button" class="eco-share-stop">Dejar de compartir</button></div><p class="eco-editorial-hint">Cualquiera que tenga este enlace ve tu libro y oye los audios, en el celular o el computador, sin cuenta. Se actualiza solo cuando cambias tu libro.</p></div></aside>
  <section class="eco-editorial-preview" aria-label="Libro"><div id="ecoEditorialBook" class="eco-editorial-pages"></div></section></div></div>`;
  document.body.appendChild(dialog);book=byId('ecoEditorialBook');outline=byId('ecoEditorialOutline');status=byId('ecoEditorialStatus');
  byId('ecoEditorialUpdate').addEventListener('click',actualizarLibro);
  byId('ecoEditorialShareCopy').addEventListener('click',copiarEnlace);
  byId('ecoEditorialShareSend').addEventListener('click',compartirEnlace);
  byId('ecoEditorialShareStop').addEventListener('click',dejarDeCompartir);
+ byId('ecoEditorialShareRefresh').addEventListener('click',()=>prepararEnlace(byId('ecoEditorialShareRefresh'),'Actualizando…'));
  byId('ecoEditorialShareUrl').addEventListener('focus',e=>e.target.select());
  if(navigator.share)byId('ecoEditorialShareSend').hidden=false;
  byId('ecoEditorialPdf').addEventListener('click',descargarPdf);
@@ -106,13 +107,26 @@ async function autoQr(){
 
 /* ── Enlace para compartir el libro ────────────────────────────────────────── */
 function mostrarEnlace(url){byId('ecoEditorialShareUrl').value=url||'';byId('ecoEditorialShare').hidden=!url;enlaceActivo=!!url}
+// Si el enlace ya existe y la compra está hecha, solo se muestra: el enlace no cambia, así que no hay nada que volver a armar.
 async function compartirEnLinea(){
- const btn=byId('ecoEditorialDigital'),texto=btn.textContent;
+ const btn=byId('ecoEditorialDigital');
  if(!window.EcoLibroDigital||!window.EcoLibroDigital.compartirEnLinea){status.textContent='No se pudo preparar el enlace. Recarga la página e intenta de nuevo.';return}
  if(!chapters.length){status.textContent='Todavía no tienes capítulos. Genera tus capítulos primero y luego comparte tu libro.';return}
- if(!(await pagar())){status.textContent='Para compartir el libro digital primero hay que completar la compra de prueba.';return}
+ if(!(await pagado())){status.textContent='Para compartir el libro digital primero hay que completar la compra de prueba.';return}
+ if(!enlaceActivo)await consultarEnlace();
+ if(enlaceActivo){
+  status.classList.remove('eco-editorial-status-error');
+  alternarIndice(true);byId('ecoEditorialShareUrl').focus();
+  status.textContent='Este es el enlace de tu libro (a la izquierda). Es siempre el mismo y se actualiza solo cuando cambias tu libro.';
+  return;
+ }
+ await prepararEnlace(btn,'Preparando tu enlace…');
+}
+// Arma el libro y deja listo (o actualiza) el enlace. Es lo pesado: reduce fotos y convierte audios.
+async function prepararEnlace(btn,textoOcupado){
+ const texto=btn.textContent;
  status.classList.remove('eco-editorial-status-error');
- btn.disabled=true;btn.textContent='Preparando tu enlace…';
+ btn.disabled=true;btn.textContent=textoOcupado;
  try{
   await flush();
   const url=await window.EcoLibroDigital.compartirEnLinea({aviso:t=>{status.textContent=t}});
@@ -169,8 +183,10 @@ async function descargarPdf(){
  }catch(e){status.textContent=e.message||'No se pudo preparar el PDF.';status.classList.add('eco-editorial-status-error')}
  finally{btn.disabled=false;btn.textContent=texto}
 }
-// El PDF y el enlace del libro digital muestran la pantalla de pago (compra de prueba) antes de entregar el libro.
+// El PDF muestra la pantalla de pago (compra de prueba) en cada descarga.
 const pagar=async()=>!window.EcoLibroCompra||(await window.EcoLibroCompra.asegurar({siempre:true}));
+// El enlace del libro solo pide la compra la primera vez: con la compra hecha no vuelve a mostrar la pantalla de pago.
+const pagado=async()=>!window.EcoLibroCompra||(await window.EcoLibroCompra.asegurar());
 
 /* ── Actualizar el libro y eliminar capítulos ──────────────────────────────── */
 // Vuelve a escribir los capítulos con las historias más recientes. Los capítulos nuevos tienen otros números, así que lo que
