@@ -1,0 +1,86 @@
+/* Orbe de la app (app.html), copiado con prefijo demo- para que la demo se vea y se mueva igual. */
+.demo-eco{--demo-orb:clamp(168px, 46vw, 220px)}
+.demo-orbe-zona{display:grid; justify-items:center; gap:8px; padding-top:4px}
+.demo-state-label{font-size:.9rem; color:rgba(255,248,234,.85); min-height:1.3em; text-align:center}
+.demo-orb:focus-visible{outline:3px solid #F2C98A; outline-offset:6px}
+.demo-orb-label{font-size:clamp(.8rem, calc(var(--demo-orb) * .07), 1.25rem)}
+.demo-mic-level span{background:#9DB07A}
+@media(prefers-reduced-motion:reduce){.demo-orb::before,.demo-orb *{animation:none !important}}
+  .demo-orb {
+    width: 168px; height: 168px; border-radius: 50%; border: none; cursor: pointer;
+    position: relative; display: grid; place-items: center;
+    background: radial-gradient(circle at 35% 30%, #93622A, #8F5A20);
+    color: #FBF6EA; font-family: var(--sans); font-weight: 700; font-size: 1.2rem;
+    box-shadow: 0 10px 26px -10px rgba(168,106,38,0.55);
+  }
+  .demo-orb::before {
+    content: ""; position: absolute; inset: -14px; border-radius: 50%;
+    border: 2px solid rgba(201, 138, 60, 0.35); animation: demo-breathe 3.2s ease-in-out infinite;
+  }
+  @keyframes demo-breathe { 0%,100% { transform: scale(1); opacity: .6; } 50% { transform: scale(1.08); opacity: .15; } }
+  .demo-orb[data-state="listening"] { background: radial-gradient(circle at 35% 30%, #7C8F5E, #5B6B45); }
+  .demo-orb[data-state="listening"]::before { animation-duration: 1.4s; }
+  .demo-orb[data-state="speaking"], .demo-orb[data-state="thinking"] { background: radial-gradient(circle at 35% 30%, #E8B923, #B8860B); pointer-events: none; }
+  .demo-orb[data-state="paused"] { background: radial-gradient(circle at 35% 30%, #7D7050, #706551); }
+  .demo-orb[data-state="paused"]::before { animation: none; opacity: 0.3; }
+  .demo-mic-level { display: flex; align-items: flex-end; gap: 3px; height: 20px; justify-content: center; margin-top: 4px; }
+  .demo-mic-level[hidden] { display: none; }
+  .demo-mic-level span { display: block; width: 4px; border-radius: 2px; background: #7C8F5E; height: 3px; transition: height 0.09s ease-out; }
+  .demo-orb-wrap { position: relative; display: inline-grid; place-items: center; }
+  .demo-orb-fin {
+    display: none;
+    position: absolute; right: -16px; bottom: -8px;
+    width: 56px; height: 56px; min-width: 44px; min-height: 44px;
+    border-radius: 50%; border: 3px solid #241b13; cursor: pointer;
+    background: #a33; color: #fff; font-family: var(--sans); font-weight: 700;
+    font-size: 0.48rem; line-height: 1.05; letter-spacing: 0;
+    padding: 2px; text-align: center;
+    overflow-wrap: break-word; word-break: break-word;
+    box-shadow: 0 6px 16px -6px rgba(136,34,34,0.6);
+  }
+  .demo-orb-fin:hover { background: #8f2b2b; }
+  .demo-orb { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3%;
+    background: #4F5D3A; box-shadow: 0 10px 26px -10px rgba(79,93,58,0.55);
+    transition: background-color .5s ease, box-shadow .5s ease; }
+  .demo-orb[data-state="listening"] { background: #4F5D3A; }
+  .demo-orb[data-state="speaking"], .demo-orb[data-state="thinking"] { background: #1A1A1A; box-shadow: 0 10px 26px -10px rgba(0,0,0,0.6); }
+  .demo-orb[data-state="paused"] { background: #706551; }
+  .demo-orb[data-state="speaking"]::before, .demo-orb[data-state="thinking"]::before { animation: none; opacity: 0.25; border-color: #1A1A1A; }
+  .demo-orb-logo { width: 58%; height: auto; flex: none; display: block; overflow: visible; }
+  .demo-orb-label { font-size: clamp(0.8rem, calc(var(--demo-orb) * 0.07), 1.25rem); line-height: 1.15; text-align: center; }
+  .demo-orb-logo .ring { fill: none; stroke: #F6EEDC; stroke-width: 12; stroke-linecap: round; stroke-dasharray: 72 28; transition: stroke-dasharray .5s ease; }
+  .demo-orb-logo .wave-c { fill: none; stroke: #F6EEDC; stroke-width: 6; stroke-linecap: round; stroke-dasharray: 72 28; }
+  .demo-orb-logo .w1 .wave-c { stroke: #D9A441; }
+  .demo-orb-logo .dot, .demo-orb-logo .drop-fill { fill: #D9A441; }
+  .demo-orb-logo .dot, .demo-orb-logo .rg, .demo-orb-logo .wave-g, .demo-orb-logo .drop { transform-box: fill-box; transform-origin: center; }
+  .demo-orb-logo .wave-g, .demo-orb-logo .drop { opacity: 0; }
+  .demo-orb[data-state="speaking"] .demo-orb-logo .ring, .demo-orb[data-state="thinking"] .demo-orb-logo .ring { stroke-dasharray: 100 0; }
+  .demo-orb[data-state="speaking"] .demo-orb-logo, .demo-orb[data-state="thinking"] .demo-orb-logo { opacity: 0.8; }
+  @keyframes demo-eco-dropFall { 0% { transform: translateY(-150px) scaleY(1.25); opacity: 0; } 8% { opacity: 1; } 99% { opacity: 1; } 100% { transform: translateY(0) scaleY(1.1); opacity: 0; } }
+  @keyframes demo-eco-dotLand { 0% { opacity: 0; transform: scale(1.7, 0.4); } 1% { opacity: 1; } 40% { transform: scale(0.82, 1.3); } 70% { transform: scale(1.1, 0.92); } 100% { opacity: 1; transform: scale(1, 1); } }
+  @keyframes demo-eco-waveOut { 0% { transform: scale(0.08); opacity: 0; } 8% { opacity: 0.6; } 100% { transform: scale(1.55); opacity: 0; } }
+  @keyframes demo-eco-waveSoft { 0% { transform: scale(0.3); opacity: 0; } 10% { opacity: 0.3; } 100% { transform: scale(1.5); opacity: 0; } }
+  @keyframes demo-eco-ringDraw { 0% { stroke-dasharray: 0.01 100; opacity: 0; } 12% { opacity: 1; } 100% { stroke-dasharray: 72 28; opacity: 1; } }
+  @keyframes demo-eco-ringBloom { from { transform: scale(0.35) rotate(-70deg); } to { transform: scale(1) rotate(0deg); } }
+  @keyframes demo-eco-ringKick { 0%, 28% { transform: scale(1); } 40% { transform: scale(1.08); } 56%, 100% { transform: scale(1); } }
+  @keyframes demo-eco-dotBeat { 0% { transform: scale(1); } 7% { transform: scale(1.32); } 22%, 100% { transform: scale(1); } }
+  .demo-orb[data-state="listening"] .drop { animation: demo-eco-dropFall 0.56s cubic-bezier(0.55, 0.05, 0.9, 0.5) 0.14s both; }
+  .demo-orb[data-state="listening"] .dot { animation: demo-eco-dotLand 0.49s cubic-bezier(0.3, 0.7, 0.3, 1) 0.7s both; }
+  .demo-orb[data-state="listening"] .w1 { animation: demo-eco-waveOut 0.77s cubic-bezier(0.2, 0.6, 0.3, 1) 0.7s both; }
+  .demo-orb[data-state="listening"] .w2 { animation: demo-eco-waveOut 0.77s cubic-bezier(0.2, 0.6, 0.3, 1) 0.83s both; }
+  .demo-orb[data-state="listening"] .w3 { animation: demo-eco-waveOut 0.77s cubic-bezier(0.2, 0.6, 0.3, 1) 0.95s both; }
+  .demo-orb[data-state="listening"] .r1 { animation: demo-eco-ringBloom 0.63s cubic-bezier(0.2, 0.9, 0.3, 1.25) 0.77s both; }
+  .demo-orb[data-state="listening"] .r1 .ring { animation: demo-eco-ringDraw 0.63s cubic-bezier(0.22, 1, 0.36, 1) 0.77s both; }
+  .demo-orb[data-state="listening"] .r2 { animation: demo-eco-ringBloom 0.63s cubic-bezier(0.2, 0.9, 0.3, 1.25) 0.91s both; }
+  .demo-orb[data-state="listening"] .r2 .ring { animation: demo-eco-ringDraw 0.63s cubic-bezier(0.22, 1, 0.36, 1) 0.91s both; }
+  .demo-orb[data-state="listening"] .r3 { animation: demo-eco-ringBloom 0.63s cubic-bezier(0.2, 0.9, 0.3, 1.25) 1.05s both; }
+  .demo-orb[data-state="listening"] .r3 .ring { animation: demo-eco-ringDraw 0.63s cubic-bezier(0.22, 1, 0.36, 1) 1.05s both; }
+  .demo-orb[data-state="idle"] .w4 { animation: demo-eco-waveSoft 5s ease-out 1s infinite both; }
+  .demo-orb[data-state="listening"] .dot { animation: demo-eco-dotLand 0.49s cubic-bezier(0.3, 0.7, 0.3, 1) 0.7s both, demo-eco-dotBeat 2.4s ease-in-out 1.7s infinite; }
+  .demo-orb[data-state="listening"] .w1 { animation: demo-eco-waveOut 0.77s cubic-bezier(0.2, 0.6, 0.3, 1) 0.7s both, demo-eco-waveOut 2.4s cubic-bezier(0.2, 0.6, 0.3, 1) 2s infinite; }
+  .demo-orb[data-state="listening"] .w2 { animation: demo-eco-waveOut 0.77s cubic-bezier(0.2, 0.6, 0.3, 1) 0.83s both, demo-eco-waveOut 2.4s cubic-bezier(0.2, 0.6, 0.3, 1) 3.2s infinite; }
+  .demo-orb[data-state="listening"] .r1 { animation: demo-eco-ringBloom 0.63s cubic-bezier(0.2, 0.9, 0.3, 1.25) 0.77s both, demo-eco-ringKick 2.4s ease-in-out 2s infinite; }
+  .demo-orb[data-state="listening"] .r2 { animation: demo-eco-ringBloom 0.63s cubic-bezier(0.2, 0.9, 0.3, 1.25) 0.91s both, demo-eco-ringKick 2.4s ease-in-out 2.15s infinite; }
+  .demo-orb[data-state="listening"] .r3 { animation: demo-eco-ringBloom 0.63s cubic-bezier(0.2, 0.9, 0.3, 1.25) 1.05s both, demo-eco-ringKick 2.4s ease-in-out 2.3s infinite; }
+.demo-orb{width:var(--demo-orb); height:var(--demo-orb); font-size:clamp(1.05rem, 5.2vw, 1.35rem)}
+.demo-orb::before{inset:-10px}

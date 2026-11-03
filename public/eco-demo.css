@@ -18,6 +18,7 @@
 .demo-eco__chat.is-atenuado .demo-eco__burbuja{opacity:.3}
 .demo-eco__burbuja{max-width:88%; padding:14px 18px; border-radius:20px; font-size:1.0625rem; line-height:1.45; overflow-wrap:anywhere}
 .demo-eco__burbuja--eco{align-self:flex-start; background:rgba(255,248,234,.12); border-bottom-left-radius:6px}
+.demo-eco__burbuja--final{align-self:stretch; max-width:none; background:transparent; border:1px solid rgba(242,201,138,.45); border-radius:18px; font-family:var(--serif); font-size:clamp(1.125rem, 3.4vw, 1.375rem); line-height:1.35; color:var(--d-dorado); text-align:center; padding:18px 20px}
 .demo-eco__burbuja--tu{align-self:flex-end; background:var(--d-dorado); color:#1c150e; border-bottom-right-radius:6px}
 
 .demo-eco__pregunta{text-align:center; padding:8px 0 0}
@@ -25,31 +26,21 @@
 .demo-eco__pregunta p{margin:0; font-family:var(--serif); font-size:clamp(1.5rem, 4.6vw, 2.25rem); line-height:1.2; color:var(--d-crema); text-wrap:balance}
 
 .demo-eco__accion{display:flex; flex-direction:column; gap:14px; align-items:stretch}
-.demo-eco__accion label{font-size:.9375rem; color:rgba(255,248,234,.85)}
-.demo-eco__accion input,.demo-eco__accion textarea{width:100%; padding:14px 16px; border-radius:14px; border:1.5px solid rgba(255,248,234,.3); background:rgba(255,248,234,.95); color:#2B241C; font:inherit; font-size:1rem}
-.demo-eco__accion textarea{min-height:92px; resize:vertical}
-.demo-eco__accion input:focus-visible,.demo-eco__accion textarea:focus-visible{outline:3px solid var(--d-dorado); outline-offset:2px}
 .demo-eco__fila{display:flex; gap:10px; flex-wrap:wrap}
 .demo-eco__fila .btn{flex:1 1 180px}
+.demo-eco__fila [hidden]{display:none !important}
 .demo-eco .btn-secondary{color:var(--d-crema); border-color:rgba(255,248,234,.5); background:transparent}
 .demo-eco .btn-secondary:hover{background:rgba(255,248,234,.14)}
 .demo-eco__nota{font-size:.875rem; color:rgba(255,248,234,.7); text-align:center}
 
-.demo-eco__reloj{position:relative; width:96px; height:96px; margin:4px auto 0; display:grid; place-items:center}
-.demo-eco__reloj svg{position:absolute; inset:0; width:100%; height:100%; transform:rotate(-90deg)}
-.demo-eco__reloj circle{fill:none; stroke-width:5}
-.demo-eco__reloj .pista{stroke:rgba(255,248,234,.16)}
-.demo-eco__reloj .avance{stroke:var(--d-dorado); stroke-linecap:round; stroke-dasharray:289; stroke-dashoffset:0; animation:demo-eco-cuenta 20s linear forwards}
-.demo-eco__reloj b{position:relative; width:58px; height:58px; border-radius:50%; display:grid; place-items:center; background:var(--d-dorado); color:#1c150e; font-size:1.25rem; animation:demo-eco-late 1.8s ease-in-out infinite}
-
+.demo-eco__sonido{align-self:flex-end; padding:6px 12px; border-radius:99px; border:1px solid rgba(255,248,234,.3); background:transparent; color:rgba(255,248,234,.85); font:inherit; font-size:.8125rem; cursor:pointer}
+.demo-eco__sonido:focus-visible{outline:3px solid var(--d-dorado); outline-offset:2px}
+.demo-eco__guardado audio{display:block; width:100%; margin-top:6px}
 .demo-eco__guardado{padding:18px 20px; border-radius:18px; background:rgba(255,248,234,.1); border:1px solid rgba(242,201,138,.35)}
 .demo-eco__guardado span{display:inline-block; margin-bottom:8px; padding:3px 10px; border-radius:99px; background:var(--d-dorado); color:#1c150e; font-size:.8125rem; font-weight:600}
 .demo-eco__guardado p{margin:0; font-family:var(--serif); font-style:italic; font-size:1.125rem; color:var(--d-crema); overflow-wrap:anywhere}
 
-@keyframes demo-eco-cuenta{to{stroke-dashoffset:289}}
-@keyframes demo-eco-late{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
 @media(prefers-reduced-motion:reduce){
-  .demo-eco__reloj .avance,.demo-eco__reloj b{animation:none}
   .demo-eco__cabecera,.demo-eco__caja,.demo-eco__chat,.demo-eco__progreso li{transition:none}
 }
 @media(max-width:560px){

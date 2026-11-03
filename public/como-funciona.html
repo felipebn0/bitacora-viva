@@ -566,7 +566,8 @@
 </style>
 <link rel="stylesheet" href="/eco-v5.css?v=6">
 <link rel="stylesheet" href="/eco-portada.css?v=7">
-<link rel="stylesheet" href="/eco-demo.css?v=1">
+<link rel="stylesheet" href="/eco-demo-orbe.css?v=1">
+<link rel="stylesheet" href="/eco-demo.css?v=6">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Saltar al contenido</a>
@@ -605,11 +606,33 @@
         <div class="demo-eco__cabecera reveal">
           <div class="eyebrow">Pruébalo · un minuto</div>
           <h2 id="demoTitulo">Conoce a Eco.</h2>
-          <p>Una conversación de ejemplo para que veas cómo se siente. No graba tu voz ni guarda nada.</p>
+          <p>Una conversación de ejemplo, con voz, para que veas cómo se siente. Tu voz se queda en tu dispositivo: no se envía ni se guarda.</p>
         </div>
         <div class="demo-eco__caja" id="demoCaja">
+          <button type="button" class="demo-eco__sonido" id="demoSonido" aria-pressed="true">Sonido: activado</button>
           <ol class="demo-eco__progreso" aria-hidden="true"><li></li><li></li><li></li><li></li><li></li></ol>
           <div class="demo-eco__chat" id="demoChat" role="log" aria-live="polite" aria-label="Conversación de ejemplo con Eco"></div>
+          <div class="demo-orbe-zona">
+            <div class="demo-orb-wrap">
+              <button class="demo-orb" id="demoOrbe" data-state="idle" type="button" aria-label="Presionar para comenzar la charla">
+                <svg class="demo-orb-logo" viewBox="16 16 168 168" aria-hidden="true" focusable="false">
+                  <g class="wave-g w1"><circle class="wave-c" cx="100" cy="100" r="72" pathLength="100" transform="rotate(-34 100 100)"/></g>
+                  <g class="wave-g w2"><circle class="wave-c" cx="100" cy="100" r="72" pathLength="100" transform="rotate(-34 100 100)"/></g>
+                  <g class="wave-g w3"><circle class="wave-c" cx="100" cy="100" r="72" pathLength="100" transform="rotate(-34 100 100)"/></g>
+                  <g class="wave-g w4"><circle class="wave-c" cx="100" cy="100" r="72" pathLength="100" transform="rotate(-34 100 100)"/></g>
+                  <g class="rg r1"><circle class="ring" cx="100" cy="100" r="28" pathLength="100" transform="rotate(-10 100 100)"/></g>
+                  <g class="rg r2"><circle class="ring" cx="100" cy="100" r="50" pathLength="100" transform="rotate(-22 100 100)"/></g>
+                  <g class="rg r3"><circle class="ring" cx="100" cy="100" r="72" pathLength="100" transform="rotate(-34 100 100)"/></g>
+                  <circle class="dot" cx="100" cy="100" r="13"/>
+                  <g class="drop"><path class="drop-fill" transform="translate(100 100)" d="M0 -27C3 -17 13 -9 13 0A13 13 0 0 1 -13 0C-13 -9 -3 -17 0 -27Z"/></g>
+                </svg>
+                <span class="demo-orb-label" id="demoOrbeEtiqueta">Presiona<br>para hablar</span>
+              </button>
+              <button class="demo-orb-fin" id="demoFin" type="button" aria-label="Terminar la charla">Fin</button>
+            </div>
+            <div class="demo-state-label" id="demoEstado" role="status" aria-live="polite" aria-atomic="true"></div>
+            <div class="demo-mic-level" id="demoNivel" aria-hidden="true" hidden><span></span><span></span><span></span><span></span><span></span></div>
+          </div>
           <div class="demo-eco__accion" id="demoAccion"></div>
         </div>
       </div>
@@ -713,6 +736,6 @@
 <script src="/eco-portada-pagina.js?v=1" defer></script>
 <script src="/eco-v5.js?v=5" defer></script>
 <script src="/eco-portada.js?v=2" defer></script>
-<script src="/eco-demo.js?v=1" defer></script>
+<script src="/eco-demo.js?v=5" defer></script>
 </body>
 </html>
