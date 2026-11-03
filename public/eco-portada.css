@@ -81,3 +81,14 @@ section.portada-bloque.portada-bloque--sinfoto{min-height:0; align-items:center}
   .portada-hero__foto{animation:none}
   .portada-bloque__foto{top:0; height:100%; will-change:auto}
 }
+
+.portada-registro{position:relative; isolation:isolate; overflow:hidden; background:#1c150e}
+.portada-registro__foto{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:50% 14%; z-index:-2}
+.portada-registro:after{content:""; position:absolute; inset:0; z-index:-1; background:linear-gradient(90deg, rgba(20,14,8,.9) 0%, rgba(20,14,8,.72) 46%, rgba(20,14,8,.4) 100%)}
+.portada-registro .registro-box{background:transparent}
+.portada-registro .eyebrow{color:#F2C98A}
+.portada-registro .eyebrow:before{background:#F2C98A}
+.portada-registro h2{color:#FFF8EA; text-wrap:balance}
+@media(max-width:820px){
+  .portada-registro:after{background:linear-gradient(0deg, rgba(20,14,8,.9) 0%, rgba(20,14,8,.78) 100%)}
+}
