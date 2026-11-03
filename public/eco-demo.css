@@ -31,6 +31,9 @@
 .demo-eco__fila [hidden]{display:none !important}
 .demo-eco .btn-secondary{color:var(--d-crema); border-color:rgba(255,248,234,.5); background:transparent}
 .demo-eco .btn-secondary:hover{background:rgba(255,248,234,.14)}
+.demo-eco__aviso{margin-top:4px; padding:14px 16px; border:2px solid var(--d-dorado); border-radius:14px; background:rgba(242,201,138,.12); color:var(--d-crema); font-size:.9375rem; line-height:1.45; text-align:center}
+.demo-eco__aviso strong{display:block; margin-bottom:2px; color:var(--d-dorado); font-size:1.0625rem; letter-spacing:.02em; text-transform:uppercase}
+.demo-eco__pregunta p:empty{display:none}
 .demo-eco__nota{font-size:.875rem; color:rgba(255,248,234,.7); text-align:center}
 
 .demo-eco__sonido{align-self:flex-end; padding:6px 12px; border-radius:99px; border:1px solid rgba(255,248,234,.3); background:transparent; color:rgba(255,248,234,.85); font:inherit; font-size:.8125rem; cursor:pointer}

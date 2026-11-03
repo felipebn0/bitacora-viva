@@ -77,40 +77,42 @@
     return id;
   }
 
-  function hablar(clave, texto, nodo, listo) {
+  // El texto de lo que dice Eco no se muestra: solo si el sonido está apagado o no
+  // se puede reproducir, para que nadie se quede sin entender la demo.
+  function hablar(clave, texto, mostrar, listo) {
     let terminado = false;
     let escritura = 0;
+    let nodo = null;
     estado('speaking', '···', 'Hablando…');
     const fin = () => {
       if (terminado) return;
       terminado = true;
       window.clearInterval(escritura);
       finActual = null;
-      nodo.textContent = texto;
+      if (nodo) nodo.textContent = texto;
       if (listo) listo();
     };
     finActual = fin;
-    const sinAudio = () => { window.clearInterval(escritura); escritura = escribir(nodo, texto, texto.length * 48, fin); };
+    const sinAudio = () => {
+      window.clearInterval(escritura);
+      nodo = nodo || mostrar();
+      escritura = escribir(nodo, texto, texto.length * 48, fin);
+    };
     if (!sonido) { sinAudio(); return; }
     voz.onended = fin;
     voz.onerror = sinAudio;
     voz.src = '/audio-demo/' + clave + '.mp3';
     const intento = voz.play();
-    if (intento && typeof intento.then === 'function') {
-      intento.then(() => {
-        const dur = (voz.duration && isFinite(voz.duration) ? voz.duration : texto.length * 0.055) * 1000;
-        escritura = escribir(nodo, texto, dur * 0.85, null);
-      }).catch(sinAudio);
-    }
+    if (intento && typeof intento.catch === 'function') intento.catch(sinAudio);
   }
 
   function burbujaEco(clave, texto, listo) {
-    const b = el('div', 'demo-eco__burbuja demo-eco__burbuja--eco');
-    chat.appendChild(b);
-    hablar(clave, texto, b, listo);
+    hablar(clave, texto, () => {
+      const b = el('div', 'demo-eco__burbuja demo-eco__burbuja--eco');
+      chat.appendChild(b);
+      return b;
+    }, listo);
   }
-
-  function burbujaTuVoz() { chat.appendChild(el('div', 'demo-eco__burbuja demo-eco__burbuja--tu', 'Tu voz')); }
 
   function liberarMic() {
     permisoMic = null;
@@ -158,7 +160,6 @@
     let grabador = null;
     const trozos = [];
     let marco = 0;
-    let resta = segundos;
 
     const cerrar = (blob) => {
       if (fin) return;
@@ -193,18 +194,19 @@
       return;
     }
 
-    estado('listening', 'Escuchando<br>…', 'Escuchando… toca el círculo cuando termines · ' + resta + ' s');
+    estado('listening', 'Escuchando<br>…', 'Te escucho… cuando hagas una pausa, sigo');
     nivel.hidden = false;
     alTocarOrbe = detener;
-    const reloj = window.setInterval(() => {
-      resta -= 1;
-      textoEstado.textContent = 'Escuchando… toca el círculo cuando termines · ' + Math.max(resta, 0) + ' s';
-      if (resta <= 0) { window.clearInterval(reloj); detener(); }
-    }, 1000);
-    timers.push(reloj);
+    timers.push(window.setTimeout(detener, segundos * 1000));
 
+    // La voz se detecta contra el ruido de fondo de cada micrófono: el piso es el nivel
+    // más bajo que se ha oído, y hablar es superarlo con claridad. Al terminar de hablar,
+    // una pausa corta cierra el turno sin que la persona toque nada.
+    const PAUSA_MS = conservar ? 1800 : 1400;
     let habloMs = 0;
     let silencioMs = 0;
+    let suave = 0;
+    let piso = Infinity;
     let ultimo = performance.now();
     const medir = () => {
       const ahora = performance.now();
@@ -216,12 +218,16 @@
         let suma = 0;
         for (let i = 0; i < datos.length; i++) { const v = (datos[i] - 128) / 128; suma += v * v; }
         const rms = Math.sqrt(suma / datos.length);
+        const alfa = 1 - Math.exp(-dt / 80);
+        suave += (rms - suave) * alfa;
+        piso = Math.min(piso, suave);
+        const umbral = Math.max(0.02, piso * 2.5 + 0.012);
         barrasNivel.forEach((barra, i) => {
           const h = Math.max(3, Math.round(rms * 4 * 60 * (1 - Math.abs(i - 2) * 0.18)));
           barra.style.height = Math.min(h, 18) + 'px';
         });
-        if (rms > 0.05) { habloMs += dt; silencioMs = 0; } else if (habloMs > 400) { silencioMs += dt; }
-        if (habloMs > 400 && silencioMs > 2000) { detener(); return; }
+        if (suave > umbral) { habloMs += dt; silencioMs = 0; } else if (habloMs > 500) { silencioMs += dt; }
+        if (habloMs > 500 && silencioMs > PAUSA_MS) { detener(); return; }
       }
       marco = window.requestAnimationFrame(medir);
     };
@@ -238,7 +244,7 @@
     progreso(0);
     estado('idle', 'Presiona<br>para hablar', '');
     alTocarOrbe = bienvenida;
-    accion.appendChild(el('p', 'demo-eco__nota', 'Dura cerca de un minuto. Eco habla y tú le contestas con tu voz. Tu micrófono se usa solo en tu dispositivo: nada se envía ni se guarda.'));
+    accion.appendChild(el('p', 'demo-eco__nota', 'Dura cerca de un minuto. Toca el círculo, escucha a Eco y contéstale hablando: cuando hagas una pausa, sigue solo.'));
   }
 
   function bienvenida() {
@@ -253,7 +259,7 @@
   function pedirNombre() {
     progreso(2);
     burbujaEco('nombre', 'Antes de empezar, cuéntame, ¿cómo te llamas?', () => {
-      escuchar(8, false, () => { burbujaTuVoz(); esperar(300, saludo); });
+      escuchar(8, false, () => esperar(300, saludo));
     });
   }
 
@@ -269,7 +275,7 @@
     const p = el('p');
     bloque.appendChild(p);
     chat.appendChild(bloque);
-    hablar('pregunta', '¿Qué historia de tu familia no quisieras que se perdiera?', p, () => {
+    hablar('pregunta', '¿Qué historia de tu familia no quisieras que se perdiera?', () => p, () => {
       escuchar(20, true, seguimiento);
     });
   }
@@ -281,7 +287,6 @@
     if (blob) {
       liberarRespuesta();
       respuestaUrl = URL.createObjectURL(blob);
-      burbujaTuVoz();
     }
     esperar(300, () => {
       burbujaEco('seguimiento', 'Gracias por contármelo. ¿Quién más estaba ahí? Cuéntame un detalle: cómo sonaba, o cómo olía, ese momento.', () => esperar(700, cierre));
@@ -305,16 +310,15 @@
       tarjeta.appendChild(el('p', null, '“La casa de los abuelos, los domingos, el olor del café…”'));
     }
     accion.appendChild(tarjeta);
-    const dicho = el('div', 'demo-eco__burbuja demo-eco__burbuja--eco');
-    chat.appendChild(dicho);
-    hablar('cierre', 'Así empieza un recuerdo. Con tu familia es igual: ellos cuentan, y yo pregunto.', dicho, () => {
+    burbujaEco('cierre', 'Así empieza un recuerdo. Con tu familia es igual: ellos cuentan, y yo pregunto.', () => {
       esperar(700, () => {
-        const final = el('div', 'demo-eco__burbuja demo-eco__burbuja--final');
-        chat.appendChild(final);
-        hablar('cierre2', 'Imagina volver a escuchar su voz dentro de veinte años: cómo se reía, cómo contaba. Empieza hoy, mientras todavía puedes preguntarle.', final, () => {
+        hablar('cierre2', 'Imagina volver a escuchar su voz dentro de veinte años: cómo se reía, cómo contaba. Empieza hoy, mientras todavía puedes preguntarle.', () => {
+          const final = el('div', 'demo-eco__burbuja demo-eco__burbuja--final');
+          chat.appendChild(final);
+          return final;
+        }, () => {
           estado('idle', 'Presiona<br>para otra charla', '');
           alTocarOrbe = () => inicio();
-          accion.appendChild(el('p', 'demo-eco__nota', 'Tu grabación está solo en esta pantalla y desaparece al cerrar la página. No se guardó nada.'));
           const fila = el('div', 'demo-eco__fila');
           const crear = el('a', 'btn btn-primary', 'Guardar su primera historia');
           crear.href = '/index-portada.html#registro-form';
