@@ -149,7 +149,7 @@
 
   // Turno de la persona: el orbe pasa a "listening", se mide el nivel de voz y se
   // termina al tocarlo, al hacer una pausa después de hablar, o al agotarse el tiempo.
-  async function escuchar(segundos, conservar, alTerminar) {
+  async function escuchar(segundos, conservar, alTerminar, pausa) {
     if (!permisoMic) pedirMic();
     const mio = epoca;
     const hayMic = await permisoMic;
@@ -202,7 +202,7 @@
     // La voz se detecta contra el ruido de fondo de cada micrófono: el piso es el nivel
     // más bajo que se ha oído, y hablar es superarlo con claridad. Al terminar de hablar,
     // una pausa corta cierra el turno sin que la persona toque nada.
-    const PAUSA_MS = conservar ? 1800 : 1400;
+    const PAUSA_MS = pausa || (conservar ? 1800 : 1400);
     let habloMs = 0;
     let silencioMs = 0;
     let suave = 0;
@@ -289,7 +289,7 @@
       respuestaUrl = URL.createObjectURL(blob);
     }
     esperar(300, () => {
-      burbujaEco('seguimiento', 'Gracias por contármelo. ¿Quién más estaba ahí? Cuéntame un detalle: cómo sonaba, o cómo olía, ese momento.', () => esperar(700, cierre));
+      burbujaEco('seguimiento', 'Gracias por contármelo. ¿Quién más estaba ahí? Cuéntame un detalle: cómo sonaba, o cómo olía, ese momento.', () => escuchar(20, false, cierre, 1800));
     });
   }
 
