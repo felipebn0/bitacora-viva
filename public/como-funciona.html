@@ -566,6 +566,7 @@
 </style>
 <link rel="stylesheet" href="/eco-v5.css?v=6">
 <link rel="stylesheet" href="/eco-portada.css?v=7">
+<link rel="stylesheet" href="/eco-demo.css?v=1">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Saltar al contenido</a>
@@ -595,7 +596,22 @@
         <div class="eyebrow">Cómo funciona</div>
         <h1 id="cfTitulo">Así se guarda <em>una historia.</em></h1>
         <p>Conversa por voz, convierte cada recuerdo en un libro y conecta a tu familia en un árbol. Así funciona Eco, paso a paso.</p>
-        <a class="btn btn-primary" href="/index-portada.html#registro-form">Crear mi cuenta</a>
+        <a class="btn btn-primary" href="#demo">Probar la demo (1 minuto)</a>
+      </div>
+    </section>
+
+<section class="demo-eco" id="demo" aria-labelledby="demoTitulo">
+      <div class="wrap">
+        <div class="demo-eco__cabecera reveal">
+          <div class="eyebrow">Pruébalo · un minuto</div>
+          <h2 id="demoTitulo">Conoce a Eco.</h2>
+          <p>Una conversación de ejemplo para que veas cómo se siente. No graba tu voz ni guarda nada.</p>
+        </div>
+        <div class="demo-eco__caja" id="demoCaja">
+          <ol class="demo-eco__progreso" aria-hidden="true"><li></li><li></li><li></li><li></li><li></li></ol>
+          <div class="demo-eco__chat" id="demoChat" role="log" aria-live="polite" aria-label="Conversación de ejemplo con Eco"></div>
+          <div class="demo-eco__accion" id="demoAccion"></div>
+        </div>
       </div>
     </section>
 
@@ -610,35 +626,6 @@
           <article class="step reveal"><div class="step-num">01</div><h3>Conversa</h3><p>Presiona un botón y empieza a hablar. La app escucha, hace preguntas y sigue el hilo de forma natural.</p></article>
           <article class="step reveal"><div class="step-num">02</div><h3>Construye la historia</h3><p>Nombres, lugares, relaciones, etapas de vida y anécdotas comienzan a formar una memoria familiar organizada.</p></article>
           <article class="step reveal"><div class="step-num">03</div><h3>Vuelve a ella</h3><p>Escucha los audios, recorre capítulos y pregúntale a la app por personas, momentos o recuerdos ya contados.</p></article>
-        </div>
-      </div>
-    </section>
-
-<section class="product" id="producto">
-      <div class="wrap">
-        <div class="section-head center reveal">
-          <div class="eyebrow pc-9b54a373">Una memoria que se puede explorar</div>
-          <h2>No es un archivo. Es una historia viva.</h2>
-          <p>Las conversaciones pueden convertirse en recuerdos consultables, capítulos y conexiones familiares.</p>
-        </div>
-        <div class="product-window reveal">
-          <div class="window-bar"><div class="traffic"><i></i><i></i><i></i></div><span class="quiet">Charla familiar</span><span>•••</span></div>
-          <div class="window-content">
-            <div class="conversation">
-              <div class="bubble q">Cuéntame de la casa donde creciste.</div>
-              <div class="bubble a">Era una casa pequeña, pero siempre estaba llena de gente. Mi mamá cocinaba los domingos y mis hermanos llegaban desde temprano...</div>
-              <div class="bubble q">¿Hay algún domingo que recuerdes especialmente?</div>
-              <div class="bubble a">Sí. El día que mi hermano volvió después de varios años. Nadie sabía que venía.</div>
-              <div class="audio-card"><button class="play" id="playDemo" aria-label="Vista previa visual — este ejemplo no tiene audio real">▶</button><div><strong>Así se guarda un recuerdo con audio</strong><div class="quiet pc-1e28117f">Vista previa · sin audio</div></div><div class="wave" id="waveDemo"></div></div>
-            </div>
-            <aside class="story-side">
-              <h3>Mi libro</h3>
-              <div class="chapter"><small>Capítulo 01</small><b>La casa donde crecimos</b></div>
-              <div class="chapter"><small>Capítulo 02</small><b>Conocer a mamá</b></div>
-              <div class="chapter"><small>Capítulo 03</small><b>El primer trabajo</b></div>
-              <div class="tree-mini"><div class="quiet pc-fa3e1c7d">Árbol familiar</div><div class="tree-row"><span class="person">Abuelo</span><span class="arrow">→</span><span class="person">Papá</span><span class="arrow">→</span><span class="person">Hijos</span></div></div>
-            </aside>
-          </div>
         </div>
       </div>
     </section>
@@ -726,5 +713,6 @@
 <script src="/eco-portada-pagina.js?v=1" defer></script>
 <script src="/eco-v5.js?v=5" defer></script>
 <script src="/eco-portada.js?v=2" defer></script>
+<script src="/eco-demo.js?v=1" defer></script>
 </body>
 </html>
