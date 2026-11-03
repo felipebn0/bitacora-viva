@@ -92,3 +92,6 @@ section.portada-bloque.portada-bloque--sinfoto{min-height:0; align-items:center}
 @media(max-width:820px){
   .portada-registro:after{background:linear-gradient(0deg, rgba(20,14,8,.9) 0%, rgba(20,14,8,.78) 100%)}
 }
+
+.portada-registro + .privacy{padding-top:64px}
+@media(max-width:820px){.portada-registro + .privacy{padding-top:40px}}
