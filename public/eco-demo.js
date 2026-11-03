@@ -311,7 +311,7 @@
       esperar(700, () => {
         const final = el('div', 'demo-eco__burbuja demo-eco__burbuja--final');
         chat.appendChild(final);
-        hablar('cierre2', 'Imagina volver a escuchar su voz dentro de veinte años: cómo se reía, cómo contaba. Empieza hoy, mientras todavía puedes preguntarle. Por ahora, es gratis.', final, () => {
+        hablar('cierre2', 'Imagina volver a escuchar su voz dentro de veinte años: cómo se reía, cómo contaba. Empieza hoy, mientras todavía puedes preguntarle.', final, () => {
           estado('idle', 'Presiona<br>para otra charla', '');
           alTocarOrbe = () => inicio();
           accion.appendChild(el('p', 'demo-eco__nota', 'Tu grabación está solo en esta pantalla y desaparece al cerrar la página. No se guardó nada.'));
