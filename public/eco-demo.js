@@ -244,7 +244,7 @@
     progreso(0);
     estado('idle', 'Presiona<br>para hablar', '');
     alTocarOrbe = bienvenida;
-    accion.appendChild(el('p', 'demo-eco__nota', 'Dura cerca de un minuto. Toca el círculo, escucha a Eco y contéstale hablando: cuando hagas una pausa, sigue solo.'));
+    accion.appendChild(el('p', 'demo-eco__nota', 'Toca el círculo una vez para empezar y habla con naturalidad. Eco se encarga del resto.'));
   }
 
   function bienvenida() {
