@@ -567,7 +567,7 @@
 <link rel="stylesheet" href="/eco-v5.css?v=6">
 <link rel="stylesheet" href="/eco-portada.css?v=7">
 <link rel="stylesheet" href="/eco-demo-orbe.css?v=1">
-<link rel="stylesheet" href="/eco-demo.css?v=7">
+<link rel="stylesheet" href="/eco-demo.css?v=9">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Saltar al contenido</a>
@@ -593,22 +593,16 @@
   <main id="main-content" tabindex="-1">
     <section class="portada-bloque portada-bloque--album portada-bloque--pagina" aria-labelledby="cfTitulo">
       <img class="portada-bloque__foto" src="/images/portada/manos.jpg" width="760" height="345" decoding="async" alt="Las manos de un abuelo moviéndose mientras cuenta una historia">
-      <div class="wrap portada-bloque__texto">
+      <div class="wrap portada-bloque__texto cf-cabecera">
+        <div class="cf-izq">
         <div class="eyebrow">Cómo funciona</div>
         <h1 id="cfTitulo">Así se guarda <em>una historia.</em></h1>
         <p>Conversa por voz, convierte cada recuerdo en un libro y conecta a tu familia en un árbol. Así funciona Eco, paso a paso.</p>
         <a class="btn btn-primary" href="#demo">Probar la demo (1 minuto)</a>
-      </div>
-    </section>
-
-<section class="demo-eco" id="demo" aria-labelledby="demoTitulo">
-      <div class="wrap">
-        <div class="demo-eco__cabecera reveal">
-          <div class="eyebrow">Pruébalo · un minuto</div>
-          <h2 id="demoTitulo">Conoce a Eco.</h2>
-          <p>Una conversación de ejemplo, con voz, para que veas cómo se siente.</p>
         </div>
-        <div class="demo-eco__caja" id="demoCaja">
+        <div class="demo-eco" id="demo" aria-labelledby="demoTitulo">
+          <h2 id="demoTitulo" class="demo-eco__titulo">Conoce a Eco.</h2>
+          <div class="demo-eco__caja" id="demoCaja">
           <button type="button" class="demo-eco__sonido" id="demoSonido" aria-pressed="true">Sonido: activado</button>
           <ol class="demo-eco__progreso" aria-hidden="true"><li></li><li></li><li></li><li></li><li></li></ol>
           <div class="demo-eco__chat" id="demoChat" role="log" aria-live="polite" aria-label="Conversación de ejemplo con Eco"></div>
@@ -635,6 +629,7 @@
           </div>
           <div class="demo-eco__accion" id="demoAccion"></div>
           <div class="demo-eco__aviso" role="note"><strong>Esto es solo una demo.</strong> Lo que hables aquí no se graba ni se guarda: es únicamente para la demostración. Tu voz solo se oye de vuelta en tu pantalla y se borra al cerrar la página.</div>
+        </div>
         </div>
       </div>
     </section>
