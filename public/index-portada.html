@@ -578,6 +578,7 @@
 </style>
 <link rel="stylesheet" href="/eco-v5.css?v=6">
 <link rel="stylesheet" href="/eco-portada.css?v=9">
+<link rel="stylesheet" href="/eco-popup.css?v=1">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Saltar al contenido</a>
@@ -912,6 +913,18 @@
     </div>
   </footer>
 
+  <dialog class="eco-popup" id="ecoPopup" aria-labelledby="ecoPopupTitulo">
+    <div class="eco-popup__caja">
+      <h2 class="eco-popup__solo-lectores" id="ecoPopupTitulo">Video: así funciona Eco</h2>
+      <button class="eco-popup__cerrar" id="ecoPopupCerrar" type="button" aria-label="Cerrar el video">&times;</button>
+      <video class="eco-popup__video" id="ecoPopupVideo" data-src="/video/eco-mapa.mp4" poster="/video/eco-mapa-poster.jpg" playsinline muted controls preload="none"></video>
+      <div class="eco-popup__pie">
+        <a class="btn btn-primary" href="/como-funciona.html">Ver cómo funciona</a>
+        <button class="eco-popup__sonido" id="ecoPopupSonido" type="button" aria-pressed="false">Activar sonido</button>
+      </div>
+    </div>
+  </dialog>
+
   <script>
     // Tamaño de letra — mismo mecanismo global de font-size.js que usa el
     // resto de la app (localStorage + document.documentElement), aquí solo
@@ -1222,5 +1235,6 @@
   </script>
 <script src="/eco-v5.js?v=5" defer></script>
 <script src="/eco-portada.js?v=2" defer></script>
+<script src="/eco-popup.js?v=1" defer></script>
 </body>
 </html>

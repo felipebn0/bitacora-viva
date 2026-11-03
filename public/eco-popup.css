@@ -1,0 +1,24 @@
+.eco-popup{padding:0; border:0; border-radius:20px; background:#1c150e; color:#FFF8EA; width:min(960px, 94vw); max-width:none; max-height:96dvh; overflow:hidden; box-shadow:0 30px 90px rgba(0,0,0,.6)}
+.eco-popup::backdrop{background:rgba(20,14,8,.8); -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px)}
+.eco-popup[open]{animation:eco-popup-entra .35s ease both}
+.eco-popup[open]::backdrop{animation:eco-popup-velo .35s ease both}
+.eco-popup__caja{position:relative; display:flex; flex-direction:column}
+.eco-popup__video{display:block; width:100%; aspect-ratio:16 / 9; max-height:calc(96dvh - 96px); object-fit:contain; background:#000}
+.eco-popup__cerrar{position:absolute; top:10px; right:10px; z-index:2; width:44px; height:44px; border:0; border-radius:50%; background:rgba(20,14,8,.7); color:#FFF8EA; font-size:1.75rem; line-height:1; cursor:pointer; display:grid; place-items:center}
+.eco-popup__cerrar:hover{background:rgba(20,14,8,.9)}
+.eco-popup__cerrar:focus-visible,.eco-popup__sonido:focus-visible{outline:3px solid #F2C98A; outline-offset:2px}
+.eco-popup__pie{display:flex; align-items:center; justify-content:center; gap:12px 16px; flex-wrap:wrap; padding:16px 20px}
+.eco-popup__sonido{border:1px solid rgba(255,248,234,.4); background:transparent; color:#FFF8EA; border-radius:99px; padding:10px 16px; font:inherit; font-size:.9375rem; cursor:pointer}
+.eco-popup__sonido:hover{background:rgba(255,248,234,.12)}
+.eco-popup__solo-lectores{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}
+body:has(.eco-popup[open]){overflow:hidden}
+@keyframes eco-popup-entra{from{opacity:0; transform:translateY(14px) scale(.98)} to{opacity:1; transform:none}}
+@keyframes eco-popup-velo{from{opacity:0} to{opacity:1}}
+@media(max-width:560px){
+  .eco-popup{width:96vw; border-radius:16px}
+  .eco-popup__pie{flex-direction:column; align-items:stretch; padding:14px 16px 16px}
+  .eco-popup__pie .btn,.eco-popup__sonido{width:100%; text-align:center; justify-content:center}
+}
+@media(prefers-reduced-motion:reduce){
+  .eco-popup[open],.eco-popup[open]::backdrop{animation:none}
+}
