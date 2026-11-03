@@ -54,6 +54,8 @@ function inicioDelDiaColombia(ahora) {
 }
 
 module.exports = (app, { sql, ensureSchema, requireAuth, requireAdmin, bloquearColaborador, bloquearInvitado, rateLimit, pushWeb }) => {
+  let fkQuitada = false;
+  const { idDeAvisos, soloCuentaONarrador } = pushWeb;
   async function ready() {
     await ensureSchema();
     await sql`CREATE TABLE IF NOT EXISTS push_recordatorio_cuentas (
@@ -73,12 +75,23 @@ module.exports = (app, { sql, ensureSchema, requireAuth, requireAdmin, bloquearC
       abierto_at TIMESTAMPTZ
     )`;
     await sql`CREATE INDEX IF NOT EXISTS idx_push_recordatorio_envios_user ON push_recordatorio_envios(user_id, enviado_at)`;
+    if (!fkQuitada) {
+      await sql`ALTER TABLE push_recordatorio_cuentas DROP CONSTRAINT IF EXISTS push_recordatorio_cuentas_user_id_fkey`;
+      await sql`ALTER TABLE push_recordatorio_envios DROP CONSTRAINT IF EXISTS push_recordatorio_envios_user_id_fkey`;
+      fkQuitada = true;
+    }
   }
 
-  app.get('/api/push/recordatorio', requireAuth, bloquearColaborador, bloquearInvitado, async (req, res) => {
+  async function limpiar(id) {
+    await ready();
+    await sql`DELETE FROM push_recordatorio_envios WHERE user_id = ${id}`;
+    await sql`DELETE FROM push_recordatorio_cuentas WHERE user_id = ${id}`;
+  }
+
+  app.get('/api/push/recordatorio', requireAuth, bloquearColaborador, soloCuentaONarrador, async (req, res) => {
     try {
       await ready();
-      const filas = await sql`SELECT activo FROM push_recordatorio_cuentas WHERE user_id = ${req.userId}`;
+      const filas = await sql`SELECT activo FROM push_recordatorio_cuentas WHERE user_id = ${idDeAvisos(req)}`;
       res.json({ activo: filas.length ? filas[0].activo : true });
     } catch (err) {
       console.error(err);
@@ -86,11 +99,11 @@ module.exports = (app, { sql, ensureSchema, requireAuth, requireAdmin, bloquearC
     }
   });
 
-  app.post('/api/push/recordatorio', requireAuth, bloquearColaborador, bloquearInvitado, rateLimit, async (req, res) => {
+  app.post('/api/push/recordatorio', requireAuth, bloquearColaborador, soloCuentaONarrador, rateLimit, async (req, res) => {
     try {
       const activo = !!(req.body && req.body.activo);
       await ready();
-      await sql`INSERT INTO push_recordatorio_cuentas (user_id, activo) VALUES (${req.userId}, ${activo})
+      await sql`INSERT INTO push_recordatorio_cuentas (user_id, activo) VALUES (${idDeAvisos(req)}, ${activo})
         ON CONFLICT (user_id) DO UPDATE SET activo = EXCLUDED.activo`;
       res.json({ ok: true, activo });
     } catch (err) {
@@ -194,6 +207,8 @@ module.exports = (app, { sql, ensureSchema, requireAuth, requireAdmin, bloquearC
       res.status(500).json({ error: 'No se pudo cargar la prueba de recordatorios.' });
     }
   });
+
+  return { limpiar };
 };
 
 module.exports.MENSAJES = MENSAJES;

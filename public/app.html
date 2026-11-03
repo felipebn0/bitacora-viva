@@ -31,7 +31,7 @@
 <link rel="stylesheet" href="/eco-recordatorio-app.css?v=1">
 <link rel="stylesheet" href="/eco-push-web.css?v=2">
 <script src="/eco-recordatorio-app.js?v=1" defer></script>
-<script src="/eco-push-web.js?v=2" defer></script>
+<script src="/eco-push-web.js?v=3" defer></script>
 <script src="/eco-aviso-aportes.js?v=1" defer></script>
 <script src="/eco-aviso-abierto.js?v=1" defer></script>
 <script src="/eco-saludo.js?v=1" defer></script>
@@ -2274,12 +2274,20 @@
       // reiniciar la cuenta) — mostrarlas solo llevaría a un error al
       // tocarlas. Tamaño de letra, Voz y Tu copia (exportar) sí funcionan
       // igual que siempre.
-      ['umSecPerfil', 'umSecClave', 'umSecPlan', 'umSecRecordatorios', 'umSecRiesgo'].forEach((controlId) => {
+      ['umSecPerfil', 'umSecClave', 'umSecPlan', 'umSecRiesgo'].forEach((controlId) => {
         const toggle = document.querySelector(`[aria-controls="${controlId}"]`);
         const body = document.getElementById(controlId);
         if (toggle) toggle.style.display = 'none';
         if (body) body.hidden = true;
       });
+      // Recordatorios: el correo no aplica (no tiene), pero los avisos del
+      // celular sí — solo se queda el bloque de eco-push-web.js.
+      ['umRecordatoriosActivos', 'umRecordatoriosFrecuencia', 'umRecordatoriosGuardar', 'umRecordatoriosMsg'].forEach((elId) => {
+        const el = document.getElementById(elId);
+        const caja = el && (el.closest('label') || el);
+        if (caja) caja.hidden = true;
+      });
+      window.ecoNarradorLink = true;
       // El narrador de un enlace permanente no administra bitácoras — no
       // tiene cuenta propia detrás.
       const umPerfilesLink = document.getElementById('umPerfilesLink');

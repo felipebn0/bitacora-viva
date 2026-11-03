@@ -10,6 +10,7 @@ process.env.VAPID_PRIVATE_KEY = 'privadaDePrueba';
 const path = require('path');
 const http = require('http');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 
 const serverPath = path.resolve(__dirname, '..', 'server.js');
 const HASH = bcrypt.hashSync('miclave123', 4);
@@ -22,6 +23,8 @@ let suscripciones = [];
 let siguienteId = 1;
 const enviados = [];
 let fallarCon = null; // endpoint -> código HTTP con el que "falla"
+const bitacoras = { 50: { id: 50, admin_user_id: 1, narrador_code: 'NARR1234', invite_code: null } };
+const limpiezas = [];
 
 function fakeSql(strings, ...values) {
   const text = strings.join('?');
@@ -54,6 +57,22 @@ function fakeSql(strings, ...values) {
   if (text.includes('SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id')) {
     return Promise.resolve(suscripciones.filter((s) => s.user_id === values[0]).map((s) => ({ ...s })));
   }
+  if (text.includes('SELECT id, narrador_code FROM bitacoras WHERE id') && text.includes('admin_user_id')) {
+    const b = bitacoras[values[0]];
+    return Promise.resolve(b && b.admin_user_id === values[1] ? [{ id: b.id, narrador_code: b.narrador_code }] : []);
+  }
+  if (text.includes('SELECT id, narrador_code FROM bitacoras WHERE id')) {
+    const b = bitacoras[values[0]];
+    return Promise.resolve(b ? [{ id: b.id, narrador_code: b.narrador_code }] : []);
+  }
+  if (text.includes('UPDATE bitacoras SET narrador_code = NULL WHERE id')) { bitacoras[values[0]].narrador_code = null; return Promise.resolve([]); }
+  if (text.includes('DELETE FROM push_recordatorio_envios WHERE user_id') || text.includes('DELETE FROM push_recordatorio_cuentas WHERE user_id')) { limpiezas.push(values[0]); return Promise.resolve([]); }
+  if (text.includes('DELETE FROM push_subscriptions WHERE user_id') && !text.includes('endpoint') && !text.includes('NOT IN')) {
+    suscripciones = suscripciones.filter((x) => x.user_id !== values[0]);
+    return Promise.resolve([]);
+  }
+  if (text.includes('SELECT id, invite_code FROM users WHERE id')) return Promise.resolve([{ id: values[0], invite_code: 'ABCD1234' }]);
+  if (text.includes('FROM invitados WHERE id')) return Promise.resolve([{ '?column?': 1 }]);
   if (text.includes('SELECT aportes_pending_names FROM users WHERE id')) return Promise.resolve([{ aportes_pending_names: null }]);
   if (text.includes('UPDATE users SET aportes_pending_names')) return Promise.resolve([]);
   return Promise.resolve([]);
@@ -147,6 +166,34 @@ async function login(server, username) {
     // Apagar
     r = await request(server, { path: '/api/push/baja', method: 'POST', body: { endpoint: 'https://push.example/otra-1' } }, otra);
     ok(r.status === 200 && suscripciones.length === 0, 'apagar los avisos borra el celular');
+
+    // El narrador de un subperfil (sin cuenta) sí puede activar el recordatorio; el invitado clásico no
+    const firmar = (payload) => {
+      const b64 = Buffer.from(JSON.stringify({ ...payload, iat: Date.now() })).toString('base64url');
+      return `bv_session=${b64}.${crypto.createHmac('sha256', process.env.SESSION_SECRET).update(b64).digest('base64url')}`;
+    };
+    const narrador = firmar({ guest: true, narrador: true, bitacoraId: 50, guestName: 'Papá', code: 'NARR1234' });
+    const clasico = firmar({ guest: true, ownerId: 1, guestName: 'Carlos', code: 'ABCD1234', guestId: 9 });
+    r = await request(server, { path: '/api/push/suscribir', method: 'POST', body: { subscription: { endpoint: 'https://push.example/papa-1', keys: { p256dh: 'p4', auth: 'a4' } } } }, narrador);
+    ok(r.status === 200 && suscripciones.some((x) => x.endpoint === 'https://push.example/papa-1' && x.user_id === 50), 'el narrador activa los avisos y quedan a nombre de su subperfil (50)');
+    r = await request(server, { path: '/api/push/suscribir', method: 'POST', body: { subscription: { endpoint: 'https://push.example/carlos-1', keys: { p256dh: 'p5', auth: 'a5' } } } }, clasico);
+    ok(r.status === 403 && !suscripciones.some((x) => x.endpoint === 'https://push.example/carlos-1'), 'un invitado clásico sigue sin poder activar avisos (403)');
+    enviados.length = 0;
+    r = await request(server, { path: '/api/push/prueba', method: 'POST', body: {} }, narrador);
+    ok(r.status === 200 && r.json.enviados === 1 && enviados[0].endpoint === 'https://push.example/papa-1' && enviados[0].carga.url === '/app.html', 'el aviso de prueba del narrador llega solo a su celular y abre su charla');
+    r = await request(server, { path: '/api/push/recordatorio', method: 'POST', body: { activo: false } }, narrador);
+    ok(r.status === 200 && r.json.activo === false, 'el narrador puede apagar su recordatorio diario');
+    r = await request(server, { path: '/api/push/recordatorio', method: 'POST', body: { activo: true } }, clasico);
+    ok(r.status === 403, 'el invitado clásico no toca el recordatorio diario (403)');
+    r = await request(server, { path: '/api/push/baja', method: 'POST', body: { endpoint: 'https://push.example/papa-1' } }, narrador);
+    ok(r.status === 200 && !suscripciones.some((x) => x.endpoint === 'https://push.example/papa-1'), 'el narrador apaga los avisos de su celular');
+
+    // Cortar el enlace borra los avisos del subperfil
+    await request(server, { path: '/api/push/suscribir', method: 'POST', body: { subscription: { endpoint: 'https://push.example/papa-2', keys: { p256dh: 'p6', auth: 'a6' } } } }, narrador);
+    r = await request(server, { path: '/api/subprofiles/50/narrador-link/revoke', method: 'POST', body: {} }, duena);
+    ok(r.status === 200 && !suscripciones.some((x) => x.user_id === 50) && limpiezas.includes(50), 'al cortar el enlace del narrador se borran sus avisos');
+    r = await request(server, { path: '/api/push/suscribir', method: 'POST', body: { subscription: { endpoint: 'https://push.example/papa-3', keys: { p256dh: 'p7', auth: 'a7' } } } }, narrador);
+    ok(r.status === 401 && !suscripciones.some((x) => x.user_id === 50), 'con el enlace cortado el narrador ya no puede activar avisos (401)');
   } catch (e) {
     fallaron++;
     console.log('FAIL - error inesperado:', e && e.stack ? e.stack : e);

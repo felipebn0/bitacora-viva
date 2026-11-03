@@ -25,7 +25,7 @@ const FALSOS = () => {
   const base = 'http://127.0.0.1:' + server.address().port;
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' }).catch(() => chromium.launch());
 
-  async function abrir({ nombres = [], compatible = true, push = true, ua, ruta = '/app.html' } = {}) {
+  async function abrir({ nombres = [], compatible = true, push = true, ua, ruta = '/app.html', narrador = false } = {}) {
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, userAgent: ua });
     const page = await ctx.newPage();
     if (compatible) await page.addInitScript(FALSOS);
@@ -38,6 +38,7 @@ const FALSOS = () => {
       const u = new URL(route.request().url());
       const json = (o) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(o) });
       if (route.request().method() === 'POST') { posts.push(u.pathname); cuerpos[u.pathname] = route.request().postData(); if (u.pathname === '/api/push/recordatorio') diarioActivo = JSON.parse(cuerpos[u.pathname]).activo; }
+      if (u.pathname === '/api/me' && narrador) return json({ username: null, name: 'Papá', email: null, isCollaborator: false, isGuest: true, isNarradorLink: true, guestName: 'Papá', bitacoraNombre: 'Papá' });
       if (u.pathname === '/api/me') return json({ username: 'felipe', name: 'Felipe Bernal', email: 'f@x.com', isCollaborator: false, isGuest: false });
       if (u.pathname === '/api/aportes/pending') return json({ names: nombres });
       if (u.pathname === '/api/push/clave') return json({ habilitado: push, clave: push ? 'BEl2hHDP' : null });
@@ -86,6 +87,18 @@ const FALSOS = () => {
   await t.page.evaluate(() => [...document.querySelectorAll('#umPushWeb button')].find((b) => /Dejar de avisarme/.test(b.textContent)).click());
   await t.page.waitForTimeout(400);
   ok(t.posts.includes('/api/push/baja') && await t.page.evaluate(() => window.__push.suscrito === null), 'al apagarlo se avisa al servidor y se cancela la suscripción');
+  await t.ctx.close();
+
+  // Narrador de un subperfil (sin cuenta): ve el recordatorio del celular, pero no los controles del correo
+  t = await abrir({ narrador: true, ruta: '/app.html?codigo=NARR1234' });
+  ok(await t.page.locator('#umPushWeb').count() === 1, 'el narrador ve el bloque de avisos en Recordatorios');
+  ok(/Recordatorio en este celular/.test(await t.page.locator('#umPushWeb').innerText()) && !/aportes/i.test(await t.page.locator('#umPushWeb').innerText()), 'el texto habla solo del recordatorio, no de aportes de familiares');
+  ok(await t.page.evaluate(() => getComputedStyle(document.querySelector('[aria-controls="umSecRecordatorios"]')).display !== 'none'), 'la sección Recordatorios queda visible para el narrador');
+  ok(await t.page.locator('#umRecordatoriosGuardar').isHidden() && await t.page.locator('#umRecordatoriosFrecuencia').isHidden() && await t.page.locator('#umRecordatoriosActivos').isHidden(), 'los controles de recordatorio por correo quedan ocultos');
+  ok(await t.page.evaluate(() => ['umSecClave', 'umSecPlan'].every((id) => getComputedStyle(document.querySelector('[aria-controls="' + id + '"]')).display === 'none')), 'clave y plan siguen ocultos para el narrador');
+  await t.page.evaluate(() => [...document.querySelectorAll('#umPushWeb button')].find((b) => /Activar el recordatorio diario/.test(b.textContent)).click());
+  await t.page.waitForTimeout(600);
+  ok(t.posts.includes('/api/push/suscribir'), 'el narrador manda su suscripción al servidor');
   await t.ctx.close();
 
   t = await abrir({ ruta: '/app.html?av=0123456789abcdef01234567' });

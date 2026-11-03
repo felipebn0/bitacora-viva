@@ -782,6 +782,7 @@ if (!DB_URL) {
 let schemaReady = null;
 // Avisos push (push-web-routes.js): se asigna al montar las rutas, más abajo.
 let pushWeb = null;
+let pushRecordatorios = null;
 // Antes esto era una función async que hacía 44 "await sql`...`" seguidos —
 // cada uno un viaje de red HTTP aparte a Neon. La memoización de schemaReady
 // ya hacía que esto solo corriera una vez por instancia tibia, pero esa
@@ -3474,6 +3475,7 @@ app.post('/api/subprofiles/:id/narrador-link/regenerate', requireAuth, bloquearC
     const bit = await bitacoraDelAdmin(id, req.userId);
     if (!bit) return res.status(404).json({ error: 'No se encontró ese subperfil.' });
     const code = await asignarNuevoNarradorCode(id);
+    await borrarAvisosPush(id);
     res.json({ code });
   } catch (err) {
     console.error(err);
@@ -3490,6 +3492,7 @@ app.post('/api/subprofiles/:id/narrador-link/revoke', requireAuth, bloquearColab
     const bit = await bitacoraDelAdmin(id, req.userId);
     if (!bit) return res.status(404).json({ error: 'No se encontró ese subperfil.' });
     await sql`UPDATE bitacoras SET narrador_code = NULL WHERE id = ${id}`;
+    await borrarAvisosPush(id);
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -3567,6 +3570,7 @@ app.post('/api/subprofiles/:id/archive', requireAuth, bloquearColaborador, bloqu
       return res.status(400).json({ error: 'Primero vuelve a tu propia bitácora antes de archivar la que tienes activa.' });
     }
     await sql`UPDATE bitacoras SET archived_at = now(), narrador_code = NULL, invite_code = NULL WHERE id = ${id}`;
+    await borrarAvisosPush(id);
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -4239,6 +4243,7 @@ app.post('/api/delete-account', requireAuth, rateLimit, async (req, res) => {
     fotosDelLibro.forEach((u) => audioUrls.push(u));
     fotosDelDiarioBebe.forEach((u) => audioUrls.push(u));
     await borrarArchivosBlob(audioUrls);
+    await borrarAvisosPush(req.userId);
 
     clearSessionCookie(req, res);
     res.json({ ok: true });
@@ -6567,6 +6572,16 @@ async function avisarAportePorPush(cuentaId, contribuidor, perfilNombre) {
   });
 }
 
+// Borra los avisos del celular de una cuenta o subperfil (al cortar su enlace, archivarlo o borrar la cuenta). No falla nunca.
+async function borrarAvisosPush(id) {
+  try {
+    if (pushWeb) await pushWeb.limpiar(id);
+    if (pushRecordatorios) await pushRecordatorios.limpiar(id);
+  } catch (err) {
+    console.error('No se pudieron borrar los avisos push:', err);
+  }
+}
+
 async function marcarAportePendiente(ownerId, contributorName) {
   try {
     const nombre = (contributorName || '').trim() || 'Un familiar';
@@ -7697,7 +7712,7 @@ app.delete('/api/chapters/:id', requireAuth, bloquearColaborador, rateLimit, asy
 });
 
 pushWeb = require('./push-web-routes')(app, { sql, ensureSchema, requireAuth, bloquearColaborador, bloquearInvitado, rateLimit });
-require('./push-recordatorios-routes')(app, { sql, ensureSchema, requireAuth, requireAdmin, bloquearColaborador, bloquearInvitado, rateLimit, pushWeb });
+pushRecordatorios = require('./push-recordatorios-routes')(app, { sql, ensureSchema, requireAuth, requireAdmin, bloquearColaborador, bloquearInvitado, rateLimit, pushWeb });
 require('./book-qr-routes')(app, { preguntasPorAudio, sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob });
 require('./libro-compartido-routes')(app, { sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob, almacenarArchivo, express });
 require('./recuperar-clave-routes')(app, { sql, ensureSchema, rateLimit, limitePorClave, claveDemasiadoLarga });

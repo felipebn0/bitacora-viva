@@ -26,7 +26,8 @@
 
     const caja = E('div', 'um-push-web');
     caja.id = 'umPushWeb';
-    caja.append(E('p', 'um-field-label', 'Avisos de aportes en este celular'));
+    const narrador = window.ecoNarradorLink === true;
+    caja.append(E('p', 'um-field-label', narrador ? 'Recordatorio en este celular' : 'Avisos de aportes en este celular'));
     const msg = E('p', 'um-msg');
     msg.setAttribute('role', 'status');
     msg.setAttribute('aria-live', 'polite');
@@ -39,7 +40,7 @@
       return;
     }
 
-    const activar = E('button', 'um-btn', 'Activar avisos (aportes de familiares y recordatorio diario)');
+    const activar = E('button', 'um-btn', narrador ? 'Activar el recordatorio diario' : 'Activar avisos (aportes de familiares y recordatorio diario)');
     const apagar = E('button', 'um-btn um-plain', 'Dejar de avisarme en este celular');
     const probar = E('button', 'um-btn um-plain', 'Mandarme un aviso de prueba');
     const diario = E('button', 'um-btn um-plain', '');
@@ -74,7 +75,7 @@
         await navigator.serviceWorker.ready;
         const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: claveABytes(cfg.clave) });
         const r = await enviarJson('/api/push/suscribir', { subscription: sub.toJSON() });
-        msg.textContent = r.ok ? 'Listo, te avisamos cuando un familiar cuente una historia y te recordamos charlar cada día a las 5 pm.' : 'No se pudieron activar los avisos. Intenta de nuevo.';
+        msg.textContent = r.ok ? narrador ? 'Listo, te recordamos charlar cada día a las 5 pm.' : 'Listo, te avisamos cuando un familiar cuente una historia y te recordamos charlar cada día a las 5 pm.' : 'No se pudieron activar los avisos. Intenta de nuevo.';
       } catch (e) {
         msg.textContent = 'No se pudieron activar los avisos en este celular.';
       }

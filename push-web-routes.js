@@ -15,6 +15,7 @@ const MAX_POR_CUENTA = 10;
 const ESPERA_MAXIMA_MS = 4000;
 
 module.exports = (app, { sql, ensureSchema, requireAuth, bloquearColaborador, bloquearInvitado, rateLimit }) => {
+  let fkQuitada = false;
   async function ready() {
     await ensureSchema();
     await sql`CREATE TABLE IF NOT EXISTS push_subscriptions (
@@ -26,6 +27,24 @@ module.exports = (app, { sql, ensureSchema, requireAuth, bloquearColaborador, bl
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )`;
     await sql`CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(user_id)`;
+    // El narrador de un subperfil no tiene fila en "users": sus avisos se guardan con el id del subperfil.
+    if (!fkQuitada) {
+      await sql`ALTER TABLE push_subscriptions DROP CONSTRAINT IF EXISTS push_subscriptions_user_id_fkey`;
+      fkQuitada = true;
+    }
+  }
+
+  // Quién recibe los avisos de esta sesión: la cuenta que entró o, si es el narrador de un subperfil, ese subperfil.
+  const idDeAvisos = (req) => req.userId || (req.isNarradorLink ? req.profileUserId : null);
+  // Mismo veto que bloquearInvitado, salvo para el narrador de un subperfil.
+  function soloCuentaONarrador(req, res, next) {
+    if (req.isGuest && !req.isNarradorLink) return bloquearInvitado(req, res, next);
+    next();
+  }
+
+  async function limpiar(id) {
+    await ready();
+    await sql`DELETE FROM push_subscriptions WHERE user_id = ${id}`;
   }
 
   const textoCorto = (v, max) => (typeof v === 'string' && v.length > 0 && v.length <= max ? v : null);
@@ -74,16 +93,16 @@ module.exports = (app, { sql, ensureSchema, requireAuth, bloquearColaborador, bl
     res.json({ habilitado: HABILITADO, clave: HABILITADO ? VAPID_PUBLIC_KEY : null });
   });
 
-  app.post('/api/push/suscribir', requireAuth, bloquearColaborador, bloquearInvitado, rateLimit, async (req, res) => {
+  app.post('/api/push/suscribir', requireAuth, bloquearColaborador, soloCuentaONarrador, rateLimit, async (req, res) => {
     if (!HABILITADO) return res.status(503).json({ error: 'Los avisos todavía no están disponibles.' });
     const s = suscripcionValida(req.body && req.body.subscription);
     if (!s) return res.status(400).json({ error: 'La suscripción no es válida.' });
     try {
       await ready();
-      await sql`INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth) VALUES (${req.userId}, ${s.endpoint}, ${s.p256dh}, ${s.auth})
+      await sql`INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth) VALUES (${idDeAvisos(req)}, ${s.endpoint}, ${s.p256dh}, ${s.auth})
         ON CONFLICT (endpoint) DO UPDATE SET user_id = EXCLUDED.user_id, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth`;
       // Tope por cuenta: se conservan las más recientes.
-      await sql`DELETE FROM push_subscriptions WHERE user_id = ${req.userId} AND id NOT IN (SELECT id FROM push_subscriptions WHERE user_id = ${req.userId} ORDER BY id DESC LIMIT ${MAX_POR_CUENTA})`;
+      await sql`DELETE FROM push_subscriptions WHERE user_id = ${idDeAvisos(req)} AND id NOT IN (SELECT id FROM push_subscriptions WHERE user_id = ${idDeAvisos(req)} ORDER BY id DESC LIMIT ${MAX_POR_CUENTA})`;
       res.json({ ok: true });
     } catch (err) {
       console.error(err);
@@ -91,12 +110,12 @@ module.exports = (app, { sql, ensureSchema, requireAuth, bloquearColaborador, bl
     }
   });
 
-  app.post('/api/push/baja', requireAuth, bloquearColaborador, bloquearInvitado, rateLimit, async (req, res) => {
+  app.post('/api/push/baja', requireAuth, bloquearColaborador, soloCuentaONarrador, rateLimit, async (req, res) => {
     const endpoint = textoCorto(req.body && req.body.endpoint, 800);
     if (!endpoint) return res.status(400).json({ error: 'Falta el celular.' });
     try {
       await ready();
-      await sql`DELETE FROM push_subscriptions WHERE user_id = ${req.userId} AND endpoint = ${endpoint}`;
+      await sql`DELETE FROM push_subscriptions WHERE user_id = ${idDeAvisos(req)} AND endpoint = ${endpoint}`;
       res.json({ ok: true });
     } catch (err) {
       console.error(err);
@@ -104,11 +123,11 @@ module.exports = (app, { sql, ensureSchema, requireAuth, bloquearColaborador, bl
     }
   });
 
-  app.post('/api/push/prueba', requireAuth, bloquearColaborador, bloquearInvitado, rateLimit, async (req, res) => {
+  app.post('/api/push/prueba', requireAuth, bloquearColaborador, soloCuentaONarrador, rateLimit, async (req, res) => {
     if (!HABILITADO) return res.status(503).json({ error: 'Los avisos todavía no están disponibles.' });
-    const r = await enviarPush(req.userId, { title: 'Eco', body: 'Así te voy a avisar cuando un familiar cuente una historia.', url: '/colaboraciones.html', tag: 'eco-prueba' });
+    const r = await enviarPush(idDeAvisos(req), { title: 'Eco', body: req.isNarradorLink ? 'Así te voy a recordar cuando sea un buen momento para charlar.' : 'Así te voy a avisar cuando un familiar cuente una historia.', url: req.isNarradorLink ? '/app.html' : '/colaboraciones.html', tag: 'eco-prueba' });
     res.json({ ok: true, enviados: r.enviados });
   });
 
-  return { enviarPush, habilitado: HABILITADO };
+  return { enviarPush, habilitado: HABILITADO, idDeAvisos, soloCuentaONarrador, limpiar };
 };
