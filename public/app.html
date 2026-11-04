@@ -3208,6 +3208,19 @@
     analizadorInterrupcion = null;
   }
 
+  // Medidor opcional para afinar la interrupción: abrir la app con ?debugvoz=1 muestra abajo a la izquierda lo que lee el micrófono.
+  const medidorDeVoz = new URLSearchParams(location.search).get('debugvoz') ? (() => {
+    let caja = null;
+    return (rms, ratioVoz, eco, e) => {
+      if (!caja) {
+        caja = document.createElement('div');
+        caja.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99999;background:#000c;color:#fff;font:12px monospace;padding:6px 8px;border-radius:6px;pointer-events:none';
+        document.body.appendChild(caja);
+      }
+      caja.textContent = (eco ? 'Eco habla' : 'Eco piensa') + ' | mic ' + rms.toFixed(3) + ' | umbral ' + e.umbral.toFixed(3) + ' | voz ' + ratioVoz.toFixed(2) + ' | suma ' + Math.round(e.msVoz) + ' ms';
+    };
+  })() : null;
+
   function iniciarEscuchaDeInterrupcion() {
     detenerEscuchaDeInterrupcion();
     if (!window.EcoInterrupcion || !mediaStream || !mediaStream.active) return;
@@ -3236,7 +3249,11 @@
       for (let i = 0; i < tiempo.length; i++) { const v = (tiempo[i] - 128) / 128; suma += v * v; }
       analizador.getFloatFrequencyData(espectro);
       const ratioVoz = window.EcoInterrupcion.razonDeVoz(espectro, frecuenciaDeMuestreo, analizador.fftSize);
-      if (detector.alimentar({ rms: Math.sqrt(suma / tiempo.length), ratioVoz, dt, eco: ecoSonando() })) interrumpirPorVoz();
+      const rms = Math.sqrt(suma / tiempo.length);
+      const eco = ecoSonando();
+      const dispara = detector.alimentar({ rms, ratioVoz, dt, eco });
+      if (medidorDeVoz) medidorDeVoz(rms, ratioVoz, eco, detector.estado());
+      if (dispara) interrumpirPorVoz();
     }, 50);
   }
 

@@ -128,6 +128,22 @@ async function preparar(browser, base, { demoraRespuesta = 0 } = {}) {
     ok(!ultima.history.some((m) => /Respuesta de Eco/.test(m.content)), 'la respuesta que Eco no alcanzó a decir no queda en el historial');
     await t.context.close();
 
+    console.log('\n--- 1b: se puede interrumpir varias veces seguidas ---');
+    t = await preparar(browser, base);
+    await t.page.evaluate(() => { window.__duracionAudio = 8000; });
+    await t.contarParteA();
+    for (const parte of ['B', 'C']) {
+      await dormir(1200);
+      await t.mic(0.25, true);
+      await t.esperar('listening', 3000).then(() => ok(true, 'interrupción ' + parte + ': Eco se calla y vuelve a escuchar'), () => ok(false, 'interrupción ' + parte + ': Eco se calla y vuelve a escuchar'));
+      t.estado.texto = 'Parte ' + parte;
+      await dormir(700); await t.mic(0.005, false);
+      await t.esperar('speaking', 20000);
+    }
+    const seguidas = t.llamadas[t.llamadas.length - 1];
+    ok(seguidas.history.map((m) => m.content).filter((c) => /^Parte/.test(c)).join(',') === 'Parte A,Parte B,Parte C', 'las tres partes llegan juntas y en orden');
+    await t.context.close();
+
     console.log('\n--- 2: un ruido mientras Eco habla no lo interrumpe ---');
     t = await preparar(browser, base);
     await t.page.evaluate(() => { window.__duracionAudio = 6000; });

@@ -38,6 +38,8 @@ ok(correr([[0.05, VOZ, 8000, true]]) === null, 'el eco de la propia voz de Eco p
 ok(correr([[0.11, VOZ, 8000, true]]) === null, 'ni siquiera cuando el altavoz suena fuerte');
 ok(correr([[0.11, VOZ, 3000, true], [0.35, VOZ, 2000, true]]) !== null, 'pero con el altavoz fuerte, una voz mucho más alta que el eco sí interrumpe');
 
+const desdeElInicio = correr([[0.01, 0.5, 500, false], [0.15, VOZ, 3000, true]]);
+ok(desdeElInicio !== null, 'si la persona ya estaba hablando cuando Eco empezó, igual lo interrumpe (su voz no contamina el cálculo del eco)');
 ok(correr([[0.01, 0.5, 500, false], [HABLA_NORMAL, VOZ, 2000, true]]) === null, 'con el altavoz de Eco sonando igual de fuerte que una voz normal no se confunde (es su propio eco)');
 ok(correr([[0.01, 0.5, 500, false], [HABLA_NORMAL, VOZ, 2000, false]]) !== null, 'una voz normal (volumen suave) mientras Eco piensa interrumpe');
 ok(correr([[0.12, 0.3, 5000, false]]) === null, 'sonido fuerte pero sin forma de voz (poca energía en el rango de la voz) no interrumpe');

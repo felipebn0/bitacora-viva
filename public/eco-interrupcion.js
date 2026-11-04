@@ -11,6 +11,9 @@
   const MS_VOZ_PENSANDO = 300;
   const MS_VOZ_HABLANDO = 400;
   const MS_CALIBRACION_ECO = 600;
+  // La fuga de Eco por el altavoz nunca se da por más de esto: si la persona ya estaba hablando cuando Eco empezó, su voz
+  // no puede subir el umbral hasta dejarla sin poder interrumpir.
+  const FUGA_MAX = 0.06;
   const BANDA_VOZ = [250, 3400];
   const BANDA_TOTAL = [50, 8000];
 
@@ -44,7 +47,7 @@
         msEco += dt;
         if (msEco <= MS_CALIBRACION_ECO) {
           // Primeros instantes de la voz de Eco: todo lo que se oye es su fuga por el altavoz, no la persona.
-          fuga += (rms - fuga) * (1 - Math.exp(-dt / 150));
+          fuga = Math.min(FUGA_MAX, fuga + (rms - fuga) * (1 - Math.exp(-dt / 150)));
           return false;
         }
       }
@@ -55,12 +58,15 @@
       } else {
         msVoz = Math.max(0, msVoz - dt * 2);
         piso += (rms - piso) * alfa;
-        if (eco) fuga += (rms - fuga) * alfa;
+        if (eco) fuga = Math.min(FUGA_MAX, fuga + (rms - fuga) * alfa);
       }
       return msVoz >= (eco ? MS_VOZ_HABLANDO : MS_VOZ_PENSANDO);
     }
 
-    return { alimentar };
+    // Para el medidor de depuración de app.html (?debugvoz=1).
+    function estado() { return { umbral: Math.max(UMBRAL_MIN, piso * 2.5, fuga * 2), msVoz, piso, fuga }; }
+
+    return { alimentar, estado };
   }
 
   const api = { crearDetector, razonDeVoz };
