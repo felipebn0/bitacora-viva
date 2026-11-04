@@ -7715,7 +7715,8 @@ pushWeb = require('./push-web-routes')(app, { sql, ensureSchema, requireAuth, bl
 pushRecordatorios = require('./push-recordatorios-routes')(app, { sql, ensureSchema, requireAuth, requireAdmin, bloquearColaborador, bloquearInvitado, rateLimit, pushWeb });
 require('./book-qr-routes')(app, { preguntasPorAudio, sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob });
 require('./libro-compartido-routes')(app, { sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob, almacenarArchivo, express });
-require('./recuperar-clave-routes')(app, { sql, ensureSchema, rateLimit, limitePorClave, claveDemasiadoLarga });
+require('./demo-nombre-routes')(app, { rateLimit, limitePorClave, verificarArchivoReal, AUDIO_MIME_PERMITIDOS, speakWithElevenLabs, elevenKey: ELEVEN_KEY, express });
+require('./recuperar-clave-routes')(app,{ sql, ensureSchema, rateLimit, limitePorClave, claveDemasiadoLarga });
 require('./bebe-routes')(app, { sql, ensureSchema, requireAuth, rateLimit, bloquearEscritura: [bloquearColaborador, bloquearSiNoPuedeNarrar, bloquearSiReadOnly], resolveProfileUserId, almacenarArchivo, verificarArchivoReal, MEDIA_MIME_PERMITIDOS, AUDIO_MIME_PERMITIDOS, enviarArchivoAlmacenado, datosDelArchivoDeBlob, borrarArchivosBlob });
 require('./book-editor-routes')(app, {
   sql,

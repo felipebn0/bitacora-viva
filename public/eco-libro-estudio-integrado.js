@@ -140,6 +140,7 @@ function programarEnlace(){
  if(!enlaceActivo)return;
  clearTimeout(enlaceTimer);
  enlaceTimer=setTimeout(async()=>{
+  if(!enlaceActivo)return;
   if(enlaceEnCurso)return programarEnlace();
   enlaceEnCurso=true;
   try{await flush();if(await window.EcoLibroDigital.compartirEnLinea())status.textContent='Guardado ✓ El enlace de tu libro quedó al día.'}catch{/* se reintenta con el próximo cambio */}

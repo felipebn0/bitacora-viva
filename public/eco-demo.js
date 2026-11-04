@@ -21,6 +21,7 @@
   let mic = null;
   let permisoMic = null;
   let respuestaUrl = null;
+  let saludoUrl = null;
   let finActual = null;
   let alTocarOrbe = null;
   let sesion = null;
@@ -101,7 +102,7 @@
     if (!sonido) { sinAudio(); return; }
     voz.onended = fin;
     voz.onerror = sinAudio;
-    voz.src = '/audio-demo/' + clave + '.mp3';
+    voz.src = clave.indexOf('blob:') === 0 ? clave : '/audio-demo/' + clave + '.mp3';
     const intento = voz.play();
     if (intento && typeof intento.catch === 'function') intento.catch(sinAudio);
   }
@@ -124,6 +125,7 @@
 
   function liberarRespuesta() {
     if (respuestaUrl) { URL.revokeObjectURL(respuestaUrl); respuestaUrl = null; }
+    if (saludoUrl) { URL.revokeObjectURL(saludoUrl); saludoUrl = null; }
   }
 
   // Pide el micrófono en cuanto la persona toca el orbe, igual que la app.
@@ -259,12 +261,36 @@
   function pedirNombre() {
     progreso(2);
     burbujaEco('nombre', 'Antes de empezar, cuéntame, ¿cómo te llamas?', () => {
-      escuchar(8, false, () => esperar(300, saludo));
+      escuchar(8, true, conocerNombre, 1400);
     });
   }
 
-  function saludo() {
-    burbujaEco('gusto', 'Mucho gusto. Qué bueno tenerte aquí.', () => esperar(700, pregunta));
+  // Manda el audio del nombre al servidor, que devuelve el saludo hablado con ese nombre.
+  // Si algo falla (sin micrófono, sin conexión, no se entendió), sigue el saludo de siempre.
+  async function conocerNombre(blob) {
+    const mio = epoca;
+    let nombre = null;
+    if (blob && blob.size > 1500) {
+      const corte = new AbortController();
+      const aviso = window.setTimeout(() => corte.abort(), 10000);
+      timers.push(aviso);
+      try {
+        const r = await fetch('/api/demo-nombre', { method: 'POST', headers: { 'Content-Type': blob.type || 'audio/mp4' }, body: blob, signal: corte.signal });
+        if (r.status === 200) {
+          const dicho = decodeURIComponent(r.headers.get('X-Nombre') || '');
+          const audio = await r.blob();
+          if (dicho && audio.size && mio === epoca) { nombre = dicho; saludoUrl = URL.createObjectURL(audio); }
+        }
+      } catch (e) { nombre = null; }
+      window.clearTimeout(aviso);
+    }
+    if (mio !== epoca) return;
+    esperar(300, () => saludo(nombre));
+  }
+
+  function saludo(nombre) {
+    if (nombre && saludoUrl) burbujaEco(saludoUrl, 'Mucho gusto, ' + nombre + '. Qué bueno tenerte aquí.', () => esperar(700, pregunta));
+    else burbujaEco('gusto', 'Mucho gusto. Qué bueno tenerte aquí.', () => esperar(700, pregunta));
   }
 
   function pregunta() {
