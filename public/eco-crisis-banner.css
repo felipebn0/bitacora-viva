@@ -1,9 +1,15 @@
-/* ECO · Banner de recursos de crisis — no intrusivo, cálido, descartable */
+/* ECO · Banner de recursos de crisis — cálido, descartable, y en el centro de la pantalla (encima del orbe) para que no se pueda no ver */
 .eco-crisis-banner {
-  position: relative;
-  width: 100%;
-  max-width: 710px;
-  margin: 0 auto 16px;
+  position: fixed;
+  inset: 0;
+  z-index: 100001;
+  width: calc(100% - 32px);
+  max-width: 460px;
+  height: fit-content;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  margin: auto;
+  box-shadow: 0 0 0 100vmax rgba(35, 30, 20, 0.5), 0 12px 40px rgba(0, 0, 0, 0.3);
   box-sizing: border-box;
   background: #fdf8ee;
   border: 1.5px solid #d4c9a8;
@@ -30,7 +36,7 @@
 }
 .eco-crisis-close:hover { color: #444; }
 .eco-crisis-msg {
-  font-size: .92rem;
+  font-size: 1rem;
   color: #3d3a2e;
   line-height: 1.5;
   margin: 0 0 12px;
@@ -52,7 +58,7 @@
 .eco-crisis-num {
   font-weight: 700;
   color: #293d30;
-  font-size: .95rem;
+  font-size: 1.15rem;
   white-space: nowrap;
 }
 .eco-crisis-label {
