@@ -26,7 +26,7 @@
      de la violación de CSP (font-src 'self') mandaba la IP de cada visita
      a un tercero. Ver public/fonts/fonts.css para el detalle. -->
 <link rel="stylesheet" href="/fonts/fonts.css">
-<script src="/font-size.js"></script>
+<script src="/font-size.js"></script><script src="/eco-orientacion.js?v=1"></script>
 <script src="/eco-telefono.js?v=2"></script>
 <link rel="stylesheet" href="/eco-recordatorio-app.css?v=1">
 <link rel="stylesheet" href="/eco-push-web.css?v=2">
@@ -35,7 +35,7 @@
 <script src="/eco-aviso-aportes.js?v=1" defer></script>
 <script src="/eco-aviso-abierto.js?v=1" defer></script>
 <script src="/eco-saludo.js?v=1" defer></script>
-<script src="/eco-interrupcion.js?v=1" defer></script>
+<script src="/eco-interrupcion.js?v=2" defer></script>
 <style>
   :root {
     --bg: #F5EFE2;
@@ -2515,6 +2515,7 @@
   let esperandoRespuestaPausa = false;
   // La persona tocó "Fin": después del mensaje de cierre la charla termina SIEMPRE, aunque la IA no ponga [FIN].
   let finPedido = false;
+  let cierreEnCurso = false;
   function pausaDebida() {
     return indicePausa < PAUSAS_MIN.length && !!sessionStartTime
       && (Date.now() - sessionStartTime) >= PAUSAS_MIN[indicePausa] * 60 * 1000;
@@ -2799,7 +2800,7 @@
     else if (next === 'error') orbHint = 'Presionar para reintentar';
     else if (!resting) orbHint = 'Presionar para pausar la charla';
     orb.setAttribute('aria-label', orbHint);
-    endBtn.style.display = resting ? 'none' : 'inline';
+    endBtn.style.display = (resting || next === 'paused' || next === 'save-failed' || finPedido || cierreEnCurso) ? 'none' : 'inline';
     // arbolTieneBase === null: todavía no llegó la respuesta de
     // comprobarSiArbolTieneBase() — no se muestra de más mientras tanto.
     treeModeBtn.style.display = (resting && arbolTieneBase === false) ? 'inline' : 'none';
@@ -2876,9 +2877,20 @@
     // el audio del micrófono — al volver, quedaba pegado en "Escuchando…".
     // Cerramos el turno ahí mismo con lo que se haya grabado hasta ese
     // momento, en vez de dejarlo colgado.
-    if (document.visibilityState === 'hidden' && state === 'listening') {
-      stopVoiceActivityDetection();
-      finalizeSpokenAnswer();
+    // Si estaba hablando o pensando, la voz se corta sola al salir y no hay quien siga el turno: se pausa la charla.
+    // Al volver queda en "Presiona para seguir".
+    if (document.visibilityState === 'hidden') {
+      if (finPedido || cierreEnCurso) {
+        if (state === 'thinking' || state === 'speaking') {
+          sessionId += 1;
+          if ('speechSynthesis' in window) speechSynthesis.cancel();
+          if (ttsAudioEl) { try { ttsAudioEl.pause(); } catch (e) {} }
+          finPedido = false;
+          finishSession();
+        }
+      } else if (state === 'listening' || state === 'thinking' || state === 'speaking') {
+        pauseConversation();
+      }
     }
   });
 
@@ -3716,6 +3728,7 @@
       turnIndex += 1;
       const myTurn = turnIndex;
       history.push({ role: 'assistant', content: data.message });
+      if (data.done) { cierreEnCurso = true; endBtn.style.display = 'none'; }
       // Si ECO detectó un riesgo actual (o recomendó una línea de ayuda), los números quedan en pantalla.
       if (window.ecoCrisisAyuda) {
         const ultimaDeLaPersona = [...history].reverse().find((m) => m.role === 'user' && !/^\(/.test(m.content || ''));
@@ -3766,6 +3779,7 @@
     // Segunda vez que toca «Fin» (el cierre ya se pidió): se cierra la charla de una, sin decir nada más.
     const yaSeEstabaCerrando = finPedido;
     finPedido = true;
+    endBtn.style.display = 'none';
     quitarFotoDelOrbe();
     cancelarEspeculacion();
     stopVoiceActivityDetection();
@@ -4102,6 +4116,7 @@
   }
 
   async function finishSession() {
+    cierreEnCurso = false;
     setState('ended', '');
     orbLabel.innerHTML = 'Presiona<br>para otra charla';
     releaseMic();
@@ -4132,6 +4147,7 @@
   function startSession(mode) {
     if (state !== 'idle' && state !== 'ended' && state !== 'save-failed') return;
     finPedido = false;
+    cierreEnCurso = false;
     
     // Si hay datos pendientes, pedir confirmación
     if (pendingSessionLog.length > 0 && state !== 'ended') {

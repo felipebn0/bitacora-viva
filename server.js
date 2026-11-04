@@ -268,7 +268,7 @@ app.get('/api/manifest.json', (req, res) => {
     start_url: codigo ? `/app.html?codigo=${codigo}` : '/app.html',
     scope: '/',
     lang: 'es',
-    orientation: 'portrait',
+    orientation: 'any',
     display: 'standalone',
     background_color: '#F6EEDC', // crema de Eco
     theme_color: '#4F5D3A', // musgo de Eco

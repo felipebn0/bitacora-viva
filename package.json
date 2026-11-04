@@ -13,6 +13,7 @@
     "test:interrupcion": "node test/interrupcion.playwright.js",
     "test:colaborar-otra-historia": "node test/colaborar-otra-historia.playwright.js",
     "test:colaborar-audio-corto": "node test/colaborar-audio-corto.playwright.js",
+    "test:salir-pantalla": "node test/salir-pantalla.playwright.js",
     "test:perfilar-regalo": "node test/perfilar-regalo.playwright.js",
     "test:ingreso": "node test/ingreso.playwright.js",
     "test:pantalla": "node test/pantalla-principal.playwright.js",

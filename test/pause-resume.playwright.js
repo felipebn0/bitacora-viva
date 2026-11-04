@@ -267,7 +267,7 @@ async function scenarioFinConError(browser, base) {
 }
 
 async function scenarioFinDosVeces(browser, base) {
-  console.log('\n--- Escenario 5: "Fin" pide el cierre una sola vez; tocarlo otra vez cierra sin decir nada más ---');
+  console.log('\n--- Escenario 5: "Fin" pide el cierre una sola vez y el botón desaparece ---');
   const { context, page, callCounts, nextCalls } = await setupPage(browser, { transcript: 'algo' });
   await page.goto(base + '/app.html');
   await page.waitForSelector('#orb', { state: 'visible' });
@@ -284,12 +284,12 @@ async function scenarioFinDosVeces(browser, base) {
   await esperarEstado(page, 'thinking');
   assert(nextCalls[nextCalls.length - 1].fin === true, 'el primer «Fin» pide el cierre avisándole al servidor que es un cierre (fin: true)');
   assert(/hemos llegado al fin por hoy|llegamos al final|cerramos por hoy/.test(JSON.stringify(nextCalls[nextCalls.length - 1].history)), 'y le pide empezar con una frase clara de cierre');
+  assert(await page.evaluate(() => getComputedStyle(document.getElementById('endBtn')).display) === 'none', 'apenas toca «Fin», el botón desaparece: ya no hay nada más que terminar');
   const pedidosAntes = callCounts.next;
-  await page.click('#endBtn');
   await esperarEstado(page, 'ended');
-  await page.waitForTimeout(2200);
-  assert(callCounts.next === pedidosAntes, 'el segundo «Fin» no pide nada más: la charla se cierra sin decir ni mostrar nada');
-  assert(await page.evaluate(() => document.getElementById('orb').dataset.state) === 'ended', 'y la charla queda terminada (no vuelve a hablar con el cierre que llegó tarde)');
+  await page.waitForTimeout(500);
+  assert(callCounts.next === pedidosAntes, 'el cierre se pidió una sola vez');
+  assert(await page.evaluate(() => getComputedStyle(document.getElementById('endBtn')).display) === 'none', 'y con la charla terminada el botón sigue oculto');
   await context.close();
 }
 

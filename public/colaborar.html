@@ -12,7 +12,7 @@
      de la violación de CSP (font-src 'self') mandaba la IP de cada visita
      a un tercero. Ver public/fonts/fonts.css para el detalle. -->
 <link rel="stylesheet" href="/fonts/fonts.css">
-<script src="/font-size.js"></script>
+<script src="/font-size.js"></script><script src="/eco-orientacion.js?v=1"></script>
 <style>
   :root {
     --bg: var(--eco-bg, #f7f4eb);
@@ -1133,6 +1133,7 @@
   // silencio — la historia se guardaba sin ella.
   let subidaFotoEnCurso = null;
   let charlaTerminada = false;
+  let pausadoPorSalida = false;
   let esperandoAclaracion = false; // true justo después de que la IA pidió parentesco/año que faltaban
   // Id de la fila en family_notes que se va actualizando turno a turno
   // mientras se cuenta la historia (ver guardarBorradorAporte en el
@@ -1220,6 +1221,9 @@
       aporteMsg.textContent = data.saved ? '✓ Historia guardada. Gracias. Si quieres añadir otra historia, toca el círculo.' : '⚠️ La charla terminó, pero hubo un problema para guardarla.';
       otraHistoriaBtn.style.display = 'inline-block';
       if (data.saved) { cargarAportes(); }
+    } else if (pausadoPorSalida) {
+      recStatus.textContent = 'En pausa — presiona el círculo para seguir.';
+      reactivarOrbeTrasError();
     } else if (interaccionReal) {
       await empezarGrabacion();
     }
@@ -1294,9 +1298,11 @@
       // cerrando todo, aunque la historia sí se había guardado.
       if (data.done) {
         await manejarDesenlaceDeTurno(data);
-        try { speak(data.message, () => {}); } catch (e) {}
+        if (!pausadoPorSalida) { try { speak(data.message, () => {}); } catch (e) {} }
         return true;
       }
+
+      if (pausadoPorSalida) { await manejarDesenlaceDeTurno(data); return true; }
 
       orb.dataset.state = 'speaking';
       orb.innerHTML = '···';
@@ -1333,6 +1339,12 @@
   }
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && !charlaTerminada && historyLocal.length) requestWakeLock();
+    if (document.visibilityState === 'hidden' && !charlaTerminada) {
+      const estado = orb.dataset.state;
+      if (estado === 'listening' || estado === 'thinking' || estado === 'speaking') pausadoPorSalida = true;
+      if (grabando) terminarGrabacion();
+      else if (estado === 'speaking') cortarVoz();
+    }
   });
 
   function iniciarAporte() {
@@ -1574,18 +1586,34 @@
     return resp.blob();
   }
 
+  let vozId = 0;
+  let resolverAudioActual = null;
+  function cortarVoz() {
+    vozId += 1;
+    if (ttsAudioEl) { try { ttsAudioEl.pause(); } catch (e) {} }
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+    if (resolverAudioActual) { const r = resolverAudioActual; resolverAudioActual = null; r(); }
+    if (cierreVozPendiente) { const c = cierreVozPendiente; cierreVozPendiente = null; c(); }
+  }
+  let cierreVozPendiente = null;
+
   function reproducirBlob(blob) {
     return new Promise((resolve, reject) => {
       const url = URL.createObjectURL(blob);
       if (!ttsAudioEl) ttsAudioEl = new Audio();
       ttsAudioEl.src = url;
-      ttsAudioEl.onended = () => { URL.revokeObjectURL(url); resolve(); };
+      resolverAudioActual = () => { URL.revokeObjectURL(url); resolve(); };
+      ttsAudioEl.onended = () => { URL.revokeObjectURL(url); resolverAudioActual = null; resolve(); };
       ttsAudioEl.onerror = () => { URL.revokeObjectURL(url); reject(new Error('audio')); };
       ttsAudioEl.play().catch((e) => { URL.revokeObjectURL(url); reject(e); });
     });
   }
 
-  async function speak(text, onEnd) {
+  async function speak(text, alTerminar) {
+    let terminado = false;
+    const onEnd = alTerminar ? () => { if (terminado) return; terminado = true; alTerminar(); } : null;
+    const miVoz = ++vozId;
+    cierreVozPendiente = onEnd;
     const partes = dividirParaVoz(text);
     const pedidos = partes.map((parte) => pedirVoz(parte)); // en paralelo
     pedidos.forEach((pedido) => pedido.catch(() => {}));
@@ -1593,13 +1621,17 @@
     try {
       for (let i = 0; i < pedidos.length; i++) {
         const blob = await pedidos[i];
+        if (miVoz !== vozId) return;
         await reproducirBlob(blob);
+        if (miVoz !== vozId) return;
         ya = i + 1;
       }
     } catch (err) {
+      if (miVoz !== vozId) return;
       speakWithSystemVoice(partes.slice(ya).join(' ') || text, onEnd);
       return;
     }
+    cierreVozPendiente = null;
     if (onEnd) onEnd();
   }
 
@@ -1620,6 +1652,7 @@
   async function empezarGrabacion() {
     if (charlaTerminada || grabando || iniciandoGrabacion) return;
     interaccionReal = true;
+    pausadoPorSalida = false;
     // Ahora esto también se llama SOLO (sin click, ver
     // manejarDesenlaceDeTurno) para seguir la charla — un botón
     // deshabilitado no bloquea una llamada por código como sí bloquea un

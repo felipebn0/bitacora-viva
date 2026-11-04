@@ -29,10 +29,10 @@ ok(correr([[GOLPE, 0.4, 150, false], [0.01, 0.5, 3000, false]]) === null, 'un go
 ok(correr([[0.15, VOZ, 300, true], [0.01, 0.5, 3000, true]]) === null, 'una tos de 0,3 segundos mientras Eco habla no interrumpe');
 
 const pensando = correr([[0.01, 0.5, 1000, false], [0.12, VOZ, 2000, false]]);
-ok(pensando !== null && pensando - 1000 >= 300 && pensando - 1000 <= 450, 'mientras Eco piensa, una voz que se sostiene interrumpe en menos de medio segundo');
+ok(pensando !== null && pensando - 1000 >= 250 && pensando - 1000 <= 400, 'mientras Eco piensa, una voz que se sostiene interrumpe en menos de medio segundo');
 
 const hablando = correr([[0.01, 0.5, 500, false], [0.05, VOZ, 4000, true], [0.2, VOZ, 2000, true]]);
-ok(hablando !== null && hablando >= 4500 + 350 && hablando <= 4500 + 550, 'mientras Eco habla, la voz de la persona por encima de la fuga interrumpe a los ~0,4 s');
+ok(hablando !== null && hablando >= 4500 + 250 && hablando <= 4500 + 450, 'mientras Eco habla, la voz de la persona por encima de la fuga interrumpe a los ~0,3 s');
 
 ok(correr([[0.05, VOZ, 8000, true]]) === null, 'el eco de la propia voz de Eco por el altavoz no la interrumpe');
 ok(correr([[0.11, VOZ, 8000, true]]) === null, 'ni siquiera cuando el altavoz suena fuerte');

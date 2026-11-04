@@ -1,0 +1,12 @@
+.eco-gira {
+  position: fixed; inset: 0; z-index: 2147483647;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; padding: 24px; text-align: center;
+  background: #F6EEDC; color: #3E3A2A;
+  font-family: 'Atkinson Hyperlegible', system-ui, sans-serif;
+}
+.eco-gira[hidden] { display: none; }
+.eco-gira p { margin: 0; }
+.eco-gira-icono { font-size: 2.4rem; }
+.eco-gira-titulo { font-size: 1.3rem; font-weight: 700; }
+.eco-gira-texto { font-size: 1rem; }

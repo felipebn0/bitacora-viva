@@ -1,15 +1,15 @@
 /* Decide si lo que oye el micrófono mientras Eco piensa o habla es la persona queriendo seguir (y entonces Eco se calla)
  * o solo ruido: un ventilador, un golpe, una tos, el eco de la propia voz de Eco por el altavoz.
  * Una voz cuenta cuando suena más fuerte que el ruido de fondo (y que la fuga de Eco), tiene su energía en el rango de la voz
- * humana y se sostiene unos 0,4 segundos. No distingue una voz de otra: una televisión con gente hablando sí cuenta.
+ * humana y se sostiene unos 0,3 segundos. No distingue una voz de otra: una televisión con gente hablando sí cuenta.
  */
 (function (raiz) {
   'use strict';
 
-  const UMBRAL_MIN = 0.04;
+  const UMBRAL_MIN = 0.03;
   const RATIO_VOZ_MIN = 0.5;
-  const MS_VOZ_PENSANDO = 300;
-  const MS_VOZ_HABLANDO = 400;
+  const MS_VOZ_PENSANDO = 250;
+  const MS_VOZ_HABLANDO = 300;
   const MS_CALIBRACION_ECO = 600;
   // La fuga de Eco por el altavoz nunca se da por más de esto: si la persona ya estaba hablando cuando Eco empezó, su voz
   // no puede subir el umbral hasta dejarla sin poder interrumpir.
