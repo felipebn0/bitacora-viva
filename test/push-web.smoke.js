@@ -154,7 +154,7 @@ async function login(server, username) {
     r = await request(server, { path: '/api/contribute-story', method: 'POST', body: { contributor: 'Ana', parentesco: 'hija', text: 'Recuerdo la finca en Boyacá, donde pasábamos las vacaciones de diciembre con toda la familia reunida alrededor de la mesa.' } }, colab);
     ok(r.status === 200, 'la colaboradora aporta una historia (200)');
     ok(enviados.length === 1 && enviados[0].endpoint === 'https://push.example/dueña-1', 'el aviso llega a la dueña y a nadie más');
-    ok(enviados[0] && /Ana/.test(enviados[0].carga.body) && enviados[0].carga.url === '/colaboraciones.html', 'el aviso dice quién aportó y lleva a Colaboración');
+    ok(enviados[0] && /Ana/.test(enviados[0].carga.body) && enviados[0].carga.url === '/app.html', 'el aviso dice quién aportó y lleva a la app principal');
 
     // Suscripción vencida
     fallarCon = { endpoint: 'https://push.example/dueña-1', codigo: 410 };

@@ -41,8 +41,8 @@ for (const [n, h] of [['privacidad', priv], ['terminos', term]]) {
   ok(!/<script(?![^>]*\ssrc=)[^>]*>/.test(h), `${n}: sin scripts inline`);
 }
 
-// --- Las dos landings de la prueba A/B ---
-for (const f of ['index.html', 'index-v2.html', 'index-voces.html', 'index-v2-voces.html']) {
+// --- La landing de "/", la anterior y las alternas ---
+for (const f of ['index.html', 'index-anterior.html', 'index-v2.html', 'index-voces.html', 'index-v2-voces.html']) {
   const h = pub(f);
   ok(h.includes('href="/privacidad.html"') && h.includes('href="/terminos.html"'), `${f}: enlaza a la política y a los términos`);
   ok(/<input id="suTerms" name="acceptTerms" type="checkbox" required>/.test(h), `${f}: casilla de aceptación obligatoria`);
@@ -64,8 +64,8 @@ const cuerpoV2 = v2.slice(v2.indexOf('<main'), v2.indexOf('</main>'));
 ok(!/morir|muert|falleci|extrañar|se apag|última vez|mientras todavía/i.test(cuerpoV2), 'v2: el texto no gira alrededor de la muerte ni de la pérdida');
 ok(/noindex/.test(v2), 'v2: sigue con noindex');
 
-// --- V1 (control): también lleva la sección de casos de uso ---
-const v1 = pub('index.html');
+// --- V1 (la landing anterior, control): también lleva la sección de casos de uso ---
+const v1 = pub('index-anterior.html');
 const bloquePara1 = v1.indexOf('<section id="para-quien">') === -1 ? '' : v1.slice(v1.indexOf('<section id="para-quien">'), v1.indexOf('<section id="familia">'));
 ok((bloquePara1.match(/class="family-card"/g) || []).length === 3, 'v1: tiene la sección de casos de uso con tres tarjetas');
 ok(bloquePara1 === bloquePara, 'v1 y v2: la sección de casos de uso es idéntica en las dos landings');

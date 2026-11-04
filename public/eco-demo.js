@@ -362,7 +362,7 @@
           alTocarOrbe = () => inicio();
           const fila = el('div', 'demo-eco__fila');
           const crear = el('a', 'btn btn-primary', 'Guardar su primera historia');
-          crear.href = '/index-portada.html#registro-form';
+          crear.href = '/#registro-form';
           fila.appendChild(crear);
           accion.appendChild(fila);
         });

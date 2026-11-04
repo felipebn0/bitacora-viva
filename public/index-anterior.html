@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <!-- Versión alterna de index.html con portada de foto a pantalla completa y secuencia de fotos al bajar. No entra en la prueba A/B de "/" y no se indexa: se abre por su dirección. -->
+  <!-- Landing anterior de Eco (la de "/" hasta el 2026-11-03), guardada para volver a ella si hace falta. No se indexa: se abre por su dirección. -->
   <meta name="robots" content="noindex, nofollow">
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Eco — Historias que siguen vivas</title>
@@ -14,7 +14,6 @@
        antes venían de fonts.googleapis.com/fonts.gstatic.com, lo que además
        de la violación de CSP (font-src 'self') mandaba la IP de cada visita
        a un tercero. Ver public/fonts/fonts.css para el detalle. -->
-  <link rel="preload" as="image" href="/images/portada/abuelo.jpg" fetchpriority="high">
   <link rel="stylesheet" href="/fonts/fonts.css">
   <script src="/font-size.js"></script>
   <style>
@@ -577,8 +576,6 @@
     .pc-a2ef1fee{width:30px !important; height:30px !important;}
 </style>
 <link rel="stylesheet" href="/eco-v5.css?v=6">
-<link rel="stylesheet" href="/eco-portada.css?v=9">
-<link rel="stylesheet" href="/eco-popup.css?v=1">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Saltar al contenido</a>
@@ -594,7 +591,11 @@
         <button type="button" id="navFontIncBtn" aria-label="Agrandar la letra">A+</button>
       </div>
       <div class="nav-links">
-        <a href="/como-funciona.html">Cómo funciona</a>
+        <a href="#como-funciona">Cómo funciona</a>
+        <a href="#mi-libro">Mi libro</a>
+        <a href="#arbol-familiar">Árbol familiar</a>
+        <a href="#familia">Familia</a>
+        <a href="#privacidad">Privacidad</a>
         <a href="/app.html" class="nav-login">Iniciar sesión</a>
         <a class="btn btn-primary nav-cta" href="#registro-form">Crear cuenta</a>
       </div>
@@ -602,57 +603,109 @@
   </nav>
 
   <main id="main-content" tabindex="-1">
-<section class="hero portada-hero" id="inicio">
-      <img class="portada-hero__foto" src="/images/portada/abuelo.jpg" width="1376" height="768" fetchpriority="high" decoding="async" alt="Un abuelo sentado junto a la chimenea cuenta una historia moviendo las manos">
-      <div class="wrap portada-hero__texto">
-        <div class="eyebrow">Para guardar la voz de tus papás y abuelos</div>
-        <h1>Las historias de tu familia merecen <em>seguir vivas.</em></h1>
-        <p>Siéntate con tus papás o abuelos. Eco les hace las preguntas y guarda su voz, para que tu familia pueda volver a escucharlos.</p>
-        <div class="hero-actions">
-          <a class="btn btn-primary" href="#registro-form">Empezar gratis</a>
-          <a class="btn btn-secondary" href="/como-funciona.html">Ver cómo funciona</a>
+    <section class="hero" id="inicio">
+      <div class="wrap hero-grid">
+        <div class="hero-copy reveal">
+          <div class="eyebrow">Un legado contado con tu propia voz</div>
+          <h1>Las historias de tu familia merecen <em>seguir vivas.</em></h1>
+          <p>Conserva las voces, recuerdos e historias de tu familia en un solo lugar.</p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#registro-form">Crear mi cuenta</a>
+            <a class="btn btn-secondary" href="#como-funciona">Ver cómo funciona ↓</a>
+          </div>
+          <div class="trust-row">
+            <span><i class="dot"></i> Conversa por voz</span>
+            <span><i class="dot"></i> Conserva recuerdos</span>
+            <span><i class="dot"></i> Involucra a tu familia</span>
+          </div>
         </div>
-        <div class="trust-row">
-          <span><i class="dot"></i> Gratis por ahora</span>
-          <span><i class="dot"></i> Conversa por voz</span>
-          <span><i class="dot"></i> Invita a tu familia</span>
+
+        <div class="hero-device-wrap reveal">
+          <div class="memory-chip chip-a"><strong>Nuevo recuerdo</strong>“La casa de los abuelos...”</div>
+          <div class="memory-chip chip-b"><strong>Historia guardada</strong>Infancia · 4 min de audio</div>
+          <div class="device">
+            <div class="device-top">
+              <div class="device-title">Eco</div>
+              <div class="device-icons"><span class="mini-icon">🌳</span><span class="mini-icon">📖</span></div>
+            </div>
+            <div class="demo-panel">
+              <span class="demo-badge">Demostración visual</span>
+              <div class="demo-kicker">Una conversación. Un recuerdo que queda.</div>
+              <button class="orb" id="demoOrb" aria-label="Probar demostración visual (no graba audio real)"><span id="orbText">Presiona<br>para hablar</span></button>
+              <div class="demo-state" id="demoState">Prueba el botón — es solo un ejemplo</div>
+              <div class="demo-question" id="demoQuestion">“Quiero guardar una historia de mi familia.”</div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
 
-<section class="portada-bloque portada-bloque--album" aria-labelledby="portadaAlbum">
-      <img class="portada-bloque__foto" src="/images/portada/album.jpg" width="896" height="768" loading="lazy" decoding="async" alt="Unas manos mayores sostienen una fotografía antigua de una familia sobre un álbum viejo">
-      <div class="wrap portada-bloque__texto">
-        <div class="eyebrow reveal">Lo que queda</div>
-        <h2 id="portadaAlbum" class="reveal">Las fotos guardan caras. Casi nadie guardó <em>las historias.</em></h2>
-        <p class="reveal">¿Quién era la mujer del retrato? ¿De qué se reía tu abuelo? Si nadie lo cuenta, la foto se queda muda.</p>
-      </div>
-    </section>
-
-<section class="portada-bloque portada-bloque--escucha" aria-labelledby="portadaEscucha">
-      <img class="portada-bloque__foto" src="/images/portada/escucha.jpg" width="1376" height="768" loading="lazy" decoding="async" alt="Una madre y su hijo escuchan con atención a un familiar que les cuenta algo en la sala">
-      <div class="wrap portada-bloque__texto">
-        <div class="eyebrow reveal">Solo hace falta preguntar</div>
-        <h2 id="portadaEscucha" class="reveal">Basta con que alguien <em>pregunte.</em></h2>
-        <p class="reveal">Eco hace las preguntas con calma y escucha. Tu familiar solo tiene que hablar.</p>
-      </div>
-    </section>
-
-    <section class="problem problem--bajo">
-      <div class="wrap reveal">
-        <div class="questions">
+    <section class="problem">
+      <div class="wrap problem-grid">
+        <div class="reveal">
+          <div class="eyebrow pc-f1b4ce9c">Lo que no se pregunta, puede perderse</div>
+          <h2>Hay historias que solo existen mientras alguien pueda contarlas.</h2>
+        </div>
+        <div class="reveal">
+          <div class="questions">
             <div class="question-card">“¿Cómo conociste a mamá?”</div>
             <div class="question-card">“¿Cómo eran tus papás cuando eras niño?”</div>
             <div class="question-card">“¿Cuál fue uno de los días más importantes de tu vida?”</div>
             <div class="question-card">“¿Qué historia quieres que nunca olvidemos?”</div>
-        <p class="problem-note">Eco te ayuda a hacer esas preguntas hoy, para volver a escuchar sus respuestas mañana.</p>
+          </div>
+          <p class="problem-note">ECO te ayuda a hacer esas preguntas hoy, para volver a escuchar sus respuestas mañana.</p>
+        </div>
       </div>
     </section>
 
-<section class="portada-voz">
+    <section id="como-funciona">
+      <div class="wrap">
+        <div class="section-head reveal">
+          <div class="eyebrow">Cómo funciona</div>
+          <h2>Hablar es suficiente.</h2>
+          <p>Solo empieza a hablar. ECO te ayuda a conservar cada recuerdo.</p>
+        </div>
+        <div class="steps-grid">
+          <article class="step reveal"><div class="step-num">01</div><h3>Conversa</h3><p>Presiona un botón y empieza a hablar. La app escucha, hace preguntas y sigue el hilo de forma natural.</p></article>
+          <article class="step reveal"><div class="step-num">02</div><h3>Construye la historia</h3><p>Nombres, lugares, relaciones, etapas de vida y anécdotas comienzan a formar una memoria familiar organizada.</p></article>
+          <article class="step reveal"><div class="step-num">03</div><h3>Vuelve a ella</h3><p>Escucha los audios, recorre capítulos y pregúntale a la app por personas, momentos o recuerdos ya contados.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="product" id="producto">
+      <div class="wrap">
+        <div class="section-head center reveal">
+          <div class="eyebrow pc-9b54a373">Una memoria que se puede explorar</div>
+          <h2>No es un archivo. Es una historia viva.</h2>
+          <p>Las conversaciones pueden convertirse en recuerdos consultables, capítulos y conexiones familiares.</p>
+        </div>
+        <div class="product-window reveal">
+          <div class="window-bar"><div class="traffic"><i></i><i></i><i></i></div><span class="quiet">Charla familiar</span><span>•••</span></div>
+          <div class="window-content">
+            <div class="conversation">
+              <div class="bubble q">Cuéntame de la casa donde creciste.</div>
+              <div class="bubble a">Era una casa pequeña, pero siempre estaba llena de gente. Mi mamá cocinaba los domingos y mis hermanos llegaban desde temprano...</div>
+              <div class="bubble q">¿Hay algún domingo que recuerdes especialmente?</div>
+              <div class="bubble a">Sí. El día que mi hermano volvió después de varios años. Nadie sabía que venía.</div>
+              <div class="audio-card"><button class="play" id="playDemo" aria-label="Vista previa visual — este ejemplo no tiene audio real">▶</button><div><strong>Así se guarda un recuerdo con audio</strong><div class="quiet pc-1e28117f">Vista previa · sin audio</div></div><div class="wave" id="waveDemo"></div></div>
+            </div>
+            <aside class="story-side">
+              <h3>Mi libro</h3>
+              <div class="chapter"><small>Capítulo 01</small><b>La casa donde crecimos</b></div>
+              <div class="chapter"><small>Capítulo 02</small><b>Conocer a mamá</b></div>
+              <div class="chapter"><small>Capítulo 03</small><b>El primer trabajo</b></div>
+              <div class="tree-mini"><div class="quiet pc-fa3e1c7d">Árbol familiar</div><div class="tree-row"><span class="person">Abuelo</span><span class="arrow">→</span><span class="person">Papá</span><span class="arrow">→</span><span class="person">Hijos</span></div></div>
+            </aside>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
       <div class="wrap voice-grid">
         <div class="voice-art reveal">
-          <img class="portada-retrato" src="/images/portada/retrato.jpg" width="520" height="520" loading="lazy" decoding="async" alt="Un abuelo sonriendo mientras cuenta una historia en su sala">
+          <div class="portrait" role="img" aria-label="Representación abstracta de un retrato familiar"></div>
           <div class="voice-wave"><button class="play" aria-label="Vista previa visual — este ejemplo no tiene audio real">▶</button><div class="wave"></div></div>
         </div>
         <div class="voice-copy reveal">
@@ -664,12 +717,42 @@
       </div>
     </section>
 
-<section class="portada-teaser" id="como-funciona">
+    
+<!-- ECO V5: visual demos only, no family data, no hidden registration logic -->
+<section class="eco5-feature eco5-book" id="mi-libro" aria-labelledby="eco5BookHeading">
+ <div class="wrap eco5-grid reverse">
+  <div class="eco5-stage eco5-motion">
+   <div><div class="eco5-openbook" aria-label="Ilustración de un libro de recuerdos">
+    <div class="eco5-page"><small>Mi libro · Capítulo 01</small><h3>La casa donde crecimos</h3><p>"Los domingos eran para reunirnos. Cada comida traía una historia nueva..."</p><div class="eco5-audio"><span class="eco5-play" aria-hidden="true">▶</span><span class="eco5-wave" aria-hidden="true"></span><span>02:14</span></div></div>
+    <div class="eco5-page"><div class="eco5-photo" role="img" aria-label="Siluetas ilustrativas de dos familiares"><span></span><span></span></div><small class="pc-mt16">Las historias de nuestra familia</small></div>
+   </div><p class="eco5-caption">Vista ilustrativa de Mi libro · No contiene recuerdos reales</p></div>
+  </div>
+  <div class="eco5-copy eco5-motion"><p class="eco5-overline">Tus recuerdos en capítulos</p><h2 id="eco5BookHeading">Mi libro, una historia que sigue creciendo.</h2><p>Las conversaciones se convierten en capítulos que puedes leer y volver a escuchar. Cada recuerdo encuentra su lugar.</p><a class="btn btn-primary" href="#registro-form">Comenzar mi libro →</a></div>
+ </div>
+</section>
+<section class="eco5-feature eco5-tree" id="arbol-familiar" aria-labelledby="eco5TreeHeading">
+ <div class="wrap eco5-grid">
+  <div class="eco5-copy eco5-motion"><p class="eco5-overline">Personas, recuerdos, generaciones</p><h2 id="eco5TreeHeading">Tu historia también tiene un árbol.</h2><p>Conecta a los familiares, consulta sus vínculos y descubre cómo cada historia forma parte de algo más grande.</p><a class="btn btn-primary" href="#registro-form">Conocer mi árbol →</a></div>
+  <div class="eco5-stage eco5-motion"><div class="eco5-family-card" aria-label="Ejemplo visual de un árbol familiar">
+    <div class="eco5-family-head"><strong>Árbol familiar</strong><span class="eco5-tag">Ejemplo</span></div>
+    <div class="eco5-relatives"><div class="eco5-relative"><span class="eco5-avatar">P</span><span><strong>Papá</strong><small>Familia paterna</small></span></div><div class="eco5-relative"><span class="eco5-avatar">M</span><span><strong>Mamá</strong><small>Familia materna</small></span></div></div>
+    <div class="eco5-connect" aria-hidden="true"></div><div class="eco5-relative eco5-you"><span class="eco5-avatar">Y</span><span><strong>Tú</strong><small>Persona principal</small></span></div>
+    <div class="eco5-branches"><span>Abuelos</span><span>Hermanos</span><span>Tíos y tías</span></div>
+    <p class="eco5-caption">Ilustración conceptual, no datos de una familia real.</p>
+  </div></div>
+ </div>
+</section>
+<section class="eco5-ai" id="inteligencia-familiar" aria-labelledby="eco5AiHeading"><div class="wrap eco5-grid reverse">
+ <div class="eco5-ai-card eco5-motion"><span class="eco5-ai-chip">Posible conexión familiar</span><blockquote>"Mi papá siempre contaba historias de su abuelo..."</blockquote><div class="eco5-proposal">ECO puede sugerir un parentesco para que lo revises.</div><div class="eco5-check">✓ La decisión de confirmar es siempre tuya.</div></div>
+ <div class="eco5-copy eco5-motion"><p class="eco5-overline">Historias que se conectan</p><h2 id="eco5AiHeading">Los recuerdos pueden revelar vínculos.</h2><p>Al contar historias, ECO puede detectar posibles relaciones familiares. Tú revisas la información y decides qué guardar.</p><a class="btn btn-secondary" href="#como-funciona">Ver cómo funciona ↓</a></div>
+</div></section>
+
+<section id="para-quien">
       <div class="wrap">
         <div class="section-head center reveal">
-          <div class="eyebrow">Cómo funciona</div>
-          <h2>Hablar es suficiente.</h2>
-          <p>Presionas un botón, cuentas el recuerdo y Eco te hace las preguntas. Después vuelves a escucharlo cuando quieras. Una misma cuenta, tres formas de usarla.</p>
+          <div class="eyebrow pc-9b54a373">Para quién es</div>
+          <h2>Para quien tiene mucho que contar. Y para quien quiere escucharlo.</h2>
+          <p>Una misma bitácora, tres formas de usarla. Empieza por la que más te llame.</p>
         </div>
         <div class="family-cards reveal">
           <div class="family-card">
@@ -688,7 +771,38 @@
             <p class="pc-166017f1">Ve contando su historia desde que son bebés: las primeras palabras, los primeros pasos, las anécdotas de cada etapa. Cuando crezcan, van a tener un libro con la voz de quien los vio crecer, para saber cómo fueron de pequeños.</p>
           </div>
         </div>
-        <p class="portada-teaser__mas reveal"><a class="btn btn-secondary" href="/como-funciona.html">Ver cómo funciona</a></p>
+      </div>
+    </section>
+
+    <section id="familia">
+      <div class="wrap">
+        <div class="section-head center reveal">
+          <div class="eyebrow pc-9b54a373">Una historia de todos</div>
+          <h2>Esta historia la construimos entre todos.</h2>
+          <p>Invita a tu familia a contar, escuchar y conservar recuerdos juntos.</p>
+        </div>
+        <div class="family-cards reveal">
+          <div class="family-card">
+            <div class="pc-6899e93a">📲</div>
+            <b class="pc-f3b0f625">Un link, directo por WhatsApp</b>
+            <p class="pc-166017f1">Cada bitácora tiene su propio código — lo mandas con un toque, listo para compartir con quien quieras.</p>
+          </div>
+          <div class="family-card">
+            <div class="pc-6899e93a">🎙️</div>
+            <b class="pc-f3b0f625">Entran y hablan, sin crear cuenta</b>
+            <p class="pc-166017f1">Tocan el link, dicen su nombre una vez, y una entrevistadora los va guiando — sin correo, sin clave, sin formularios. También pueden sumar fotos, videos o una nota de voz que ya tengan guardada.</p>
+          </div>
+          <div class="family-card">
+            <div class="pc-6899e93a">🔒</div>
+            <b class="pc-f3b0f625">Nunca se cuela nadie de afuera</b>
+            <p class="pc-166017f1">Solo entran las personas que invites — nadie más puede crearse una cuenta y llegar a tu bitácora.</p>
+          </div>
+          <div class="family-card">
+            <div class="pc-6899e93a">🤝</div>
+            <b class="pc-f3b0f625">Puedes tener la tuya y ayudar en otras</b>
+            <p class="pc-166017f1">Tu propia bitácora y, con un código, colaborar en la historia de alguien más — sin cerrar sesión ni crear otra cuenta.</p>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -701,14 +815,13 @@
          y sigue apuntando aquí — con el registro más arriba, ese link ahora
          scrollea hacia ARRIBA en vez de hacia abajo, cosa normal en
          cualquier navegador. -->
-    <section class="registro portada-registro" id="registro">
-      <img class="portada-registro__foto" src="/images/portada/familia.jpg" width="1376" height="768" loading="lazy" decoding="async" alt="Un abuelo cuenta una historia en la sala mientras sus hijos y nietos lo escuchan junto a la chimenea">
+    <section class="registro" id="registro">
       <div class="wrap">
         <div class="registro-box reveal">
           <div class="registro-copy">
-            <div class="eyebrow pc-f1b4ce9c">Para los que vienen después</div>
-            <h2>Y un día, todos pueden volver a escucharlas.</h2>
-            <p>Su voz, sus palabras y su risa, guardadas para tu familia. Crea tu cuenta en menos de un minuto: con nombre, correo y clave alcanza.</p>
+            <div class="eyebrow pc-f1b4ce9c">Empieza hoy</div>
+            <h2>Crea tu cuenta en menos de un minuto.</h2>
+            <p>Con nombre, correo y clave alcanza. En cuanto te registres entras directo a la herramienta y puedes empezar la primera charla.</p>
             <div class="registro-points">
               <span><i></i> Tus recuerdos quedan listos para volver a ellos cuando quieras.</span>
               <span><i></i> Comparte tu código y arma esta historia entre todos.</span>
@@ -838,7 +951,17 @@
       </div>
     </section>
 
-<section class="privacy" id="privacidad">
+    <!-- "Próximamente" vivió antes justo antes del CTA final (diluía la
+         conversión: alguien por registrarse volvía a leer "esto todavía
+         no existe" justo antes de decidirse), después justo después de
+         "Cómo funciona" (pero ahí seguía quedando ANTES de mostrar
+         producto/voz/familia), y después de familia (auditoría UX
+         2026-09-06). Ahora el registro se movió justo antes de aquí
+         (auditoría UX 2026-09-07) — Próximamente sigue después de mostrar
+         lo que la app YA hace Y después de la oportunidad de registrarse;
+         quien no está listo para registrarse todavía sigue viendo esto,
+         privacidad y preguntas antes del cierre final. -->
+    <section class="privacy" id="privacidad">
       <div class="wrap">
         <div class="privacy-box reveal">
           <div><div class="eyebrow pc-f1b4ce9c">Recuerdos personales</div><h2>Tu historia tiene que sentirse tuya.</h2><p>Lo que se guarda aquí son voces, recuerdos y relaciones familiares — no un dato cualquiera. Por eso la privacidad no es un detalle secundario, es la base de todo lo demás.</p><p><a class="pc-f1b4ce9c" href="/privacidad.html">Leer la Política de Privacidad completa →</a></p><p><a class="pc-f1b4ce9c" href="/terminos.html">Leer los Términos y Condiciones →</a></p></div>
@@ -851,35 +974,23 @@
                juntas las que ya decían cosas parecidas. El detalle completo
                de cada una sigue estando en las preguntas frecuentes. -->
           <div class="privacy-list">
-            <details class="privacy-item"><summary>🔒 Tus audios, fotos y videos son privados</summary><p>Se guardan en almacenamiento privado y no existe un enlace público para abrirlos (la única excepción son los códigos QR de tu libro, si tú decides crearlos: quien los escanee puede escuchar esas grabaciones). Cada vez que se pide un archivo, la app comprueba primero que iniciaste sesión y que tienes permiso sobre esa bitácora, y solo entonces lo entrega.</p></details>
-            <details class="privacy-item"><summary>👨‍👩‍👧 Solo entra quien tú invitas</summary><p>Nadie ve tu bitácora sin el código de invitación que tú generas — ni siquiera creándose una cuenta nueva por su cuenta. Puedes cambiar el código cuando quieras para cerrar ese acceso.</p></details>
-            <details class="privacy-item"><summary>🤫 Nadie de nuestro equipo lee ni escucha tus historias</summary><p>No es parte de cómo funciona la app. Solo accederíamos a tu contenido si tú nos lo pides para ayudarte con un problema, o si una autoridad competente lo exige por ley.</p></details>
-            <details class="privacy-item"><summary>🚫 No vendemos tus datos ni mostramos publicidad</summary><p>Tus historias no se venden, no se publican y no se usan para publicidad. Tampoco usamos cookies de seguimiento de terceros.</p></details>
-            <details class="privacy-item"><summary>🤖 Quién procesa tu voz y tus palabras</summary><p>Para funcionar, el texto de tus charlas pasa por Claude (Anthropic) y tu voz por ElevenLabs: así te hacen preguntas, transcriben lo que dices y te hablan. Según los términos comerciales de Anthropic, lo enviado por este canal no se usa para entrenar sus modelos. Todos los proveedores que usamos están nombrados en la Política de Privacidad.</p></details>
-            <details class="privacy-item"><summary>🔐 Tu clave nunca queda expuesta</summary><p>La tuya nunca se guarda en texto plano: se guarda como un hash de un solo sentido, así que ni siquiera nosotros podemos leerla ni revertirla. Toda la conexión va cifrada por HTTPS.</p></details>
-            <details class="privacy-item"><summary>🗑️ Tú tienes el control</summary><p>Puedes descargar todo y borrarlo cuando quieras, desde el menú de Cuenta, con una acción tuya deliberada — nada se borra por accidente. Al confirmar, se borra de la base de datos y del almacenamiento de audios y fotos; puede quedar un tiempo limitado en copias de respaldo de nuestros proveedores, nunca para volver a mostrar tu contenido.</p></details>
+            <details class="privacy-item" open><summary>🔒 Tus audios, fotos y videos son privados</summary><p>Se guardan en almacenamiento privado y no existe un enlace público para abrirlos (la única excepción son los códigos QR de tu libro, si tú decides crearlos: quien los escanee puede escuchar esas grabaciones). Cada vez que se pide un archivo, la app comprueba primero que iniciaste sesión y que tienes permiso sobre esa bitácora, y solo entonces lo entrega.</p></details>
+            <details class="privacy-item" open><summary>👨‍👩‍👧 Solo entra quien tú invitas</summary><p>Nadie ve tu bitácora sin el código de invitación que tú generas — ni siquiera creándose una cuenta nueva por su cuenta. Puedes cambiar el código cuando quieras para cerrar ese acceso.</p></details>
+            <details class="privacy-item" open><summary>🤫 Nadie de nuestro equipo lee ni escucha tus historias</summary><p>No es parte de cómo funciona la app. Solo accederíamos a tu contenido si tú nos lo pides para ayudarte con un problema, o si una autoridad competente lo exige por ley.</p></details>
+            <details class="privacy-item" open><summary>🚫 No vendemos tus datos ni mostramos publicidad</summary><p>Tus historias no se venden, no se publican y no se usan para publicidad. Tampoco usamos cookies de seguimiento de terceros.</p></details>
+            <details class="privacy-item" open><summary>🤖 Quién procesa tu voz y tus palabras</summary><p>Para funcionar, el texto de tus charlas pasa por Claude (Anthropic) y tu voz por ElevenLabs: así te hacen preguntas, transcriben lo que dices y te hablan. Según los términos comerciales de Anthropic, lo enviado por este canal no se usa para entrenar sus modelos. Todos los proveedores que usamos están nombrados en la Política de Privacidad.</p></details>
+            <details class="privacy-item" open><summary>🔐 Tu clave nunca queda expuesta</summary><p>La tuya nunca se guarda en texto plano: se guarda como un hash de un solo sentido, así que ni siquiera nosotros podemos leerla ni revertirla. Toda la conexión va cifrada por HTTPS.</p></details>
+            <details class="privacy-item" open><summary>🗑️ Tú tienes el control</summary><p>Puedes descargar todo y borrarlo cuando quieras, desde el menú de Cuenta, con una acción tuya deliberada — nada se borra por accidente. Al confirmar, se borra de la base de datos y del almacenamiento de audios y fotos; puede quedar un tiempo limitado en copias de respaldo de nuestros proveedores, nunca para volver a mostrar tu contenido.</p></details>
           </div>
         </div>
       </div>
     </section>
 
-<section id="preguntas">
+    <section id="preguntas">
       <div class="wrap">
         <div class="eyebrow">Preguntas frecuentes</div>
         <h2>Lo que la gente más nos pregunta</h2>
         <div class="faq pc-d3a18014">
-          <details class="faq-item">
-            <summary>¿Y si mis papás o abuelos no saben usar tecnología?</summary>
-            <p>No hace falta que sepan. Puedes sentarte a su lado con tu celular: se presiona un botón, se habla, y Eco hace las preguntas. Si prefieren hacerlo solos, les mandas un link por WhatsApp: lo tocan, dicen su nombre y empiezan a contar, sin correo ni clave.</p>
-          </details>
-          <details class="faq-item">
-            <summary>¿Tengo que instalar algo?</summary>
-            <p>No. Eco funciona desde el navegador del celular o del computador: creas tu cuenta y entras.</p>
-          </details>
-          <details class="faq-item">
-            <summary>¿Y si mi familiar habla poco o se queda sin saber qué decir?</summary>
-            <p>Eco va con calma, una pregunta a la vez, y hace preguntas de seguimiento a partir de lo que la persona cuenta. Pueden hacer varias charlas cortas en distintos días.</p>
-          </details>
           <details class="faq-item">
             <summary>¿Quién puede escuchar o leer las historias que se guardan aquí?</summary>
             <p>Solo tu círculo de confianza: tú, y las personas que invites con tu propio código. Cualquiera de ellos puede entrar cuando quiera a escuchar, leer y disfrutar lo que se fue guardando — <strong>ese es justo el sentido de la aplicación</strong>, que esas historias no se pierdan y se puedan volver a visitar. Nadie por fuera de ese círculo puede entrar, ni creando una cuenta nueva por su cuenta.</p>
@@ -903,27 +1014,24 @@
         </div>
       </div>
     </section>
+
+    <section class="final-cta" id="empezar">
+      <div class="wrap inner reveal">
+        <div class="eyebrow pc-9b54a373">Una historia empieza con una pregunta</div>
+        <h2>Algún día vas a querer escuchar esa historia una vez más.</h2>
+        <p>Guarda hoy las voces que querrás escuchar mañana.</p>
+        <a class="btn btn-primary" href="#registro-form">Crear mi cuenta</a>
+      </div>
+    </section>
   </main>
 
   <footer>
     <div class="wrap footer-row">
       <div class="brand"><img class="brand-mark pc-a2ef1fee" src="/images/logo-icon.png" alt="" aria-hidden="true"><span>Eco</span></div>
       <div class="footer-tagline">Las historias pasan. Los recuerdos pueden quedarse.</div>
-      <div class="footer-links"><a href="/como-funciona.html">Cómo funciona</a><a href="#registro-form">Crear cuenta</a><a href="/app.html">Iniciar sesión</a><a href="#privacidad">Privacidad</a><a href="#preguntas">Preguntas frecuentes</a><a href="/privacidad.html">Política de Privacidad</a><a href="/terminos.html">Términos y Condiciones</a></div>
+      <div class="footer-links"><a href="#como-funciona">Cómo funciona</a><a href="#registro-form">Crear cuenta</a><a href="/app.html">Iniciar sesión</a><a href="#privacidad">Privacidad</a><a href="#preguntas">Preguntas frecuentes</a><a href="/privacidad.html">Política de Privacidad</a><a href="/terminos.html">Términos y Condiciones</a></div>
     </div>
   </footer>
-
-  <dialog class="eco-popup" id="ecoPopup" aria-labelledby="ecoPopupTitulo">
-    <div class="eco-popup__caja">
-      <h2 class="eco-popup__solo-lectores" id="ecoPopupTitulo">Video: así funciona Eco</h2>
-      <button class="eco-popup__cerrar" id="ecoPopupCerrar" type="button" aria-label="Cerrar el video">&times;</button>
-      <video class="eco-popup__video" id="ecoPopupVideo" data-src="/video/eco-mapa.mp4" poster="/video/eco-mapa-poster.jpg" playsinline muted controls preload="none"></video>
-      <div class="eco-popup__pie">
-        <a class="btn btn-primary" href="/como-funciona.html">Ver cómo funciona</a>
-        <button class="eco-popup__sonido" id="ecoPopupSonido" type="button" aria-pressed="false">Activar sonido</button>
-      </div>
-    </div>
-  </dialog>
 
   <script>
     // Tamaño de letra — mismo mecanismo global de font-size.js que usa el
@@ -1002,7 +1110,7 @@
       '“¿Qué lugar de tu infancia todavía puedes imaginar perfectamente?”'
     ];
     let qIndex = 0;
-    if (orb) orb.addEventListener('click', () => {
+    orb.addEventListener('click', () => {
       active = !active;
       orb.classList.toggle('listening', active);
       if (active) {
@@ -1021,7 +1129,7 @@
     const playDemo = document.getElementById('playDemo');
     const waveDemo = document.getElementById('waveDemo');
     let playing = false;
-    if (playDemo && waveDemo) playDemo.addEventListener('click', () => {
+    playDemo.addEventListener('click', () => {
       playing = !playing;
       playDemo.textContent = playing ? '❚❚' : '▶';
       waveDemo.style.opacity = playing ? '.95' : '.55';
@@ -1234,7 +1342,5 @@
     document.querySelectorAll('.reveal').forEach(el => io.observe(el));
   </script>
 <script src="/eco-v5.js?v=5" defer></script>
-<script src="/eco-portada.js?v=2" defer></script>
-<script src="/eco-popup.js?v=1" defer></script>
 </body>
 </html>

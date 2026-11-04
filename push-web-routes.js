@@ -65,7 +65,7 @@ module.exports = (app, { sql, ensureSchema, requireAuth, bloquearColaborador, bl
       await ready();
       const filas = await sql`SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ${userId}`;
       let enviados = 0;
-      const carga = JSON.stringify({ title: aviso.title, body: aviso.body, url: aviso.url || '/colaboraciones.html', tag: aviso.tag || 'eco-aviso' });
+      const carga = JSON.stringify({ title: aviso.title, body: aviso.body, url: aviso.url || '/app.html', tag: aviso.tag || 'eco-aviso' });
       await Promise.all(filas.map(async (f) => {
         try {
           await Promise.race([
@@ -125,7 +125,7 @@ module.exports = (app, { sql, ensureSchema, requireAuth, bloquearColaborador, bl
 
   app.post('/api/push/prueba', requireAuth, bloquearColaborador, soloCuentaONarrador, rateLimit, async (req, res) => {
     if (!HABILITADO) return res.status(503).json({ error: 'Los avisos todavía no están disponibles.' });
-    const r = await enviarPush(idDeAvisos(req), { title: 'Eco', body: req.isNarradorLink ? 'Así te voy a recordar cuando sea un buen momento para charlar.' : 'Así te voy a avisar cuando un familiar cuente una historia.', url: req.isNarradorLink ? '/app.html' : '/colaboraciones.html', tag: 'eco-prueba' });
+    const r = await enviarPush(idDeAvisos(req), { title: 'Eco', body: req.isNarradorLink ? 'Así te voy a recordar cuando sea un buen momento para charlar.' : 'Así te voy a avisar cuando un familiar cuente una historia.', url: '/app.html', tag: 'eco-prueba' });
     res.json({ ok: true, enviados: r.enviados });
   });
 

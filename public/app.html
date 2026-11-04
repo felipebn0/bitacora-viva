@@ -35,6 +35,7 @@
 <script src="/eco-aviso-aportes.js?v=1" defer></script>
 <script src="/eco-aviso-abierto.js?v=1" defer></script>
 <script src="/eco-saludo.js?v=1" defer></script>
+<script src="/eco-interrupcion.js?v=1" defer></script>
 <style>
   :root {
     --bg: #F5EFE2;
@@ -2625,7 +2626,7 @@
   async function startRecordingAudio() {
     try {
       if (!mediaStream) {
-        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
       }
       audioChunks = [];
       // Vercel rechaza pedidos de más de ~4.5MB (FUNCTION_PAYLOAD_TOO_LARGE),
@@ -2699,6 +2700,7 @@
 
   function releaseMic() {
     stopVoiceActivityDetection();
+    detenerEscuchaDeInterrupcion();
     if (audioContext) { audioContext.close(); audioContext = null; }
     if (mediaStream) {
       mediaStream.getTracks().forEach((t) => t.stop());
@@ -2786,6 +2788,7 @@
 
   function setState(next, label) {
     if (next !== 'listening') stopMicLevel(); // Medio #7
+    if (next !== 'speaking' && !(next === 'thinking' && label === 'Pensando…')) detenerEscuchaDeInterrupcion();
     state = next;
     orb.dataset.state = next;
     orb.disabled = next === 'thinking' || next === 'speaking';
@@ -3174,6 +3177,84 @@
     vadRafId = null;
   }
 
+  // --- Interrumpir a Eco hablando ---
+  // Mientras Eco piensa o habla su respuesta, el micrófono sigue abierto: si la persona retoma la palabra (una voz que
+  // se sostiene, no un ruido ni el eco de Eco por el altavoz, ver eco-interrupcion.js), Eco se calla, se descarta su
+  // respuesta y se vuelve a escuchar. Lo nuevo llega como otro mensaje de la persona, a continuación del anterior.
+  let analizadorInterrupcion = null;
+  let fuenteInterrupcion = null;
+  let timerInterrupcion = null;
+  // La charla volvió a escuchar por una interrupción: si lo que sigue no trae nada usable (fue una falsa alarma),
+  // se le pide a Eco su respuesta de nuevo en vez de quedarse esperando.
+  let interrupcionPendiente = false;
+
+  // Solo cuando Eco está respondiendo a algo que la persona dijo (no al saludo, ni a un aviso del sistema ni al cierre).
+  function puedeInterrumpirPorVoz() {
+    const ultimo = history[history.length - 1];
+    const dePersona = ultimo && ultimo.role === 'assistant' ? history[history.length - 2] : ultimo;
+    return !finPedido && !!dePersona && dePersona.role === 'user' && !/^\(/.test(dePersona.content || '');
+  }
+
+  function ecoSonando() {
+    if (ttsAudioEl && !ttsAudioEl.paused && !ttsAudioEl.ended && ttsAudioEl.currentTime > 0) return true;
+    return 'speechSynthesis' in window && speechSynthesis.speaking;
+  }
+
+  function detenerEscuchaDeInterrupcion() {
+    if (timerInterrupcion) clearInterval(timerInterrupcion);
+    timerInterrupcion = null;
+    if (fuenteInterrupcion) { try { fuenteInterrupcion.disconnect(); } catch (e) {} }
+    fuenteInterrupcion = null;
+    analizadorInterrupcion = null;
+  }
+
+  function iniciarEscuchaDeInterrupcion() {
+    detenerEscuchaDeInterrupcion();
+    if (!window.EcoInterrupcion || !mediaStream || !mediaStream.active) return;
+    try {
+      if (audioContext && audioContext.state === 'closed') audioContext = null;
+      if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
+      fuenteInterrupcion = audioContext.createMediaStreamSource(mediaStream);
+      analizadorInterrupcion = audioContext.createAnalyser();
+      analizadorInterrupcion.fftSize = 1024;
+      fuenteInterrupcion.connect(analizadorInterrupcion);
+    } catch (e) { detenerEscuchaDeInterrupcion(); return; }
+    const analizador = analizadorInterrupcion;
+    const tiempo = new Uint8Array(analizador.fftSize);
+    const espectro = new Float32Array(analizador.frequencyBinCount);
+    const detector = window.EcoInterrupcion.crearDetector();
+    const frecuenciaDeMuestreo = audioContext.sampleRate;
+    let ultimo = Date.now();
+    timerInterrupcion = setInterval(() => {
+      if (analizador !== analizadorInterrupcion) return;
+      const ahora = Date.now();
+      const dt = ahora - ultimo;
+      ultimo = ahora;
+      analizador.getByteTimeDomainData(tiempo);
+      let suma = 0;
+      for (let i = 0; i < tiempo.length; i++) { const v = (tiempo[i] - 128) / 128; suma += v * v; }
+      analizador.getFloatFrequencyData(espectro);
+      const ratioVoz = window.EcoInterrupcion.razonDeVoz(espectro, frecuenciaDeMuestreo, analizador.fftSize);
+      if (detector.alimentar({ rms: Math.sqrt(suma / tiempo.length), ratioVoz, dt, eco: ecoSonando() })) interrumpirPorVoz();
+    }, 50);
+  }
+
+  function interrumpirPorVoz() {
+    detenerEscuchaDeInterrupcion();
+    if (!puedeInterrumpirPorVoz()) return;
+    cancelarEspeculacion();
+    sessionId += 1; // invalida la respuesta de Eco que venía en camino
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+    if (ttsAudioEl) { try { ttsAudioEl.pause(); } catch (e) {} }
+    vozAdelantada.clear();
+    // Si la respuesta de Eco alcanzó a quedar en el historial, se saca: la persona no la escuchó completa.
+    if (history.length && history[history.length - 1].role === 'assistant') history.pop();
+    if (sessionLog.length && sessionLog[sessionLog.length - 1].role === 'assistant') sessionLog.pop();
+    interrupcionPendiente = true;
+    listenForAnswer();
+  }
+
   // durationMsOverride: duración (en ms) del audio que se manda, para el
   // "tiempo hablando" del panel de consumo.
   async function transcribeAudio(blob, durationMsOverride) {
@@ -3225,6 +3306,12 @@
 
   function reintentarOEscribir() {
     cancelarEspeculacion();
+    if (interrupcionPendiente) {
+      // Falsa alarma: Eco se calló por un ruido y no llegó nada de la persona. Eco vuelve a responder lo de antes.
+      interrupcionPendiente = false;
+      fetchNext();
+      return;
+    }
     finalizacionesVacias++;
     writeRow.classList.add('visible');
     if (finalizacionesVacias >= MAX_VACIOS) {
@@ -3498,6 +3585,7 @@
     if (mySession !== sessionId) return;
     setState('thinking', 'Pensando…');
     orbLabel.innerHTML = '···';
+    if (puedeInterrumpirPorVoz()) iniciarEscuchaDeInterrupcion();
     let hablaEnCurso = null;
     try {
       const mediaUrls = mediaUrlsLocal;
@@ -3817,6 +3905,7 @@
     if (!text || !text.trim()) return;
     quitarFotoDelOrbe(); // ya contó: el círculo vuelve a ser el botón normal
     finalizacionesVacias = 0; // hubo una respuesta de verdad: se reinicia el contador de intentos vacíos
+    interrupcionPendiente = false;
     if (audioBlob === undefined && mediaRecorder && mediaRecorder.state !== 'inactive') {
       stopVoiceActivityDetection();
       await stopRecordingAudio(); // vino de "escribir": se descarta la grabación en curso
@@ -4038,6 +4127,7 @@
     }
     
     requestWakeLock();
+    interrupcionPendiente = false;
     sessionMode = mode === 'arbol' ? 'arbol' : 'historia';
     sessionId += 1;
     sessionStartTime = Date.now();

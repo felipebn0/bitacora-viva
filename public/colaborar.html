@@ -1166,6 +1166,10 @@
   }
 
   function resetChat() {
+    if (charlaTerminada) {
+      orb.innerHTML = 'Presiona<br>para hablar';
+      orb.setAttribute('aria-label', 'Presiona para grabar tu historia');
+    }
     historyLocal = [];
     audioUrlsLocal = [];
     mediaUrlsLocal = [];
@@ -1195,16 +1199,25 @@
   // corresponde, ya se terminó de hablar): cerrar la charla si era el
   // cierre, o seguir escuchando sola si no (pedido de Felipe, 2026-09-08:
   // que esta pantalla se sienta igual de fluida que la charla principal).
+  // Al cerrar la charla el orbe se queda a la vista: tocarlo empieza otra historia (lo mismo que el botón de abajo).
+  function orbeParaOtraHistoria() {
+    orb.style.display = '';
+    orb.dataset.state = 'idle';
+    orb.innerHTML = 'Presiona<br>para otra historia';
+    orb.setAttribute('aria-label', 'Presiona para contar otra historia');
+    orb.disabled = false;
+  }
+
   async function manejarDesenlaceDeTurno(data) {
     if (data.done) {
       charlaTerminada = true;
       releaseWakeLock();
-      orb.style.display = 'none';
+      orbeParaOtraHistoria();
       document.getElementById('subirAudioBtn').style.display = 'none';
       mostrarEscribirColab(false);
       recStatus.textContent = '';
       aporteMsg.classList.toggle('error', !data.saved);
-      aporteMsg.textContent = data.saved ? '✓ Historia guardada. Gracias.' : '⚠️ La charla terminó, pero hubo un problema para guardarla.';
+      aporteMsg.textContent = data.saved ? '✓ Historia guardada. Gracias. Si quieres añadir otra historia, toca el círculo.' : '⚠️ La charla terminó, pero hubo un problema para guardarla.';
       otraHistoriaBtn.style.display = 'inline-block';
       if (data.saved) { cargarAportes(); }
     } else if (interaccionReal) {
@@ -1399,6 +1412,7 @@
   let vadRafId = null;
   let vadActive = false;
   let lastLoudTime = 0;
+  let primeraVozEn = 0;
 
   function startVAD() {
     if (!mediaStream) return;
@@ -1411,6 +1425,7 @@
 
     const data = new Uint8Array(analyser.frequencyBinCount);
     lastLoudTime = Date.now();
+    primeraVozEn = 0;
     vadActive = true;
 
     function tick() {
@@ -1422,7 +1437,10 @@
         sumSquares += v * v;
       }
       const rms = Math.sqrt(sumSquares / data.length);
-      if (rms > VAD_THRESHOLD) lastLoudTime = Date.now();
+      if (rms > VAD_THRESHOLD) {
+        lastLoudTime = Date.now();
+        if (!primeraVozEn) primeraVozEn = lastLoudTime;
+      }
       const silencioLargo = Date.now() - lastLoudTime > SILENCE_MS;
       const turnoDemasiadoLargo = grabacionIniciadaEn && (Date.now() - grabacionIniciadaEn > MAX_TURN_MS);
       if (silencioLargo || turnoDemasiadoLargo) {
@@ -1683,13 +1701,16 @@
   // terminarGrabacion): cuando no se dan (el flujo de "subir un archivo ya
   // grabado"), se transcribe el mismo "blob" de siempre, sin recortar nada
   // — mismo comportamiento que había antes de este cambio.
-  async function procesarAudio(blob, contentType, blobParaTranscribir, durationMsParaTranscribir) {
+  async function procesarAudio(blob, contentType, blobParaTranscribir, durationMsParaTranscribir, habladoMs) {
     const esSoloAclaracion = esperandoAclaracion;
 
     // durationMsParaTranscribir > 0 solo cuando viene de una grabación (no
     // de "subir un archivo ya grabado", que se guarda siempre). Una nota
     // de 5 s o menos no se sube.
-    const notaMuyCorta = durationMsParaTranscribir > 0 && durationMsParaTranscribir <= NOTA_MINIMA_A_GUARDAR_MS;
+    // Se mide lo que la persona habló (de la primera a la última palabra), no lo que duró la grabación: esa incluye la
+    // espera antes de empezar y el silencio del final, y hacía que un «sí» se guardara como si fuera una historia.
+    const duracionParaGuardar = habladoMs != null ? habladoMs : durationMsParaTranscribir;
+    const notaMuyCorta = duracionParaGuardar > 0 && duracionParaGuardar <= NOTA_MINIMA_A_GUARDAR_MS;
     // La subida va EN PARALELO con la transcripción (antes una esperaba a la
     // otra); solo se espera a que termine justo antes de mandar el turno, para
     // que la URL viaje con él.
@@ -1751,6 +1772,7 @@
     recStatus.textContent = 'Procesando el audio…';
 
     const duracionMs = grabacionIniciadaEn ? Date.now() - grabacionIniciadaEn : 0;
+    const habladoMs = primeraVozEn ? lastLoudTime - primeraVozEn : duracionMs;
     const blob = await detenerGrabacionRaw();
     if (mediaStream) { mediaStream.getTracks().forEach((t) => t.stop()); mediaStream = null; }
 
@@ -1772,7 +1794,7 @@
     // Se manda la grabación tal cual (comprimida): ver el comentario en app.html
     // sobre por qué ya no se recorta el silencio de cola (decodificar y
     // recodificar a WAV tardaba más de lo que ahorraba).
-    const ok = await procesarAudio(blob, blob.type || 'audio/webm', blob, duracionMs);
+    const ok = await procesarAudio(blob, blob.type || 'audio/webm', blob, duracionMs, habladoMs);
     if (!ok) {
       recStatus.textContent = 'No se pudo entender el audio. Intenta de nuevo.';
       reset();
@@ -1794,6 +1816,13 @@
     // siempre y el detector de silencio nunca detecta voz real.
     unlockAudioPlayback();
     unlockMicAudioContext();
+    if (charlaTerminada) {
+      // Si Eco todavía está diciendo el cierre, se calla: empieza otra historia.
+      if (ttsAudioEl) { try { ttsAudioEl.pause(); } catch (e) {} }
+      if ('speechSynthesis' in window) speechSynthesis.cancel();
+      iniciarAporte();
+      return;
+    }
     empezarGrabacion();
   });
 

@@ -9,13 +9,13 @@ self.addEventListener('push', (event) => {
     body: datos.body || '',
     icon: '/images/favicon-192.png',
     tag: datos.tag || 'eco-aviso',
-    data: { url: typeof datos.url === 'string' && datos.url.startsWith('/') ? datos.url : '/colaboraciones.html' },
+    data: { url: typeof datos.url === 'string' && datos.url.startsWith('/') ? datos.url : '/app.html' },
   }));
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const destino = new URL((event.notification.data && event.notification.data.url) || '/colaboraciones.html', self.location.origin).href;
+  const destino = new URL((event.notification.data && event.notification.data.url) || '/app.html', self.location.origin).href;
   event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((ventanas) => {
     const abierta = ventanas.find((v) => 'focus' in v);
     if (abierta) { if ('navigate' in abierta) abierta.navigate(destino); return abierta.focus(); }

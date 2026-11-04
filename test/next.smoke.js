@@ -537,15 +537,15 @@ async function main() {
   const notaYFotoBody = JSON.parse(conNotaYFoto.body);
   check('nota con foto: la respuesta trae la foto para mostrarla en pantalla', notaYFotoBody.media && notaYFotoBody.media.url === 'https://fake.blob.vercel-storage.com/media/1/foto-1.jpg' && notaYFotoBody.media.type === 'foto');
 
-  // --- 11c1) Item 12 (A/B test): variante 'medio' -- NO se menciona en el
-  // primer turno, se difiere hasta que la charla lleva unos intercambios.
+  // --- 11c1) Un aporte de la familia es lo primero que Eco menciona al abrir la charla, aunque la nota venga marcada con la
+  // variante 'medio' del antiguo A/B (ya no se difiere), y no se vuelve a mencionar a mitad de una charla.
   resetAnthropicMock();
   user.pendingFamilyNote = { id: 45, contributor: 'María', parentesco: 'hija', texto: 'Contó del cumpleaños sorpresa.', ab_variant: 'medio' };
-  pushAnthropicResponse('¡Hola Diego! Cuéntame, ¿de dónde eres?');
+  pushAnthropicResponse('¡Hola Diego! María me contó del cumpleaños sorpresa. ¿Qué recuerdas?');
   const medioTurno0 = await nextForUser(server, cookie, { history: [], mode: 'historia' });
-  check('variante medio, turno 0 -> 200', medioTurno0.status === 200);
-  check('variante medio, turno 0: el arranque NO menciona la nota (se difiere)', !capturedCalls[0].messages[0].content.includes('cumpleaños sorpresa'));
-  check('variante medio, turno 0: NO se marca como discutida todavía', !familyNoteMarkedDiscussed.includes(45));
+  check('aporte con variante medio, turno 0 -> 200', medioTurno0.status === 200);
+  check('aporte con variante medio, turno 0: el arranque SÍ menciona la nota', capturedCalls[0].messages[0].content.includes('cumpleaños sorpresa'));
+  check('aporte con variante medio, turno 0: se marca como discutida', familyNoteMarkedDiscussed.includes(45));
 
   resetAnthropicMock();
   const historialLargo = [
@@ -557,15 +557,15 @@ async function main() {
     { role: 'assistant', content: '¿Algún recuerdo lindo de esa casa?' },
     { role: 'user', content: 'Sí, los domingos en familia.' },
   ];
-  pushAnthropicResponse('Qué lindo. Y antes de seguir, María me contó una historia sobre el cumpleaños sorpresa. ¿Qué recuerdas de eso?');
+  familyNoteMarkedDiscussed.length = 0;
+  pushAnthropicResponse('Qué lindo. ¿Y quién cocinaba esos domingos?');
   const medioTurnoTarde = await nextForUser(server, cookie, { history: historialLargo, mode: 'historia' });
-  check('variante medio, turno tardío -> 200', medioTurnoTarde.status === 200);
+  check('aporte pendiente, turno tardío -> 200', medioTurnoTarde.status === 200);
   const ultimoMensajeMedio = capturedCalls[0].messages[capturedCalls[0].messages.length - 1];
-  check('variante medio, turno tardío: se pega al ÚLTIMO mensaje del usuario (no reemplaza la charla)', ultimoMensajeMedio.role === 'user' && ultimoMensajeMedio.content.includes('Sí, los domingos en familia.') && ultimoMensajeMedio.content.includes('cumpleaños sorpresa'));
-  check('variante medio, turno tardío: se marca como discutida', familyNoteMarkedDiscussed.includes(45));
+  check('aporte pendiente, turno tardío: no se mete a mitad de la charla', ultimoMensajeMedio.role === 'user' && !ultimoMensajeMedio.content.includes('cumpleaños sorpresa') && !familyNoteMarkedDiscussed.includes(45));
 
   // --- 11c2) «Fin»: el turno de cierre NUNCA trae la historia ni la foto de un familiar (reportado en el perfil de Diego:
-  // al tocar Fin con la charla ya avanzada, la variante 'medio' mencionó una colaboración con su foto).
+  // al tocar Fin con la charla ya avanzada, se mencionó una colaboración con su foto).
   user.pendingFamilyNote = { id: 46, contributor: 'María', parentesco: 'hija', texto: 'Contó del paseo a Villa de Leyva.', ab_variant: 'medio', media_urls: JSON.stringify([{ url: 'https://fake.blob.vercel-storage.com/media/1/foto-paseo.jpg', type: 'foto' }]) };
   const historialFin = historialLargo.concat([{ role: 'user', content: '(La persona tocó el botón «Fin»: quiere terminar la charla por hoy.)' }]);
   resetAnthropicMock();
@@ -578,8 +578,8 @@ async function main() {
   check('Fin: la nota del familiar NO se marca como discutida (queda para la próxima charla)', !familyNoteMarkedDiscussed.includes(46));
   resetAnthropicMock();
   pushAnthropicResponse('Qué lindo. Y antes de seguir, María me contó del paseo a Villa de Leyva. ¿Qué recuerdas?');
-  const sinFin = await nextForUser(server, cookie, { history: historialLargo, mode: 'historia' });
-  check('sin Fin, la misma nota sí se menciona con su foto (control del caso de arriba)', sinFin.status === 200 && JSON.parse(sinFin.body).media && familyNoteMarkedDiscussed.includes(46));
+  const sinFin = await nextForUser(server, cookie, { history: [], mode: 'historia' });
+  check('al abrir la charla, la misma nota sí se menciona con su foto (control del caso de arriba)', sinFin.status === 200 && JSON.parse(sinFin.body).media && familyNoteMarkedDiscussed.includes(46));
 
   user.pendingFamilyNote = null;
 

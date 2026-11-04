@@ -191,21 +191,11 @@ app.use((req, res, next) => {
   if (req.path === CSP_REPORT_PATH) return next(); // ya se parseó arriba, con el límite chico
   jsonBodyParserGlobal(req, res, next);
 });
-// --- Prueba A/B de la landing (pedido de Felipe, 2026-09-28) -----------
-// Un solo link ("/") reparte 50/50 entre index.html (v1, la de siempre) e
-// index-v2.html (v2, el copy más nostálgico) — no dos links distintos que
-// Felipe tenga que repartir a mano. La primera vez que alguien llega, se
-// tira una moneda y queda fija en una cookie (90 días) para que esa misma
-// persona siga viendo siempre la misma versión, en vez de que le cambie
-// en cada visita. vercel.json ahora manda "/" acá (antes iba directo al
-// archivo estático) — sin este route(), Express serviría public/index.html
-// solo porque express.static() lo hace por defecto para una carpeta, así
-// que ni siquiera hace falta un "else" explícito para v1.
-//
-// La cookie NO es la de sesión (bv_session): esta no protege nada, solo
-// es una etiqueta de qué versión le tocó a este navegador — por eso no
-// va firmada ni HttpOnly hace falta por seguridad (queda igual, por
-// prolijidad, ver más abajo).
+// --- Landing de "/" ---------------------------------------------------------
+// Desde el 2026-11-03 "/" sirve siempre public/index.html (la landing con portada de foto, antes en pruebas). Terminó la
+// prueba A/B (2026-09-28) entre la anterior (public/index-anterior.html) y la nostálgica (public/index-v2.html): las dos
+// siguen abiertas por su dirección, sin indexar. vercel.json manda "/" acá en vez de servir el archivo directo.
+
 // Versión vigente de los Términos y la Política de Privacidad (public/
 // terminos.html y public/privacidad.html). Si se cambia el texto de fondo,
 // subir esta fecha — queda guardada junto a cada aceptación.
@@ -225,62 +215,11 @@ async function registrarAceptacion(tipo, sujetoId, ownerId, aceptadoAt) {
 }
 
 const MENSAJE_TERMINOS_ENTRADA = 'Para entrar tienes que aceptar los Términos y la Política de Privacidad.';
+// La cookie de la antigua prueba A/B: ya no se pone, pero /api/signup todavía la lee en quien la tiene de antes.
 const AB_LANDING_COOKIE = 'bv_ab_landing';
-const AB_LANDING_MAX_AGE = 60 * 60 * 24 * 90; // 90 días
-const AB_LANDING_ARCHIVOS = {
-  v1: path.join(__dirname, 'public', 'index.html'),
-  v2: path.join(__dirname, 'public', 'index-v2.html'),
-};
 
-// Robots de buscadores y escáneres visitan sin cookie: contarlos despertaba la
-// base de datos (Neon cobra por el tiempo que está encendida) y ensuciaba la
-// prueba A/B. A un robot se le sirve la versión 1 sin tocar la base.
-const PATRON_ROBOT = /bot\b|bot[\/ ;)]|crawl|spider|slurp|preview|monitor|uptime|curl\/|wget|python|axios|headless|facebookexternalhit|lighthouse|go-http-client|java\//i;
-function pareceRobot(req) {
-  const ua = String(req.headers['user-agent'] || '');
-  return !ua || PATRON_ROBOT.test(ua);
-}
-
-// Primero se intenta el conteo directo: la revisión completa de tablas
-// (ensureSchema) solo hace falta si la tabla todavía no existe (42P01).
-async function contarAsignacionAbLanding(variante) {
-  const contar = () => sql`
-    INSERT INTO ab_landing_counters (variant, asignados) VALUES (${variante}, 1)
-    ON CONFLICT (variant) DO UPDATE SET asignados = ab_landing_counters.asignados + 1
-  `;
-  try {
-    await contar();
-  } catch (err) {
-    if (!err || err.code !== '42P01') throw err;
-    await ensureSchema();
-    await contar();
-  }
-}
-
-app.get('/', async (req, res, next) => {
-  try {
-    const cookies = parseCookies(req.headers.cookie);
-    const yaAsignada = cookies[AB_LANDING_COOKIE];
-    let variante = yaAsignada === 'v1' || yaAsignada === 'v2' ? yaAsignada : null;
-    if (!variante && pareceRobot(req)) {
-      variante = 'v1';
-    } else if (!variante) {
-      variante = Math.random() < 0.5 ? 'v1' : 'v2';
-      const secure = cookieEsSegura(req) ? '; Secure' : '';
-      res.setHeader('Set-Cookie', `${AB_LANDING_COOKIE}=${variante}; Max-Age=${AB_LANDING_MAX_AGE}; Path=/; HttpOnly; SameSite=Lax${secure}`);
-      // Contador de personas nuevas, no de vistas — best-effort: si la base
-      // falla acá, igual se sirve la página (fallar cerrado dejaría a
-      // alguien sin poder ver la landing por un problema de métricas).
-      try {
-        await contarAsignacionAbLanding(variante);
-      } catch (err) {
-        console.error('No se pudo contar la asignación de A/B de la landing:', err);
-      }
-    }
-    res.sendFile(AB_LANDING_ARCHIVOS[variante]);
-  } catch (err) {
-    next(err);
-  }
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -4374,14 +4313,6 @@ async function loadPendingFamilyNote(userId) {
   // de este camino).
   const mediaUrls = parseJsonArray(nota.media_urls);
   nota.media = mediaUrls.length ? mediaUrls[0] : null;
-  // Item 12: sorteo de UNA sola vez, la primera vez que esta nota se lee
-  // como candidata — a partir de aquí queda fija en la base, así que
-  // llamadas siguientes (turno a turno, dentro de la misma charla o en la
-  // próxima) ven siempre la misma variante para esta nota puntual.
-  if (!nota.ab_variant) {
-    nota.ab_variant = Math.random() < 0.5 ? 'inicio' : 'medio';
-    await sql`UPDATE family_notes SET ab_variant = ${nota.ab_variant} WHERE id = ${nota.id}`;
-  }
   return nota;
 }
 
@@ -5617,27 +5548,13 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
       : (familiaCtx && familiaCtx.tratamiento);
     const mascotaActiva = mode === 'historia' && familiaCtx && familiaCtx.mascota ? familiaCtx.mascota : null;
     const esPrimeraVez = mode === 'historia' && !memoria && !history.length && !mascotaActiva && !esPerfilBebe;
-    // Item 12 (pedido de Felipe, 2026-09-08): A/B test de DÓNDE se
-    // menciona una historia aportada — 'inicio' (arranca la charla con
-    // eso, como ya funcionaba) o 'medio' (se difiere unos turnos, para no
-    // interrumpir apenas empieza). La variante se sortea una sola vez por
-    // nota (ver loadPendingFamilyNote) y queda fija; aquí solo se decide SI
-    // ESTE turno puntual es el momento de mostrarla según le tocó.
-    // UMBRAL_MEDIO=6: history trae 2 mensajes por intercambio (user +
-    // assistant), así que 6 son ~3 intercambios ya pasados — ">=" en vez
-    // de "===" para no depender de que el conteo caiga justo en ese
-    // número exacto.
-    const UMBRAL_MEDIO_APORTE = 6;
     // «Fin»: el turno de cierre nunca trae la historia ni la foto de un familiar (eso queda para la próxima charla).
     const esCierre = req.body.fin === true;
     const candidataPendiente = mode === 'historia' && !esPrimeraVez && !esCierre
       ? await loadPendingFamilyNote(req.profileUserId)
       : null;
-    const notaPendiente = candidataPendiente && (
-      candidataPendiente.ab_variant === 'medio'
-        ? history.length >= UMBRAL_MEDIO_APORTE
-        : !history.length // 'inicio', o sin sortear todavía (notas viejas) -> comportamiento de siempre
-    ) ? candidataPendiente : null;
+    // Un aporte de la familia es lo primero que Eco menciona al abrir la charla (pedido de Felipe, 2026-11-03).
+    const notaPendiente = candidataPendiente && !history.length ? candidataPendiente : null;
     // Solo se busca si no hay ya una nota pendiente (esa tiene prioridad) —
     // no hace falta resolver ambas a la vez porque solo una puede ser el
     // arranque de ESTA charla; la otra sigue esperando para la próxima.
@@ -6567,7 +6484,7 @@ async function avisarAportePorPush(cuentaId, contribuidor, perfilNombre) {
   await pushWeb.enviarPush(cuentaId, {
     title: 'Nuevo aporte en Eco',
     body: contribuidor + ' contó una historia' + donde + '. Tócala para verla.',
-    url: '/colaboraciones.html',
+    url: '/app.html',
     tag: 'eco-aporte',
   });
 }
