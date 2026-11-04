@@ -42,6 +42,7 @@ const user = { id: 1, username: 'jorge', password_hash: PASSWORD_HASH, token_ver
 let familyMembers = []; // fila: { id, nombre, relacion, detalles, padres (string JSON o null), es_principal }
 let nextId = 1;
 let treePendingNames = null;
+let cambiosIA = [];
 
 // "padres" se guarda en family_members como TEXT (JSON) o null — mismo
 // parseJsonArray defensivo que usa server.js, para leer el mock en los
@@ -86,6 +87,13 @@ function fakeSql(strings, ...values) {
     // GET /api/tree — lo que de verdad ve el navegador, con "id" y
     // "es_principal" incluidos.
     return Promise.resolve(familyMembers.map((p) => ({ id: p.id, nombre: p.nombre, relacion: p.relacion, detalles: p.detalles, padres: p.padres, es_principal: p.es_principal, notas_count: 0 })));
+  }
+  if (text.includes('AND padres_fijos = true')) {
+    return Promise.resolve(familyMembers.filter((p) => p.padres_fijos).map((p) => ({ nombre: p.nombre, padres: p.padres })));
+  }
+  if (text.includes('INSERT INTO arbol_cambios_ia')) {
+    cambiosIA.push({ nombre: values[1], antes: JSON.parse(values[2]), despues: JSON.parse(values[3]) });
+    return Promise.resolve([]);
   }
   if (text.includes('SELECT nombre, relacion, detalles, padres, es_principal, aliases FROM family_members')) {
     // personasPrevias, adentro de updateFamilyTree — refleja lo que haya
@@ -148,8 +156,8 @@ function fakeSql(strings, ...values) {
     return Promise.resolve([]);
   }
   if (text.includes('INSERT INTO family_members')) {
-    const [userId, nombre, relacion, detalles, padres, esPrincipal] = values;
-    familyMembers.push({ id: nextId++, user_id: userId, nombre, relacion, detalles, padres, es_principal: !!esPrincipal });
+    const [userId, nombre, relacion, detalles, padres, esPrincipal, , padresFijos] = values;
+    familyMembers.push({ id: nextId++, user_id: userId, nombre, relacion, detalles, padres, es_principal: !!esPrincipal, padres_fijos: !!padresFijos });
     return Promise.resolve([]);
   }
   if (text.includes('DELETE FROM timeline_events')) return Promise.resolve([]);
@@ -415,6 +423,49 @@ async function main() {
 
   const rBorrarInexistente = await request(server, { path: '/api/tree/person/99999', method: 'DELETE' }, cookie);
   check('borrar un id que no existe -> 404', rBorrarInexistente.status === 404);
+
+  // --- 9) La IA deja a los abuelos como padres de la persona principal (el error real del árbol de Diego): se corrige ---
+  familyMembers = [];
+  nextId = 1;
+  proximaRespuestaArbol = {
+    personas: [
+      { nombre: 'Diego', relacion: 'sujeto principal', padres: ['Jorge Vargas Velosa', 'Alejandrina Peña'] },
+      { nombre: 'Jorge Vargas', relacion: 'papá', padres: ['Jorge Vargas Velosa', 'Alejandrina Peña'] },
+      { nombre: 'Juliana Palacio', relacion: 'mamá', padres: [] },
+      { nombre: 'Jorge Vargas Velosa', relacion: 'abuelo paterno', padres: [] },
+      { nombre: 'Alejandrina Peña', relacion: 'abuela paterna', padres: [] },
+    ],
+    eventos: [],
+  };
+  await request(server, { path: '/api/rebuild-tree', method: 'POST' }, cookie);
+  const diego9 = familyMembers.find((p) => p.nombre === 'Diego');
+  check('la persona principal quedó como hija de su papá y su mamá, no de los abuelos', JSON.stringify(parseJsonArrayTest(diego9.padres)) === JSON.stringify(['Jorge Vargas', 'Juliana Palacio']));
+  check('el papá conserva a los abuelos como padres', parseJsonArrayTest(familyMembers.find((p) => p.nombre === 'Jorge Vargas').padres).length === 2);
+
+  // --- 10) Lo que se puso a mano no lo pisa la IA, y queda el registro de lo que la IA sí cambió ---
+  familyMembers = [
+    { id: 1, user_id: 1, nombre: 'Lourdes Florez', relacion: 'Abuela Materna', detalles: null, padres: null, es_principal: false },
+    { id: 2, user_id: 1, nombre: 'Lourdes', relacion: 'tía materna', detalles: null, padres: null, es_principal: false },
+    { id: 3, user_id: 1, nombre: 'Carolina', relacion: 'prima', detalles: null, padres: JSON.stringify(['Lourdes']), es_principal: false, padres_fijos: true },
+    { id: 4, user_id: 1, nombre: 'Sharon', relacion: 'prima', detalles: null, padres: JSON.stringify(['Lourdes']), es_principal: false },
+  ];
+  nextId = 5;
+  cambiosIA = [];
+  proximaRespuestaArbol = {
+    personas: [
+      { id: 3, nombre: 'Carolina', relacion: 'prima', padres: ['Lourdes Florez'] },
+      { id: 4, nombre: 'Sharon', relacion: 'prima', padres: ['Lourdes Florez'] },
+    ],
+    eventos: [],
+  };
+  await request(server, { path: '/api/rebuild-tree', method: 'POST' }, cookie);
+  const carolina10 = familyMembers.find((p) => p.nombre === 'Carolina');
+  check('los padres puestos a mano ("Lourdes") no se cambian aunque la IA diga otra cosa', JSON.stringify(parseJsonArrayTest(carolina10.padres)) === JSON.stringify(['Lourdes']));
+  check('y siguen marcados como fijos tras reconstruir el árbol', carolina10.padres_fijos === true);
+  check('Carolina no aparece en el registro de cambios de la IA (no hubo cambio)', !cambiosIA.some((c) => c.nombre === 'Carolina'));
+  const sharon10 = familyMembers.find((p) => p.nombre === 'Sharon');
+  check('a quien no está fijo, la IA sí lo puede cambiar, pero una prima no queda como hija de una abuela', !parseJsonArrayTest(sharon10.padres).includes('Lourdes Florez'));
+  check('el cambio de la IA sobre Sharon quedó registrado con lo de antes y lo de después', cambiosIA.some((c) => c.nombre === 'Sharon' && JSON.stringify(c.antes) === JSON.stringify(['Lourdes']) && Array.isArray(c.despues)));
 
   console.warn = originalWarn;
   server.close();

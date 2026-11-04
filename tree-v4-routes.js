@@ -65,7 +65,7 @@ module.exports = function registerTreeV4(app, { sql, ensureSchema, requireAuth, 
       const people=await sql`SELECT nombre FROM family_members WHERE user_id=${req.profileUserId}`;
       if(people.some(p=>p.nombre.trim().toLocaleLowerCase('es')===nombre.toLocaleLowerCase('es')))return res.status(409).json({error:'Ya existe un familiar con ese nombre. Edítalo en lugar de duplicarlo.'});
       if(padres.some(n=>!people.some(p=>p.nombre.trim().toLocaleLowerCase('es')===n.toLocaleLowerCase('es'))))return res.status(400).json({error:'Selecciona padres que ya estén registrados.'});
-      const rows=await sql`INSERT INTO family_members(user_id,nombre,relacion,padres,detalles) VALUES(${req.profileUserId},${nombre},${relacion},${JSON.stringify(padres)},${'Añadido manualmente desde el árbol'}) RETURNING id`;
+      const rows=await sql`INSERT INTO family_members(user_id,nombre,relacion,padres,detalles,padres_fijos) VALUES(${req.profileUserId},${nombre},${relacion},${JSON.stringify(padres)},${'Añadido manualmente desde el árbol'},${padres.length>0}) RETURNING id`;
       res.status(201).json({ok:true,id:rows[0].id});
     }catch(err){console.error(err);res.status(500).json({error:'No se pudo agregar al familiar.'})}
   });

@@ -1073,6 +1073,18 @@ function ensureSchema() {
       // esta persona, para poder dibujar el árbol con las ramas reales en vez
       // de agrupar por generación no más.
       sql`ALTER TABLE family_members ADD COLUMN IF NOT EXISTS padres TEXT`,
+      // padres_fijos: los padres de esta persona los puso o confirmó alguien a mano; la IA que reconstruye el árbol no los cambia.
+      sql`ALTER TABLE family_members ADD COLUMN IF NOT EXISTS padres_fijos BOOLEAN NOT NULL DEFAULT false`,
+      // Cada vez que la IA cambia los padres de alguien al armar el árbol queda aquí lo que había antes y lo que quedó.
+      sql`CREATE TABLE IF NOT EXISTS arbol_cambios_ia (
+        id BIGSERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        nombre TEXT NOT NULL,
+        padres_antes TEXT,
+        padres_despues TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      sql`CREATE INDEX IF NOT EXISTS idx_arbol_cambios_ia_user ON arbol_cambios_ia(user_id, created_at)`,
       // es_principal: quién es "Yo" (el eje del árbol, el dueño de la
       // bitácora) — antes esto se detectaba en el navegador buscando la
       // palabra "principal" dentro del texto libre de "relacion", así que
@@ -4023,6 +4035,7 @@ app.post('/api/reset-bitacora', requireAuth, bloquearColaborador, bloquearInvita
       sql`DELETE FROM tree_v4_state WHERE profile_user_id = ${req.userId}`,
       sql`DELETE FROM diario_bebe_entradas WHERE profile_user_id = ${req.userId}`,
       sql`DELETE FROM diario_bebe WHERE profile_user_id = ${req.userId}`,
+      sql`DELETE FROM arbol_cambios_ia WHERE user_id = ${req.userId}`,
     ]);
 
     // Blob queda deliberadamente FUERA de la transacción SQL (Vercel Blob no
@@ -4145,6 +4158,7 @@ app.post('/api/delete-account', requireAuth, rateLimit, async (req, res) => {
       // Van después de los índices que se leen más abajo (results[3], [4],
       // [7]) para no moverlos.
       sql`DELETE FROM family_members_excluidos WHERE user_id = ${req.userId}`,
+      sql`DELETE FROM arbol_cambios_ia WHERE user_id = ${req.userId}`,
       sql`DELETE FROM notification_preferences WHERE user_id = ${req.userId}`,
       sql`DELETE FROM reminder_deliveries WHERE user_id = ${req.userId}`,
       sql`DELETE FROM whatsapp_reminder_log WHERE profile_id = ${req.userId}`,
@@ -4435,7 +4449,7 @@ const TREE_TOOLS = [{
             padres: {
               type: 'array',
               items: { type: 'string' },
-              description: 'MUY IMPORTANTE para armar el árbol bien: nombres de esta persona reales padre/madre (o los dos), escritos EXACTAMENTE igual a como aparece su "nombre" en la lista de personas (las conocidas más las nuevas), para poder conectar las ramas correctamente. Ej: si Ema es hija de Oscar, aquí va ["Oscar"] (o ["Oscar","Paula Franco"] si se sabe también la mamá). Dejar vacío [] si es de la generación más alta (abuelos) o si no se sabe.',
+              description: 'MUY IMPORTANTE para armar el árbol bien: nombres de esta persona reales padre/madre (o los dos), escritos EXACTAMENTE igual a como aparece su "nombre" en la lista de personas (las conocidas más las nuevas), para poder conectar las ramas correctamente. Ej: si Ema es hija de Oscar, aquí va ["Oscar"] (o ["Oscar","Paula Franco"] si se sabe también la mamá). Dejar vacío [] si es de la generación más alta (abuelos) o si no se sabe. Nunca pongas a un abuelo como padre/madre de la persona principal, de sus hermanos, de un primo o de un sobrino: los padres de la persona principal son su papá y su mamá, y los de un primo son un tío o una tía. Si dos personas comparten nombre (por ejemplo una abuela y una tía llamadas igual), no las confundas: usa el nombre completo de la correcta y, si no estás seguro de cuál es, deja [].',
             },
           },
           required: ['nombre', 'relacion'],
@@ -4552,6 +4566,7 @@ function inferirPadresFaltantes(personas) {
 
   personas.forEach((p) => {
     if (Array.isArray(p.padres) && p.padres.length) return; // ya lo trajo la IA, no tocar
+    if (p.padres_fijos) return;
     const rel = (p.relacion || '').trim().toLowerCase();
     // La IA no siempre usa el mismo texto exacto para el sujeto principal
     // ("sujeto principal", "yo (persona principal)", etc.) — se detecta por
@@ -4792,6 +4807,8 @@ async function updateFamilyTree(userId, esPropia, newExchanges) {
     await ensureSchema();
     const personasPreviasRaw = await sql`SELECT nombre, relacion, detalles, padres, es_principal, aliases FROM family_members WHERE user_id = ${userId}`;
     const personasPrevias = personasPreviasRaw.map((p) => ({ ...p, padres: parseJsonArray(p.padres) }));
+    const fijosRows = await sql`SELECT nombre, padres FROM family_members WHERE user_id = ${userId} AND padres_fijos = true`;
+    const padresFijosPorNombre = new Map(fijosRows.map((r) => [normalizarNombreParaComparar(r.nombre), parseJsonArray(r.padres)]));
     // Quién quedó marcado como "Yo" (es_principal) antes de esta corrida, si
     // había alguien — se usa más abajo para no perder el resaltado ni
     // aunque el modelo, esta vez, no vuelva a redactar el parentesco con la
@@ -4801,7 +4818,7 @@ async function updateFamilyTree(userId, esPropia, newExchanges) {
     const principalPrevioNombre = (personasPreviasRaw.find((p) => p.es_principal) || {}).nombre || null;
     const eventosPrevios = await sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${userId} ORDER BY anio NULLS LAST, id`;
 
-    const prompt = `Personas ya conocidas (id | nombre | parentesco | detalles | padres):\n${personasPrevias.length ? personasPreviasCompactas(personasPrevias) : '(ninguna todavía)'}\n\nEventos ya conocidos (id | descripción | categoría | año | edad):\n${eventosPrevios.length ? eventosPreviosCompactos(eventosPrevios) : '(ninguno todavía)'}\n\nCharla nueva para integrar:${envolverDatoNoConfiable('charla', nuevaCharla)}\n\nUsa la herramienta para devolver SOLO LOS CAMBIOS, no la lista completa: las personas y eventos NUEVOS, los que cambian por esta charla (con su id), y en quitar_personas / quitar_eventos los ids de lo que no cumple las reglas. Lo que ya está y no cambia NO se repite (se conserva solo). Si esta charla no agrega ni cambia nada, devuelve listas vacías. Reglas: personas SOLO de la familia directa (nada de novio/novia, solo esposo/a si está casado/a); interpreta referencias naturales de parentesco ("mi papá Jorge", "sus hermanos", "los hijos de Alejandrina"), resolviendo el referente solo cuando sea inequívoco; para cada persona nueva o modificada completa "padres" con los nombres exactos de su papá y/o mamá tal como aparecen en la lista (por ejemplo, por los "detalles" ya guardados tipo "hija de Oscar"); eventos SOLO hitos importantes (nacimiento, cumpleaños, viaje, graduación, matrimonio, muerte), nada de charla cotidiana ni planes sin confirmar.`;
+    const prompt = `Personas ya conocidas (id | nombre | parentesco | detalles | padres):\n${personasPrevias.length ? personasPreviasCompactas(personasPrevias) : '(ninguna todavía)'}\n\nEventos ya conocidos (id | descripción | categoría | año | edad):\n${eventosPrevios.length ? eventosPreviosCompactos(eventosPrevios) : '(ninguno todavía)'}\n\nCharla nueva para integrar:${envolverDatoNoConfiable('charla', nuevaCharla)}\n\nUsa la herramienta para devolver SOLO LOS CAMBIOS, no la lista completa: las personas y eventos NUEVOS, los que cambian por esta charla (con su id), y en quitar_personas / quitar_eventos los ids de lo que no cumple las reglas. Lo que ya está y no cambia NO se repite (se conserva solo). Si esta charla no agrega ni cambia nada, devuelve listas vacías. Reglas: personas SOLO de la familia directa (nada de novio/novia, solo esposo/a si está casado/a); interpreta referencias naturales de parentesco ("mi papá Jorge", "sus hermanos", "los hijos de Alejandrina"), resolviendo el referente solo cuando sea inequívoco; para cada persona nueva o modificada completa "padres" con los nombres exactos de su papá y/o mamá tal como aparecen en la lista (por ejemplo, por los "detalles" ya guardados tipo "hija de Oscar"); nunca pongas a un abuelo como padre de la persona principal, de sus hermanos, de un primo o de un sobrino (los de la persona principal son su papá y su mamá, los de un primo son un tío o una tía), y si una persona comparte nombre con otra (una abuela y una tía llamadas igual) no las confundas: en la duda deja "padres" vacío; eventos SOLO hitos importantes (nacimiento, cumpleaños, viaje, graduación, matrimonio, muerte), nada de charla cotidiana ni planes sin confirmar.`;
 
     const response = await anthropic.messages.create({
       model: MODEL,
@@ -4844,10 +4861,15 @@ async function updateFamilyTree(userId, esPropia, newExchanges) {
         nombre: capitalizarNombre(p.nombre),
         padres: Array.isArray(p.padres) ? p.padres.map(capitalizarNombre) : p.padres,
       }));
-    const personas = quitarPadresDeOtraGeneracion(resolverPadresPorNombreParecido(
-      inferirPadresFaltantes(fusionarRolesUnicos(personasCapitalizadas, userId)),
+    const personas = resolverPadresPorNombreParecido(
+      inferirPadresFaltantes(quitarPadresDeOtraGeneracion(fusionarRolesUnicos(personasCapitalizadas, userId))),
       userId
-    ));
+    );
+    // Lo que alguien puso o confirmó a mano sobre los padres de una persona no lo cambia la IA.
+    personas.forEach((p) => {
+      const fijos = padresFijosPorNombre.get(normalizarNombreParaComparar(p.nombre));
+      if (fijos) p.padres = fijos.slice();
+    });
     const eventos = unidos.eventos.slice(0, 100);
 
     // Para la campanita de aviso en el ícono del árbol: nombres que
@@ -4934,14 +4956,31 @@ async function updateFamilyTree(userId, esPropia, newExchanges) {
         .map((r) => [normalizarNombreParaComparar(r.nombre), r.aliases])
     );
 
+    try {
+      const previasPorNombre = new Map(personasPrevias.map((p) => [norm(p.nombre), Array.isArray(p.padres) ? p.padres : []]));
+      const cambiosDePadres = personas
+        .map((p) => {
+          const antes = previasPorNombre.has(norm(p.nombre)) ? previasPorNombre.get(norm(p.nombre)) : null;
+          const despues = Array.isArray(p.padres) ? p.padres.filter((x) => typeof x === 'string' && x.trim()).slice(0, 2) : [];
+          return { nombre: p.nombre, antes, despues };
+        })
+        .filter((c) => c.antes !== null && JSON.stringify(c.antes) !== JSON.stringify(c.despues))
+        .slice(0, 100);
+      for (const c of cambiosDePadres) {
+        await sql`INSERT INTO arbol_cambios_ia (user_id, nombre, padres_antes, padres_despues) VALUES (${userId}, ${String(c.nombre).slice(0, 120)}, ${JSON.stringify(c.antes)}, ${JSON.stringify(c.despues)})`;
+      }
+    } catch (e) {
+      console.warn(`[arbol] no se pudo registrar el cambio de padres userId=${userId}:`, e.message);
+    }
+
     await sql.transaction([
       sql`DELETE FROM family_members WHERE user_id = ${userId}`,
       ...personas.map((p, i) => {
         const padres = Array.isArray(p.padres) ? p.padres.filter((x) => typeof x === 'string' && x.trim()).slice(0, 2) : [];
         const esPrincipal = i === indicePrincipal;
         const aliasesJson = aliasesPorNombreNorm.get(normalizarNombreParaComparar(p.nombre)) || null;
-        return sql`INSERT INTO family_members (user_id, nombre, relacion, detalles, padres, es_principal, aliases) VALUES (
-        ${userId}, ${String(p.nombre).slice(0, 120)}, ${String(p.relacion).slice(0, 80)}, ${p.detalles ? capitalizarInicio(String(p.detalles).slice(0, 300)) : null}, ${padres.length ? JSON.stringify(padres) : null}, ${esPrincipal}, ${aliasesJson}
+        return sql`INSERT INTO family_members (user_id, nombre, relacion, detalles, padres, es_principal, aliases, padres_fijos) VALUES (
+        ${userId}, ${String(p.nombre).slice(0, 120)}, ${String(p.relacion).slice(0, 80)}, ${p.detalles ? capitalizarInicio(String(p.detalles).slice(0, 300)) : null}, ${padres.length ? JSON.stringify(padres) : null}, ${esPrincipal}, ${aliasesJson}, ${padresFijosPorNombre.has(normalizarNombreParaComparar(p.nombre))}
       )`;
       }),
       sql`DELETE FROM timeline_events WHERE user_id = ${userId}`,
@@ -7717,7 +7756,7 @@ app.post('/api/tree/family-review/confirm', requireAuth, bloquearColaborador, ra
   const prior=JSON.stringify({nombre:child.nombre,padres:existing});
   await sql.transaction([
    sql`INSERT INTO historia_versiones (tabla, registro_id, texto_anterior, editado_por) VALUES ('family_members', ${child.id}, ${prior}, ${req.userId})`,
-   sql`UPDATE family_members SET padres=${JSON.stringify(updated)} WHERE id=${child.id} AND user_id=${req.profileUserId}`
+   sql`UPDATE family_members SET padres=${JSON.stringify(updated)}, padres_fijos=true WHERE id=${child.id} AND user_id=${req.profileUserId}`
   ]);
   res.json({ok:true});
  }catch(err){console.error(err);res.status(500).json({error:'No se pudo confirmar el vínculo.'})}
@@ -7836,7 +7875,7 @@ app.post('/api/tree/family-review/natural/confirm',requireAuth,bloquearColaborad
   const updated=JSON.stringify([...previous,parent.nombre]);
   // Optimistic concurrency: update only if the exact parent list still matches.
   const expectedRaw=child.padres;
-  const outcome=await sql`UPDATE family_members SET padres=${updated} WHERE id=${childId} AND user_id=${req.profileUserId} AND padres IS NOT DISTINCT FROM ${expectedRaw} RETURNING id`;
+  const outcome=await sql`UPDATE family_members SET padres=${updated}, padres_fijos=true WHERE id=${childId} AND user_id=${req.profileUserId} AND padres IS NOT DISTINCT FROM ${expectedRaw} RETURNING id`;
   if(outcome.length!==1)return res.status(409).json({error:'Otro cambio ocurrió mientras confirmabas. Vuelve a revisar.'});
   res.json({ok:true});
  }catch(err){console.error('confirmación familiar V4',err);res.status(500).json({error:'No se pudo confirmar el parentesco.'})}
@@ -7846,7 +7885,7 @@ app.get('/api/tree', requireAuth, bloquearColaborador, async (req, res) => {
   try {
     await ensureSchema();
     const peopleRaw = await sql`
-      SELECT fm.id, fm.nombre, fm.relacion, fm.detalles, fm.padres, fm.es_principal,
+      SELECT fm.id, fm.nombre, fm.relacion, fm.detalles, fm.padres, fm.es_principal, fm.padres_fijos,
         COUNT(fn.id)::int AS notas_count
       FROM family_members fm
       LEFT JOIN family_notes fn ON fn.user_id = fm.user_id
@@ -7862,7 +7901,7 @@ app.get('/api/tree', requireAuth, bloquearColaborador, async (req, res) => {
       es_principal: !!p.es_principal,
       notas_count: Number(p.notas_count) || 0,
     }));
-    quitarPadresDeOtraGeneracion(people);
+    inferirPadresFaltantes(quitarPadresDeOtraGeneracion(people));
     // Auto-agregar al narrador si no aparece en el árbol.
     // Cuenta propia (esPropia): nombre en users.name. Subperfil: en bitacoras.nombre.
     try {
@@ -7984,7 +8023,7 @@ app.put('/api/tree/person/:id', requireAuth, bloquearColaborador, rateLimit, asy
     }
 
     if (padresUpdate !== undefined) {
-      await sql`UPDATE family_members SET nombre = ${cleanNombre}, relacion = ${cleanRelacion}, padres = ${padresUpdate.length ? JSON.stringify(padresUpdate) : null} WHERE id = ${id} AND user_id = ${req.profileUserId}`;
+      await sql`UPDATE family_members SET nombre = ${cleanNombre}, relacion = ${cleanRelacion}, padres = ${padresUpdate.length ? JSON.stringify(padresUpdate) : null}, padres_fijos = true WHERE id = ${id} AND user_id = ${req.profileUserId}`;
     } else {
       await sql`UPDATE family_members SET nombre = ${cleanNombre}, relacion = ${cleanRelacion} WHERE id = ${id} AND user_id = ${req.profileUserId}`;
     }
@@ -8996,6 +9035,7 @@ function stmtsBorrarContenidoDe(id) {
     sql`DELETE FROM whatsapp_reminder_log WHERE profile_id = ${id}`,
     sql`DELETE FROM subscriptions WHERE user_id = ${id}`,
     sql`DELETE FROM billing_orders WHERE user_id = ${id}`,
+    sql`DELETE FROM arbol_cambios_ia WHERE user_id = ${id}`,
   ];
 }
 

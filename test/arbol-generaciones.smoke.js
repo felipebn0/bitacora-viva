@@ -28,5 +28,22 @@ const mezcla = [
 quitarPadresDeOtraGeneracion(mezcla);
 check('si tenía un padre bueno y una abuela, solo se quita la abuela', JSON.stringify(mezcla[2].padres) === '["Gordo"]');
 check('sin abuelos en la lista no toca nada', JSON.stringify(quitarPadresDeOtraGeneracion([{ nombre: 'A', relacion: 'prima', padres: ['B'] }])[0].padres) === '["B"]');
+const diego = [
+  { nombre: 'Jorge Vargas Velosa', relacion: 'Abuelo Paterno', padres: [] },
+  { nombre: 'Alejandrina Peña', relacion: 'Abuela Paterna', padres: [] },
+  { nombre: 'Jorge Vargas', relacion: 'Papá', padres: ['Jorge Vargas Velosa', 'Alejandrina Peña'] },
+  { nombre: 'Nubia', relacion: 'tía paterna', padres: ['Jorge Vargas Velosa', 'Alejandrina Peña'] },
+  { nombre: 'Diego Vargas', relacion: 'Persona principal', padres: ['Jorge Vargas Velosa', 'Alejandrina Peña'] },
+  { nombre: 'Yo mismo', relacion: 'Yo (persona principal)', padres: ['Jorge Vargas Velosa'] },
+  { nombre: 'Laura', relacion: 'hermana', padres: ['Alejandrina Peña'] },
+  { nombre: 'Rosa', relacion: 'hermana de mi papá', padres: ['Jorge Vargas Velosa', 'Alejandrina Peña'] },
+];
+quitarPadresDeOtraGeneracion(diego);
+const d = (n) => diego.find((p) => p.nombre === n);
+check('la persona principal ya no es hija de sus abuelos', d('Diego Vargas').padres.length === 0);
+check('"Yo (persona principal)" tampoco', d('Yo mismo').padres.length === 0);
+check('una hermana de la persona principal tampoco', d('Laura').padres.length === 0);
+check('una "hermana de mi papá" (tía) conserva a sus padres, los abuelos', d('Rosa').padres.length === 2);
+check('el papá y la tía conservan a sus padres', d('Jorge Vargas').padres.length === 2 && d('Nubia').padres.length === 2);
 console.log(`\n${ok} pasaron, ${mal} fallaron`);
 process.exit(mal ? 1 : 0);
