@@ -10,6 +10,7 @@ const { AwsClient } = require('aws4fetch');
 const archiver = require('archiver');
 const { Readable } = require('stream');
 const { calcularHashesDeInline } = require('./csp-hashes');
+const { quitarPadresDeOtraGeneracion } = require('./arbol-generaciones');
 
 // Observabilidad (Sentry): hasta ahora, si algo fallaba en producción nos
 // enterábamos solo si alguien nos escribía o si alguien iba a mirar los
@@ -4843,10 +4844,10 @@ async function updateFamilyTree(userId, esPropia, newExchanges) {
         nombre: capitalizarNombre(p.nombre),
         padres: Array.isArray(p.padres) ? p.padres.map(capitalizarNombre) : p.padres,
       }));
-    const personas = resolverPadresPorNombreParecido(
+    const personas = quitarPadresDeOtraGeneracion(resolverPadresPorNombreParecido(
       inferirPadresFaltantes(fusionarRolesUnicos(personasCapitalizadas, userId)),
       userId
-    );
+    ));
     const eventos = unidos.eventos.slice(0, 100);
 
     // Para la campanita de aviso en el ícono del árbol: nombres que
@@ -7861,6 +7862,7 @@ app.get('/api/tree', requireAuth, bloquearColaborador, async (req, res) => {
       es_principal: !!p.es_principal,
       notas_count: Number(p.notas_count) || 0,
     }));
+    quitarPadresDeOtraGeneracion(people);
     // Auto-agregar al narrador si no aparece en el árbol.
     // Cuenta propia (esPropia): nombre en users.name. Subperfil: en bitacoras.nombre.
     try {
