@@ -54,6 +54,18 @@ const ARGS = ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-str
   t = await correr((r) => r.abort());
   ok(t.oidos.some((s) => /gusto\.mp3/.test(s)), 'si el servidor falla, sigue el saludo de siempre');
 
+  const context = await browser.newContext({ permissions: ['microphone'], viewport: { width: 1280, height: 900 } });
+  const page = await context.newPage();
+  await page.route('**/api/demo-nombre', (r) => r.fulfill({ status: 204 }));
+  await page.goto(base + '/como-funciona.html');
+  await page.locator('#demoOrbe').click();
+  await page.waitForSelector('.demo-eco__guardado', { timeout: 150000 });
+  const preguntas = await page.locator('.demo-eco__guardado-pregunta').allInnerTexts();
+  ok(await page.locator('.demo-eco__guardado audio').count() === 2, 'la tarjeta final guarda las dos notas de voz');
+  ok(preguntas.length === 2 && /historia de tu familia/.test(preguntas[0]) && /Quién más estaba ahí/.test(preguntas[1]), 'cada nota trae la pregunta de Eco como contexto');
+  if (process.env.CAPTURA) await page.locator('#demoCaja').screenshot({ path: process.env.CAPTURA });
+  await context.close();
+
   await browser.close(); server.close();
   console.log(fallos ? '\nHubo fallos.' : '\nTodo bien');
   process.exit(fallos ? 1 : 0);

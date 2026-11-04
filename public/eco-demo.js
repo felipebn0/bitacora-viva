@@ -21,7 +21,10 @@
   let mic = null;
   let permisoMic = null;
   let respuestaUrl = null;
+  let segundaUrl = null;
   let saludoUrl = null;
+  const PREGUNTA_1 = '¿Qué historia de tu familia no quisieras que se perdiera?';
+  const PREGUNTA_2 = '¿Quién más estaba ahí? Cuéntame un detalle: cómo sonaba, o cómo olía, ese momento.';
   let finActual = null;
   let alTocarOrbe = null;
   let sesion = null;
@@ -125,6 +128,7 @@
 
   function liberarRespuesta() {
     if (respuestaUrl) { URL.revokeObjectURL(respuestaUrl); respuestaUrl = null; }
+    if (segundaUrl) { URL.revokeObjectURL(segundaUrl); segundaUrl = null; }
     if (saludoUrl) { URL.revokeObjectURL(saludoUrl); saludoUrl = null; }
   }
 
@@ -301,7 +305,7 @@
     const p = el('p');
     bloque.appendChild(p);
     chat.appendChild(bloque);
-    hablar('pregunta', '¿Qué historia de tu familia no quisieras que se perdiera?', () => p, () => {
+    hablar('pregunta', PREGUNTA_1, () => p, () => {
       escuchar(20, true, seguimiento);
     });
   }
@@ -315,8 +319,13 @@
       respuestaUrl = URL.createObjectURL(blob);
     }
     esperar(300, () => {
-      burbujaEco('seguimiento', 'Gracias por contármelo. ¿Quién más estaba ahí? Cuéntame un detalle: cómo sonaba, o cómo olía, ese momento.', () => escuchar(20, false, cierre, 1800));
+      burbujaEco('seguimiento', 'Gracias por contármelo. ' + PREGUNTA_2, () => escuchar(20, true, segundaRespuesta, 1800));
     });
+  }
+
+  function segundaRespuesta(blob) {
+    if (blob) segundaUrl = URL.createObjectURL(blob);
+    cierre();
   }
 
   function cierre() {
@@ -326,12 +335,18 @@
     accion.textContent = '';
     const tarjeta = el('div', 'demo-eco__guardado');
     tarjeta.appendChild(el('span', null, 'Recuerdo guardado (ejemplo)'));
-    if (respuestaUrl) {
-      tarjeta.appendChild(el('p', null, 'Así quedó tu voz:'));
-      const reproductor = el('audio');
-      reproductor.controls = true;
-      reproductor.src = respuestaUrl;
-      tarjeta.appendChild(reproductor);
+    const respuestas = [[PREGUNTA_1, respuestaUrl], [PREGUNTA_2, segundaUrl]].filter((r) => r[1]);
+    if (respuestas.length) {
+      const reproductores = [];
+      respuestas.forEach(([pregunta, url]) => {
+        tarjeta.appendChild(el('p', 'demo-eco__guardado-pregunta', pregunta));
+        const reproductor = el('audio');
+        reproductor.controls = true;
+        reproductor.src = url;
+        reproductor.addEventListener('play', () => reproductores.forEach((o) => { if (o !== reproductor) o.pause(); }));
+        reproductores.push(reproductor);
+        tarjeta.appendChild(reproductor);
+      });
     } else {
       tarjeta.appendChild(el('p', null, '“La casa de los abuelos, los domingos, el olor del café…”'));
     }
