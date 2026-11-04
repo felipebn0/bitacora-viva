@@ -159,6 +159,9 @@ function check(nombre, cond) {
 
     const promptEscribir = capturedAnthropicCalls.find((c) => c.tool_choice && c.tool_choice.name === 'escribir_capitulo');
     check('el prompt le pidió a la IA narrar en PRIMERA persona', promptEscribir.messages[0].content.includes('PRIMERA persona'));
+    const promptAgrupar = capturedAnthropicCalls.find((c) => c.tool_choice && c.tool_choice.name === 'agrupar_historias_por_tema');
+    check('al agrupar por temas, cada historia llega con la pregunta de Eco a la que responde (una respuesta corta no se confunde con la de al lado)', promptAgrupar.messages[0].content.includes('#10') && promptAgrupar.messages[0].content.includes('Eco le preguntó: «¿cómo era la finca donde vivían en Boyacá?»'));
+    check('y se le dice que estar juntas en la fecha no las hace del mismo tema', promptAgrupar.messages[0].content.includes('NO significa que sean del mismo tema'));
     check('cada historia llega con la pregunta de Eco que la originó (para saber de quién habla)', promptEscribir.messages[0].content.includes('Eco le preguntó: «¿cómo era la finca donde vivían en Boyacá?»'));
     check('el prompt prohíbe contarle a la persona la vida de otra, la charla técnica y los datos que se contradicen', /REGLAS: \(1\) Si en una respuesta la persona habla de OTRA persona/.test(promptEscribir.messages[0].content) && /pruebas de audio/.test(promptEscribir.messages[0].content) && /se contradicen/.test(promptEscribir.messages[0].content));
 
@@ -193,6 +196,21 @@ function check(nombre, cond) {
     const genRep = await request(server, { path: '/api/chapters/generate', method: 'POST', body: {} }, cookie);
     const repData = JSON.parse(genRep.body);
     check('una historia repetida en dos temas se queda solo en el primer capítulo', repData.chapters.length === 1 && JSON.stringify(repData.chapters[0].story_ids) === '[10,11]');
+
+    // Los capítulos salen en el orden de la vida (infancia, colegio, universidad, trabajo), no en el que la IA los nombró.
+    gruposFalsos = [
+      { theme: 'El primer trabajo', story_ids: [11], etapa: 'vida_laboral', orden: 3 },
+      { theme: 'La cocina', story_ids: [], etapa: 'toda_la_vida', orden: 2 },
+      { theme: 'La infancia', story_ids: [10], etapa: 'infancia', orden: 1 },
+    ];
+    capturedAnthropicCalls = [];
+    const ordenado = await request(server, { path: '/api/chapters/generate', method: 'POST', body: {} }, cookie);
+    const ordenData = JSON.parse(ordenado.body);
+    check('los capítulos salen en el orden de la línea de vida, no en el que los nombró la IA', ordenData.chapters.map((c) => c.theme).join('|') === 'La infancia|El primer trabajo');
+    const promptAgruparOrden = capturedAnthropicCalls.find((c) => c.tool_choice && c.tool_choice.name === 'agrupar_historias_por_tema');
+    check('a la IA se le pide agrupar por etapas de vida, sin mezclar colegio, universidad y trabajo, y ordenar en la línea de vida', /NO mezcles|no mezcles en un mismo tema épocas distintas/.test(promptAgruparOrden.messages[0].content) && promptAgruparOrden.messages[0].content.includes('cuándo se CONTÓ') && JSON.stringify(promptAgruparOrden.tools).includes('"orden"'));
+    const promptEscribirEtapa = capturedAnthropicCalls.find((c) => c.tool_choice && c.tool_choice.name === 'escribir_capitulo');
+    check('al escribir cada capítulo se le dice a qué etapa de la vida pertenece y que cuente en orden cronológico sin mezclar épocas', promptEscribirEtapa.messages[0].content.includes('etapa de su vida "infancia"') && promptEscribirEtapa.messages[0].content.includes('de lo más antiguo a lo más reciente'));
   } finally {
     server.close();
   }

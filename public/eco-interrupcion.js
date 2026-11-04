@@ -14,6 +14,11 @@
   // La fuga de Eco por el altavoz nunca se da por más de esto: si la persona ya estaba hablando cuando Eco empezó, su voz
   // no puede subir el umbral hasta dejarla sin poder interrumpir.
   const FUGA_MAX = 0.06;
+  // Cuántos valores de volumen (uno cada 50 ms) se miran para saber si el sonido es parejo, y cuánto tiene que variar (desviación
+  // sobre promedio) para parecer una voz.
+  const MUESTRAS_MIN = 7;
+  const MUESTRAS_MAX = 14;
+  const VARIACION_MIN = 0.15;
   const BANDA_VOZ = [250, 3400];
   const BANDA_TOTAL = [50, 8000];
 
@@ -34,11 +39,22 @@
     return total > 0 ? voz / total : 0;
   }
 
+  function variacion(valores) {
+    let suma = 0;
+    for (let i = 0; i < valores.length; i++) suma += valores[i];
+    const promedio = suma / valores.length;
+    if (promedio <= 0) return 0;
+    let cuadrados = 0;
+    for (let i = 0; i < valores.length; i++) cuadrados += (valores[i] - promedio) * (valores[i] - promedio);
+    return Math.sqrt(cuadrados / valores.length) / promedio;
+  }
+
   function crearDetector() {
     let piso = 0.01;
     let fuga = 0;
     let msEco = 0;
     let msVoz = 0;
+    const fuertes = [];
 
     // eco: Eco está sonando por el altavoz en este momento.
     function alimentar({ rms, ratioVoz, dt, eco }) {
@@ -52,15 +68,23 @@
         }
       }
       const umbral = Math.max(UMBRAL_MIN, piso * 2.5, eco ? fuga * 2 : 0);
-      const esVoz = rms > umbral && ratioVoz >= RATIO_VOZ_MIN;
+      let esVoz = rms > umbral && ratioVoz >= RATIO_VOZ_MIN;
+      if (esVoz) {
+        // La voz sube y baja con cada sílaba; una sirena, una alarma o un pito suenan parejos. Un sonido fuerte cuyo volumen
+        // casi no cambia no se cuenta como voz (y se toma como ruido de fondo).
+        fuertes.push(rms);
+        if (fuertes.length > MUESTRAS_MAX) fuertes.shift();
+        if (fuertes.length >= MUESTRAS_MIN && variacion(fuertes) < VARIACION_MIN) esVoz = false;
+      }
       if (esVoz) {
         msVoz += dt;
       } else {
         msVoz = Math.max(0, msVoz - dt * 2);
+        if (msVoz === 0) fuertes.length = 0;
         piso += (rms - piso) * alfa;
         if (eco) fuga = Math.min(FUGA_MAX, fuga + (rms - fuga) * alfa);
       }
-      return msVoz >= (eco ? MS_VOZ_HABLANDO : MS_VOZ_PENSANDO);
+      return msVoz >= (eco ? MS_VOZ_HABLANDO : MS_VOZ_PENSANDO) && fuertes.length >= MUESTRAS_MIN;
     }
 
     // Para el medidor de depuración de app.html (?debugvoz=1).

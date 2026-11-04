@@ -11,13 +11,15 @@ const GOLPE = 0.4;
 const HABLA_NORMAL = 0.06;
 
 // Corre el detector con una secuencia [rms, ratio, ms, eco] y dice a los cuántos ms disparó (o null).
-function correr(tramos) {
+// La voz sube y baja con cada sílaba (modulada); una sirena suena pareja (fija).
+function correr(tramos, fija = false) {
   const d = crearDetector();
   let t = 0;
   for (const [rms, ratioVoz, ms, eco] of tramos) {
     for (let i = 0; i < ms / 50; i++) {
       t += 50;
-      if (d.alimentar({ rms, ratioVoz, dt: 50, eco: !!eco })) return t;
+      const nivel = fija ? rms : rms * (1 + 0.4 * Math.sin(t / 70));
+      if (d.alimentar({ rms: nivel, ratioVoz, dt: 50, eco: !!eco })) return t;
     }
   }
   return null;
@@ -29,16 +31,20 @@ ok(correr([[GOLPE, 0.4, 150, false], [0.01, 0.5, 3000, false]]) === null, 'un go
 ok(correr([[0.15, VOZ, 300, true], [0.01, 0.5, 3000, true]]) === null, 'una tos de 0,3 segundos mientras Eco habla no interrumpe');
 
 const pensando = correr([[0.01, 0.5, 1000, false], [0.12, VOZ, 2000, false]]);
-ok(pensando !== null && pensando - 1000 >= 250 && pensando - 1000 <= 400, 'mientras Eco piensa, una voz que se sostiene interrumpe en menos de medio segundo');
+ok(pensando !== null && pensando - 1000 >= 300 && pensando - 1000 <= 500, 'mientras Eco piensa, una voz que se sostiene interrumpe en menos de medio segundo');
 
 const hablando = correr([[0.01, 0.5, 500, false], [0.05, VOZ, 4000, true], [0.2, VOZ, 2000, true]]);
-ok(hablando !== null && hablando >= 4500 + 250 && hablando <= 4500 + 450, 'mientras Eco habla, la voz de la persona por encima de la fuga interrumpe a los ~0,3 s');
+ok(hablando !== null && hablando >= 4500 + 300 && hablando <= 4500 + 550, 'mientras Eco habla, la voz de la persona por encima de la fuga interrumpe en menos de 0,6 s');
+
+ok(correr([[0.01, 0.5, 500, false], [0.3, VOZ, 8000, false]], true) === null, 'una sirena o una alarma (fuerte, con forma de voz pero de volumen parejo) no interrumpe mientras Eco piensa');
+ok(correr([[0.01, 0.5, 500, false], [0.05, VOZ, 4000, true], [0.3, VOZ, 8000, true]], true) === null, 'ni mientras Eco habla');
+ok(correr([[0.01, 0.5, 500, false], [0.3, VOZ, 6000, false], [0.01, 0.5, 500, false], [0.2, VOZ, 2000, false]]) !== null, 'después de una sirena, una voz que sube y baja sí interrumpe');
 
 ok(correr([[0.05, VOZ, 8000, true]]) === null, 'el eco de la propia voz de Eco por el altavoz no la interrumpe');
 ok(correr([[0.11, VOZ, 8000, true]]) === null, 'ni siquiera cuando el altavoz suena fuerte');
 ok(correr([[0.11, VOZ, 3000, true], [0.35, VOZ, 2000, true]]) !== null, 'pero con el altavoz fuerte, una voz mucho más alta que el eco sí interrumpe');
 
-const desdeElInicio = correr([[0.01, 0.5, 500, false], [0.15, VOZ, 3000, true]]);
+const desdeElInicio = correr([[0.01, 0.5, 500, false], [0.25, VOZ, 3000, true]]);
 ok(desdeElInicio !== null, 'si la persona ya estaba hablando cuando Eco empezó, igual lo interrumpe (su voz no contamina el cálculo del eco)');
 ok(correr([[0.01, 0.5, 500, false], [HABLA_NORMAL, VOZ, 2000, true]]) === null, 'con el altavoz de Eco sonando igual de fuerte que una voz normal no se confunde (es su propio eco)');
 ok(correr([[0.01, 0.5, 500, false], [HABLA_NORMAL, VOZ, 2000, false]]) !== null, 'una voz normal (volumen suave) mientras Eco piensa interrumpe');

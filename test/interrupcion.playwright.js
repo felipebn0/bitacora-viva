@@ -53,7 +53,7 @@ async function preparar(browser, base, { demoraRespuesta = 0 } = {}) {
       set fftSize(v) { this._fft = v; }
       get fftSize() { return this._fft; }
       get frequencyBinCount() { return this._fft / 2; }
-      getByteTimeDomainData(a) { const n = Math.round(window.__mic.rms * 128); for (let i = 0; i < a.length; i++) a[i] = 128 + (i % 2 ? -n : n); }
+      getByteTimeDomainData(a) { const n = Math.round(window.__mic.rms * (window.__mic.fijo ? 1 : 1 + 0.4 * Math.sin(performance.now() / 70)) * 128); for (let i = 0; i < a.length; i++) a[i] = 128 + (i % 2 ? -n : n); }
       getFloatFrequencyData(a) {
         const ancho = 48000 / this._fft;
         for (let i = 0; i < a.length; i++) { const f = i * ancho; a[i] = window.__mic.voz ? (f >= 300 && f <= 3000 ? -30 : -100) : (f < 200 ? -30 : -100); }
@@ -92,7 +92,7 @@ async function preparar(browser, base, { demoraRespuesta = 0 } = {}) {
   await page.waitForSelector('#orb', { state: 'visible' });
   const estadoOrbe = () => page.evaluate(() => document.getElementById('orb').dataset.state);
   const esperar = (e, ms = 15000) => page.waitForFunction((x) => document.getElementById('orb').dataset.state === x, e, { timeout: ms });
-  const mic = (rms, voz) => page.evaluate((v) => { window.__mic = v; }, { rms, voz });
+  const mic = (rms, voz, fijo) => page.evaluate((v) => { window.__mic = v; }, { rms, voz, fijo: !!fijo });
   // La persona dice algo, hace una pausa y Eco empieza a responder.
   async function contarParteA() {
     await page.click('#orb');
@@ -146,13 +146,15 @@ async function preparar(browser, base, { demoraRespuesta = 0 } = {}) {
 
     console.log('\n--- 2: un ruido mientras Eco habla no lo interrumpe ---');
     t = await preparar(browser, base);
-    await t.page.evaluate(() => { window.__duracionAudio = 6000; });
+    await t.page.evaluate(() => { window.__duracionAudio = 9500; });
     await t.contarParteA();
     await dormir(1000);
     await t.mic(0.12, false); await dormir(2000);
     ok(await t.estadoOrbe() === 'speaking', 'un ventilador (sonido grave) no interrumpe a Eco');
     await t.mic(0.3, true); await dormir(250); await t.mic(0.005, false); await dormir(500);
     ok(await t.estadoOrbe() === 'speaking', 'una tos corta tampoco');
+    await t.mic(0.3, true, true); await dormir(2500); await t.mic(0.005, false);
+    ok(await t.estadoOrbe() === 'speaking', 'una sirena (fuerte, con forma de voz, pero de volumen parejo) tampoco');
     await t.esperar('listening', 15000);
     ok(t.llamadas.length === 2, 'Eco terminó de hablar sola y la charla siguió normal');
     await t.context.close();

@@ -7100,7 +7100,7 @@ app.get('/api/export', requireAuth, bloquearColaborador, rateLimit, async (req, 
       sql`SELECT id, type, url, caption, contributor, created_at FROM media WHERE user_id = ${userId} ORDER BY created_at ASC`,
       sql`SELECT nombre, relacion, detalles, padres, created_at FROM family_members WHERE user_id = ${userId} ORDER BY id ASC`,
       sql`SELECT descripcion, anio, edad_aprox, categoria FROM timeline_events WHERE user_id = ${userId} ORDER BY anio NULLS LAST, id ASC`,
-      sql`SELECT title, theme, generated_text, story_ids, created_at FROM chapters WHERE user_id = ${userId} ORDER BY created_at ASC`,
+      sql`SELECT title, theme, generated_text, story_ids, created_at FROM chapters WHERE user_id = ${userId} ORDER BY created_at ASC, id ASC`,
     ]);
     const perfilBitacora = await leerPerfilBitacora(userId, req.bitacoraEsPropia);
     const perfilCuenta = req.bitacoraEsPropia
@@ -7226,6 +7226,7 @@ ${parrafoMedia}
 // narrativo corto usando SOLO esas transcripciones. Separar los dos pasos
 // (en vez de uno solo) hace que cada llamado sea más chico y más fácil de
 // revisar si algo sale mal.
+const ETAPAS_DE_VIDA = ['infancia', 'colegio', 'universidad', 'juventud', 'vida_laboral', 'familia_propia', 'madurez', 'toda_la_vida'];
 const CHAPTER_CLASSIFY_TOOLS = [{
   name: 'agrupar_historias_por_tema',
   description: 'Agrupa las historias detectadas por tema o época de vida que realmente aparecen en el contenido (no una lista fija predefinida).',
@@ -7240,8 +7241,10 @@ const CHAPTER_CLASSIFY_TOOLS = [{
           properties: {
             theme: { type: 'string', description: 'Nombre corto del tema o época. Ej: Infancia, El trabajo, La cocina, Su primera novia' },
             story_ids: { type: 'array', items: { type: 'number' }, description: 'Los ids (número) de las historias que pertenecen a este tema, tal como aparecen en el listado.' },
+            etapa: { type: 'string', enum: ETAPAS_DE_VIDA, description: 'En qué etapa de su vida ocurre este tema. "toda_la_vida" solo para lo que no tiene una época (la cocina, la familia en general).' },
+            orden: { type: 'number', description: 'Posición de este tema en la línea de vida de la persona: 1 es lo más antiguo, y así hasta el más reciente. Dos temas no llevan el mismo número.' },
           },
-          required: ['theme', 'story_ids'],
+          required: ['theme', 'story_ids', 'etapa', 'orden'],
         },
       },
     },
@@ -7337,11 +7340,15 @@ async function classifyAportesByTheme(userId, aportes, themes) {
   }
 }
 
-async function classifyStoriesByTheme(userId, stories) {
+async function classifyStoriesByTheme(userId, stories, perfil) {
+  const anioNacimiento = perfil && perfil.fecha_nacimiento ? new Date(perfil.fecha_nacimiento).getUTCFullYear() : null;
   const listado = stories
-    .map((s) => `#${s.id} (${new Date(s.created_at).toLocaleDateString('es-CO')}): ${s.texto}`)
+    .map((s) => {
+      const preguntas = Array.isArray(s.preguntas) ? s.preguntas.filter(Boolean) : [];
+      return `#${s.id} (${new Date(s.created_at).toLocaleDateString('es-CO')}): ${preguntas.length ? `(Eco le preguntó: ${preguntas.map((q) => `«${q}»`).join(' / ')}) ` : ''}${s.texto}`;
+    })
     .join('\n\n');
-  const prompt = `Estas son las historias detectadas en las charlas de esta persona (id, fecha, transcripción):${envolverDatoNoConfiable('historias', listado)}\n\nPropón una lista de temas o épocas de vida que REALMENTE aparecen en este material (que emerja de lo contado, no uses una lista fija predefinida), y para cada tema indica qué ids de historias corresponden (cada historia va en un solo tema, el que mejor le quede). Usa la herramienta para responder.`;
+  const prompt = `Estas son las historias detectadas en las charlas de esta persona (id, fecha en que se contó, la pregunta de Eco a la que responde y la transcripción):${envolverDatoNoConfiable('historias', listado)}\n\nPropón una lista de temas o épocas de vida que REALMENTE aparecen en este material (que emerja de lo contado, no uses una lista fija predefinida), y para cada tema indica qué ids de historias corresponden (cada historia va en un solo tema, el que mejor le quede). La fecha entre paréntesis es cuándo se CONTÓ la historia, no cuándo ocurrió: la época sale de lo que se cuenta (el colegio, la universidad, un trabajo, una ciudad, la edad). Los temas siguen las etapas de la vida: no mezcles en un mismo tema épocas distintas (el colegio con la universidad, ni la universidad con un trabajo), cada trabajo o ciudad importante es su propio tema, y alguien que aparece en varias épocas (un amigo, un hermano) va en el tema de la época de cada historia. Lo que no tiene una época (la cocina, la familia en general) lleva la etapa "toda_la_vida". A cada tema ponle "etapa" y "orden": su posición en la línea de vida de la persona, de lo más antiguo (1) a lo más reciente.${anioNacimiento ? ` Nació en ${anioNacimiento}: úsalo para ubicar las épocas.` : ''} Cada historia se agrupa por lo que ella misma cuenta, usando la pregunta de Eco para entender de qué habla una respuesta corta; que dos historias queden una al lado de la otra en la fecha NO significa que sean del mismo tema. Usa la herramienta para responder.`;
 
   const response = await anthropic.messages.create({
     model: MODEL,
@@ -7355,14 +7362,19 @@ async function classifyStoriesByTheme(userId, stories) {
 
   const toolUse = response.content.find((b) => b.type === 'tool_use');
   if (!toolUse || !toolUse.input || !Array.isArray(toolUse.input.grupos)) return [];
-  return toolUse.input.grupos.slice(0, 12); // tope defensivo de temas por corrida
+  // Los capítulos salen en el orden en que ocurrieron en la vida de la persona, no en el que la IA los nombró ni en el que se contaron.
+  return toolUse.input.grupos
+    .slice(0, 12) // tope defensivo de temas por corrida
+    .map((g, i) => ({ g, i }))
+    .sort((a, b) => ((Number.isFinite(a.g && a.g.orden) ? a.g.orden : 1e9) - (Number.isFinite(b.g && b.g.orden) ? b.g.orden : 1e9)) || a.i - b.i)
+    .map((x) => x.g);
 }
 
 // Reglas que evitan los errores más graves de un libro: contarle a la persona la vida de otra, meter charla técnica,
 // repetir lo de otro capítulo o dejar datos que se contradicen. La pregunta de Eco que acompaña cada historia ("Eco le
 // preguntó: ...") es lo que permite saber de quién se está hablando.
-const REGLAS_DE_FIDELIDAD_DEL_CAPITULO = 'REGLAS: (1) Si en una respuesta la persona habla de OTRA persona (su hermana, hermano, hijo, esposa, amigo...), cuéntalo como lo que ella cuenta de esa persona, por ejemplo "su hermana, la única mujer entre siete hermanos, vivía en...", y NUNCA como algo que le pasó a la propia persona; la pregunta de Eco que acompaña cada historia ayuda a saber de quién se habla, y si aun así no se sabe de quién habla, deja ese detalle por fuera. (2) Ignora lo que no es parte de su vida: pruebas de audio o micrófono, saludos, "¿me escuchas?", comentarios sobre la grabación. (3) Si dos datos se contradicen (por ejemplo una edad que no corresponde con el año de nacimiento), no incluyas el dato dudoso. (4) Cuenta solo lo que corresponde al tema de este capítulo y no repitas en él lo que cuenta otro capítulo.';
-async function writeChapterFromStories(userId, theme, stories, persona, aportes, tratamiento) {
+const REGLAS_DE_FIDELIDAD_DEL_CAPITULO = 'REGLAS: (1) Si en una respuesta la persona habla de OTRA persona (su hermana, hermano, hijo, esposa, amigo...), cuéntalo como lo que ella cuenta de esa persona, por ejemplo "su hermana, la única mujer entre siete hermanos, vivía en...", y NUNCA como algo que le pasó a la propia persona; la pregunta de Eco que acompaña cada historia ayuda a saber de quién se habla, y si aun así no se sabe de quién habla, deja ese detalle por fuera. (2) Ignora lo que no es parte de su vida: pruebas de audio o micrófono, saludos, "¿me escuchas?", comentarios sobre la grabación. (3) Si dos datos se contradicen (por ejemplo una edad que no corresponde con el año de nacimiento), no incluyas el dato dudoso. (4) Cuenta solo lo que corresponde al tema de este capítulo y no repitas en él lo que cuenta otro capítulo. (5) Cuenta las cosas en el orden en que ocurrieron en la vida de la persona, de lo más antiguo a lo más reciente, y no mezcles épocas: si una historia habla claramente de otra etapa (por ejemplo la universidad dentro de un capítulo del colegio, o un trabajo dentro de uno de la infancia), déjala fuera o menciónala en una sola frase como algo que vendría después, sin desarrollarla. (6) Cada capítulo es una etapa o un tema de su vida: no cuentes como si ya hubiera pasado algo que, por lo que cuenta la propia persona, ocurrió después.';
+async function writeChapterFromStories(userId, theme, stories, persona, aportes, tratamiento, etapa) {
   const fuente = stories.map((s) => {
     const preguntas = Array.isArray(s.preguntas) ? s.preguntas.filter(Boolean) : [];
     return `- ${preguntas.length ? `(Eco le preguntó: ${preguntas.map((q) => `«${q}»`).join(' / ')}) ` : ''}${s.texto}`;
@@ -7382,7 +7394,7 @@ async function writeChapterFromStories(userId, theme, stories, persona, aportes,
   const bloqueAportes = (aportes && aportes.length)
     ? `\n\nAdemás, esto es lo que familiares o amigos aportaron sobre esta persona (puede no tener nada que ver con el tema "${theme}" — en ese caso, ignóralo por completo):${envolverDatoNoConfiable('aportes', aportes.map((a) => `- ${a.contributor || 'Familia'}: ${a.texto}`).join('\n\n'))}`
     : '';
-  const prompt = `Estas son transcripciones textuales de historias que esta persona contó sobre el tema "${theme}":${envolverDatoNoConfiable('historias', fuente)}${bloqueAportes}\n\nArma un capítulo narrativo corto (2 a 4 párrafos), ${indicacionPersona}, con un tono cálido de libro de memorias familiares, que hilvane estas historias. USA SOLO lo que está en las transcripciones de arriba — nunca inventes ni completes fechas, nombres, lugares o eventos que no estén ahí. Si falta contexto para que un párrafo fluya elegante, prefiere una frase más simple pero fiel a lo dicho, antes que una elegante pero inventada. Si un aporte de la familia encaja con este tema, súmalo como un detalle cálido y breve (por ejemplo "como también recuerda su hija Ana..."), PERO si un aporte cuenta el mismo momento que ya contó la propia persona, prioriza siempre la versión de la propia persona — nunca la contradigas ni la reemplaces. Ponle también un título corto al capítulo. ${REGLAS_DE_FIDELIDAD_DEL_CAPITULO} Usa la herramienta para responder.${instruccionGeneroDelTexto(tratamiento)}`;
+  const prompt = `Estas son transcripciones textuales de historias que esta persona contó sobre el tema "${theme}":${envolverDatoNoConfiable('historias', fuente)}${bloqueAportes}\n\nArma un capítulo narrativo corto (2 a 4 párrafos), ${indicacionPersona}, con un tono cálido de libro de memorias familiares, que hilvane estas historias. USA SOLO lo que está en las transcripciones de arriba — nunca inventes ni completes fechas, nombres, lugares o eventos que no estén ahí. Si falta contexto para que un párrafo fluya elegante, prefiere una frase más simple pero fiel a lo dicho, antes que una elegante pero inventada. Si un aporte de la familia encaja con este tema, súmalo como un detalle cálido y breve (por ejemplo "como también recuerda su hija Ana..."), PERO si un aporte cuenta el mismo momento que ya contó la propia persona, prioriza siempre la versión de la propia persona — nunca la contradigas ni la reemplaces. Ponle también un título corto al capítulo.${etapa && etapa !== 'toda_la_vida' ? ` Este capítulo es de la etapa de su vida "${etapa.replace(/_/g, ' ')}".` : ''} ${REGLAS_DE_FIDELIDAD_DEL_CAPITULO} Usa la herramienta para responder.${instruccionGeneroDelTexto(tratamiento)}`;
 
   const response = await anthropic.messages.create({
     model: MODEL,
@@ -7422,18 +7434,6 @@ app.post('/api/chapters/generate', requireAuth, bloquearColaborador, rateLimit, 
     const perfilCapitulos = await leerPerfilBitacora(req.profileUserId, req.bitacoraEsPropia);
     const tratamientoCapitulos = tratamientoValido(perfilCapitulos && perfilCapitulos.tratamiento);
 
-    const grupos = await classifyStoriesByTheme(req.profileUserId, stories);
-    if (!grupos.length) {
-      return res.json({ ok: true, message: 'No se pudo agrupar el material todavía. Prueba de nuevo más tarde.', chapters: [] });
-    }
-
-    // Ver el comentario largo junto a classifyAportesByTheme: reemplaza
-    // "cada capítulo recibe TODOS los aportes" por "cada capítulo recibe
-    // solo los suyos", clasificados una sola vez contra estos mismos temas.
-    const aportesPorTema = aportes.length
-      ? await classifyAportesByTheme(req.profileUserId, aportes, grupos.map((g) => g.theme))
-      : new Map();
-
     // La pregunta que Eco le hizo a la persona antes de cada respuesta: sin ella, lo que cuenta de su hermana
     // parece contar de sí misma.
     const preguntaDe = await preguntasPorRespuesta(req.profileUserId);
@@ -7445,6 +7445,18 @@ app.post('/api/chapters/generate', requireAuth, bloquearColaborador, rateLimit, 
       }
       return [s.id, { ...s, preguntas }];
     }));
+    const grupos = await classifyStoriesByTheme(req.profileUserId, Array.from(byId.values()), perfilCapitulos);
+    if (!grupos.length) {
+      return res.json({ ok: true, message: 'No se pudo agrupar el material todavía. Prueba de nuevo más tarde.', chapters: [] });
+    }
+
+    // Ver el comentario largo junto a classifyAportesByTheme: reemplaza
+    // "cada capítulo recibe TODOS los aportes" por "cada capítulo recibe
+    // solo los suyos", clasificados una sola vez contra estos mismos temas.
+    const aportesPorTema = aportes.length
+      ? await classifyAportesByTheme(req.profileUserId, aportes, grupos.map((g) => g.theme))
+      : new Map();
+
     // Una historia va en un solo capítulo: si la agrupación la repitió en dos temas, se queda en el primero.
     const yaUsadas = new Set();
     const nuevos = [];
@@ -7453,7 +7465,7 @@ app.post('/api/chapters/generate', requireAuth, bloquearColaborador, rateLimit, 
       const ids = Array.isArray(g.story_ids) ? g.story_ids.filter((id) => byId.has(id) && !yaUsadas.has(id) && yaUsadas.add(id)) : [];
       if (!ids.length) continue;
       const aportesDelTema = aportesPorTema.get(g.theme) || [];
-      const capitulo = await writeChapterFromStories(req.profileUserId, g.theme, ids.map((id) => byId.get(id)), persona, aportesDelTema, tratamientoCapitulos);
+      const capitulo = await writeChapterFromStories(req.profileUserId, g.theme, ids.map((id) => byId.get(id)), persona, aportesDelTema, tratamientoCapitulos, g.etapa);
       if (!capitulo) continue;
       nuevos.push({ theme: String(g.theme).slice(0, 120), ids, ...capitulo });
     }
