@@ -24,7 +24,7 @@ ok(/FEMENINO/.test(instruccionTratamiento('femenino')) && !/MASCULINO/.test(inst
 ok(/No lo asumas por el nombre/.test(instruccionTratamiento(null)), 'sin trato: la instrucción pide NO asumir por el nombre');
 
 ok(/ADD COLUMN IF NOT EXISTS tratamiento TEXT/.test(server) && (server.match(/ADD COLUMN IF NOT EXISTS tratamiento TEXT/g) || []).length === 2, 'columna tratamiento en users y en bitacoras');
-ok(/INSERT INTO users \([^)]*tratamiento\)/.test(server), 'el registro guarda el trato');
+ok(/INSERT INTO users \([^)]*tratamiento(, idioma)?\)/.test(server), 'el registro guarda el trato');
 ok(/INSERT INTO bitacoras \([^)]*tratamiento\)/.test(server), 'crear un subperfil guarda el trato');
 ok(/tratamiento = COALESCE\(\$\{cleanTratamiento\}, tratamiento\)/.test(server), 'editar el perfil no borra el trato si no se manda');
 ok(/app\.post\('\/api\/subprofiles\/:id\/tratamiento'/.test(server), 'se puede cambiar el trato de un subperfil existente');

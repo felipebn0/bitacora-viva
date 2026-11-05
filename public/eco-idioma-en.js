@@ -958,5 +958,7 @@ window.ECO_EN = {
   "Buenos días": "Good morning",
   "Buenas tardes": "Good afternoon",
   "Buenas noches": "Good evening",
-  "Hola": "Hi"
+  "Hola": "Hi",
+  "Idioma de tu bitácora": "Language of your journal",
+  "Toda tu bitácora y la voz de Eco quedan en este idioma. Se elige una sola vez.": "Your whole journal and Eco's voice will stay in this language. It is chosen only once."
 };
