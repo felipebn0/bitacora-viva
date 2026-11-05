@@ -7373,11 +7373,13 @@ async function classifyStoriesByTheme(userId, stories, perfil) {
     if (!grupos) console.warn(`[capitulos] userId=${userId} la clasificación por temas no trajo grupos (intento ${intento}, stop_reason=${response.stop_reason})`);
   }
   if (!grupos) return [];
-  // Los capítulos salen en el orden en que ocurrieron en la vida de la persona, no en el que la IA los nombró ni en el que se contaron.
+  // Los capítulos salen en el orden en que ocurrieron en la vida de la persona, no en el que la IA los nombró ni en el que se contaron:
+  // primero por etapa (infancia, colegio, universidad...; los temas sin época al final) y dentro de cada etapa por su posición.
+  const rangoDeEtapa = (g) => { const i = ETAPAS_DE_VIDA.indexOf(g && g.etapa); return i === -1 ? 50 : i; };
   return grupos
     .slice(0, 30) // tope defensivo de temas por corrida (con 12, los temas de la parte final de la vida se perdían del libro)
     .map((g, i) => ({ g, i }))
-    .sort((a, b) => ((Number.isFinite(a.g && a.g.orden) ? a.g.orden : 1e9) - (Number.isFinite(b.g && b.g.orden) ? b.g.orden : 1e9)) || a.i - b.i)
+    .sort((a, b) => (rangoDeEtapa(a.g) - rangoDeEtapa(b.g)) || ((Number.isFinite(a.g && a.g.orden) ? a.g.orden : 1e9) - (Number.isFinite(b.g && b.g.orden) ? b.g.orden : 1e9)) || a.i - b.i)
     .map((x) => x.g);
 }
 

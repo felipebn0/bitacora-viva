@@ -207,6 +207,18 @@ function check(nombre, cond) {
     check('con 16 temas salen los 16 capítulos, en orden', muchosData.chapters.length === 16 && muchosData.chapters.map((c) => c.theme).join('|') === gruposFalsos.map((g) => g.theme).join('|'));
     storyLog.length = 2;
 
+    // La etapa manda sobre el número de orden: un tema de la infancia no queda detrás de los de la vida adulta ni de los sin época.
+    gruposFalsos = [
+      { theme: 'Su cocina', story_ids: [10], etapa: 'toda_la_vida', orden: 1 },
+      { theme: 'Su primer trabajo', story_ids: [11], etapa: 'vida_laboral', orden: 2 },
+      { theme: 'La música de la infancia', story_ids: [], etapa: 'infancia', orden: 9 },
+    ];
+    storyLog.push({ id: 12, texto: 'La música en casa', audio_url: null });
+    gruposFalsos[2].story_ids = [12];
+    const porEtapa = await request(server, { path: '/api/chapters/generate', method: 'POST', body: {} }, cookie);
+    check('los temas se ordenan primero por etapa de vida (infancia, trabajo, sin época) y luego por posición', JSON.parse(porEtapa.body).chapters.map((c) => c.theme).join('|') === 'La música de la infancia|Su primer trabajo|Su cocina');
+    storyLog.length = 2;
+
     // Si la primera respuesta de la IA llega cortada (sin grupos), se vuelve a pedir una vez en vez de rendirse.
     gruposFalsos = [{ theme: 'La infancia', story_ids: [10, 11], etapa: 'infancia', orden: 1 }];
     clasificacionesPendientes = [{}];
