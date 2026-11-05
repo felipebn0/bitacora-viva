@@ -1,0 +1,4 @@
+/* ECO · Botón de idioma ES / ENG. Visible en todas las páginas, arriba a la derecha. */
+.eco-idioma-btn{position:fixed;top:max(10px,env(safe-area-inset-top,0px));right:max(12px,env(safe-area-inset-right,0px));z-index:9999;display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:6px 12px;border:1px solid #dadaca;border-radius:999px;background:#fffdf6;color:#293d30;font:700 .86rem/1 "Atkinson Hyperlegible",system-ui,sans-serif;cursor:pointer;box-shadow:0 4px 12px -10px #243c29}
+.eco-idioma-btn:hover{background:#edf0e5}
+.eco-idioma-btn:focus-visible{outline:3px solid #76936e;outline-offset:3px}
