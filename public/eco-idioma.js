@@ -81,8 +81,8 @@
 
   function marcarIdioma() {
     document.documentElement.lang = idioma;
-    // Cookie para que el servidor escriba resúmenes y capítulos en el mismo idioma.
-    try { document.cookie = "eco_idioma=" + idioma + "; path=/; max-age=31536000; SameSite=Lax"; } catch (e) { /* sin cookies */ }
+    // La bandera solo vive en el landing: se borra la cookie vieja que usaba la IA.
+    try { document.cookie = "eco_idioma=; path=/; max-age=0"; } catch (e) { /* sin cookies */ }
     const titulo = document.title;
     if (!document.documentElement.hasAttribute('data-es-titulo')) document.documentElement.setAttribute('data-es-titulo', titulo);
     const t = idioma === 'en' ? (dic()[norm(document.documentElement.getAttribute('data-es-titulo'))] || document.documentElement.getAttribute('data-es-titulo')) : document.documentElement.getAttribute('data-es-titulo');
