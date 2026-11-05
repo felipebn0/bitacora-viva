@@ -5907,6 +5907,11 @@ const AZURE_KEY = process.env.AZURE_SPEECH_KEY;
 const AZURE_REGION = process.env.AZURE_SPEECH_REGION;
 const AZURE_VOICE_NAME = 'es-CO-SalomeNeural';
 const AZURE_VOICE_NAME_MASCULINA = 'es-CO-GonzaloNeural';
+// Respaldo cuando la cuenta está en inglés: el texto ya viene en inglés, así que
+// leerlo con la voz colombiana suena mal. No son voces nuevas de ElevenLabs: esto
+// es solo el respaldo de Azure, que ya existía.
+const AZURE_VOICE_NAME_EN = 'en-US-JennyNeural';
+const AZURE_VOICE_NAME_EN_MASCULINA = 'en-US-GuyNeural';
 
 function escapeSsml(text) {
   return text
@@ -5963,8 +5968,12 @@ async function speakWithElevenLabs(text, voiceId = ELEVEN_VOICE_ID) {
 }
 
 async function speakWithAzure(text, voz) {
-  const nombreVoz = vozValida(voz) === 'masculina' ? AZURE_VOICE_NAME_MASCULINA : AZURE_VOICE_NAME;
-  const ssml = `<speak version="1.0" xml:lang="es-CO"><voice name="${nombreVoz}">${escapeSsml(text)}</voice></speak>`;
+  const enIngles = idiomaDeLaSolicitud() === 'en';
+  const masculina = vozValida(voz) === 'masculina';
+  const nombreVoz = enIngles
+    ? (masculina ? AZURE_VOICE_NAME_EN_MASCULINA : AZURE_VOICE_NAME_EN)
+    : (masculina ? AZURE_VOICE_NAME_MASCULINA : AZURE_VOICE_NAME);
+  const ssml = `<speak version="1.0" xml:lang="${enIngles ? 'en-US' : 'es-CO'}"><voice name="${nombreVoz}">${escapeSsml(text)}</voice></speak>`;
   const resp = await fetch(
     `https://${AZURE_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`,
     {
