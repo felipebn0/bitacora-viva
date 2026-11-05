@@ -30,6 +30,20 @@ const LINES_VIOLENCE = [
   { num:'141',           label:'ICBF',                desc:'niños y adolescentes' },
   { num:'123',           label:'Emergencias',         desc:'peligro inmediato' },
 ];
+// Cuentas en inglés (Estados Unidos). 988 se confirmó con la hoja de datos de SAMHSA
+// (llamada, mensaje de texto y chat, 24/7) y la línea de violencia doméstica con
+// thehotline.org el 2026-11-05. Igual que arriba: un número equivocado aquí lo marca
+// alguien en crisis, así que no se agrega ninguno sin confirmarlo en la fuente oficial.
+const LINES_SUICIDE_EN = [
+  { num:'988', label:'Suicide & Crisis Lifeline', desc:'24/7 · call or text' },
+  { num:'911', label:'Emergency',                 desc:'immediate danger' },
+];
+const LINES_VIOLENCE_EN = [
+  { num:'911',            label:'Emergency',                  desc:'immediate danger' },
+  { num:'1-800-799-7233', label:'Domestic Violence Hotline',  desc:'national · confidential · or text START to 88788' },
+];
+// El idioma lo fija la cuenta (public/eco-idioma.js pone lang en <html>).
+const enIngles = () => String(document.documentElement.lang || 'es').toLowerCase().startsWith('en');
 
 // ── Clasificación ─────────────────────────────────────────────────────────────
 // Se compara sin tildes ni mayúsculas, así "está", "esta" y "ESTÁ" son lo mismo.
@@ -42,6 +56,19 @@ const INOFENSIVAS = [
   /\bse me (pega|pegaba|pego|pegan)\b/g,
   /\bme (pega|pegaba|pego) (el sol|la gripa|la musica|la cancion|duro el sol)\b/g,
   /\b(el sol|la gripa|la gripe|el frio|la musica|la cancion|esa cancion|el guayabo|el trago) me (pega|pegaba|pego)\b/g,
+  // Inglés: lo mismo, expresiones que hablan de morir o de golpes sin ningún riesgo.
+  /\b(i'?m |i am )?(dying|died|dead) (of|from) (laughter|laughing|boredom|hunger|thirst|embarrassment|shame|heat|cold)\b/g,
+  /\b(i'?m |i am )?dying (laughing|to (see|know|try|go|meet|eat|hear|get))\b/g,
+  /\b(my )?(feet|back|legs|head|knees|shoes|eyes|allergies|hands) (is |are )?killing me\b/g,
+  /\b(that|this|it|the heat|the cold|my job|homework) (is |was )?killing me\b/g,
+  /\bi could (kill|murder) (for )?(a|an|some)\b/g,
+  /\bkill(ing)? two birds\b/g,
+  /\bkilling time\b/g,
+  /\b(you|he|she|they|we) (killed|crushed) it\b/g,
+  /\bdead (tired|serious|silent|end)\b/g,
+  /\bdrop dead gorgeous\b/g,
+  /\b(my phone|the phone|the battery|my battery) (is |was )?(dead|died)\b/g,
+  /\bbeat me (at|in) (the )?(game|chess|cards|a race|tennis)\b/g,
 ];
 
 // SUICIDIO / AUTOLESIÓN
@@ -58,6 +85,18 @@ const SUICIDIO_AHORA = [
   /\bmejor (estaria|estar|estuviera) muert[oa]\b/,
   /\bme (estoy haciendo|hago) dano\b/,
   /\bacabar con mi vida\b/,
+  // Inglés
+  /\bi (want|wanna|need) to (die|kill myself|end my life|end it all|hurt myself|harm myself|not exist)\b/,
+  /\bi(?:'m| am)? ?(going to|gonna) (kill myself|end my life|end it all|hurt myself)\b/,
+  /\bi(?:'m| am) suicidal\b/,
+  /\bi(?:'m| am)? ?(thinking|been thinking|have been thinking) about (suicide|killing myself|ending my life|ending it all|hurting myself)\b/,
+  /\bi have (suicidal (thoughts|ideation)|thoughts of (killing myself|suicide|dying))\b/,
+  /\bi don'?t want to (live|be alive|be here|go on|wake up)( anymore| any more)?\b/,
+  /\bi (wish i (was|were) dead|want to be dead)\b/,
+  /\b(i'?d|i would) be better off dead\b/,
+  /\b(everyone|they|my family|everybody) (would|'d) be better off without me\b/,
+  /\bi(?:'m| am) (hurting|harming|cutting) myself\b/,
+  /\bi (will|plan to|intend to|am ready to) (end my life|take my own life|end it all)\b/,
 ];
 const SUICIDIO_MENCION = [
   /\bsuicid\w*/,
@@ -65,9 +104,18 @@ const SUICIDIO_MENCION = [
   /\b(matarme|quitarme la vida|hacerme dano)\b/,
   /\bno queria (vivir|seguir viviendo)\b/,
   /\bquiero desaparecer\b/, // muchas veces es solo "irme lejos un rato": se pregunta
+  // Inglés
+  /\bsuicid\w*/,
+  /\b(i )?(tried|wanted|thought about|used to think about) (to )?(kill myself|killing myself|die|dying|end my life|ending my life|hurt myself|hurting myself)\b/,
+  /\b(kill myself|hurt myself|harm myself|end my life|take my own life)\b/,
+  /\bself[- ]harm\w*\b/,
+  /\bi didn'?t want to (live|be here|go on)\b/,
+  /\bi want to disappear\b/,
+  /\bi can'?t (go on|keep going|take it anymore|do this anymore)\b/,
 ];
 // La muerte de otra persona contada como recuerdo: no se pregunta nada.
 const SUICIDIO_DE_OTRO = /\bse (suicido|quito la vida|mato)\b/;
+const SUICIDIO_DE_OTRO_EN = /\b(killed (him|her|them)self|took (his|her|their) own life|committed suicide|died by suicide)\b/;
 
 // VIOLENCIA
 const VIOLENCIA_AHORA = [
@@ -78,12 +126,27 @@ const VIOLENCIA_AHORA = [
   /\b(todavia|aun|todos los dias|cada vez que|hoy|anoche|ayer) (me )?(pega|golpea|maltrata|amenaza|abusa|agrede|pego|golpeo|amenazo|agredio|violo)\b/,
   /\b(me|nos) (pega|golpea|maltrata|amenaza|abusa|agrede) (todavia|aun|todos los dias|cada dia|siempre)\b/,
   /\btengo miedo (de que|que) me (pegue|mate|haga dano|golpee)\b/,
+  // Inglés
+  /\b(he|she|they|my \w+) (is|are|keeps|keep) (hitting|beating|hurting|abusing|threatening|attacking|assaulting|raping) me\b/,
+  /\bi(?:'m| am) being (hit|beaten|abused|threatened|attacked|assaulted|raped|stalked)\b/,
+  /\b(he|she|they)(?:'s| is| are|'ll| will)? ?(going to|gonna) (hit|kill|hurt|beat) me\b/,
+  /\b(he|she|they) wants? to (kill|hurt|beat) me\b/,
+  /\bi(?:'m| am) (still )?(living|stuck) (in|with) (abuse|violence|an abusive)\b/,
+  /\b(he|she|they) (hits|beats|hurts|abuses|threatens|attacks) me (every day|all the time|still|again)\b/,
+  /\bi(?:'m| am) (afraid|scared) (that )?(he|she|they)(?:'ll| will| might| would)? ?(hit|kill|hurt|beat) me\b/,
+  /\b(today|last night|yesterday|tonight|this morning) (he|she|they) (hit|beat|hurt|threatened|attacked) me\b/,
 ];
 const VIOLENCIA_MENCION = [
   /\bme (pega|pegaba|pego|golpea|golpeaba|golpeo|maltrata|maltrataba|maltrato|amenaza|amenazaba|amenazo|abusa|abusaba|abuso|lastima|lastimaba|agrede|agredia|agredio|violo|forzo|pone la mano|ponia la mano)\b/,
   /\babuso de mi\b/,
   /\bviolencia (domestica|de genero|intrafamiliar|sexual)\b/,
   /\babuso sexual\b/,
+  // Inglés
+  /\b(he|she|they|my \w+) (hit|beat|hurt|abused|threatened|attacked|assaulted|raped|molested) me\b/,
+  /\bi was (hit|beaten|abused|threatened|attacked|assaulted|raped|molested)\b/,
+  /\b(domestic|sexual|family|intimate partner) (violence|abuse)\b/,
+  /\b(abused|molested|raped) me\b/,
+  /\bused to (hit|beat|abuse) me\b/,
 ];
 
 function clasificar(texto) {
@@ -93,7 +156,9 @@ function clasificar(texto) {
   const hay = (lista) => lista.some((re) => re.test(t));
   if (hay(SUICIDIO_AHORA)) return { tipo: 'suicide', modo: 'directo' };
   if (hay(VIOLENCIA_AHORA)) return { tipo: 'violence', modo: 'directo' };
-  if (hay(SUICIDIO_MENCION) && !(SUICIDIO_DE_OTRO.test(t) && !/\b(matarme|suicidarme|quitarme la vida|hacerme dano)\b/.test(t))) {
+  const deOtro = (SUICIDIO_DE_OTRO.test(t) || SUICIDIO_DE_OTRO_EN.test(t))
+    && !/\b(matarme|suicidarme|quitarme la vida|hacerme dano|kill myself|killing myself|hurt myself|end my life)\b/.test(t);
+  if (hay(SUICIDIO_MENCION) && !deOtro) {
     return { tipo: 'suicide', modo: 'verificar' };
   }
   if (hay(VIOLENCIA_MENCION)) return { tipo: 'violence', modo: 'verificar' };
@@ -122,7 +187,9 @@ const yaRespondioRecuerdo = { suicide: false, violence: false };
 const quitar = (sel) => document.querySelectorAll(sel).forEach((n) => n.remove());
 
 function createBanner(type) {
-  const lines = type === 'suicide' ? LINES_SUICIDE : LINES_VIOLENCE;
+  const lines = enIngles()
+    ? (type === 'suicide' ? LINES_SUICIDE_EN : LINES_VIOLENCE_EN)
+    : (type === 'suicide' ? LINES_SUICIDE : LINES_VIOLENCE);
   const banner = document.createElement('div');
   banner.className = 'eco-crisis-banner eco-crisis-' + type;
   banner.setAttribute('role','alert');
@@ -221,12 +288,12 @@ window.ecoCrisisCheck = function(text, nearEl){
 // ── Lo que responde ECO ───────────────────────────────────────────────────────
 // El servidor marca la respuesta cuando ECO detecta un riesgo actual (ayuda = 'suicide' | 'violence').
 // Respaldo: si ECO recomienda una línea de ayuda o ayuda profesional sin la marca, el banner sale igual.
-const RECOMIENDA_AYUDA = /\b(106|123|155|141)\b|\blinea (de )?(ayuda|atencion|apoyo)|\bayuda profesional\b|\bprofesional de (la )?salud mental\b|\bnumeros? de ayuda\b/;
+const RECOMIENDA_AYUDA = /\b(106|123|155|141|988|911)\b|\blinea (de )?(ayuda|atencion|apoyo)|\bayuda profesional\b|\bprofesional de (la )?salud mental\b|\bnumeros? de ayuda\b|\bcrisis (line|lifeline|hotline|counselor)\b|\bhelp ?line\b|\bprofessional help\b|\bmental health (professional|hotline)\b/;
 window.ecoCrisisAyuda = function(ayuda, textoEco, textoPersona, nearEl){
   let tipo = ayuda === 'suicide' || ayuda === 'violence' ? ayuda : null;
   if (!tipo && RECOMIENDA_AYUDA.test(norm(textoEco))) {
     const r = clasificar(textoPersona);
-    tipo = r ? r.tipo : (/violencia|maltrat|agred|golpe|abus/.test(norm(textoEco)) ? 'violence' : 'suicide');
+    tipo = r ? r.tipo : (/violencia|maltrat|agred|golpe|abus|violence|abuse|abusive|assault/.test(norm(textoEco)) ? 'violence' : 'suicide');
   }
   if (!tipo) return null;
   const anchor = nearEl || document.querySelector('.orb-zone, .aportes, main') || document.body;

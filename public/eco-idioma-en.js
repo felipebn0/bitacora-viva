@@ -1668,7 +1668,8 @@ window.ECO_EN = {
   "Ya tienes una cuenta abierta en este navegador. Para entrar con este enlace personal, abre el enlace en una ventana privada o cierra sesión primero.": "You already have an account open in this browser. To sign in with this personal link, open the link in a private window or sign out first.",
   "Buenos días,": "Good morning,",
   "Buenas tardes,": "Good afternoon,",
-  "Buenas noches,": "Good evening,"
+  "Buenas noches,": "Good evening,",
+  "Seguir hablando con Eco →": "Keep talking with Eco →"
 };
 window.ECO_EN_PATRONES = {
   "Abrir el diario de {}": "Open {}'s journal",
