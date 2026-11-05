@@ -90,6 +90,10 @@ function idiomaDePedido(req) {
   const c = String(req.headers.cookie || '').split(';').map((x) => x.trim()).find((x) => x.startsWith('eco_idioma='));
   return c && c.slice(11) === 'en' ? 'en' : 'es';
 }
+function idiomaDeLaSolicitud() {
+  const store = contextoDePedido.getStore();
+  return store && store.idioma === 'en' ? 'en' : 'es';
+}
 function instruccionIdiomaRespuesta() {
   const store = contextoDePedido.getStore();
   if (!store || store.idioma !== 'en') return '';
@@ -5706,6 +5710,7 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
         (!configBebe && !mascotaActiva ? instruccionFinDeMes() : '');
     }
 
+    system += instruccionIdiomaRespuesta();
     // Prompt caching: este system (~13.000 tokens de SYSTEM_PROMPT/ARBOL_SYSTEM_PROMPT
     // más el contexto familiar/memoria de esta cuenta) es idéntico turno a turno
     // dentro de la MISMA charla — nada aquí cambia hasta que la persona termina y
@@ -5801,7 +5806,7 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
     }
     // Siempre al final, también en el cierre y en la pausa: nada que no sea
     // español de Colombia le llega a la persona (ver REGLA_ESPANOL_COLOMBIANO).
-    text = await asegurarEspanolColombiano(req.profileUserId, text);
+    if (idiomaDeLaSolicitud() !== 'en') text = await asegurarEspanolColombiano(req.profileUserId, text);
     medida.marca('postproceso');
 
     // Los mensajes "sintéticos" (avisos de botones, entre paréntesis) y el modo árbol no
@@ -5987,7 +5992,7 @@ app.post('/api/transcribe', requireAuth, rateLimitTurno, express.raw({ type: '*/
 
     const formData = new FormData();
     formData.append('model_id', 'scribe_v1');
-    formData.append('language_code', 'spa');
+    formData.append('language_code', idiomaDeLaSolicitud() === 'en' ? 'eng' : 'spa');
     formData.append('file', new Blob([req.body], { type: real.mime }), `audio.${real.ext}`);
 
     const resp = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
@@ -6731,7 +6736,7 @@ app.post('/api/contribute-chat', requireAuth, rateLimit, async (req, res) => {
     const marcaAyuda = extraerMarcaAyuda(text);
     text = marcaAyuda.text;
     const ayuda = marcaAyuda.ayuda;
-    text = await asegurarEspanolColombiano(ownerId, text);
+    if (idiomaDeLaSolicitud() !== 'en') text = await asegurarEspanolColombiano(ownerId, text);
 
     // El borrador que se venía guardando turno a turno (ver
     // guardarBorradorAporte) — si ya existía, seguimos actualizando la

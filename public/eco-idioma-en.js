@@ -950,5 +950,13 @@ window.ECO_EN = {
   "Escribir respuesta": "Write answer",
   "Secciones de tu bitácora": "Sections of your journal",
   "Árbol genealógico": "Family tree",
-  "Uso y costo estimado por perfil — Claude, voz y espacio en la base de datos.": "Estimated usage and cost per profile — Claude, voice and database storage."
+  "Uso y costo estimado por perfil — Claude, voz y espacio en la base de datos.": "Estimated usage and cost per profile — Claude, voice and database storage.",
+  "Presiona": "Press",
+  "para seguir": "to continue",
+  "para otra charla": "for another conversation",
+  "✅ Guardado completado": "✅ Saved",
+  "Buenos días": "Good morning",
+  "Buenas tardes": "Good afternoon",
+  "Buenas noches": "Good evening",
+  "Hola": "Hi"
 };
