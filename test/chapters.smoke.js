@@ -30,6 +30,7 @@ let nextChapterId = 1;
 let capturedAnthropicCalls = [];
 let trato = 'femenino';
 let gruposFalsos = [{ theme: 'La infancia', story_ids: [10, 11] }];
+let clasificacionesPendientes = [];
 
 function fakeSql(strings, ...values) {
   const text = strings.join('?');
@@ -97,6 +98,7 @@ require.cache[require.resolve('@anthropic-ai/sdk')] = {
           capturedAnthropicCalls.push(opts);
           const toolName = opts.tool_choice && opts.tool_choice.name;
           if (toolName === 'agrupar_historias_por_tema') {
+            if (clasificacionesPendientes.length) return { stop_reason: 'max_tokens', content: [{ type: 'tool_use', id: 't0', name: toolName, input: clasificacionesPendientes.shift() }] };
             return { content: [{ type: 'tool_use', id: 't1', name: toolName, input: { grupos: gruposFalsos } }] };
           }
           if (toolName === 'escribir_capitulo') {
@@ -196,6 +198,17 @@ function check(nombre, cond) {
     const genRep = await request(server, { path: '/api/chapters/generate', method: 'POST', body: {} }, cookie);
     const repData = JSON.parse(genRep.body);
     check('una historia repetida en dos temas se queda solo en el primer capítulo', repData.chapters.length === 1 && JSON.stringify(repData.chapters[0].story_ids) === '[10,11]');
+
+    // Si la primera respuesta de la IA llega cortada (sin grupos), se vuelve a pedir una vez en vez de rendirse.
+    gruposFalsos = [{ theme: 'La infancia', story_ids: [10, 11], etapa: 'infancia', orden: 1 }];
+    clasificacionesPendientes = [{}];
+    const reintento = await request(server, { path: '/api/chapters/generate', method: 'POST', body: {} }, cookie);
+    const reintentoData = JSON.parse(reintento.body);
+    check('si la IA contesta la clasificación sin grupos, se reintenta y el libro se arma igual', reintentoData.chapters && reintentoData.chapters.length === 1);
+    clasificacionesPendientes = [{ grupos: JSON.stringify([{ theme: 'Texto', story_ids: [10], etapa: 'infancia', orden: 1 }]) }];
+    const comoTexto = await request(server, { path: '/api/chapters/generate', method: 'POST', body: {} }, cookie);
+    check('si "grupos" llega como texto JSON, se lee igual', JSON.parse(comoTexto.body).chapters.some((c) => c.theme === 'Texto'));
+    clasificacionesPendientes = [];
 
     // Los capítulos salen en el orden de la vida (infancia, colegio, universidad, trabajo), no en el que la IA los nombró.
     gruposFalsos = [
