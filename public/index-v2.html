@@ -829,7 +829,15 @@
             </ol>
             <form class="signup-form" id="signupForm" novalidate>
               <div class="signup-step" data-step="1">
-                
+                <div class="field">
+                  <label for="suIdioma">Idioma de tu bitácora</label>
+                  <select id="suIdioma" name="idioma" required>
+                    <option value="es" selected>Español</option>
+                    <option value="en">English</option>
+                  </select>
+                  <p class="field-hint">Toda tu bitácora y la voz de Eco quedan en este idioma. Se elige una sola vez.</p>
+                </div>
+                <div class="field">
                   <label for="suName">Nombre</label>
                   <input id="suName" name="name" type="text" autocomplete="name" placeholder="Tu nombre" required>
                 </div>
