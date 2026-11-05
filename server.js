@@ -81,14 +81,23 @@ app.set('trust proxy', 1); // detrás del proxy de Vercel: para que req.ip y req
 app.use((req, res, next) => {
   const requestId = crypto.randomUUID();
   res.setHeader('X-Request-Id', requestId);
-  contextoDePedido.run({ requestId, idioma: idiomaDePedido(req) }, next);
+  contextoDePedido.run({ requestId, idioma: 'es' }, next);
 });
 
-// Idioma de la app para este pedido (cookie eco_idioma, la pone el botón ES/ENG).
-// Los resúmenes y capítulos que escribe la IA salen en el mismo idioma.
-function idiomaDePedido(req) {
-  const c = String(req.headers.cookie || '').split(';').map((x) => x.trim()).find((x) => x.startsWith('eco_idioma='));
-  return c && c.slice(11) === 'en' ? 'en' : 'es';
+// Idioma de la cuenta (users.idioma, elegido al crearla). requireAuth lo pone en el
+// contexto del pedido; la IA (resúmenes, capítulos, entrevistador, transcripción) lo usa.
+const cacheIdioma = new Map();
+async function idiomaDeUsuario(userId) {
+  const hit = cacheIdioma.get(userId);
+  if (hit && Date.now() - hit.t < 5 * 60 * 1000) return hit.v;
+  let v = 'es';
+  try {
+    await ensureSchema();
+    const r = await sql`SELECT idioma FROM users WHERE id = ${userId}`;
+    v = r[0] && r[0].idioma === 'en' ? 'en' : 'es';
+  } catch (e) { return 'es'; }
+  cacheIdioma.set(userId, { v, t: Date.now() });
+  return v;
 }
 function idiomaDeLaSolicitud() {
   const store = contextoDePedido.getStore();
@@ -801,6 +810,7 @@ function ensureSchema() {
       // loadFamilyContext más abajo.
       sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS fecha_nacimiento DATE`,
       sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS tratamiento TEXT`,
+      sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS idioma TEXT DEFAULT 'es'`,
       // Voz de la entrevistadora que eligió la persona: 'femenina' (por defecto) o
       // 'masculina'. También en bitacoras (cada subperfil la suya).
       sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS voz TEXT`,
@@ -1753,6 +1763,8 @@ async function requireAuth(req, res, next) {
   if (!session) {
     return res.status(401).json({ error: 'No autenticado.' });
   }
+  const ctxIdioma = contextoDePedido.getStore();
+  if (ctxIdioma && session.userId) ctxIdioma.idioma = await idiomaDeUsuario(session.userId);
   // Sesión de invitado (ver /api/guest-start y /api/narrador-start): entró
   // con un código y su nombre, sin crear cuenta ni clave. No hay fila en
   // "users" para esta sesión — req.userId queda null a propósito, así que
@@ -2188,7 +2200,7 @@ app.get('/api/me', requireAuth, async (req, res) => {
       const especial = await leerTipoPerfil(req.profileUserId);
       bitacoraActiva = { id: req.profileUserId, nombre: capitalizarNombre((bit && bit.nombre) || '') || null, ...(especial ? { tipo: especial.tipo, ...(especial.tipo === 'mascota' ? { especie: especial.especie } : {}) } : {}) };
     }
-    res.json({ username: req.username, name, email, fechaNacimiento, tratamiento: tratamientoValido(rows[0] && rows[0].tratamiento), phone, whatsappOptIn, isCollaborator: req.isCollaborator, isGuest: false, isAdmin, ownerName, puedeNarrar: req.puedeNarrar, bitacoraActiva });
+    res.json({ idioma: (contextoDePedido.getStore() || {}).idioma || 'es', username: req.username, name, email, fechaNacimiento, tratamiento: tratamientoValido(rows[0] && rows[0].tratamiento), phone, whatsappOptIn, isCollaborator: req.isCollaborator, isGuest: false, isAdmin, ownerName, puedeNarrar: req.puedeNarrar, bitacoraActiva });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo cargar la cuenta.' });
@@ -3849,7 +3861,8 @@ app.post('/api/register', rateLimit, async (req, res) => {
 // funcionando sin tocarlo.
 app.post('/api/signup', rateLimit, async (req, res) => {
   try {
-    const { name, email, phone, password, inviteCode, accountType, acceptTerms, tratamiento } = req.body || {};
+    const { name, email, phone, password, inviteCode, accountType, acceptTerms, tratamiento, idioma } = req.body || {};
+    const idiomaCuenta = String(idioma || '').toLowerCase() === 'en' ? 'en' : 'es';
     if (acceptTerms !== true) {
       return res.status(400).json({ error: 'Para crear tu cuenta tienes que aceptar los Términos y la Política de Privacidad.' });
     }
@@ -3906,8 +3919,8 @@ app.post('/api/signup', rateLimit, async (req, res) => {
 
     const hash = await bcrypt.hash(password, 12);
     const rows = await sql`
-      INSERT INTO users (username, name, email, phone, password_hash, owner_user_id, signup_variant, terms_accepted_at, terms_version, tratamiento)
-      VALUES (${cleanEmail}, ${cleanName}, ${cleanEmail}, ${cleanPhone}, ${hash}, ${ownerUserId}, ${signupVariant}, now(), ${TERMS_VERSION}, ${tratamientoValido(tratamiento)})
+      INSERT INTO users (username, name, email, phone, password_hash, owner_user_id, signup_variant, terms_accepted_at, terms_version, tratamiento, idioma)
+      VALUES (${cleanEmail}, ${cleanName}, ${cleanEmail}, ${cleanPhone}, ${hash}, ${ownerUserId}, ${signupVariant}, now(), ${TERMS_VERSION}, ${tratamientoValido(tratamiento)}, ${idiomaCuenta})
       RETURNING id, username, token_version
     `;
     console.log(`[registro] userId=${rows[0].id} tipo=${ownerUserId ? 'colaboradora' : 'dueña'} variante=${signupVariant || '-'} registrada=${new Date().toISOString()}`);

@@ -829,7 +829,7 @@
             </ol>
             <form class="signup-form" id="signupForm" novalidate>
               <div class="signup-step" data-step="1">
-                <div class="field">
+                
                   <label for="suName">Nombre</label>
                   <input id="suName" name="name" type="text" autocomplete="name" placeholder="Tu nombre" required>
                 </div>
@@ -1277,7 +1277,7 @@
         const response = await fetch('/api/signup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, email, phone, tratamiento, password, inviteCode, accountType: modoColaborador ? 'collaborator' : 'owner', acceptTerms: true })
+          body: JSON.stringify({ idioma: document.getElementById('suIdioma').value, name, email, phone, tratamiento, password, inviteCode, accountType: modoColaborador ? 'collaborator' : 'owner', acceptTerms: true })
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
