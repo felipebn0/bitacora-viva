@@ -5,9 +5,12 @@
     const titulo = document.querySelector('#appContent .greeting-text');
     if (!titulo) return;
     const hora = new Date().getHours(); // Hora local del dispositivo
-    const saludo = hora < 12 ? 'Buenos días' : hora < 18 ? 'Buenas tardes' : 'Buenas noches';
+    const ingles = (() => { try { return localStorage.getItem('eco-idioma') === 'en'; } catch (e) { return false; } })();
+    const saludo = ingles
+      ? (hora < 12 ? 'Good morning' : hora < 18 ? 'Good afternoon' : 'Good evening')
+      : (hora < 12 ? 'Buenos días' : hora < 18 ? 'Buenas tardes' : 'Buenas noches');
     const nodo = Array.from(titulo.childNodes).find(
-      n => n.nodeType === Node.TEXT_NODE && /Hola|Buenos días|Buenas tardes|Buenas noches/.test(n.textContent)
+      n => n.nodeType === Node.TEXT_NODE && /Hola|Buenos días|Buenas tardes|Buenas noches|Good (morning|afternoon|evening)|Hi,/.test(n.textContent)
     );
     if (nodo) nodo.textContent = saludo + ', ';
   }
