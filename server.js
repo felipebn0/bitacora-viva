@@ -7348,7 +7348,7 @@ async function classifyStoriesByTheme(userId, stories, perfil) {
       return `#${s.id} (${new Date(s.created_at).toLocaleDateString('es-CO')}): ${preguntas.length ? `(Eco le preguntó: ${preguntas.map((q) => `«${q}»`).join(' / ')}) ` : ''}${s.texto}`;
     })
     .join('\n\n');
-  const prompt = `Estas son las historias detectadas en las charlas de esta persona (id, fecha en que se contó, la pregunta de Eco a la que responde y la transcripción):${envolverDatoNoConfiable('historias', listado)}\n\nPropón una lista de temas o épocas de vida que REALMENTE aparecen en este material (que emerja de lo contado, no uses una lista fija predefinida), y para cada tema indica qué ids de historias corresponden (cada historia va en un solo tema, el que mejor le quede). La fecha entre paréntesis es cuándo se CONTÓ la historia, no cuándo ocurrió: la época sale de lo que se cuenta (el colegio, la universidad, un trabajo, una ciudad, la edad). Los temas siguen las etapas de la vida: no mezcles en un mismo tema épocas distintas (el colegio con la universidad, ni la universidad con un trabajo), cada trabajo o ciudad importante es su propio tema, y alguien que aparece en varias épocas (un amigo, un hermano) va en el tema de la época de cada historia. Lo que no tiene una época (la cocina, la familia en general) lleva la etapa "toda_la_vida". A cada tema ponle "etapa" y "orden": su posición en la línea de vida de la persona, de lo más antiguo (1) a lo más reciente.${anioNacimiento ? ` Nació en ${anioNacimiento}: úsalo para ubicar las épocas.` : ''} Cada historia se agrupa por lo que ella misma cuenta, usando la pregunta de Eco para entender de qué habla una respuesta corta; que dos historias queden una al lado de la otra en la fecha NO significa que sean del mismo tema. Usa la herramienta para responder.`;
+  const prompt = `Estas son las historias detectadas en las charlas de esta persona (id, fecha en que se contó, la pregunta de Eco a la que responde y la transcripción):${envolverDatoNoConfiable('historias', listado)}\n\nPropón una lista de entre 8 y 25 temas o épocas de vida que REALMENTE aparecen en este material (que emerja de lo contado, no uses una lista fija predefinida), y para cada tema indica qué ids de historias corresponden (cada historia va en un solo tema, el que mejor le quede). La fecha entre paréntesis es cuándo se CONTÓ la historia, no cuándo ocurrió: la época sale de lo que se cuenta (el colegio, la universidad, un trabajo, una ciudad, la edad). Los temas siguen las etapas de la vida: no mezcles en un mismo tema épocas distintas (el colegio con la universidad, ni la universidad con un trabajo), cada trabajo o ciudad importante es su propio tema, y alguien que aparece en varias épocas (un amigo, un hermano) va en el tema de la época de cada historia. Lo que no tiene una época (la cocina, la familia en general) lleva la etapa "toda_la_vida". A cada tema ponle "etapa" y "orden": su posición en la línea de vida de la persona, de lo más antiguo (1) a lo más reciente.${anioNacimiento ? ` Nació en ${anioNacimiento}: úsalo para ubicar las épocas.` : ''} Cada historia se agrupa por lo que ella misma cuenta, usando la pregunta de Eco para entender de qué habla una respuesta corta; que dos historias queden una al lado de la otra en la fecha NO significa que sean del mismo tema. Usa la herramienta para responder.`;
 
   const pedir = () => anthropic.messages.create({
     model: MODEL,
@@ -7375,7 +7375,7 @@ async function classifyStoriesByTheme(userId, stories, perfil) {
   if (!grupos) return [];
   // Los capítulos salen en el orden en que ocurrieron en la vida de la persona, no en el que la IA los nombró ni en el que se contaron.
   return grupos
-    .slice(0, 12) // tope defensivo de temas por corrida
+    .slice(0, 30) // tope defensivo de temas por corrida (con 12, los temas de la parte final de la vida se perdían del libro)
     .map((g, i) => ({ g, i }))
     .sort((a, b) => ((Number.isFinite(a.g && a.g.orden) ? a.g.orden : 1e9) - (Number.isFinite(b.g && b.g.orden) ? b.g.orden : 1e9)) || a.i - b.i)
     .map((x) => x.g);
@@ -7470,16 +7470,29 @@ app.post('/api/chapters/generate', requireAuth, bloquearColaborador, rateLimit, 
 
     // Una historia va en un solo capítulo: si la agrupación la repitió en dos temas, se queda en el primero.
     const yaUsadas = new Set();
-    const nuevos = [];
+    const porEscribir = [];
     for (const g of grupos) {
       if (!g || !g.theme) continue;
       const ids = Array.isArray(g.story_ids) ? g.story_ids.filter((id) => byId.has(id) && !yaUsadas.has(id) && yaUsadas.add(id)) : [];
       if (!ids.length) continue;
-      const aportesDelTema = aportesPorTema.get(g.theme) || [];
-      const capitulo = await writeChapterFromStories(req.profileUserId, g.theme, ids.map((id) => byId.get(id)), persona, aportesDelTema, tratamientoCapitulos, g.etapa);
-      if (!capitulo) continue;
-      nuevos.push({ theme: String(g.theme).slice(0, 120), ids, ...capitulo });
+      porEscribir.push({ g, ids });
     }
+    if (yaUsadas.size < byId.size) console.warn(`[capitulos] userId=${req.profileUserId} ${byId.size - yaUsadas.size} historias no quedaron en ningún tema`);
+    // Los capítulos se escriben de a varios a la vez (con tope), para que la regeneración no se alargue con cada tema; el orden se conserva.
+    const escritos = new Array(porEscribir.length).fill(null);
+    let siguiente = 0;
+    await Promise.all(Array.from({ length: Math.min(4, porEscribir.length) }, async () => {
+      while (siguiente < porEscribir.length) {
+        const i = siguiente++;
+        const { g, ids } = porEscribir[i];
+        const aportesDelTema = aportesPorTema.get(g.theme) || [];
+        escritos[i] = await writeChapterFromStories(req.profileUserId, g.theme, ids.map((id) => byId.get(id)), persona, aportesDelTema, tratamientoCapitulos, g.etapa);
+      }
+    }));
+    const nuevos = [];
+    porEscribir.forEach(({ g, ids }, i) => {
+      if (escritos[i]) nuevos.push({ theme: String(g.theme).slice(0, 120), ids, ...escritos[i] });
+    });
 
     if (!nuevos.length) {
       return res.json({ ok: true, message: 'No se pudo generar ningún capítulo todavía.', chapters: [] });

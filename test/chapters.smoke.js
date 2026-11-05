@@ -199,6 +199,14 @@ function check(nombre, cond) {
     const repData = JSON.parse(genRep.body);
     check('una historia repetida en dos temas se queda solo en el primer capítulo', repData.chapters.length === 1 && JSON.stringify(repData.chapters[0].story_ids) === '[10,11]');
 
+    // Un libro con muchos temas no pierde los últimos: antes se cortaba en 12 y se caían los de la parte final de la vida.
+    for (let n = 12; n <= 25; n++) storyLog.push({ id: n, texto: 'Historia ' + n, audio_url: null });
+    gruposFalsos = Array.from({ length: 16 }, (_, k) => ({ theme: 'Tema ' + (k + 1), story_ids: [10 + k], etapa: 'vida_laboral', orden: k + 1 }));
+    const muchos = await request(server, { path: '/api/chapters/generate', method: 'POST', body: {} }, cookie);
+    const muchosData = JSON.parse(muchos.body);
+    check('con 16 temas salen los 16 capítulos, en orden', muchosData.chapters.length === 16 && muchosData.chapters.map((c) => c.theme).join('|') === gruposFalsos.map((g) => g.theme).join('|'));
+    storyLog.length = 2;
+
     // Si la primera respuesta de la IA llega cortada (sin grupos), se vuelve a pedir una vez en vez de rendirse.
     gruposFalsos = [{ theme: 'La infancia', story_ids: [10, 11], etapa: 'infancia', orden: 1 }];
     clasificacionesPendientes = [{}];
