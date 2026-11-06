@@ -15,7 +15,12 @@ module.exports = (app, { sql, ensureSchema, rateLimit, limitePorClave, enviarCor
   const tokenValido = (t) => typeof t === 'string' && /^[a-f0-9]{64}$/.test(t);
   const escapar = (s) => String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   // Nunca se arma con el Host del pedido: un Host falseado metería un enlace a otro dominio en el correo.
-  const base = () => String(process.env.PUBLIC_BASE_URL || BASE_URL_FIJA).replace(/\/+$/, '');
+  // Solo vale si de verdad es una dirección web: un valor mal pegado en Vercel (por ejemplo "PUBLIC_BASE_URL=https://...")
+  // dejaba el enlace del correo roto y sin poder tocarse. Si no sirve, se usa la dirección fija.
+  const base = () => {
+    const configurada = String(process.env.PUBLIC_BASE_URL || '').trim();
+    return (/^https?:\/\/[^\s=]+$/i.test(configurada) ? configurada : BASE_URL_FIJA).replace(/\/+$/, '');
+  };
 
   app.get('/api/clave/estado', (req, res) => {
     sinCache(res);

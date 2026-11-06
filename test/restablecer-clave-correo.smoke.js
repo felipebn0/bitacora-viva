@@ -6,6 +6,8 @@ process.env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || 'fake';
 process.env.BLOB_READ_WRITE_TOKEN = '';
 process.env.RESEND_API_KEY = 're_prueba';
 process.env.RESEND_FROM = 'Eco <hola@mieco.app>';
+// Un valor mal pegado en Vercel (con el nombre de la variable adentro) no debe romper el enlace del correo.
+process.env.PUBLIC_BASE_URL = 'PUBLIC_BASE_URL=https://bitacora-viva.vercel.app';
 
 const path = require('path');
 const http = require('http');
@@ -90,7 +92,7 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
   r = await pedir(server, 'POST', '/api/clave/olvide', { correo: ' Paula@Ejemplo.com ' });
   ok(r.status === 200 && correos.length === 1 && correos[0].to[0] === 'paula@ejemplo.com' && correos[0].from === 'Eco <hola@mieco.app>', 'se envía el enlace al correo de la cuenta');
   const m = correos[0].html.match(/restablecer\.html\?t=([a-f0-9]{64})/);
-  ok(!!m && /^https:\/\/mieco\.app\//.test(correos[0].html.match(/href="([^"]+)"/)[1]), 'el enlace lleva un código largo y apunta a mieco.app');
+  ok(!!m && /^https:\/\/mieco\.app\/restablecer\.html\?t=/.test(correos[0].html.match(/href="([^"]+)"/)[1]), 'el enlace es una dirección web completa que apunta a mieco.app aunque PUBLIC_BASE_URL venga mal pegada');
   const token = m && m[1];
   ok(/bgcolor="#4F5D3A"/.test(correos[0].html) && correos[0].html.split(m[0]).length >= 4, 'el botón tiene fondo que Outlook respeta y el enlace también aparece como texto de respaldo');
   ok(resets.length === 1 && resets[0].token_hash !== token, 'en la base solo se guarda el hash del código, no el código');
