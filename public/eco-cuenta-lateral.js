@@ -36,7 +36,7 @@
 
     const grupos = [
       ['perfil', 'Mi perfil','Datos personales'],
-      ['preferencias','Preferencias','Voz, letra y avisos'],
+      ['preferencias','Preferencias','Voz, letra, avisos y tutorial'],
       ['datos','Recuerdos, datos y seguridad','Copia, contraseña y cuenta'],
       ['planes','Perfiles y plan','Bitácoras, suscripción y diario de un bebé']
     ];
@@ -96,7 +96,7 @@
     moverSeccion('umSecClave',panels.datos);
     moverSeccion('umSecInstalacion',panels.datos);
     moverSeccion('umSecRiesgo',panels.datos);
-    ['umSecVoz','umSecFuente','umSecRecordatorios'].forEach(id=>moverSeccion(id,panels.preferencias));
+    ['umSecVoz','umSecFuente','umSecRecordatorios','umSecTutorial'].forEach(id=>moverSeccion(id,panels.preferencias));
     moverSeccion('umSecPlan',panels.planes);
     if(bebe) panels.planes.appendChild(bebe);
     // Avisos por correo: se quita de la vista por ahora (el botón de avisos del celular sigue).

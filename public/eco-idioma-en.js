@@ -1675,6 +1675,7 @@ window.ECO_EN = {
   "volvió a hablar": "spoke again",
   "Voz, lectura y avisos": "Voice, reading and notifications",
   "Voz, letra y avisos": "Voice, text size and notifications",
+  "Voz, letra, avisos y tutorial": "Voice, text size, notifications and tutorial",
   "Ya entró con su enlace": "Already signed in with their link",
   "ya llegó": "has arrived",
   "ya nació": "has been born",
