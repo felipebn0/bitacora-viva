@@ -46,7 +46,13 @@
       const m = clave.match(p.re);
       if (!m) continue;
       let i = 1;
-      return p.en.replace(/\{\}/g, () => (m[i++] !== undefined ? m[i - 1] : ''));
+      // Lo que cae en el hueco suele ser un nombre propio, que se deja igual,
+      // pero a veces es una palabra nuestra ("Yo"): esa sí se traduce.
+      return p.en.replace(/\{\}/g, () => {
+        const pedazo = m[i++];
+        if (pedazo === undefined) return '';
+        return dic()[norm(pedazo)] || pedazo;
+      });
     }
     return null;
   }
