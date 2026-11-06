@@ -138,6 +138,37 @@
     aplicar(document.body);
   }
 
+  // Los avisos del navegador (confirm, alert, prompt) no pasan por el DOM: el
+  // observador no los ve, así que se traduce el mensaje antes de mostrarlo.
+  // Se intenta con el mensaje completo y, si no está, párrafo por párrafo.
+  function traducirMensaje(mensaje) {
+    const texto = String(mensaje == null ? '' : mensaje);
+    if (idioma !== 'en' || !texto.trim()) return mensaje;
+    const entera = traducir(norm(texto));
+    if (entera) return entera;
+    const partes = texto.split(/(\n+)/);
+    let hubo = false;
+    const traducidas = partes.map((p) => {
+      if (/^\n+$/.test(p) || !p.trim()) return p;
+      const en = traducir(norm(p));
+      if (en) hubo = true;
+      return en || p;
+    });
+    return hubo ? traducidas.join('') : mensaje;
+  }
+
+  function envolverAvisos() {
+    for (const nombre of ['confirm', 'alert', 'prompt']) {
+      const original = window[nombre];
+      if (typeof original !== 'function' || original.ecoIdioma) continue;
+      const envuelto = function (mensaje, ...resto) {
+        return original.call(window, traducirMensaje(mensaje), ...resto);
+      };
+      envuelto.ecoIdioma = true;
+      try { window[nombre] = envuelto; } catch (e) { /* navegador que no deja reemplazarlo */ }
+    }
+  }
+
   // El idioma guardado en la cuenta manda sobre la copia local.
   function consultarCuenta() {
     fetch('/api/me', { credentials: 'same-origin' })
@@ -167,6 +198,7 @@
     const campoIdioma = document.getElementById('suIdioma');
     if (campoIdioma) campoIdioma.addEventListener('change', () => { campoIdioma.dataset.elegido = '1'; });
     marcarIdioma();
+    envolverAvisos();
     observador = new MutationObserver((muts) => {
       observador.disconnect();
       for (const m of muts) {

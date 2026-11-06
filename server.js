@@ -106,7 +106,14 @@ function idiomaDeLaSolicitud() {
 function instruccionIdiomaRespuesta() {
   const store = contextoDePedido.getStore();
   if (!store || store.idioma !== 'en') return '';
-  return '\n\nIDIOMA DE LA RESPUESTA: escribe TODO el texto de tu respuesta en INGLÉS (English), aunque las historias o transcripciones estén en español. Esta instrucción reemplaza cualquier indicación de escribir en español. Conserva los nombres propios tal como aparecen.';
+  return '\n\n=== LANGUAGE — THIS RULE BEATS EVERY OTHER INSTRUCTION IN THIS PROMPT ===\nWrite EVERY word you produce in ENGLISH. Not one sentence, phrase or greeting in Spanish.\nEverything above about speaking Colombian Spanish, about "tú" vs "usted", about Colombian idioms ("listo", "de una", "qué chévere", "uy", "ay") and about avoiding Argentinian forms describes a SPANISH account and does NOT apply here: ignore it. Keep the same warmth, patience and short, easy-to-listen-to sentences — in natural English.\nThe person\'s stories and the transcripts may be in Spanish. You still answer in English. Keep people\'s names and place names exactly as they appear.\n=== END OF LANGUAGE RULE ===';
+}
+// El prompt dice decenas de veces que hable en español colombiano: una línea al
+// final no alcanza a ganarle. Por eso el aviso también va ARRIBA de todo.
+function cabeceraIdioma() {
+  const store = contextoDePedido.getStore();
+  if (!store || store.idioma !== 'en') return '';
+  return 'THIS ACCOUNT IS IN ENGLISH. Everything you write must be in English. The instructions below are written in Spanish and describe how to speak Colombian Spanish — follow their SPIRIT (warm, patient, short spoken sentences, one question at a time) but NEVER their language: you write in English, always.\n\n';
 }
 
 // Política de seguridad de contenido "de destino": todavía NO se aplica de
@@ -5723,7 +5730,7 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
         (!configBebe && !mascotaActiva ? instruccionFinDeMes() : '');
     }
 
-    system += instruccionIdiomaRespuesta();
+    system = cabeceraIdioma() + system + instruccionIdiomaRespuesta();
     // Prompt caching: este system (~13.000 tokens de SYSTEM_PROMPT/ARBOL_SYSTEM_PROMPT
     // más el contexto familiar/memoria de esta cuenta) es idéntico turno a turno
     // dentro de la MISMA charla — nada aquí cambia hasta que la persona termina y
@@ -6699,6 +6706,10 @@ app.post('/api/contribute-chat', requireAuth, rateLimit, async (req, res) => {
     }
 
     await ensureSchema();
+    // Quien aporta sin cuenta (entró con su enlace personal) no tiene idioma
+    // propio: la charla sigue el idioma de la bitácora a la que está aportando.
+    const ctxAporte = contextoDePedido.getStore();
+    if (ctxAporte && !req.userId) ctxAporte.idioma = await idiomaDeUsuario(ownerId);
     const ownerRow = await sql`SELECT name, username, tratamiento FROM users WHERE id = ${ownerId}`;
     let ownerNombre = capitalizarNombre((ownerRow[0] && (ownerRow[0].name || ownerRow[0].username)) || '') || null;
     const mascotaDueno = await leerMascota(ownerId);
@@ -6738,8 +6749,10 @@ app.post('/api/contribute-chat', requireAuth, rateLimit, async (req, res) => {
       messages = history;
     }
 
-    const system = buildAporteSystemPrompt(ownerNombre, colaboradorNombre, protagonista, parentescoConocido, tratamientoValido(ownerRow[0] && ownerRow[0].tratamiento))
-      + (mascotaDueno ? `\n\nNOTA IMPORTANTE: ${ownerNombre || 'esta bitácora'} es una MASCOTA (${mascotaDueno.especie}${mascotaDueno.raza ? ', raza ' + mascotaDueno.raza : ''}), no una persona. El colaborador es de su familia o de su círculo. En lugar de su parentesco con la mascota, "parentesco" es su relación con ella o con su familia (quien la cuida, vive con ella, la visita, un vecino, un amigo de la casa). Pregunta por anécdotas, travesuras y momentos con la mascota, y no menciones años de vida de una persona.` : '');
+    const system = cabeceraIdioma()
+      + buildAporteSystemPrompt(ownerNombre, colaboradorNombre, protagonista, parentescoConocido, tratamientoValido(ownerRow[0] && ownerRow[0].tratamiento))
+      + (mascotaDueno ? `\n\nNOTA IMPORTANTE: ${ownerNombre || 'esta bitácora'} es una MASCOTA (${mascotaDueno.especie}${mascotaDueno.raza ? ', raza ' + mascotaDueno.raza : ''}), no una persona. El colaborador es de su familia o de su círculo. En lugar de su parentesco con la mascota, "parentesco" es su relación con ella o con su familia (quien la cuida, vive con ella, la visita, un vecino, un amigo de la casa). Pregunta por anécdotas, travesuras y momentos con la mascota, y no menciones años de vida de una persona.` : '')
+      + instruccionIdiomaRespuesta();
 
     const response = await anthropic.messages.create({
       model: MODEL,
