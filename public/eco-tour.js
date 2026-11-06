@@ -152,7 +152,7 @@
     // Cargar el CSS (hoja de estilos externa)
     const link = document.createElement('link');
     link.rel = 'stylesheet';
-    link.href = '/eco-tour.css?v=1';
+    link.href = '/eco-tour.css?v=2';
     document.head.appendChild(link);
 
     // Contenedor principal (solo como referencia; los hijos son position:fixed)
@@ -225,6 +225,8 @@
     // Tooltip
     const tip = document.createElement('div');
     tip.id = 'eco-tour-tip';
+    tip.setAttribute('role', 'region');
+    tip.setAttribute('aria-label', 'Guía de Eco');
     tip.className = 'eco-tour-tip';
 
     tip.innerHTML =
