@@ -10309,13 +10309,17 @@ app.get('/api/admin/usage', requireAuth, requireAdmin, async (req, res) => {
     const ahora = new Date();
     let rangeEnd = ahora;
     let rangeStart = new Date(ahora.getTime() - 30 * 24 * 60 * 60 * 1000);
+    // "tz" = lo que devuelve getTimezoneOffset() en el navegador (Colombia: 300). Con eso "hoy" empieza a la medianoche de
+    // quien mira el panel y no a las 7 pm del día anterior (que es la medianoche UTC). Sin "tz" se comporta como antes.
+    const tzMin = Number(req.query.tz);
+    const desfase = Number.isFinite(tzMin) ? Math.max(-840, Math.min(840, Math.round(tzMin))) * 60 * 1000 : 0;
     if (req.query.start) {
       const d = new Date(req.query.start);
-      if (!isNaN(d)) rangeStart = d;
+      if (!isNaN(d)) rangeStart = new Date(d.getTime() + desfase);
     }
     if (req.query.end) {
       const d = new Date(req.query.end);
-      if (!isNaN(d)) rangeEnd = new Date(d.getTime() + 24 * 60 * 60 * 1000 - 1);
+      if (!isNaN(d)) rangeEnd = new Date(d.getTime() + desfase + 24 * 60 * 60 * 1000 - 1);
     }
     if (rangeEnd <= rangeStart) rangeEnd = new Date(rangeStart.getTime() + 24 * 60 * 60 * 1000);
     const rangeMs = rangeEnd.getTime() - rangeStart.getTime();

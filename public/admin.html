@@ -341,16 +341,17 @@
 
   // --- Selector de rango de fechas ---
   // null/null = "sin elegir nada todavía" -> el servidor usa su default
-  // (últimos 30 días). Los presets calculan fechas locales; "Todo" manda
+  // (últimos 30 días); el panel arranca en "Hoy". Los presets calculan fechas locales; "Todo" manda
   // una fecha de arranque bien vieja (antes de que exista la app) para
   // traer todo el histórico sin necesitar un caso especial en el backend.
   const PRESETS = [
+    { key: 'hoy', label: 'Hoy', dias: 1 },
     { key: '7d', label: '7 días', dias: 7 },
     { key: '30d', label: '30 días', dias: 30 },
     { key: '90d', label: '90 días', dias: 90 },
     { key: 'all', label: 'Todo', dias: null },
   ];
-  let activePreset = '30d';
+  let activePreset = 'hoy';
   let range = { start: null, end: null }; // se completa con lo que confirme el servidor
 
   function calcularRangoDePreset(key) {
@@ -655,7 +656,7 @@
 
   function cargar(start, end) {
     content.innerHTML = '<p class="empty">Cargando…</p>';
-    const qs = (start && end) ? `?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}` : '';
+    const qs = (start && end) ? `?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&tz=${new Date().getTimezoneOffset()}` : '';
     fetch('/api/admin/usage' + qs)
       .then((resp) => {
         if (resp.status === 403) return Promise.reject('forbidden');
