@@ -44,7 +44,7 @@ module.exports = (app, { sql, ensureSchema, rateLimit, limitePorClave, enviarCor
           await enviarCorreo({
             to: u.email,
             subject: 'Crea una clave nueva para Eco',
-            html: `<p>Hola${u.name ? ' ' + escapar(u.name) : ''},</p><p>Pediste crear una clave nueva para tu cuenta de Eco. Toca el botón y escríbela dos veces:</p><p><a href="${escapar(enlace)}" style="display:inline-block;background:#4F5D3A;color:#fff;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:bold">Crear clave nueva</a></p><p>El enlace sirve una sola vez y dura ${VIDA_ENLACE_MIN} minutos. Si no fuiste tú, ignora este correo: tu clave actual sigue igual.</p>`,
+            html: `<p>Hola${u.name ? ' ' + escapar(u.name) : ''},</p><p>Pediste crear una clave nueva para tu cuenta de Eco. Toca el botón y escríbela dos veces:</p><table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:18px 0"><tr><td bgcolor="#4F5D3A" style="background-color:#4F5D3A;border-radius:10px"><a href="${escapar(enlace)}" style="display:inline-block;padding:13px 24px;font-family:Arial,sans-serif;font-size:16px;font-weight:bold;color:#ffffff;text-decoration:none">Crear clave nueva</a></td></tr></table><p style="font-size:14px;color:#444444">Si el botón no se ve, copia y pega este enlace en tu navegador:<br><a href="${escapar(enlace)}" style="color:#2F5D8A;word-break:break-all">${escapar(enlace)}</a></p><p>El enlace sirve una sola vez y dura ${VIDA_ENLACE_MIN} minutos. Si no fuiste tú, ignora este correo: tu clave actual sigue igual.</p>`,
           });
         } catch (err) {
           console.error('No se pudo enviar el correo para restablecer la clave:', err.message);

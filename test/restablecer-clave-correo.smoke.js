@@ -92,6 +92,7 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
   const m = correos[0].html.match(/restablecer\.html\?t=([a-f0-9]{64})/);
   ok(!!m && /^https:\/\/mieco\.app\//.test(correos[0].html.match(/href="([^"]+)"/)[1]), 'el enlace lleva un código largo y apunta a mieco.app');
   const token = m && m[1];
+  ok(/bgcolor="#4F5D3A"/.test(correos[0].html) && correos[0].html.split(m[0]).length >= 4, 'el botón tiene fondo que Outlook respeta y el enlace también aparece como texto de respaldo');
   ok(resets.length === 1 && resets[0].token_hash !== token, 'en la base solo se guarda el hash del código, no el código');
 
   r = await pedir(server, 'GET', '/api/clave/verificar?t=' + token);
