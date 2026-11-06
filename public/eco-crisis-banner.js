@@ -186,6 +186,28 @@ const yaRespondioRecuerdo = { suicide: false, violence: false };
 
 const quitar = (sel) => document.querySelectorAll(sel).forEach((n) => n.remove());
 
+// Mientras el popup de ayuda está (o lo cerraron sin tocar «Seguir hablando con Eco»), la charla no vuelve a escuchar sola.
+let enEspera = false;
+window.ecoCrisisEnEspera = () => enEspera;
+window.ecoCrisisSoltar = () => { enEspera = false; };
+
+function avisarALosAdmins(tipo) {
+  try {
+    fetch('/api/crisis-aviso', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tipo }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch (e) {}
+}
+
+function ponerBanner(tipo, poner) {
+  poner(createBanner(tipo));
+  enEspera = true;
+  avisarALosAdmins(tipo);
+}
+
 function createBanner(type) {
   const lines = enIngles()
     ? (type === 'suicide' ? LINES_SUICIDE_EN : LINES_VIOLENCE_EN)
@@ -208,6 +230,7 @@ function createBanner(type) {
   banner.querySelector('.eco-crisis-close').addEventListener('click', ()=>banner.remove());
   banner.querySelector('.eco-crisis-eco-btn').addEventListener('click', ()=>{
     banner.remove();
+    enEspera = false;
     const chat = document.querySelector('.aporte-chat, #ecoChat, [data-eco-chat]');
     if(chat){
       chat.style.removeProperty('display');
@@ -253,11 +276,11 @@ function mostrar(resultado, ancla) {
   if (modo === 'directo') {
     if (document.querySelector('.eco-crisis-banner.eco-crisis-' + tipo)) return 'banner';
     quitar('.eco-crisis-banner, .eco-crisis-check');
-    poner(createBanner(tipo));
+    ponerBanner(tipo, poner);
     return 'banner';
   }
   if (yaRespondioRecuerdo[tipo] || document.querySelector('.eco-crisis-banner, .eco-crisis-check')) return null;
-  const pregunta = createPregunta(tipo, () => poner(createBanner(tipo)));
+  const pregunta = createPregunta(tipo, () => ponerBanner(tipo, poner));
   poner(pregunta);
   pregunta.querySelector('button')?.focus({ preventScroll: true });
   return 'pregunta';

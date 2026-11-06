@@ -225,6 +225,8 @@
   .pr-tabla { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 0.85rem; }
   .pr-tabla th, .pr-tabla td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
   .pr-tabla th { color: var(--ink-soft); font-weight: 600; }
+  .cr-btn { font: inherit; font-size: 0.8rem; padding: 4px 10px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: inherit; cursor: pointer; }
+  .cr-pendiente { font-weight: 700; }
 
   footer.note { max-width: 1180px; margin: 24px auto 0; color: var(--ink-soft); font-size: 0.8rem; }
 </style>
@@ -244,6 +246,7 @@
       <p class="empty">Cargando…</p>
     </div>
   </div>
+  <div class="wrap"><div id="crisisWrap"></div></div>
   <div class="wrap"><div id="abWrap"></div></div>
   <div class="wrap"><div id="prWrap"></div></div>
   <footer class="note" id="footNote" hidden></footer>
@@ -744,12 +747,54 @@
       .catch(() => { prWrap.innerHTML = '<section class="panel"><h2>Prueba de recordatorios diarios</h2><p class="sub">No se pudo cargar esta sección.</p></section>'; });
   }
 
+  const crisisWrap = document.getElementById('crisisWrap');
+
+  function renderCrisis(data) {
+    const avisos = data.avisos || [];
+    const pendientes = avisos.filter((a) => !a.atendido_at).length;
+    const cuando = (iso) => new Date(iso).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' });
+    const filas = avisos.map((a) => `<tr>
+      <td>${esc(cuando(a.created_at))}</td>
+      <td>${a.tipo === 'suicide' ? 'Riesgo de hacerse daño' : 'Violencia o maltrato'}</td>
+      <td>${esc(a.quien)}${a.perfil_nombre ? ' · libro de ' + esc(a.perfil_nombre) : ''}</td>
+      <td>${a.atendido_at ? 'Atendido por ' + esc(a.atendido_por || 'admin') + ' (' + esc(cuando(a.atendido_at)) + ')' + (a.nota ? '<br>' + esc(a.nota) : '') : '<span class="cr-pendiente">Pendiente</span> <button type="button" class="cr-btn" data-atender="' + Number(a.id) + '">Marcar como atendido</button>'}</td>
+    </tr>`).join('');
+    crisisWrap.innerHTML = `
+      <section class="panel">
+        <h2>Alertas de ayuda${pendientes ? ' · ' + pendientes + ' pendiente(s)' : ''}</h2>
+        <p class="sub">Cada vez que a alguien le sale el popup con los números de línea de ayuda queda aquí (y le suena el celular a los admins con avisos activados). Se guarda quién y de qué tipo, nunca lo que dijo. Si una misma persona repite el mismo tipo en 30 minutos, cuenta como un solo aviso.</p>
+        ${avisos.length ? `<table class="pr-tabla"><thead><tr><th>Cuándo</th><th>Tipo</th><th>Quién</th><th>Seguimiento</th></tr></thead><tbody>${filas}</tbody></table>` : '<p class="ab-note">Todavía no ha salido ningún popup de ayuda.</p>'}
+      </section>`;
+  }
+
+  function cargarCrisis() {
+    fetch('/api/admin/crisis-avisos')
+      .then((r) => (r.ok ? r.json() : Promise.reject('cr')))
+      .then(renderCrisis)
+      .catch(() => { crisisWrap.innerHTML = '<section class="panel"><h2>Alertas de ayuda</h2><p class="sub">No se pudo cargar esta sección.</p></section>'; });
+  }
+
+  crisisWrap.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('[data-atender]');
+    if (!btn) return;
+    const nota = window.prompt('Nota de seguimiento (opcional): por ejemplo, "hablé con ella por WhatsApp".');
+    if (nota === null) return;
+    btn.disabled = true;
+    fetch('/api/admin/crisis-avisos/' + encodeURIComponent(btn.dataset.atender) + '/atendido', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nota }),
+    }).then((r) => { if (!r.ok) throw new Error('cr'); cargarCrisis(); })
+      .catch(() => { btn.disabled = false; window.alert('No se pudo guardar. Intenta de nuevo.'); });
+  });
+
   fetch('/api/me')
     .then((resp) => (resp.ok ? resp.json() : Promise.reject('auth')))
     .then((me) => {
       if (!me.isAdmin) return Promise.reject('forbidden');
       const r = calcularRangoDePreset(activePreset);
       cargar(r.start, r.end);
+      cargarCrisis();
       cargarAbLanding();
       cargarRecordatorios();
     })

@@ -313,7 +313,7 @@
 <link rel="stylesheet" href="/eco-colaborar-rediseno.css?v=5">
 <link rel="stylesheet" href="/eco-crisis-banner.css?v=4">
 <script src="/eco-colaborar-rediseno.js?v=4" defer></script>
-<script src="/eco-crisis-banner.js?v=3" defer></script>
+<script src="/eco-crisis-banner.js?v=4" defer></script>
 <script src="/eco-audio-exclusivo.js" defer></script>
 <script src="/eco-audio-player.js?v=2" defer></script>
 <link rel="stylesheet" href="/eco-volver-unificado.css?v=4">
@@ -1226,6 +1226,9 @@
     } else if (pausadoPorSalida) {
       recStatus.textContent = 'En pausa — presiona el círculo para seguir.';
       reactivarOrbeTrasError();
+    } else if (window.ecoCrisisEnEspera && window.ecoCrisisEnEspera()) {
+      recStatus.textContent = 'En pausa — toca «Seguir hablando con Eco» cuando quieras continuar.';
+      reactivarOrbeTrasError();
     } else if (interaccionReal) {
       await empezarGrabacion();
     }
@@ -1655,6 +1658,7 @@
     if (charlaTerminada || grabando || iniciandoGrabacion) return;
     interaccionReal = true;
     pausadoPorSalida = false;
+    if (window.ecoCrisisSoltar) window.ecoCrisisSoltar();
     // Ahora esto también se llama SOLO (sin click, ver
     // manejarDesenlaceDeTurno) para seguir la charla — un botón
     // deshabilitado no bloquea una llamada por código como sí bloquea un
@@ -1842,8 +1846,17 @@
     // charla hablada, así que no corresponde tocarlo.
   }
 
+  document.addEventListener('eco:crisis-chat', () => {
+    if (!charlaTerminada && !grabando && orb.dataset.state === 'idle') {
+      unlockAudioPlayback();
+      unlockMicAudioContext();
+      empezarGrabacion();
+    }
+  });
+
   orb.addEventListener('click', () => {
     if (grabando) { terminarGrabacion(); return; }
+    if (window.ecoCrisisEnEspera && window.ecoCrisisEnEspera() && document.querySelector('.eco-crisis-banner')) return;
     // Desbloquea audio/mic con este gesto real ANTES de que arranque nada
     // async — mismo motivo que app.html: en Android, si el AudioContext se
     // crea solo varios segundos después del toque (esperando al

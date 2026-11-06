@@ -1118,6 +1118,19 @@ function ensureSchema() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )`,
       sql`CREATE INDEX IF NOT EXISTS idx_arbol_cambios_ia_user ON arbol_cambios_ia(user_id, created_at)`,
+      // Cada vez que a alguien le sale el popup con los números de ayuda queda aquí, sin lo que dijo, para que los admins hagan seguimiento.
+      sql`CREATE TABLE IF NOT EXISTS crisis_avisos (
+        id BIGSERIAL PRIMARY KEY,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        tipo TEXT NOT NULL,
+        cuenta_id INTEGER,
+        quien TEXT NOT NULL,
+        perfil_nombre TEXT,
+        atendido_at TIMESTAMPTZ,
+        atendido_por TEXT,
+        nota TEXT
+      )`,
+      sql`CREATE INDEX IF NOT EXISTS idx_crisis_avisos_cuenta ON crisis_avisos(cuenta_id, tipo, created_at)`,
       // es_principal: quién es "Yo" (el eje del árbol, el dueño de la
       // bitácora) — antes esto se detectaba en el navegador buscando la
       // palabra "principal" dentro del texto libre de "relacion", así que
@@ -4195,6 +4208,7 @@ app.post('/api/delete-account', requireAuth, rateLimit, async (req, res) => {
       // [7]) para no moverlos.
       sql`DELETE FROM family_members_excluidos WHERE user_id = ${req.userId}`,
       sql`DELETE FROM arbol_cambios_ia WHERE user_id = ${req.userId}`,
+      sql`DELETE FROM crisis_avisos WHERE cuenta_id = ${req.userId}`,
       sql`DELETE FROM notification_preferences WHERE user_id = ${req.userId}`,
       sql`DELETE FROM reminder_deliveries WHERE user_id = ${req.userId}`,
       sql`DELETE FROM whatsapp_reminder_log WHERE profile_id = ${req.userId}`,
@@ -9023,6 +9037,83 @@ app.post('/api/admin/whatsapp-reminders/run', requireAuth, requireAdmin, rateLim
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo correr el resumen.' });
+  }
+});
+
+// Aviso a los admins cuando a alguien le sale el popup con los números de ayuda (eco-crisis-banner.js).
+// Guarda quién y de qué tipo, nunca lo que dijo, y manda una notificación al celular de cada admin.
+// Una misma persona y tipo no se repite en 30 minutos.
+const CRISIS_NO_REPETIR_MIN = 30;
+async function nombreDelPerfilDeCrisis(req) {
+  if (!req.profileUserId || req.profileUserId === req.userId) return null;
+  const primeroBitacoras = !!(req.isNarradorLink || req.ownerEsBitacora);
+  const deUsers = async () => (await sql`SELECT COALESCE(NULLIF(name, ''), username) AS n FROM users WHERE id = ${req.profileUserId}`)[0];
+  const deBitacoras = async () => (await sql`SELECT nombre AS n FROM bitacoras WHERE id = ${req.profileUserId}`)[0];
+  const fila = primeroBitacoras ? ((await deBitacoras()) || (await deUsers())) : ((await deUsers()) || (await deBitacoras()));
+  return fila && fila.n ? String(fila.n).slice(0, 120) : null;
+}
+
+app.post('/api/crisis-aviso', requireAuth, rateLimit, async (req, res) => {
+  const tipo = req.body && req.body.tipo;
+  if (tipo !== 'suicide' && tipo !== 'violence') return res.status(400).json({ error: 'Tipo no válido.' });
+  try {
+    await ensureSchema();
+    let quien;
+    if (req.userId) {
+      const u = await sql`SELECT COALESCE(NULLIF(name, ''), username) AS n FROM users WHERE id = ${req.userId}`;
+      quien = (u[0] && u[0].n) || 'Una cuenta';
+    } else {
+      quien = (req.guestName ? String(req.guestName).slice(0, 80) : 'Alguien') + ' (invitado)';
+    }
+    const perfil = await nombreDelPerfilDeCrisis(req);
+    const reciente = req.userId
+      ? await sql`SELECT 1 FROM crisis_avisos WHERE cuenta_id = ${req.userId} AND tipo = ${tipo} AND created_at > now() - ${CRISIS_NO_REPETIR_MIN + ' minutes'}::interval LIMIT 1`
+      : await sql`SELECT 1 FROM crisis_avisos WHERE cuenta_id IS NULL AND quien = ${quien} AND COALESCE(perfil_nombre, '') = ${perfil || ''} AND tipo = ${tipo} AND created_at > now() - ${CRISIS_NO_REPETIR_MIN + ' minutes'}::interval LIMIT 1`;
+    if (reciente.length) return res.json({ ok: true, repetido: true });
+    await sql`INSERT INTO crisis_avisos (tipo, cuenta_id, quien, perfil_nombre) VALUES (${tipo}, ${req.userId || null}, ${quien}, ${perfil})`;
+    if (pushWeb && pushWeb.habilitado) {
+      const admins = await sql`SELECT id FROM users WHERE is_admin = true`;
+      const motivo = tipo === 'suicide' ? 'riesgo de hacerse daño' : 'violencia o maltrato';
+      const donde = perfil ? ' (libro de ' + perfil + ')' : '';
+      await Promise.all(admins.map((a) => pushWeb.enviarPush(a.id, {
+        title: 'Eco · alerta de ayuda',
+        body: quien + donde + ': le salieron los números de ayuda por ' + motivo + '. Míralo en el panel.',
+        url: '/admin.html',
+        tag: 'eco-crisis',
+      })));
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('No se pudo registrar el aviso de ayuda:', err);
+    res.status(500).json({ error: 'No se pudo registrar.' });
+  }
+});
+
+app.get('/api/admin/crisis-avisos', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await ensureSchema();
+    const filas = await sql`SELECT id, created_at, tipo, quien, perfil_nombre, atendido_at, atendido_por, nota FROM crisis_avisos ORDER BY created_at DESC, id DESC LIMIT 100`;
+    res.set('Cache-Control', 'no-store');
+    res.json({ avisos: filas });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudieron cargar los avisos.' });
+  }
+});
+
+app.post('/api/admin/crisis-avisos/:id/atendido', requireAuth, requireAdmin, rateLimit, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id <= 0) return res.status(400).json({ error: 'Aviso no válido.' });
+  const nota = typeof (req.body && req.body.nota) === 'string' ? req.body.nota.trim().slice(0, 500) : '';
+  try {
+    await ensureSchema();
+    const yo = await sql`SELECT COALESCE(NULLIF(name, ''), username) AS n FROM users WHERE id = ${req.userId}`;
+    const r = await sql`UPDATE crisis_avisos SET atendido_at = now(), atendido_por = ${(yo[0] && yo[0].n) || 'admin'}, nota = ${nota || null} WHERE id = ${id} RETURNING id`;
+    if (!r.length) return res.status(404).json({ error: 'No existe ese aviso.' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo guardar.' });
   }
 });
 

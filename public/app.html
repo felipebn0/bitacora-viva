@@ -3206,6 +3206,7 @@
   function puedeInterrumpirPorVoz() {
     const ultimo = history[history.length - 1];
     const dePersona = ultimo && ultimo.role === 'assistant' ? history[history.length - 2] : ultimo;
+    if (window.ecoCrisisEnEspera && window.ecoCrisisEnEspera()) return false;
     return !finPedido && !!dePersona && dePersona.role === 'user' && !/^\(/.test(dePersona.content || '');
   }
 
@@ -3689,6 +3690,8 @@
         if (data.done || finPedido) {
           finPedido = false;
           finishSession();
+        } else if (window.ecoCrisisEnEspera && window.ecoCrisisEnEspera()) {
+          entrarEnPausaPorCrisis();
         } else if (data.pausado) {
           entrarEnPausaOfrecida();
         } else {
@@ -3873,7 +3876,23 @@
     saveSessionLog();
   }
 
+  // Salió el popup con los números de ayuda: ECO termina de hablar y se queda sin escuchar
+  // hasta que la persona toque «Seguir hablando con Eco» (o el círculo). Al volver, escucha su respuesta.
+  function entrarEnPausaPorCrisis() {
+    pausedFromState = 'listening';
+    releaseWakeLock();
+    releaseMic();
+    setState('paused', 'En pausa — toca «Seguir hablando con Eco» cuando quieras continuar');
+    orbLabel.innerHTML = 'Presiona<br>para seguir';
+    saveSessionLog();
+  }
+
+  document.addEventListener('eco:crisis-chat', () => {
+    if (state === 'paused') { unlockMicAudioContext(); resumeConversation(); }
+  });
+
   function resumeConversation() {
+    if (window.ecoCrisisSoltar) window.ecoCrisisSoltar();
     requestWakeLock();
     const mySession = ++sessionId;
     if (pausedFromState === 'thinking') {
@@ -3946,6 +3965,7 @@
     turnIndex += 1;
     const myTurn = turnIndex;
     history.push({ role: 'user', content: text.trim() });
+    if (window.ecoCrisisCheck) window.ecoCrisisCheck(text.trim(), orb.closest('.orb-wrap'));
     const logEntry = { role: 'user', content: text.trim(), timestamp: new Date().toISOString() };
     sessionLog.push(logEntry);
     writeRow.classList.remove('visible');
@@ -4150,7 +4170,8 @@
     if (state !== 'idle' && state !== 'ended' && state !== 'save-failed') return;
     finPedido = false;
     cierreEnCurso = false;
-    
+    if (window.ecoCrisisSoltar) window.ecoCrisisSoltar();
+
     // Si hay datos pendientes, pedir confirmación
     if (pendingSessionLog.length > 0 && state !== 'ended') {
       const shouldDiscard = confirm(
@@ -4204,6 +4225,7 @@
       unlockMicAudioContext();
       fetchNext();
     } else if (state === 'paused') {
+      if (window.ecoCrisisEnEspera && window.ecoCrisisEnEspera() && document.querySelector('.eco-crisis-banner')) return;
       unlockMicAudioContext();
       resumeConversation();
     } else {
@@ -4412,7 +4434,7 @@
 <script src="/eco-bebe-comun.js?v=7" defer></script>
 <script src="/eco-mascotas-inicio.js?v=5" defer></script>
 <script src="/eco-bebe.js?v=13" defer></script>
-<script src="/eco-crisis-banner.js?v=3" defer></script>
+<script src="/eco-crisis-banner.js?v=4" defer></script>
 <script src="/eco-intro.js?v=1" defer></script>
 <script src="/eco-tour.js?v=2" defer></script>
 </body>
