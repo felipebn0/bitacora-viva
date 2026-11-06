@@ -1520,6 +1520,8 @@ function ensureSchema() {
       // la UI, se activa a mano con un UPDATE directo en la base (ver
       // README). Gatea el acceso a /admin.html.
       sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT false`,
+      // primer_uso_avisado: false solo en las cuentas nuevas hasta su primera charla (ahí les suena el celular a los admins); las que ya existían quedan en true.
+      sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS primer_uso_avisado BOOLEAN NOT NULL DEFAULT true`,
 
       // Consumo medido de servicios pagos (Claude + voz), una fila por
       // llamada — alimenta el reporte de costos en /admin.html. "user_id"
@@ -3939,10 +3941,16 @@ app.post('/api/signup', rateLimit, async (req, res) => {
 
     const hash = await bcrypt.hash(password, 12);
     const rows = await sql`
-      INSERT INTO users (username, name, email, phone, password_hash, owner_user_id, signup_variant, terms_accepted_at, terms_version, tratamiento, idioma)
-      VALUES (${cleanEmail}, ${cleanName}, ${cleanEmail}, ${cleanPhone}, ${hash}, ${ownerUserId}, ${signupVariant}, now(), ${TERMS_VERSION}, ${tratamientoValido(tratamiento)}, ${idiomaCuenta})
+      INSERT INTO users (username, name, email, phone, password_hash, owner_user_id, signup_variant, terms_accepted_at, terms_version, primer_uso_avisado, tratamiento, idioma)
+      VALUES (${cleanEmail}, ${cleanName}, ${cleanEmail}, ${cleanPhone}, ${hash}, ${ownerUserId}, ${signupVariant}, now(), ${TERMS_VERSION}, ${!!ownerUserId}, ${tratamientoValido(tratamiento)}, ${idiomaCuenta})
       RETURNING id, username, token_version
     `;
+    await avisarAAdmins({
+      title: 'Eco · nueva cuenta',
+      body: cleanName + ' se registró' + (ownerUserId ? ' como colaboradora de una familia.' : ' en Eco.'),
+      url: '/admin.html',
+      tag: 'eco-registro-' + rows[0].id,
+    });
     console.log(`[registro] userId=${rows[0].id} tipo=${ownerUserId ? 'colaboradora' : 'dueña'} variante=${signupVariant || '-'} registrada=${new Date().toISOString()}`);
     await registrarAceptacion('cuenta', rows[0].id, ownerUserId, null);
     setSessionCookie(req, res, { userId: rows[0].id, username: rows[0].username, tokenVersion: rows[0].token_version });
@@ -5617,6 +5625,8 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
       if (m.content.length > 4000) m.content = m.content.slice(0, 4000);
     }
     const mode = req.body.mode === 'arbol' ? 'arbol' : 'historia';
+    // Primera charla de una cuenta nueva: se avisa a los admins sin frenar el turno (la IA tarda más que el aviso).
+    if (mode === 'historia' && !history.length && req.body.especulativo !== true && req.userId) avisarPrimerUso(req.userId);
     // Tiempos de este turno (Server-Timing + línea [latencia]): ver medirTurno.
     const medida = medirTurno('next');
     // Estas tres lecturas no dependen una de otra: en paralelo cuestan lo de la
@@ -9039,6 +9049,35 @@ app.post('/api/admin/whatsapp-reminders/run', requireAuth, requireAdmin, rateLim
     res.status(500).json({ error: 'No se pudo correr el resumen.' });
   }
 });
+
+// Notificación al celular de cada cuenta admin (las que tienen los avisos activados). No falla nunca.
+async function avisarAAdmins(aviso) {
+  try {
+    if (!pushWeb || !pushWeb.habilitado) return;
+    await ensureSchema();
+    const admins = await sql`SELECT id FROM users WHERE is_admin = true`;
+    await Promise.all(admins.map((a) => pushWeb.enviarPush(a.id, aviso)));
+  } catch (err) {
+    console.error('No se pudo avisar a los admins:', err);
+  }
+}
+
+// La primera vez que una cuenta nueva empieza una charla, a los admins les suena el celular (una sola vez por cuenta).
+async function avisarPrimerUso(userId) {
+  try {
+    if (!userId) return;
+    const r = await sql`UPDATE users SET primer_uso_avisado = true WHERE id = ${userId} AND primer_uso_avisado = false RETURNING COALESCE(NULLIF(name, ''), username) AS n`;
+    if (!r.length) return;
+    await avisarAAdmins({
+      title: 'Eco · empezó a usar la app',
+      body: r[0].n + ' acaba de empezar su primera charla con Eco.',
+      url: '/admin.html',
+      tag: 'eco-primer-uso-' + userId,
+    });
+  } catch (err) {
+    console.error('No se pudo avisar del primer uso:', err);
+  }
+}
 
 // Aviso a los admins cuando a alguien le sale el popup con los números de ayuda (eco-crisis-banner.js).
 // Guarda quién y de qué tipo, nunca lo que dijo, y manda una notificación al celular de cada admin.
