@@ -25,6 +25,7 @@ ok(motor.includes("document.documentElement.hasAttribute('data-idioma-cuenta')")
 ok(/function crearBoton\(\) \{\s*if \(POR_CUENTA/.test(motor), 'en ese modo no se dibuja la bandera');
 ok(motor.includes("fetch('/api/me'"), 'el motor consulta el idioma guardado en la cuenta');
 ok(motor.includes('characterData: true'), 'también mira los textos que cambian sin agregar nodos (el saludo)');
+ok(/function envolverAvisos\(\)/.test(motor) && /'confirm', 'alert', 'prompt'/.test(motor), 'los avisos del navegador (confirm/alert) también se traducen');
 
 // En el registro, el idioma de la bitácora arranca en el idioma en que está el landing.
 ok(/campoIdioma\.value = idioma/.test(motor), 'el campo del registro sigue el idioma del landing');
@@ -38,6 +39,16 @@ for (const p of ['index', 'index-v2']) {
 const server = leer('server.js');
 ok(/ALTER TABLE users ADD COLUMN IF NOT EXISTS idioma/.test(server), 'la cuenta guarda el idioma');
 ok(/idioma: \(contextoDePedido\.getStore\(\) \|\| \{\}\)\.idioma/.test(server), '/api/me devuelve el idioma de la cuenta');
+
+// La voz de la IA: el prompt dice decenas de veces "español de Colombia", así que
+// el aviso de inglés va arriba Y abajo, y dice expresamente que gana.
+ok(/function cabeceraIdioma\(\)/.test(server), 'hay una cabecera de idioma para el prompt');
+ok(/THIS ACCOUNT IS IN ENGLISH/.test(server), 'la cabecera avisa en inglés desde la primera línea');
+ok(/THIS RULE BEATS EVERY OTHER INSTRUCTION/.test(server), 'la regla de idioma dice que gana sobre el resto del prompt');
+ok((server.match(/cabeceraIdioma\(\)/g) || []).length >= 3, 'la cabecera se aplica a la charla principal y a la de aportes');
+ok(/system = cabeceraIdioma\(\) \+ system \+ instruccionIdiomaRespuesta\(\)/.test(server), 'charla principal: cabecera + prompt + regla final');
+ok(/ctxAporte\.idioma = await idiomaDeUsuario\(ownerId\)/.test(server), 'quien aporta sin cuenta sigue el idioma de la bitácora');
+ok(/AZURE_VOICE_NAME_EN/.test(server), 'el respaldo de voz de Azure tiene voz en inglés');
 
 const dicFuente = leer('public/eco-idioma-en.js');
 const ventana = {};
@@ -54,11 +65,21 @@ const IMPRESCINDIBLES = [
   'Buenas tardes,',                // saludo de la pantalla principal
   'Háblale a ECO',                 // recorrido
   'Mi bitácora',
-  'No se pudo guardar. Intenta de nuevo.'
+  'No se pudo guardar. Intenta de nuevo.',
+  'Continuar',                     // botón del tutorial
+  'Hablando…',                     // estado del orbe
+  'Yo',                            // tarjeta del árbol
+  'Portada',                       // libro
+  'Voz del libro',
+  '← Volver a la bitácora',
+  'Usuario principal'
 ];
 for (const t of IMPRESCINDIBLES) ok(typeof dic[t] === 'string' && dic[t].length > 0, 'hay traducción para: ' + t);
 
 ok(Object.keys(patrones).length > 0, 'hay patrones para las frases con un nombre en medio');
+for (const p of ['Paso {} de {}', 'Escuché: «{}». ¡Muy bien!']) {
+  ok(typeof patrones[p] === 'string', 'hay patrón para: ' + p);
+}
 for (const [es, en] of Object.entries(patrones)) {
   const huecosEs = (es.match(/\{\}/g) || []).length;
   const huecosEn = (en.match(/\{\}/g) || []).length;

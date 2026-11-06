@@ -1,7 +1,13 @@
 {
-"Buenos días,":"Good morning,",
-"Buenas tardes,":"Good afternoon,",
-"Buenas noches,":"Good evening,",
-"Hola,":"Hi,",
-"Seguir hablando con Eco →":"Keep talking with Eco →"
+ "Buenos días,": "Good morning,",
+ "Buenas tardes,": "Good afternoon,",
+ "Buenas noches,": "Good evening,",
+ "Hola,": "Hi,",
+ "Seguir hablando con Eco →": "Keep talking with Eco →",
+ "Continuar": "Continue",
+ "Borrar": "Delete",
+ "Buscar": "Search",
+ "Hablando…": "Speaking…",
+ "Escuchando…": "Listening…",
+ "Pensando…": "Thinking…"
 }
