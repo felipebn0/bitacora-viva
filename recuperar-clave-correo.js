@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 
 const VIDA_ENLACE_MIN = 30;
-const BASE_URL_FIJA = 'https://bitacora-viva.vercel.app';
+const BASE_URL_FIJA = 'https://mieco.app';
 const MENSAJE_GENERICO = 'Si ese correo tiene una cuenta, te enviamos un enlace para crear una clave nueva. Revisa también el correo no deseado. El enlace dura 30 minutos.';
 
 module.exports = (app, { sql, ensureSchema, rateLimit, limitePorClave, enviarCorreo, claveDemasiadoLarga }) => {
@@ -16,6 +16,11 @@ module.exports = (app, { sql, ensureSchema, rateLimit, limitePorClave, enviarCor
   const escapar = (s) => String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   // Nunca se arma con el Host del pedido: un Host falseado metería un enlace a otro dominio en el correo.
   const base = () => String(process.env.PUBLIC_BASE_URL || BASE_URL_FIJA).replace(/\/+$/, '');
+
+  app.get('/api/clave/estado', (req, res) => {
+    sinCache(res);
+    res.json({ porCorreo: true });
+  });
 
   app.post('/api/clave/olvide', rateLimit, async (req, res) => {
     sinCache(res);

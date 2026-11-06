@@ -89,7 +89,7 @@ function check(nombre, cond) {
   try {
     // --- La política y el header declaran esta misma ruta ---
     const home = await get(server, '/');
-    const csp = home.headers['content-security-policy-report-only'] || '';
+    const csp = home.headers['content-security-policy'] || '';
     check('la CSP pide report-uri hacia /api/csp-report', csp.includes('report-uri /api/csp-report'));
     check('la CSP pide report-to csp-endpoint', csp.includes('report-to csp-endpoint'));
     check('el header Reporting-Endpoints declara el grupo csp-endpoint hacia /api/csp-report', (home.headers['reporting-endpoints'] || '').includes('csp-endpoint="/api/csp-report"'));

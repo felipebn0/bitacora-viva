@@ -134,7 +134,8 @@ function cabeceraIdioma() {
 // CSP en absoluto). Si se cambia CSP_POLICY aquí, hay que copiar el cambio
 // a vercel.json también — no hay forma de compartir el string entre los
 // dos archivos.
-const CSP_MODE_ENFORCE = false;
+// Activa desde el 2026-11-06 (se comprobó que ninguna página de public/ viola la política: ver test/csp-paginas.playwright.js).
+const CSP_MODE_ENFORCE = true;
 // Ruta relativa (no una URL absoluta): report-uri la resuelve contra el
 // origen de la propia página, así que sirve igual para una página servida
 // por Express (/api/*) o por el build estático de Vercel (public/**) — el
@@ -290,6 +291,21 @@ app.get('/api/redirigir-dominio', (req, res) => {
 // lo que no empiece con /api/ directo a un archivo estático de public/ (ver
 // la última regla de "routes" ahí) — una ruta fuera de /api/ nunca llega a
 // este servidor Express en producción/preview, solo en local (npm run dev).
+// Chequeo de salud para el monitor externo (.github/workflows/monitor.yml). Sin parámetros solo confirma que la
+// app responde (no toca la base de datos: Neon cobra por el tiempo que está encendida). Con ?profundo=1 también
+// hace una consulta a la base, y por eso lleva rateLimit.
+app.get('/api/salud', (req, res, next) => (req.query.profundo === '1' ? rateLimit(req, res, next) : next()), async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (req.query.profundo !== '1') return res.json({ ok: true });
+  try {
+    await sql`SELECT 1`;
+    res.json({ ok: true, db: true });
+  } catch (err) {
+    console.error('Chequeo de salud: la base de datos no responde:', err);
+    res.status(503).json({ ok: false, db: false });
+  }
+});
+
 app.get('/api/manifest.json', (req, res) => {
   const codigo = typeof req.query.codigo === 'string' ? req.query.codigo.replace(/[^A-Za-z0-9]/g, '').slice(0, 8) : '';
   const nombre = typeof req.query.nombre === 'string' ? req.query.nombre.replace(/[^\p{L}\p{N} ]/gu, '').slice(0, 60) : '';
@@ -1131,6 +1147,14 @@ function ensureSchema() {
         nota TEXT
       )`,
       sql`CREATE INDEX IF NOT EXISTS idx_crisis_avisos_cuenta ON crisis_avisos(cuenta_id, tipo, created_at)`,
+      // Enlaces de un solo uso para crear una clave nueva (solo se guarda el hash del enlace).
+      sql`CREATE TABLE IF NOT EXISTS password_resets (
+        token_hash TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        expires_at TIMESTAMPTZ NOT NULL,
+        used_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
       // es_principal: quién es "Yo" (el eje del árbol, el dueño de la
       // bitácora) — antes esto se detectaba en el navegador buscando la
       // palabra "principal" dentro del texto libre de "relacion", así que
@@ -4217,6 +4241,7 @@ app.post('/api/delete-account', requireAuth, rateLimit, async (req, res) => {
       sql`DELETE FROM family_members_excluidos WHERE user_id = ${req.userId}`,
       sql`DELETE FROM arbol_cambios_ia WHERE user_id = ${req.userId}`,
       sql`DELETE FROM crisis_avisos WHERE cuenta_id = ${req.userId}`,
+      sql`DELETE FROM password_resets WHERE user_id = ${req.userId}`,
       sql`DELETE FROM notification_preferences WHERE user_id = ${req.userId}`,
       sql`DELETE FROM reminder_deliveries WHERE user_id = ${req.userId}`,
       sql`DELETE FROM whatsapp_reminder_log WHERE profile_id = ${req.userId}`,
@@ -7788,7 +7813,9 @@ pushRecordatorios = require('./push-recordatorios-routes')(app, { sql, ensureSch
 require('./book-qr-routes')(app, { preguntasPorAudio, sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob });
 require('./libro-compartido-routes')(app, { sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob, almacenarArchivo, express });
 require('./demo-nombre-routes')(app, { rateLimit, limitePorClave, verificarArchivoReal, AUDIO_MIME_PERMITIDOS, speakWithElevenLabs: (texto) => pedirVozAElevenLabs(texto, 'eleven_v4_turbo'), elevenKey: ELEVEN_KEY, express });
-require('./recuperar-clave-routes')(app,{ sql, ensureSchema, rateLimit, limitePorClave, claveDemasiadoLarga });
+// El cambio de clave por enlace solo se enciende con un remitente propio verificado en Resend (ver recuperar-clave-routes.js).
+const cambioDeClavePorCorreo = !!(process.env.RESEND_API_KEY && process.env.RESEND_FROM && !/resend\.dev/i.test(process.env.RESEND_FROM));
+require('./recuperar-clave-routes')(app,{ sql, ensureSchema, rateLimit, limitePorClave, claveDemasiadoLarga, enviarCorreo, porCorreo: cambioDeClavePorCorreo });
 require('./bebe-routes')(app, { sql, ensureSchema, requireAuth, rateLimit, bloquearEscritura: [bloquearColaborador, bloquearSiNoPuedeNarrar, bloquearSiReadOnly], resolveProfileUserId, almacenarArchivo, verificarArchivoReal, MEDIA_MIME_PERMITIDOS, AUDIO_MIME_PERMITIDOS, enviarArchivoAlmacenado, datosDelArchivoDeBlob, borrarArchivosBlob });
 require('./book-editor-routes')(app, {
   sql,
@@ -8899,6 +8926,15 @@ function plantillaRecordatorio(nombre, link) {
   </div>`;
 }
 
+// Compara el secreto de los crons en tiempo constante (así no se puede ir adivinando letra por letra).
+function cronAutorizado(req) {
+  const secreto = process.env.CRON_SECRET;
+  if (!secreto) return false;
+  const dado = Buffer.from(String(req.headers['authorization'] || ''));
+  const esperado = Buffer.from('Bearer ' + secreto);
+  return dado.length === esperado.length && crypto.timingSafeEqual(dado, esperado);
+}
+
 // Disparado por Vercel Cron (ver vercel.json) — protegido con CRON_SECRET,
 // el mismo valor que Vercel manda solo en el header Authorization cuando
 // el cron está configurado. Sin CRON_SECRET configurado, esta ruta se
@@ -8913,7 +8949,7 @@ function plantillaRecordatorio(nombre, link) {
 // de WhatsApp igual se arma y se manda por CallMeBot si está configurado.
 app.get('/api/cron/reminders', async (req, res) => {
   try {
-    if (!process.env.CRON_SECRET || req.headers['authorization'] !== `Bearer ${process.env.CRON_SECRET}`) {
+    if (!cronAutorizado(req)) {
       return res.status(401).json({ error: 'No autorizado.' });
     }
 
@@ -9883,7 +9919,7 @@ function plantillaRenovacion(nombre, plan, link) {
 // "reintento automático"). Mismo CRON_SECRET que /api/cron/reminders.
 app.get('/api/cron/billing', async (req, res) => {
   try {
-    if (!process.env.CRON_SECRET || req.headers['authorization'] !== `Bearer ${process.env.CRON_SECRET}`) {
+    if (!cronAutorizado(req)) {
       return res.status(401).json({ error: 'No autorizado.' });
     }
     await ensureSchema();

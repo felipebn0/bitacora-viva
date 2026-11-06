@@ -16,12 +16,30 @@
 <main class="rest-caja">
   <a class="rest-logo" href="/app.html"><img src="/images/logo-icon.png" alt="" width="36" height="36"><span>ECO</span></a>
 
-  <section id="vistaNueva">
+  <section id="vistaAyuda" hidden>
+    <h1>Cambiar la clave</h1>
+    <p class="rest-sub" id="ayudaTexto">Por ahora no podemos cambiar la clave desde aquí. Escríbenos desde el correo con el que te registraste y te ayudamos.</p>
+  </section>
+
+  <section id="vistaPedir" hidden>
+    <h1>¿Olvidaste tu clave?</h1>
+    <p class="rest-sub">Escribe tu correo y te enviamos un enlace para crear una clave nueva.</p>
+    <form id="formPedir" novalidate>
+      <label for="correo">Correo</label>
+      <input id="correo" type="email" autocomplete="email" placeholder="Tu correo">
+      <button id="btnPedir" type="submit">Enviarme el enlace</button>
+    </form>
+  </section>
+
+  <section id="vistaEnviado" hidden>
+    <h1>Revisa tu correo</h1>
+    <p class="rest-sub">Si ese correo tiene una cuenta, te enviamos un enlace para crear una clave nueva. Revisa también el correo no deseado. El enlace dura 30 minutos.</p>
+  </section>
+
+  <section id="vistaNueva" hidden>
     <h1>Crea tu clave nueva</h1>
-    <p class="rest-sub">Escribe tu correo o usuario y la clave nueva dos veces.</p>
+    <p class="rest-sub">Escribe la clave nueva dos veces.</p>
     <form id="formNueva" novalidate>
-      <label for="usuario">Correo o usuario</label>
-      <input id="usuario" type="text" autocomplete="username" placeholder="Correo o usuario">
       <label for="clave">Clave nueva</label>
       <div class="rest-fila">
         <input id="clave" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres">
@@ -42,6 +60,6 @@
   <p class="rest-msg" id="msg" role="status" aria-live="polite"></p>
   <a class="rest-volver" id="volver" href="/app.html">‹ Volver a entrar</a>
 </main>
-<script src="/restablecer.js?v=2"></script>
+<script src="/restablecer.js?v=3"></script>
 </body>
 </html>

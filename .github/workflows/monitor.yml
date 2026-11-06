@@ -1,0 +1,44 @@
+name: Monitor de mieco.app
+
+# Cada 10 minutos revisa que la app responda; una vez por hora también revisa que la base de datos responda.
+# Si algo falla, el workflow queda en rojo y GitHub avisa por correo a quien administra el repo.
+# Para recibir el aviso: GitHub -> Settings -> Notifications -> "Actions" -> marcar "Send notifications for failed workflows only".
+# También se puede correr a mano desde la pestaña Actions (botón "Run workflow").
+
+on:
+  schedule:
+    - cron: '7,17,27,37,47,57 * * * *'
+  workflow_dispatch: {}
+
+permissions: {}
+
+jobs:
+  revisar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: La app responde
+        run: |
+          for intento in 1 2 3; do
+            codigo=$(curl -s -o /tmp/salud.json -w '%{http_code}' -m 20 https://mieco.app/api/salud || true)
+            if [ "$codigo" = "200" ] && grep -q '"ok":true' /tmp/salud.json; then echo "OK ($codigo)"; exit 0; fi
+            echo "Intento $intento: respuesta $codigo"; sleep 15
+          done
+          echo "::error::mieco.app no responde bien (último código: $codigo)"
+          exit 1
+
+      - name: La landing carga
+        run: |
+          codigo=$(curl -s -o /dev/null -w '%{http_code}' -m 20 https://mieco.app/ || true)
+          [ "$codigo" = "200" ] || { echo "::error::La landing respondió $codigo"; exit 1; }
+
+      - name: La base de datos responde (una vez por hora)
+        run: |
+          if [ "$(date -u +%M)" -ge 10 ] && [ "${{ github.event_name }}" = "schedule" ]; then echo "Se revisa solo en la primera ejecución de cada hora."; exit 0; fi
+          for intento in 1 2 3; do
+            codigo=$(curl -s -o /tmp/db.json -w '%{http_code}' -m 25 'https://mieco.app/api/salud?profundo=1' || true)
+            if [ "$codigo" = "200" ] && grep -q '"db":true' /tmp/db.json; then echo "OK ($codigo)"; exit 0; fi
+            echo "Intento $intento: respuesta $codigo"; sleep 15
+          done
+          echo "::error::La base de datos no responde (último código: $codigo)"
+          exit 1

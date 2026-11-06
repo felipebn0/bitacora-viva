@@ -1,7 +1,7 @@
 // Smoke test para las tres mejoras "baratas" del hallazgo de CSP/errores
 // (2026-09-05): apagar X-Powered-By, un id de correlación por pedido
 // (X-Request-Id + prefijo en console.error), y que vercel.json tenga la
-// misma política CSP-Report-Only para las páginas estáticas (que en
+// misma política CSP para las páginas estáticas (que en
 // producción nunca pasan por este server.js — ver el comentario junto a
 // CSP_POLICY en server.js).
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || 'ci-smoke-secret';
@@ -94,8 +94,8 @@ function check(nombre, cond) {
     const vercelJson = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', 'vercel.json'), 'utf8'));
     const rutaEstatica = vercelJson.routes.find((r) => r.src === '^/(?!api/|libro/).*');
     check('vercel.json tiene una regla de headers para las rutas no-api', !!(rutaEstatica && rutaEstatica.headers));
-    const cspEstatica = rutaEstatica && rutaEstatica.headers['Content-Security-Policy-Report-Only'];
-    check('esa regla incluye Content-Security-Policy-Report-Only', typeof cspEstatica === 'string' && cspEstatica.length > 0);
+    const cspEstatica = rutaEstatica && rutaEstatica.headers['Content-Security-Policy'];
+    check('esa regla incluye Content-Security-Policy (obligatoria)', typeof cspEstatica === 'string' && cspEstatica.length > 0);
     check('la CSP de vercel.json no permite unsafe-inline (coherente con la de server.js)', !!cspEstatica && !cspEstatica.includes('unsafe-inline'));
   } finally {
     process.stderr.write = stderrWriteOriginal;

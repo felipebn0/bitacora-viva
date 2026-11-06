@@ -53,6 +53,14 @@ function inicioDelDiaColombia(ahora) {
   return new Date(Date.UTC(col.getUTCFullYear(), col.getUTCMonth(), col.getUTCDate()) + OFFSET_COLOMBIA_MS);
 }
 
+const cronAutorizado = (req) => {
+  const secreto = process.env.CRON_SECRET;
+  if (!secreto) return false;
+  const dado = Buffer.from(String(req.headers['authorization'] || ''));
+  const esperado = Buffer.from('Bearer ' + secreto);
+  return dado.length === esperado.length && crypto.timingSafeEqual(dado, esperado);
+};
+
 module.exports = (app, { sql, ensureSchema, requireAuth, requireAdmin, bloquearColaborador, bloquearInvitado, rateLimit, pushWeb }) => {
   let fkQuitada = false;
   const { idDeAvisos, soloCuentaONarrador } = pushWeb;
@@ -129,7 +137,7 @@ module.exports = (app, { sql, ensureSchema, requireAuth, requireAdmin, bloquearC
   // Vercel Cron, todos los días a las 22:00 UTC (5 pm en Colombia). Mismo CRON_SECRET que los otros crons.
   app.get('/api/cron/recordatorio-push', async (req, res) => {
     try {
-      if (!process.env.CRON_SECRET || req.headers['authorization'] !== `Bearer ${process.env.CRON_SECRET}`) {
+      if (!cronAutorizado(req)) {
         return res.status(401).json({ error: 'No autorizado.' });
       }
       if (!pushWeb || !pushWeb.habilitado) return res.json({ ok: true, saltado: 'sin llaves de avisos' });
