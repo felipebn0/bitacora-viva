@@ -125,6 +125,10 @@
       boton.setAttribute('aria-label', idioma === 'en' ? 'Switch to Spanish' : 'Cambiar a inglés');
       boton.title = idioma === 'en' ? 'Switch to Spanish' : 'Cambiar a inglés';
     }
+    // "Crear cuenta": si la página está en inglés, el idioma de la bitácora arranca
+    // en inglés. Si la persona ya lo cambió a mano, no se le toca.
+    const campoIdioma = document.getElementById('suIdioma');
+    if (campoIdioma && !campoIdioma.dataset.elegido) campoIdioma.value = idioma;
   }
 
   function cambiar(nuevo) {
@@ -160,6 +164,8 @@
   function iniciar() {
     idioma = leer();
     crearBoton();
+    const campoIdioma = document.getElementById('suIdioma');
+    if (campoIdioma) campoIdioma.addEventListener('change', () => { campoIdioma.dataset.elegido = '1'; });
     marcarIdioma();
     observador = new MutationObserver((muts) => {
       observador.disconnect();

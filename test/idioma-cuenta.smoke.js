@@ -26,6 +26,15 @@ ok(/function crearBoton\(\) \{\s*if \(POR_CUENTA/.test(motor), 'en ese modo no s
 ok(motor.includes("fetch('/api/me'"), 'el motor consulta el idioma guardado en la cuenta');
 ok(motor.includes('characterData: true'), 'también mira los textos que cambian sin agregar nodos (el saludo)');
 
+// En el registro, el idioma de la bitácora arranca en el idioma en que está el landing.
+ok(/campoIdioma\.value = idioma/.test(motor), 'el campo del registro sigue el idioma del landing');
+ok(/campoIdioma\.dataset\.elegido/.test(motor), 'si la persona lo eligió a mano, no se le pisa');
+for (const p of ['index', 'index-v2']) {
+  const html = leer(path.join('public', p + '.html'));
+  ok(/id="suIdioma"/.test(html), p + '.html: el registro tiene el campo de idioma');
+  ok(/idioma: document\.getElementById\('suIdioma'\)\.value/.test(html), p + '.html: el registro manda el idioma elegido');
+}
+
 const server = leer('server.js');
 ok(/ALTER TABLE users ADD COLUMN IF NOT EXISTS idioma/.test(server), 'la cuenta guarda el idioma');
 ok(/idioma: \(contextoDePedido\.getStore\(\) \|\| \{\}\)\.idioma/.test(server), '/api/me devuelve el idioma de la cuenta');
