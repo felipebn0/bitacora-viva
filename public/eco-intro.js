@@ -238,9 +238,16 @@
   }
 
   async function consultar(repetir) {
-    const resp = await fetch('/api/intro' + (repetir ? '?repetir=1' : ''));
-    if (!resp.ok) return null;
-    return resp.json();
+    // Un fallo momentáneo del servidor (justo al registrarse, por ejemplo) no puede dejar a la persona sin intro: se reintenta.
+    for (let intento = 0; intento < 3; intento++) {
+      try {
+        const resp = await fetch('/api/intro' + (repetir ? '?repetir=1' : ''));
+        if (resp.ok) return resp.json();
+        if (resp.status === 401 || resp.status === 403) return null;
+      } catch (e) { /* sin conexión: se reintenta */ }
+      await new Promise((r) => setTimeout(r, 900));
+    }
+    return null;
   }
 
   window.EcoIntro = {

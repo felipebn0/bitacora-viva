@@ -20,7 +20,7 @@ const ok = (c, m) => { if (c) console.log('✓ ' + m); else { fallas++; console.
   async function abrir({ vistos = [], tourFalla = false, localStorageHecho = false } = {}) {
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
     const page = await ctx.newPage();
-    if (localStorageHecho) await page.addInitScript(() => { try { localStorage.setItem('eco_tour_done__app_html', '1'); } catch (e) { /* nada */ } });
+    if (localStorageHecho) await page.addInitScript(() => { try { localStorage.setItem('eco_tour_done__arbol_html', '1'); } catch (e) { /* nada */ } });
     const posts = [];
     await page.route('**/api/**', (route) => {
       const u = new URL(route.request().url());
@@ -33,7 +33,7 @@ const ok = (c, m) => { if (c) console.log('✓ ' + m); else { fallas++; console.
       if (u.pathname === '/api/push/clave') return json({ habilitado: false, clave: null });
       return json({ ok: true });
     });
-    await page.goto(base + '/app.html', { waitUntil: 'load' });
+    await page.goto(base + '/arbol.html', { waitUntil: 'load' });
     await page.waitForTimeout(2500);
     return { ctx, page, posts };
   }
@@ -43,13 +43,13 @@ const ok = (c, m) => { if (c) console.log('✓ ' + m); else { fallas++; console.
   await t.page.locator('.eco-tour-skip').click();
   await t.page.waitForTimeout(300);
   const marca = t.posts.find((p) => p.ruta === '/api/tour/visto');
-  ok(marca && JSON.parse(marca.cuerpo).pagina === '/app.html', 'al terminarlo se guarda en el servidor');
-  ok(await t.page.evaluate(() => localStorage.getItem('eco_tour_done__app_html')) === '1', 'y también en este navegador');
+  ok(marca && JSON.parse(marca.cuerpo).pagina === '/arbol.html', 'al terminarlo se guarda en el servidor');
+  ok(await t.page.evaluate(() => localStorage.getItem('eco_tour_done__arbol_html')) === '1', 'y también en este navegador');
   await t.ctx.close();
 
-  t = await abrir({ vistos: ['/app.html'] });
+  t = await abrir({ vistos: ['/arbol.html'] });
   ok(await t.page.locator('#eco-tour-tip').count() === 0 && await t.page.locator('#eco-tour-overlay').count() === 0, 'si el servidor dice que ya lo vio, no aparece (aunque sea otro celular sin nada guardado)');
-  ok(await t.page.evaluate(() => localStorage.getItem('eco_tour_done__app_html')) === '1', 'y este navegador lo recuerda');
+  ok(await t.page.evaluate(() => localStorage.getItem('eco_tour_done__arbol_html')) === '1', 'y este navegador lo recuerda');
   await t.ctx.close();
 
   t = await abrir({ vistos: [], localStorageHecho: true });
