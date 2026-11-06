@@ -3,6 +3,7 @@ const express = require('express');
 const path = require('path');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
+const { correoDeBienvenida } = require('./correo-bienvenida');
 const Anthropic = require('@anthropic-ai/sdk');
 const { neon } = require('@neondatabase/serverless');
 const { put, del, get, list } = require('@vercel/blob');
@@ -3975,6 +3976,18 @@ app.post('/api/signup', rateLimit, async (req, res) => {
       url: '/admin.html',
       tag: 'eco-registro-' + rows[0].id,
     });
+    // Bienvenida (solo cuentas dueñas): explica cómo funciona Eco y lleva a contar la primera historia. Nunca frena el registro.
+    if (!ownerUserId && remitenteVerificado) {
+      try {
+        const bienvenida = correoDeBienvenida({ nombre: cleanName, idioma: idiomaCuenta });
+        await Promise.race([
+          enviarCorreo({ to: cleanEmail, ...bienvenida }),
+          new Promise((_, rechazar) => setTimeout(() => rechazar(new Error('tiempo de espera')), 6000)),
+        ]);
+      } catch (err) {
+        console.error('No se pudo enviar el correo de bienvenida:', err.message);
+      }
+    }
     console.log(`[registro] userId=${rows[0].id} tipo=${ownerUserId ? 'colaboradora' : 'dueña'} variante=${signupVariant || '-'} registrada=${new Date().toISOString()}`);
     await registrarAceptacion('cuenta', rows[0].id, ownerUserId, null);
     setSessionCookie(req, res, { userId: rows[0].id, username: rows[0].username, tokenVersion: rows[0].token_version });
@@ -7813,9 +7826,10 @@ pushRecordatorios = require('./push-recordatorios-routes')(app, { sql, ensureSch
 require('./book-qr-routes')(app, { preguntasPorAudio, sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob });
 require('./libro-compartido-routes')(app, { sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob, almacenarArchivo, express });
 require('./demo-nombre-routes')(app, { rateLimit, limitePorClave, verificarArchivoReal, AUDIO_MIME_PERMITIDOS, speakWithElevenLabs: (texto) => pedirVozAElevenLabs(texto, 'eleven_v4_turbo'), elevenKey: ELEVEN_KEY, express });
-// El cambio de clave por enlace solo se enciende con un remitente propio verificado en Resend (ver recuperar-clave-routes.js).
-const cambioDeClavePorCorreo = !!(process.env.RESEND_API_KEY && process.env.RESEND_FROM && !/resend\.dev/i.test(process.env.RESEND_FROM));
-require('./recuperar-clave-routes')(app,{ sql, ensureSchema, rateLimit, limitePorClave, claveDemasiadoLarga, enviarCorreo, porCorreo: cambioDeClavePorCorreo });
+// Los correos que se mandan a cualquier persona (cambio de clave, bienvenida) solo se encienden con un remitente propio
+// verificado en Resend: con onboarding@resend.dev solo se puede escribir al dueño de la cuenta de Resend (ver recuperar-clave-routes.js).
+const remitenteVerificado = !!(process.env.RESEND_API_KEY && process.env.RESEND_FROM && !/resend\.dev/i.test(process.env.RESEND_FROM));
+require('./recuperar-clave-routes')(app,{ sql, ensureSchema, rateLimit, limitePorClave, claveDemasiadoLarga, enviarCorreo, porCorreo: remitenteVerificado });
 require('./bebe-routes')(app, { sql, ensureSchema, requireAuth, rateLimit, bloquearEscritura: [bloquearColaborador, bloquearSiNoPuedeNarrar, bloquearSiReadOnly], resolveProfileUserId, almacenarArchivo, verificarArchivoReal, MEDIA_MIME_PERMITIDOS, AUDIO_MIME_PERMITIDOS, enviarArchivoAlmacenado, datosDelArchivoDeBlob, borrarArchivosBlob });
 require('./book-editor-routes')(app, {
   sql,
@@ -8599,12 +8613,12 @@ app.post('/api/save', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const RESEND_FROM = process.env.RESEND_FROM || 'Eco <onboarding@resend.dev>';
 
-async function enviarCorreo({ to, subject, html }) {
+async function enviarCorreo({ to, subject, html, text }) {
   if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY no está configurada.');
   const resp = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: RESEND_FROM, to: [to], subject, html }),
+    body: JSON.stringify(text ? { from: RESEND_FROM, to: [to], subject, html, text } : { from: RESEND_FROM, to: [to], subject, html }),
     signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
   });
   if (!resp.ok) {
