@@ -16,6 +16,7 @@
     "test:salir-pantalla": "node test/salir-pantalla.playwright.js",
     "test:crisis-pausa": "node test/crisis-pausa.playwright.js",
     "test:csp-paginas": "node test/csp-paginas.playwright.js",
+    "test:csp-blob": "node test/csp-blob.playwright.js",
     "test:perfilar-regalo": "node test/perfilar-regalo.playwright.js",
     "test:ingreso": "node test/ingreso.playwright.js",
     "test:pantalla": "node test/pantalla-principal.playwright.js",

@@ -161,8 +161,10 @@ const CSP_POLICY = [
   "default-src 'self'",
   `script-src 'self' ${HASHES_SCRIPT.map((h) => `'${h}'`).join(' ')}`,
   `style-src 'self' ${HASHES_STYLE.map((h) => `'${h}'`).join(' ')}`,
-  "img-src 'self' data: https://*.blob.vercel-storage.com",
-  "media-src 'self' https://*.blob.vercel-storage.com",
+  // blob: = archivos que el propio navegador arma en memoria: la voz de Eco (audio que llega de /api/speak), las
+  // vistas previas de fotos que la persona sube y las páginas del libro. Sin esto, la voz cae a la del navegador.
+  "img-src 'self' data: blob: https://*.blob.vercel-storage.com",
+  "media-src 'self' blob: https://*.blob.vercel-storage.com",
   "connect-src 'self'",
   "font-src 'self'",
   "object-src 'none'",
