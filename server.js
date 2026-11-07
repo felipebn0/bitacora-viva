@@ -1601,6 +1601,23 @@ function ensureSchema() {
       sql`ALTER TABLE diario_bebe_entradas ADD COLUMN IF NOT EXISTS audio_urls TEXT`,
       // 'charla' = lo que la persona contó en la charla del modo bebé (también queda en su libro).
       sql`ALTER TABLE diario_bebe_entradas ADD COLUMN IF NOT EXISTS origen TEXT`,
+
+      // --- SEC-01/SEC-02: enlaces mágicos de un solo uso ---
+      // Cada enlace mágico ahora se registra aquí al crearlo. Al consumirlo,
+      // consumed_at se marca atómicamente — un segundo uso encuentra la fila
+      // ya consumida y se rechaza. Cambiar clave (token_version++) invalida
+      // todos los pendientes de ese usuario porque token_version ya no coincide.
+      sql`CREATE TABLE IF NOT EXISTS magic_tokens (
+        id SERIAL PRIMARY KEY,
+        user_id INT NOT NULL REFERENCES users(id),
+        token_hash TEXT NOT NULL UNIQUE,
+        token_version INT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        expires_at TIMESTAMPTZ NOT NULL,
+        consumed_at TIMESTAMPTZ
+      )`,
+      sql`CREATE INDEX IF NOT EXISTS idx_magic_tokens_user ON magic_tokens(user_id)`,
+      sql`CREATE INDEX IF NOT EXISTS idx_magic_tokens_hash ON magic_tokens(token_hash)`,
     ]).catch((err) => {
       // Si la transacción falla, no dejamos una promesa rota memoizada para
       // siempre — el próximo intento (esta misma instancia tibia, no hace
@@ -1907,6 +1924,11 @@ async function requireAuth(req, res, next) {
     // las dos buscar el nombre del "dueño" a mostrar.
     req.ownerEsBitacora = !!session.ownerEsBitacora;
     return next();
+  }
+  // SEC-01: un token mágico NO es una sesión — si alguien metió un token
+  // mágico como cookie de sesión (copiando el valor a mano), se rechaza.
+  if (session.magic) {
+    return res.status(401).json({ error: 'No autenticado.' });
   }
   if (!session.userId) {
     return res.status(401).json({ error: 'No autenticado.' });
@@ -8879,8 +8901,15 @@ async function enviarResumenWhatsApp(paraWhatsApp, { soloTexto = false } = {}) {
 // ventana en la que sirve, menos expone si el link se filtra.
 const MAGIC_LOGIN_MAX_AGE = 15 * 60 * 1000;
 
-function crearLinkMagico(req, userId, next) {
-  const token = signSession({ magic: true, userId });
+async function crearLinkMagico(req, userId, next) {
+  await ensureSchema();
+  const rows = await sql`SELECT token_version FROM users WHERE id = ${userId}`;
+  const tokenVersion = rows.length ? rows[0].token_version : 0;
+  const token = signSession({ magic: true, userId, tokenVersion });
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const expiresAt = new Date(Date.now() + MAGIC_LOGIN_MAX_AGE);
+  await sql`INSERT INTO magic_tokens (user_id, token_hash, token_version, expires_at)
+            VALUES (${userId}, ${tokenHash}, ${tokenVersion}, ${expiresAt})`;
   const base = urlBase(req);
   return `${base}/api/magic-login?token=${encodeURIComponent(token)}&next=${encodeURIComponent(next || '/app.html')}`;
 }
@@ -8894,8 +8923,26 @@ app.get('/api/magic-login', rateLimit, async (req, res) => {
       return res.redirect(302, '/app.html?magic=vencido');
     }
     await ensureSchema();
+    // SEC-02: consumir atómicamente — UPDATE ... WHERE consumed_at IS NULL
+    // devuelve la fila SOLO si no se había consumido. Segundo uso → 0 filas.
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const consumed = await sql`
+      UPDATE magic_tokens
+         SET consumed_at = now()
+       WHERE token_hash = ${tokenHash}
+         AND consumed_at IS NULL
+         AND expires_at > now()
+      RETURNING user_id, token_version`;
+    if (!consumed.length) {
+      return res.redirect(302, '/app.html?magic=vencido');
+    }
+    // Verificar que token_version no cambió desde que se creó el enlace
+    // (cambiar clave incrementa token_version → invalida enlaces pendientes)
     const rows = await sql`SELECT username, token_version FROM users WHERE id = ${payload.userId}`;
     if (!rows.length) return res.redirect(302, '/app.html?magic=invalido');
+    if (rows[0].token_version !== consumed[0].token_version) {
+      return res.redirect(302, '/app.html?magic=vencido');
+    }
     setSessionCookie(req, res, { userId: payload.userId, username: rows[0].username, tokenVersion: rows[0].token_version });
     res.redirect(302, next);
   } catch (err) {
@@ -8975,7 +9022,7 @@ app.get('/api/cron/reminders', async (req, res) => {
     if (RESEND_API_KEY) {
       for (const c of paraCorreo) {
         try {
-          await enviarCorreo({ to: c.email, subject: 'Un recuerdo más para tu bitácora', html: plantillaRecordatorio(c.nombre, crearLinkMagico(req, c.id)) });
+          await enviarCorreo({ to: c.email, subject: 'Un recuerdo más para tu bitácora', html: plantillaRecordatorio(c.nombre, await crearLinkMagico(req, c.id)) });
           await sql`INSERT INTO reminder_deliveries (user_id, tipo, enviado_ok) VALUES (${c.id}, 'recordatorio', true)`;
           correosEnviados++;
         } catch (err) {
@@ -9979,7 +10026,7 @@ app.get('/api/cron/billing', async (req, res) => {
           await sql`INSERT INTO billing_orders (subscription_id, user_id, order_key, wava_hash, wava_link, concepto, monto_cop, status) VALUES (${s.subscription_id}, ${s.user_id}, ${orderKey}, ${wavaData.result.hash || null}, ${link}, ${'Renovación ' + plan.nombre}, ${monto}, 'pending')`;
         }
         const nombre = capitalizarNombre(s.name || s.username) || 'de nuevo';
-        await enviarCorreo({ to: s.email, subject: `Tu plan ${plan.nombre} está por renovarse`, html: plantillaRenovacion(nombre, plan, link || crearLinkMagico(req, s.user_id)) });
+        await enviarCorreo({ to: s.email, subject: `Tu plan ${plan.nombre} está por renovarse`, html: plantillaRenovacion(nombre, plan, link || await crearLinkMagico(req, s.user_id)) });
         await sql`INSERT INTO reminder_deliveries (user_id, tipo, enviado_ok) VALUES (${s.user_id}, 'renovacion', true)`;
         avisosEnviados++;
       } catch (err) {

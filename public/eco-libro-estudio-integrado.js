@@ -80,7 +80,8 @@ async function open(){create();dialog.hidden=false;document.body.classList.add('
  version=draft.version||0;serverReady=true;dirty=false;
  status.textContent='Libro sincronizado con tu cuenta ECO ✓';
  if(chapters[0]?.persona==='primera')byId('ecoEditorialVoz').value='primera';
- autoQr();
+ // PRI-01: no crear QR públicos automáticamente al abrir el editor.
+ // El usuario puede crearlos manualmente cuando lo decida.
  consultarEnlace();
  }catch(e){chapters=[];state=read();status.textContent=e.message+' Se cargó el respaldo local cuando estaba disponible.'}
  drawBook();renderOutline();dialog.querySelector('.eco-editorial-preview').scrollTop=0;marcarSeccionActual();byId('ecoEditorialPdf').focus()}
@@ -207,7 +208,7 @@ async function actualizarLibro(){
   chapters=rc.ok?((await rc.json()).chapters||[]):d.chapters;
   state={...state,order:[],edits:{},media:{},bookPhotos:{},qr:{},qrOff:{}};
   herramientasAbiertas.clear();
-  persist();autoQr();drawBook();renderOutline();book.parentElement.scrollTop=0;
+  persist();drawBook();renderOutline();book.parentElement.scrollTop=0;
   status.textContent='Libro actualizado ✓ ('+chapters.length+(chapters.length===1?' capítulo)':' capítulos)');
  }catch(e){status.textContent=e.message;status.classList.add('eco-editorial-status-error')}
  finally{btn.disabled=false;btn.textContent=texto}

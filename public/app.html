@@ -4035,19 +4035,25 @@
 
   async function saveSessionLog(options = {}) {
     const { forceRetry = false } = options;
-    
-    if (!sessionLog.length && !forceRetry) return { ok: true };
-    
+
+    // DAT-01: si es un reintento y hay datos pendientes de una sesión
+    // anterior, enviar ESO — no sessionLog (que puede ser vacío o ser una
+    // sesión nueva distinta). Solo si no hay pendingSessionLog se usa
+    // sessionLog como antes.
+    const historialAEnviar = (forceRetry && pendingSessionLog.length) ? pendingSessionLog : sessionLog;
+
+    if (!historialAEnviar.length && !forceRetry) return { ok: true };
+
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
-      
+
       const resp = await fetch('/api/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          history: sessionLog, 
-          sessionDbId: currentSessionDbId 
+        body: JSON.stringify({
+          history: historialAEnviar,
+          sessionDbId: currentSessionDbId
         }),
         signal: controller.signal,
       });
@@ -4071,9 +4077,12 @@
         throw new Error(`Unexpected error: ${resp.status}`);
       }
     } catch (e) {
-      // Guardar como pendiente
+      // Guardar como pendiente — conservar lo que se intentó enviar, no
+      // pisar con sessionLog vacío si era un reintento de datos anteriores.
       lastSaveError = e.message;
-      pendingSessionLog = [...sessionLog];
+      if (!pendingSessionLog.length) {
+        pendingSessionLog = [...historialAEnviar];
+      }
       localStorage.setItem('bitacora_backup', JSON.stringify(pendingSessionLog));
       
       console.error('saveSessionLog falló:', e);
