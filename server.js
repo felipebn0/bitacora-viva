@@ -1602,6 +1602,18 @@ function ensureSchema() {
       // 'charla' = lo que la persona contó en la charla del modo bebé (también queda en su libro).
       sql`ALTER TABLE diario_bebe_entradas ADD COLUMN IF NOT EXISTS origen TEXT`,
 
+      // --- Feedback de sesión (calificación + comentario al terminar) ---
+      sql`CREATE TABLE IF NOT EXISTS session_feedback (
+        id SERIAL PRIMARY KEY,
+        user_id INT REFERENCES users(id),
+        session_id INT REFERENCES sessions(id),
+        rating TEXT NOT NULL CHECK (rating IN ('mal', 'regular', 'bien')),
+        comment TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      sql`CREATE INDEX IF NOT EXISTS idx_session_feedback_user ON session_feedback(user_id)`,
+      sql`CREATE INDEX IF NOT EXISTS idx_session_feedback_created ON session_feedback(created_at)`,
+
       // --- SEC-01/SEC-02: enlaces mágicos de un solo uso ---
       // Cada enlace mágico ahora se registra aquí al crearlo. Al consumirlo,
       // consumed_at se marca atómicamente — un segundo uso encuentra la fila
@@ -8532,6 +8544,24 @@ app.post('/api/rebuild-tree', requireAuth, bloquearColaborador, rateLimit, async
   }
 });
 
+// --- Feedback de sesión (calificación al terminar) ---
+app.post('/api/session-feedback', requireAuth, rateLimit, async (req, res) => {
+  try {
+    const { rating, comment, sessionDbId } = req.body;
+    if (!['mal', 'regular', 'bien'].includes(rating)) {
+      return res.status(400).json({ error: 'Calificación inválida.' });
+    }
+    const texto = typeof comment === 'string' ? comment.trim().slice(0, 1000) : null;
+    await ensureSchema();
+    await sql`INSERT INTO session_feedback (user_id, session_id, rating, comment)
+              VALUES (${req.userId}, ${sessionDbId || null}, ${rating}, ${texto || null})`;
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Error al guardar feedback:', err);
+    res.status(500).json({ error: 'No se pudo guardar el feedback.' });
+  }
+});
+
 app.post('/api/save', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar, rateLimit, async (req, res) => {
   try {
     const history = Array.isArray(req.body.history) ? req.body.history.slice(0, 100) : [];
@@ -10354,6 +10384,24 @@ app.get('/api/admin/voz-debug', requireAuth, requireAdmin, rateLimit, async (req
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo hacer el diagnóstico.' });
+  }
+});
+
+// --- Feedback de sesiones (vista admin) ---
+app.get('/api/admin/session-feedback', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await ensureSchema();
+    const rows = await sql`
+      SELECT sf.id, sf.rating, sf.comment, sf.created_at,
+             COALESCE(u.name, u.username) AS nombre
+        FROM session_feedback sf
+        LEFT JOIN users u ON u.id = sf.user_id
+       ORDER BY sf.created_at DESC
+       LIMIT 100`;
+    res.json({ feedback: rows });
+  } catch (err) {
+    console.error('Error al cargar feedback:', err);
+    res.status(500).json({ error: 'No se pudo cargar el feedback.' });
   }
 });
 
