@@ -1237,6 +1237,23 @@
                porque el texto se REEMPLAZA entero cada vez (no se agrega),
                así que conviene anunciarlo completo y no solo la diferencia. -->
           <div class="state-label" id="stateLabel" role="status" aria-live="polite" aria-atomic="true"></div>
+          <!-- Feedback de sesión: aparece al terminar una charla guardada -->
+          <div id="sessionFeedback" hidden style="margin-top:1rem;text-align:center;font-family:Georgia,serif;color:var(--text)">
+            <p id="feedbackPregunta" style="font-size:.9rem;margin:0 0 .5rem;opacity:.8">¿Cómo estuvo esta sesión?</p>
+            <div style="display:flex;gap:.6rem;justify-content:center" id="feedbackBtns">
+              <button type="button" data-rating="mal" data-en="😕 Bad" style="padding:.4rem .9rem;border-radius:999px;border:1px solid var(--borde);background:transparent;color:var(--text);cursor:pointer;font-size:.85rem">😕 Mal</button>
+              <button type="button" data-rating="regular" data-en="🤔 Okay" style="padding:.4rem .9rem;border-radius:999px;border:1px solid var(--borde);background:transparent;color:var(--text);cursor:pointer;font-size:.85rem">🤔 Regular</button>
+              <button type="button" data-rating="bien" data-en="😊 Good" style="padding:.4rem .9rem;border-radius:999px;border:1px solid var(--borde);background:transparent;color:var(--text);cursor:pointer;font-size:.85rem">😊 Bien</button>
+            </div>
+            <div id="feedbackComment" hidden style="margin-top:.6rem">
+              <textarea id="feedbackText" rows="2" maxlength="1000" placeholder="¿Algo que quieras contarnos? (opcional)" style="width:min(100%,320px);padding:.5rem;border-radius:8px;border:1px solid var(--borde);background:var(--fondo);color:var(--text);font-family:inherit;font-size:.85rem;resize:vertical"></textarea>
+              <div style="margin-top:.4rem">
+                <button type="button" id="feedbackSend" style="padding:.35rem .8rem;border-radius:999px;border:none;background:var(--primario,#8F5A20);color:#fff;cursor:pointer;font-size:.85rem">Enviar</button>
+                <button type="button" id="feedbackSkip" style="padding:.35rem .8rem;border-radius:999px;border:1px solid var(--borde);background:transparent;color:var(--text);cursor:pointer;font-size:.85rem;margin-left:.3rem">Omitir</button>
+              </div>
+            </div>
+            <p id="feedbackGracias" hidden style="font-size:.85rem;margin:.5rem 0 0;opacity:.7">¡Gracias por tu opinión!</p>
+          </div>
           <!-- Medio #7: indicador de nivel de micrófono — solo visible al escuchar -->
           <div class="mic-level" id="micLevel" aria-hidden="true" hidden>
             <span></span><span></span><span></span><span></span><span></span>
@@ -4174,10 +4191,79 @@
     }
     
     if (sessionMode === 'arbol') comprobarSiArbolTieneBase();
+
+    // Mostrar feedback solo si la charla tuvo intercambios y se guardó bien
+    if (saveResult.ok && sessionLog.length > 0) {
+      mostrarFeedback();
+    }
+  }
+
+  // --- Feedback de sesión ---
+  let feedbackRating = null;
+  function mostrarFeedback() {
+    const el = document.getElementById('sessionFeedback');
+    if (!el) return;
+    el.hidden = false;
+    document.getElementById('feedbackComment').hidden = true;
+    document.getElementById('feedbackGracias').hidden = true;
+    document.getElementById('feedbackBtns').hidden = false;
+    feedbackRating = null;
+    // Adaptar textos al idioma de la cuenta
+    const en = document.documentElement.lang === 'en';
+    document.getElementById('feedbackPregunta').textContent = en ? 'How was this session?' : '¿Cómo estuvo esta sesión?';
+    document.getElementById('feedbackText').placeholder = en ? 'Anything you want to tell us? (optional)' : '¿Algo que quieras contarnos? (opcional)';
+    document.getElementById('feedbackSend').textContent = en ? 'Send' : 'Enviar';
+    document.getElementById('feedbackSkip').textContent = en ? 'Skip' : 'Omitir';
+    document.getElementById('feedbackGracias').textContent = en ? 'Thanks for your feedback!' : '¡Gracias por tu opinión!';
+    document.querySelectorAll('#feedbackBtns button[data-en]').forEach(b => {
+      if (en) b.textContent = b.dataset.en;
+    });
+  }
+  function ocultarFeedback() {
+    const el = document.getElementById('sessionFeedback');
+    if (el) el.hidden = true;
+  }
+  // Clic en Mal/Regular/Bien
+  document.getElementById('feedbackBtns')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-rating]');
+    if (!btn) return;
+    feedbackRating = btn.dataset.rating;
+    // Resaltar el seleccionado
+    document.querySelectorAll('#feedbackBtns button').forEach(b => {
+      b.style.opacity = b === btn ? '1' : '.4';
+      b.style.fontWeight = b === btn ? 'bold' : 'normal';
+    });
+    document.getElementById('feedbackComment').hidden = false;
+  });
+  // Enviar con comentario
+  document.getElementById('feedbackSend')?.addEventListener('click', async () => {
+    if (!feedbackRating) return;
+    const texto = document.getElementById('feedbackText')?.value || '';
+    await enviarFeedback(feedbackRating, texto);
+  });
+  // Omitir comentario (enviar solo la calificación)
+  document.getElementById('feedbackSkip')?.addEventListener('click', async () => {
+    if (!feedbackRating) return;
+    await enviarFeedback(feedbackRating, '');
+  });
+  async function enviarFeedback(rating, comment) {
+    try {
+      await fetch('/api/session-feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ rating, comment: comment || null, sessionDbId: currentSessionDbId })
+      });
+    } catch (e) { /* best-effort */ }
+    document.getElementById('feedbackBtns').hidden = true;
+    document.getElementById('feedbackComment').hidden = true;
+    document.getElementById('feedbackGracias').hidden = false;
+    setTimeout(ocultarFeedback, 2500);
   }
 
   function startSession(mode) {
     if (state !== 'idle' && state !== 'ended' && state !== 'save-failed') return;
+    ocultarFeedback();
     finPedido = false;
     cierreEnCurso = false;
     if (window.ecoCrisisSoltar) window.ecoCrisisSoltar();
