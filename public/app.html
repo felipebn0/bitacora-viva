@@ -1238,22 +1238,8 @@
                así que conviene anunciarlo completo y no solo la diferencia. -->
           <div class="state-label" id="stateLabel" role="status" aria-live="polite" aria-atomic="true"></div>
           <!-- Feedback de sesión: aparece al terminar una charla guardada -->
-          <div id="sessionFeedback" hidden style="margin-top:1rem;text-align:center;font-family:Georgia,serif;color:var(--text)">
-            <p id="feedbackPregunta" style="font-size:.9rem;margin:0 0 .5rem;opacity:.8">¿Cómo estuvo esta sesión?</p>
-            <div style="display:flex;gap:.6rem;justify-content:center" id="feedbackBtns">
-              <button type="button" data-rating="mal" data-en="😕 Bad" style="padding:.4rem .9rem;border-radius:999px;border:1px solid var(--borde);background:transparent;color:var(--text);cursor:pointer;font-size:.85rem">😕 Mal</button>
-              <button type="button" data-rating="regular" data-en="🤔 Okay" style="padding:.4rem .9rem;border-radius:999px;border:1px solid var(--borde);background:transparent;color:var(--text);cursor:pointer;font-size:.85rem">🤔 Regular</button>
-              <button type="button" data-rating="bien" data-en="😊 Good" style="padding:.4rem .9rem;border-radius:999px;border:1px solid var(--borde);background:transparent;color:var(--text);cursor:pointer;font-size:.85rem">😊 Bien</button>
-            </div>
-            <div id="feedbackComment" hidden style="margin-top:.6rem">
-              <textarea id="feedbackText" rows="2" maxlength="1000" placeholder="¿Algo que quieras contarnos? (opcional)" style="width:min(100%,320px);padding:.5rem;border-radius:8px;border:1px solid var(--borde);background:var(--fondo);color:var(--text);font-family:inherit;font-size:.85rem;resize:vertical"></textarea>
-              <div style="margin-top:.4rem">
-                <button type="button" id="feedbackSend" style="padding:.35rem .8rem;border-radius:999px;border:none;background:var(--primario,#8F5A20);color:#fff;cursor:pointer;font-size:.85rem">Enviar</button>
-                <button type="button" id="feedbackSkip" style="padding:.35rem .8rem;border-radius:999px;border:1px solid var(--borde);background:transparent;color:var(--text);cursor:pointer;font-size:.85rem;margin-left:.3rem">Omitir</button>
-              </div>
-            </div>
-            <p id="feedbackGracias" hidden style="font-size:.85rem;margin:.5rem 0 0;opacity:.7">¡Gracias por tu opinión!</p>
-          </div>
+          <!-- Feedback popup: se muestra como overlay al terminar una sesión -->
+          <div id="sessionFeedback" hidden style="display:none"></div>
           <!-- Medio #7: indicador de nivel de micrófono — solo visible al escuchar -->
           <div class="mic-level" id="micLevel" aria-hidden="true" hidden>
             <span></span><span></span><span></span><span></span><span></span>
@@ -4201,12 +4187,13 @@
   // --- Feedback de sesión ---
   let feedbackRating = null;
   function mostrarFeedback() {
-    const el = document.getElementById('sessionFeedback');
-    if (!el) return;
-    el.hidden = false;
+    const overlay = document.getElementById('feedbackOverlay');
+    if (!overlay) return;
     document.getElementById('feedbackComment').hidden = true;
     document.getElementById('feedbackGracias').hidden = true;
     document.getElementById('feedbackBtns').hidden = false;
+    document.querySelectorAll('#feedbackBtns button').forEach(b => { b.removeAttribute('data-selected'); });
+    document.getElementById('feedbackText').value = '';
     feedbackRating = null;
     // Adaptar textos al idioma de la cuenta
     const en = document.documentElement.lang === 'en';
@@ -4216,22 +4203,22 @@
     document.getElementById('feedbackSkip').textContent = en ? 'Skip' : 'Omitir';
     document.getElementById('feedbackGracias').textContent = en ? 'Thanks for your feedback!' : '¡Gracias por tu opinión!';
     document.querySelectorAll('#feedbackBtns button[data-en]').forEach(b => {
-      if (en) b.textContent = b.dataset.en;
+      if (en) { b.childNodes[b.childNodes.length - 1].textContent = b.dataset.en; }
     });
+    overlay.style.display = 'flex';
   }
   function ocultarFeedback() {
-    const el = document.getElementById('sessionFeedback');
-    if (el) el.hidden = true;
+    const overlay = document.getElementById('feedbackOverlay');
+    if (overlay) overlay.style.display = 'none';
   }
   // Clic en Mal/Regular/Bien
   document.getElementById('feedbackBtns')?.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-rating]');
     if (!btn) return;
     feedbackRating = btn.dataset.rating;
-    // Resaltar el seleccionado
     document.querySelectorAll('#feedbackBtns button').forEach(b => {
-      b.style.opacity = b === btn ? '1' : '.4';
-      b.style.fontWeight = b === btn ? 'bold' : 'normal';
+      if (b === btn) b.setAttribute('data-selected', '');
+      else b.removeAttribute('data-selected');
     });
     document.getElementById('feedbackComment').hidden = false;
   });
@@ -4246,6 +4233,12 @@
     if (!feedbackRating) return;
     await enviarFeedback(feedbackRating, '');
   });
+  // Cerrar sin enviar (la X)
+  document.getElementById('feedbackClose')?.addEventListener('click', ocultarFeedback);
+  // Cerrar tocando el fondo oscuro
+  document.getElementById('feedbackOverlay')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) ocultarFeedback();
+  });
   async function enviarFeedback(rating, comment) {
     try {
       await fetch('/api/session-feedback', {
@@ -4258,7 +4251,7 @@
     document.getElementById('feedbackBtns').hidden = true;
     document.getElementById('feedbackComment').hidden = true;
     document.getElementById('feedbackGracias').hidden = false;
-    setTimeout(ocultarFeedback, 2500);
+    setTimeout(ocultarFeedback, 2000);
   }
 
   function startSession(mode) {
@@ -4532,5 +4525,37 @@
 <script src="/eco-bebe.js?v=13" defer></script>
 <script src="/eco-crisis-banner.js?v=4" defer></script>
 <script src="/eco-intro.js?v=2" defer></script>
+
+<!-- Feedback popup overlay -->
+<div id="feedbackOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.45);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:1rem;font-family:Georgia,serif">
+  <div style="background:var(--fondo,#FAF6F0);border-radius:20px;padding:2rem 1.5rem;max-width:340px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,.25);text-align:center;animation:fbIn .3s ease">
+    <p id="feedbackPregunta" style="font-size:1.05rem;margin:0 0 1.2rem;color:var(--text,#3B3226);font-weight:600;line-height:1.3">¿Cómo estuvo esta sesión?</p>
+    <div id="feedbackBtns" style="display:flex;gap:.5rem;justify-content:center;margin-bottom:.2rem">
+      <button type="button" data-rating="mal" data-en="Bad" style="flex:1;padding:.7rem .4rem;border-radius:14px;border:2px solid var(--borde,#D4C9B8);background:transparent;color:var(--text,#3B3226);cursor:pointer;font-size:.95rem;font-family:inherit;transition:all .2s">
+        <span style="display:block;font-size:1.8rem;margin-bottom:.2rem">😕</span>Mal
+      </button>
+      <button type="button" data-rating="regular" data-en="Okay" style="flex:1;padding:.7rem .4rem;border-radius:14px;border:2px solid var(--borde,#D4C9B8);background:transparent;color:var(--text,#3B3226);cursor:pointer;font-size:.95rem;font-family:inherit;transition:all .2s">
+        <span style="display:block;font-size:1.8rem;margin-bottom:.2rem">🤔</span>Regular
+      </button>
+      <button type="button" data-rating="bien" data-en="Good" style="flex:1;padding:.7rem .4rem;border-radius:14px;border:2px solid var(--borde,#D4C9B8);background:transparent;color:var(--text,#3B3226);cursor:pointer;font-size:.95rem;font-family:inherit;transition:all .2s">
+        <span style="display:block;font-size:1.8rem;margin-bottom:.2rem">😊</span>Bien
+      </button>
+    </div>
+    <div id="feedbackComment" hidden style="margin-top:1rem">
+      <textarea id="feedbackText" rows="3" maxlength="1000" placeholder="¿Algo que quieras contarnos? (opcional)" style="width:100%;padding:.6rem .8rem;border-radius:12px;border:1px solid var(--borde,#D4C9B8);background:var(--fondo,#FAF6F0);color:var(--text,#3B3226);font-family:inherit;font-size:.9rem;resize:none;box-sizing:border-box"></textarea>
+      <div style="display:flex;gap:.5rem;margin-top:.7rem;justify-content:center">
+        <button type="button" id="feedbackSend" style="flex:1;max-width:140px;padding:.55rem 1rem;border-radius:999px;border:none;background:var(--primario,#8F5A20);color:#fff;cursor:pointer;font-size:.9rem;font-family:inherit;font-weight:600">Enviar</button>
+        <button type="button" id="feedbackSkip" style="flex:1;max-width:140px;padding:.55rem 1rem;border-radius:999px;border:1px solid var(--borde,#D4C9B8);background:transparent;color:var(--text,#3B3226);cursor:pointer;font-size:.9rem;font-family:inherit">Omitir</button>
+      </div>
+    </div>
+    <p id="feedbackGracias" hidden style="font-size:1rem;margin:1rem 0 0;color:var(--primario,#8F5A20);font-weight:600">¡Gracias por tu opinión!</p>
+    <button type="button" id="feedbackClose" style="position:absolute;top:.7rem;right:.9rem;background:none;border:none;font-size:1.3rem;color:var(--text,#3B3226);opacity:.5;cursor:pointer;padding:.3rem" aria-label="Cerrar">✕</button>
+  </div>
+</div>
+<style>
+@keyframes fbIn{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:scale(1)}}
+#feedbackBtns button:hover{background:var(--borde,#D4C9B8)!important}
+#feedbackBtns button[data-selected]{border-color:var(--primario,#8F5A20);background:rgba(143,90,32,.1)!important;font-weight:700}
+</style>
 </body>
 </html>
