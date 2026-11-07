@@ -145,6 +145,9 @@
   .kind-calls { color: var(--ink-soft); font-weight: 400; font-family: var(--font-body); font-size: 0.76rem; }
 
   .toolbar { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+  .paginacion { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 14px 0 30px; }
+  .paginacion .pag-info { color: var(--ink-soft); font-size: 0.88rem; }
+  .paginacion .pag-botones { display: flex; gap: 8px; flex-wrap: wrap; }
   button.csv-btn {
     border: 1px solid var(--gold-deep); background: #FBF6EA; color: var(--gold-deep);
     border-radius: 999px; padding: 8px 16px; font-weight: 700; font-size: 0.82rem;
@@ -380,6 +383,8 @@
   ];
 
   let sortState = { key: 'total', dir: 'desc' };
+  const TAM_PAGINA = 10; // perfiles por página
+  let paginaActual = 1;
 
   function sortedProfiles(profiles) {
     const col = COLUMNS.find((c) => c.key === sortState.key) || COLUMNS[COLUMNS.length - 1];
@@ -432,6 +437,10 @@
   function render(data) {
     range = data.range || range;
     const profiles = data.profiles || [];
+    // Solo se muestran los perfiles con gasto en el rango elegido (los de gasto 0 ocupan espacio y no dicen nada);
+    // los totales de arriba siguen saliendo de la lista completa.
+    const conGasto = profiles.filter((p) => (p.totalCostUsdRange || 0) > 0);
+    paginaActual = 1;
 
     const rangeBarHtml = `
       <div class="range-bar">
@@ -448,8 +457,8 @@
         <div class="range-label">Mostrando del ${fmtDate(range.start)} al ${fmtDate(range.end)}. El costo "histórico" de las tarjetas de abajo es siempre desde que se activó la medición, sin importar el rango elegido aquí.</div>
       </div>`;
 
-    if (!profiles.length) {
-      content.innerHTML = rangeBarHtml + '<p class="empty">Nadie usó Eco en este período. Prueba con «7 días» o «30 días».</p>';
+    if (!conGasto.length) {
+      content.innerHTML = rangeBarHtml + '<p class="empty">Nadie tuvo gasto en este período. Prueba con «7 días» o «30 días».</p>';
       conectarRangeBar();
       return;
     }
@@ -532,14 +541,18 @@
       : `<section class="panel"><h2>Costo por tipo de uso (Claude) — rango elegido</h2><p class="sub">Sin actividad de Claude en este período.</p></section>`;
 
     function renderTable() {
-      const sorted = sortedProfiles(profiles);
+      const sorted = sortedProfiles(conGasto);
+      const paginas = Math.max(1, Math.ceil(sorted.length / TAM_PAGINA));
+      if (paginaActual > paginas) paginaActual = paginas;
+      const desde = (paginaActual - 1) * TAM_PAGINA;
+      const visibles = sorted.slice(desde, desde + TAM_PAGINA);
       const theadHtml = COLUMNS.map((c) => {
         const active = sortState.key === c.key;
         const arrow = active ? (sortState.dir === 'asc' ? '▲' : '▼') : '↕';
         return `<th class="sortable" data-key="${c.key}"><span class="arrow">${arrow}</span> ${esc(c.label)}</th>`;
       }).join('');
 
-      const rowsHtml = sorted.map((p) => {
+      const rowsHtml = visibles.map((p) => {
         const barPct = Math.max(2, Math.round((p.totalCostUsdRange / maxCost) * 100));
         const overThreshold = threshold != null && p.totalCostUsdRange > threshold;
         const tipoLabel = p.tipo === 'subperfil' ? 'subperfil' : 'cuenta';
@@ -603,9 +616,23 @@
           } else {
             sortState = { key, dir: 'desc' };
           }
+          paginaActual = 1;
           renderTable();
         });
       });
+
+      const pag = document.getElementById('paginacion');
+      if (sorted.length <= TAM_PAGINA) { pag.innerHTML = ''; return; }
+      pag.innerHTML = `
+        <span class="pag-info">Mostrando ${desde + 1}–${desde + visibles.length} de ${sorted.length} perfiles con gasto</span>
+        <span class="pag-botones">
+          ${paginaActual > 1 ? '<button type="button" class="csv-btn" id="pagAnterior">‹ Página anterior</button>' : ''}
+          ${paginaActual < paginas ? `<button type="button" class="csv-btn" id="pagSiguiente">Ir a página ${paginaActual + 1} ›</button>` : ''}
+        </span>`;
+      const ant = document.getElementById('pagAnterior');
+      const sig = document.getElementById('pagSiguiente');
+      if (ant) ant.addEventListener('click', () => { paginaActual -= 1; renderTable(); });
+      if (sig) sig.addEventListener('click', () => { paginaActual += 1; renderTable(); });
     }
 
     content.innerHTML = `
@@ -618,11 +645,12 @@
       </div>
       <div class="table-scroll">
         <table id="usageTable"></table>
-      </div>`;
+      </div>
+      <div class="paginacion" id="paginacion"></div>`;
 
     aplicarAnchosDeBarra(content);
     renderTable();
-    document.getElementById('csvBtn').addEventListener('click', () => downloadCsv(sortedProfiles(profiles)));
+    document.getElementById('csvBtn').addEventListener('click', () => downloadCsv(sortedProfiles(conGasto)));
     conectarRangeBar();
 
     footNote.hidden = false;

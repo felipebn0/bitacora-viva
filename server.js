@@ -10344,13 +10344,13 @@ app.get('/api/admin/usage', requireAuth, requireAdmin, async (req, res) => {
     const prevRangeStartIso = prevRangeStart.toISOString();
     const prevRangeEndIso = prevRangeEnd.toISOString();
 
-    // Solo se traen los perfiles que tuvieron uso en el rango elegido o en el período anterior (con el que se compara):
+    // Solo se traen los perfiles que tuvieron gasto en el rango elegido o en el período anterior (con el que se compara):
     // calcular el tamaño de textos de TODAS las cuentas, que recorre todas las charlas guardadas, volvía el panel
     // imposible de cargar. El total histórico se calcula aparte (más abajo) para no perder lo de quien no tuvo uso hoy.
     const rows = await sql`
       WITH activos AS (
         SELECT DISTINCT user_id FROM usage_events
-        WHERE created_at >= ${prevRangeStartIso} AND created_at <= ${rangeEndIso}
+        WHERE created_at >= ${prevRangeStartIso} AND created_at <= ${rangeEndIso} AND COALESCE(cost_usd, 0) > 0
       ),
       profiles AS (
         SELECT id, COALESCE(name, username) AS nombre, email, username, is_admin,
