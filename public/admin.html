@@ -797,7 +797,15 @@
     const estado = (u) => (u.termino ? 'Terminó un recuerdo' : u.empezo ? 'Empezó, no terminó' : 'Solo entró') + (u.cortado ? ' · acceso cortado' : '');
     const cuando = (iso) => new Date(iso).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' });
     const filas = (d.ultimos || []).map((u) => `<tr><td>${esc(u.nombre)}</td><td>${esc(cuando(u.creado))}</td><td>${esc(estado(u))}</td></tr>`).join('');
+    const origenes = d.porOrigen || [];
+    const totalCuentas = origenes.reduce((acc, o) => acc + (o.cuentas || 0), 0);
+    const filasOrigen = origenes.map((o) => `<tr><td>${o.origen ? esc(o.origen) : '<em>sin etiqueta</em>'}</td><td>${fmtNumber(o.cuentas)}</td><td>${pct(o.cuentas, totalCuentas)}</td></tr>`).join('');
     enlaceWrap.innerHTML = `
+      <section class="panel">
+        <h2>Cuentas nuevas por origen</h2>
+        <p class="sub">En el período elegido, de dónde llegó cada cuenta nueva según la etiqueta del enlace (por ejemplo <code>?desde=colaboracion</code> o <code>?desde=instagram</code>). «Sin etiqueta» son las que entraron directo o por un enlace sin etiqueta.</p>
+        ${filasOrigen ? `<table class="pr-tabla"><thead><tr><th>Origen</th><th>Cuentas</th><th>%</th></tr></thead><tbody>${filasOrigen}</tbody></table>` : '<p class="ab-note">No se creó ninguna cuenta en este período.</p>'}
+      </section>
       <section class="panel">
         <h2>Enlace abierto de invitados</h2>
         <p class="sub">En el período elegido: personas que entraron con tu enlace abierto (nombre y apellido), cuántas empezaron a contar un recuerdo y cuántas lo terminaron. Tus propias pruebas cuentan igual.</p>

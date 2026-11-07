@@ -135,7 +135,7 @@ const ok = (c, m) => { if (c) console.log('✓ ' + m); else { fallos++; console.
       if (u.pathname === '/api/me') return json({ isAdmin: true });
       if (u.pathname === '/api/admin/enlace-abierto') {
         consulta = u.search;
-        return json({ entraron: 12, empezaron: 7, terminaron: 4, cuentasNuevas: 2, ultimos: [
+        return json({ porOrigen: [{ origen: 'colaboracion', cuentas: 6 }, { origen: null, cuentas: 3 }, { origen: 'instagram', cuentas: 1 }], entraron: 12, empezaron: 7, terminaron: 4, cuentasNuevas: 2, ultimos: [
           { id: 'a', nombre: 'Ana Gómez', creado: '2026-11-07T15:00:00Z', empezo: true, termino: true, cortado: false },
           { id: 'b', nombre: 'Luis <b>Pérez</b>', creado: '2026-11-07T14:00:00Z', empezo: true, termino: false, cortado: false },
           { id: 'c', nombre: 'Sara Ruiz', creado: '2026-11-07T13:00:00Z', empezo: false, termino: false, cortado: true },
@@ -148,9 +148,11 @@ const ok = (c, m) => { if (c) console.log('✓ ' + m); else { fallos++; console.
     const cartas = await page.locator('#enlaceWrap .stat-card').allTextContents();
     ok(cartas.length === 4 && /Entraron\s*12/.test(cartas[0]) && /Empezaron a contar\s*7/.test(cartas[1]) && /Terminaron un recuerdo\s*4/.test(cartas[2]) && /Cuentas nuevas desde ahí\s*2/.test(cartas[3]), 'la tarjeta muestra entraron, empezaron, terminaron y cuentas nuevas');
     ok(/58% de quienes entraron/.test(cartas[1]) && /33% de quienes entraron/.test(cartas[2]) && /50% de quienes terminaron/.test(cartas[3]), 'y los porcentajes de cada paso');
-    const filas = await page.locator('#enlaceWrap tbody tr').allTextContents();
+    const filas = await page.locator('#enlaceWrap .panel').last().locator('tbody tr').allTextContents();
     ok(filas.length === 3 && /Terminó un recuerdo/.test(filas[0]) && /Empezó, no terminó/.test(filas[1]) && /Solo entró · acceso cortado/.test(filas[2]), 'la lista dice qué hizo cada uno');
     ok(await page.locator('#enlaceWrap b').count() === 0, 'un nombre con HTML se ve como texto');
+    const origenes = await page.locator('#enlaceWrap .panel').first().locator('tbody tr').allTextContents();
+    ok(origenes.length === 3 && /colaboracion\s*6\s*60%/.test(origenes[0]) && /sin etiqueta\s*3\s*30%/.test(origenes[1]) && /instagram\s*1\s*10%/.test(origenes[2]), 'la tabla de cuentas nuevas por origen muestra cuántas trajo cada etiqueta, con su porcentaje');
     ok(/start=\d{4}-\d{2}-\d{2}&end=\d{4}-\d{2}-\d{2}&tz=/.test(consulta || ''), 'pide las cifras del mismo período que el resto del panel');
   }
   ok(errores.length === 0, 'sin errores de JavaScript' + (errores.length ? ': ' + errores.join(' | ') : ''));

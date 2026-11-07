@@ -25,6 +25,7 @@ function fakeSql(strings, ...v) {
   if (text.includes('SELECT id FROM users WHERE email =')) return Promise.resolve([]);
   if (text.includes('INSERT INTO users (username, name, email')) return Promise.resolve([{ id: siguiente++, username: v[0], token_version: 0 }]);
   if (text.includes('UPDATE users SET origen_registro')) { origenes.push(v[0]); return Promise.resolve([]); }
+  if (text.includes('COALESCE(origen_registro')) return Promise.resolve([{ origen: 'colaboracion', cuentas: 6 }, { origen: '', cuentas: 3 }, { origen: 'instagram', cuentas: 1 }]);
   if (text.includes('AS entraron')) { consultas.push(v); return Promise.resolve([{ entraron: 12, empezaron: 7, terminaron: 4, cuentas_nuevas: 2 }]); }
   if (text.includes('FROM invitados i') && text.includes('EXISTS')) {
     return Promise.resolve([
@@ -79,6 +80,7 @@ const registro = { name: 'maria perez', email: 'm@x.co', phone: '+57 300 123 456
   ok(r.status === 200 && r.json.entraron === 12 && r.json.empezaron === 7 && r.json.terminaron === 4 && r.json.cuentasNuevas === 2, 'el panel recibe cuántos entraron, empezaron y terminaron, y las cuentas nuevas');
   ok(r.json.ultimos.length === 3 && r.json.ultimos[0].termino === true && r.json.ultimos[1].empezo && !r.json.ultimos[1].termino && r.json.ultimos[2].cortado, 'y los últimos con su estado (terminó, empezó, acceso cortado)');
   ok(consultas[0] && consultas[0][0] === '2026-11-07T05:00:00.000Z' && consultas[0][1] === '2026-11-08T04:59:59.999Z', 'el día se cuenta con la hora de Colombia (tz=300)');
+  ok(r.json.porOrigen.length === 3 && r.json.porOrigen[0].origen === 'colaboracion' && r.json.porOrigen[0].cuentas === 6 && r.json.porOrigen[1].origen === null && r.json.porOrigen[2].origen === 'instagram', 'también llegan las cuentas nuevas por origen (la que no tiene etiqueta sale como «sin etiqueta»)');
   r = await pedir(server, 'GET', '/api/admin/enlace-abierto', null, null);
   ok(r.status === 401, 'sin sesión no se ve (401)');
 

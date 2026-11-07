@@ -9361,9 +9361,15 @@ app.get('/api/admin/enlace-abierto', requireAuth, requireAdmin, async (req, res)
       FROM invitados i
       WHERE i.origen = 'abierto' AND i.created_at >= ${a} AND i.created_at <= ${b}
       ORDER BY i.created_at DESC LIMIT 10`;
+    // Cuentas nuevas del período según de dónde llegaron (la etiqueta ?desde= del enlace); sin etiqueta = entraron directo o por otro lado.
+    const porOrigen = await sql`
+      SELECT COALESCE(origen_registro, '') AS origen, COUNT(*)::int AS cuentas
+      FROM users WHERE created_at >= ${a} AND created_at <= ${b}
+      GROUP BY COALESCE(origen_registro, '') ORDER BY COUNT(*) DESC, 1 ASC LIMIT 20`;
     const t = totales[0] || {};
     res.set('Cache-Control', 'no-store');
     res.json({
+      porOrigen: porOrigen.map((o) => ({ origen: o.origen || null, cuentas: Number(o.cuentas) || 0 })),
       entraron: Number(t.entraron) || 0,
       empezaron: Number(t.empezaron) || 0,
       terminaron: Number(t.terminaron) || 0,
