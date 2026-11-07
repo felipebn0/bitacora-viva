@@ -230,11 +230,19 @@
   .pr-tabla th { color: var(--ink-soft); font-weight: 600; }
   .cr-btn { font: inherit; font-size: 0.8rem; padding: 4px 10px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: inherit; cursor: pointer; }
   .cr-pendiente { font-weight: 700; }
+  .fb-scroll { overflow-x: auto; }
+  .fb-tabla { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  .fb-tabla thead tr { border-bottom: 2px solid var(--line); text-align: left; }
+  .fb-tabla th, .fb-tabla td { padding: 6px 8px; }
+  .fb-fecha { white-space: nowrap; }
+  .fb-centro { text-align: center; }
+  .fb-coment { font-size: .85rem; color: var(--ink-soft); }
+  .fb-mal { color: #c0392b; } .fb-regular { color: #e67e22; } .fb-bien { color: #27ae60; }
 
   footer.note { max-width: 1180px; margin: 24px auto 0; color: var(--ink-soft); font-size: 0.8rem; }
 </style>
-<script src="/eco-idioma-en.js?v=1" defer></script>
-<script src="/eco-idioma.js?v=2" defer></script>
+<script src="/eco-idioma-en.js?v=2" defer></script>
+<script src="/eco-idioma.js?v=3" defer></script>
 </head>
 <body>
   <header>
@@ -829,14 +837,14 @@
           return;
         }
         const emoji = { mal: '😕', regular: '🤔', bien: '😊' };
-        const color = { mal: '#c0392b', regular: '#e67e22', bien: '#27ae60' };
         const filas = data.feedback.map(f => {
           const fecha = new Date(f.created_at).toLocaleDateString('es-CO', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+          const clase = emoji[f.rating] ? 'fb-' + f.rating : '';
           return `<tr>
-            <td style="white-space:nowrap">${fecha}</td>
-            <td>${f.nombre || '<em>sin nombre</em>'}</td>
-            <td style="text-align:center"><span style="color:${color[f.rating] || '#666'}">${emoji[f.rating] || ''} ${f.rating}</span></td>
-            <td style="font-size:.85rem;color:var(--ink-soft)">${f.comment ? f.comment.replace(/</g,'&lt;') : '—'}</td>
+            <td class="fb-fecha">${esc(fecha)}</td>
+            <td>${f.nombre ? esc(f.nombre) : '<em>sin nombre</em>'}</td>
+            <td class="fb-centro"><span class="${clase}">${emoji[f.rating] || ''} ${esc(f.rating)}</span></td>
+            <td class="fb-coment">${f.comment ? esc(f.comment) : '—'}</td>
           </tr>`;
         }).join('');
         const resumen = data.feedback.reduce((acc, f) => { acc[f.rating] = (acc[f.rating] || 0) + 1; return acc; }, {});
@@ -844,10 +852,10 @@
       <section class="panel">
         <h2>Feedback de sesiones</h2>
         <p class="sub">${data.feedback.length} calificaciones — ${emoji.bien} ${resumen.bien || 0} bien · ${emoji.regular} ${resumen.regular || 0} regular · ${emoji.mal} ${resumen.mal || 0} mal</p>
-        <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:.9rem">
-          <thead><tr style="border-bottom:2px solid var(--borde,#e0d5c5);text-align:left">
-            <th style="padding:6px 8px">Fecha</th><th style="padding:6px 8px">Usuario</th><th style="padding:6px 8px;text-align:center">Rating</th><th style="padding:6px 8px">Comentario</th>
+        <div class="fb-scroll">
+        <table class="fb-tabla">
+          <thead><tr>
+            <th>Fecha</th><th>Usuario</th><th class="fb-centro">Rating</th><th>Comentario</th>
           </tr></thead>
           <tbody>${filas}</tbody>
         </table>

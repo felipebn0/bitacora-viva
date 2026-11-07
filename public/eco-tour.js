@@ -230,7 +230,7 @@
     tip.className = 'eco-tour-tip';
 
     tip.innerHTML =
-      '<div class="eco-tour-counter">' + (i + 1) + ' de ' + STEPS.length + '</div>' +
+      '<div class="eco-tour-counter">' + (i + 1) + (document.documentElement.lang === 'en' ? ' of ' : ' de ') + STEPS.length + '</div>' +
       '<div class="eco-tour-title">'   + step.title + '</div>' +
       '<div class="eco-tour-text">'    + step.text  + '</div>' +
       '<div class="eco-tour-actions">' +

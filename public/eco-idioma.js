@@ -13,7 +13,9 @@
   const ATRIBUTOS = ['alt', 'aria-label', 'placeholder', 'title'];
   // characterData: hay textos (el saludo de la pantalla principal, los contadores)
   // que cambian el contenido de un nodo que ya existe, sin agregar nodos nuevos.
-  const OBSERVAR = { childList: true, subtree: true, characterData: true };
+  // attributes: el aria-label/placeholder que la app cambia después de cargar
+  // (p. ej. el del círculo según el estado de la charla) también se traduce.
+  const OBSERVAR = { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ATRIBUTOS };
   const OMITIR = new Set(['SCRIPT', 'STYLE', 'TEXTAREA', 'CODE', 'PRE', 'NOSCRIPT']);
   const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim();
   const origenTexto = new WeakMap();
@@ -75,7 +77,9 @@
       }
       return;
     }
-    if (nodo.nodeType !== 1 || OMITIR.has(nodo.tagName)) return;
+    if (nodo.nodeType !== 1) return;
+    // Del cuadro de texto no se toca lo que escribió la persona, pero sí su placeholder.
+    if (OMITIR.has(nodo.tagName) && nodo.tagName !== 'TEXTAREA') return;
     if (nodo.hasAttribute('data-no-idioma')) return;
     for (const attr of ATRIBUTOS) {
       if (!nodo.hasAttribute(attr)) continue;
@@ -93,6 +97,7 @@
         nodo.setAttribute(attr, origenAtributo.get(nodo)[attr]);
       }
     }
+    if (nodo.tagName === 'TEXTAREA') return;
     // Elemento completo (p. ej. un titular con <em>) solo si no tiene controles dentro.
     if (!esInteractivo(nodo) && nodo.children.length) {
       const claveHtml = norm(nodo.innerHTML);
@@ -109,6 +114,17 @@
       }
     }
     for (const hijo of Array.from(nodo.childNodes)) traducirNodo(hijo);
+  }
+
+  // Un atributo que la app acaba de cambiar: el valor nuevo pasa a ser el original.
+  function traducirAtributo(el, attr) {
+    if (idioma !== 'en' || !el.hasAttribute(attr) || el.closest('[data-no-idioma]')) return;
+    const valor = el.getAttribute(attr);
+    const en = traducir(norm(valor));
+    if (!en) return;
+    if (!origenAtributo.has(el)) origenAtributo.set(el, {});
+    origenAtributo.get(el)[attr] = valor;
+    el.setAttribute(attr, en);
   }
 
   function aplicar(raiz) {
@@ -209,6 +225,7 @@
       observador.disconnect();
       for (const m of muts) {
         if (m.type === 'characterData') traducirNodo(m.target);
+        else if (m.type === 'attributes') traducirAtributo(m.target, m.attributeName);
         else for (const n of m.addedNodes) traducirNodo(n);
       }
       observador.observe(document.body, OBSERVAR);

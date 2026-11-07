@@ -1,4 +1,5 @@
 {
+ "Diario de {} · Eco": "{}'s journal · Eco",
  "Abrir el diario de {}": "Open {}'s journal",
  "Foto del diario de {}": "Photo from {}'s journal",
  "Entrar al diario de {}": "Open {}'s journal",
@@ -81,5 +82,21 @@
  "(Modo de prueba) Código de regalo: {} — cánjealo desde la cuenta que va a narrar (Cuenta → Plan → Canjear un regalo).": "(Test mode) Gift code: {} — redeem it from the account that will be telling the stories (Account → Plan → Redeem a gift).",
  "Libro descargado ({})": "Book downloaded ({})",
  "Preparando los audios para que suenen en cualquier celular ({})": "Preparing the audio so it plays on any phone ({})",
- "· vence el {}": "· expires on {}"
+ "· vence el {}": "· expires on {}",
+ "{}, ya llegó hoy": "{} arrived today",
+ "{}, ya llegó (1 día)": "{} has arrived (1 day old)",
+ "{}, ya llegó (1 mes)": "{} has arrived (1 month old)",
+ "{}, ya llegó ({} días)": "{} has arrived ({} days old)",
+ "{}, ya llegó ({} semanas)": "{} has arrived ({} weeks old)",
+ "{}, ya llegó ({} meses)": "{} has arrived ({} months old)",
+ "{}, ya llegó ({} años)": "{} has arrived ({} years old)",
+ "¿Confirmas que {} es padre o madre de {}?": "Do you confirm that {} is a parent of {}?",
+ "Fragmento de la conversación: «{}»": "Excerpt from the conversation: «{}»",
+ "Listo: se descargó tu PDF en hoja A4 ({} MB).": "Done: your A4 PDF was downloaded ({} MB).",
+ "Libro descargado ({} MB). Preparando tu enlace para compartir…": "Book downloaded ({} MB). Getting your share link ready…",
+ "Preparando los audios para que suenen en cualquier celular ({} de {})…": "Preparing the audio so it plays on any phone ({} of {})…",
+ "Listo: se descargó tu libro digital ({} MB).": "Done: your digital book was downloaded ({} MB).",
+ "Listo: se descargó tu libro digital ({} MB). Un audio pesaba demasiado y no se incluyó en el archivo. {}": "Done: your digital book was downloaded ({} MB). One audio file was too large and wasn't included. {}",
+ "Listo: se descargó tu libro digital ({} MB). {} audios pesaban demasiado y no se incluyeron en el archivo. {}": "Done: your digital book was downloaded ({} MB). {} audio files were too large and weren't included. {}",
+ "Listo: se descargó tu libro digital ({} MB). {}": "Done: your digital book was downloaded ({} MB). {}"
 }
