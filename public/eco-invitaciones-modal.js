@@ -53,7 +53,7 @@ function init(){
   function pintarEnlace(code){
     urlAbierta=location.origin+'/colaborar.html?abierto='+encodeURIComponent(code);
     urlInput.value=urlAbierta;
-    wa.href='https://wa.me/?text='+encodeURIComponent('Te invito a contar un recuerdo en mi libro de Eco, solo tienes que poner tu nombre y apellido: '+urlAbierta);
+    wa.href='https://wa.me/?text='+encodeURIComponent((document.documentElement.lang==='en'?'I invite you to tell a memory in my Eco book, you just need to enter your first and last name: ':'Te invito a contar un recuerdo en mi libro de Eco, solo tienes que poner tu nombre y apellido: ')+urlAbierta);
   }
   async function cargarEnlace(){
     msg.textContent='';
