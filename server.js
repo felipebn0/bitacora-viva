@@ -10084,24 +10084,38 @@ async function listarTodosLosBlobs(prefix) {
 // y /api/contribute-media ("media/<profileId>/<foto|video>-...") — ver esas
 // rutas si alguna vez cambia el armado del nombre de archivo, porque este
 // desglose depende de que no cambie.
-async function resumenBlobDePerfil(profileId) {
-  const [audioPropio, audioAportes, media] = await Promise.all([
-    listarTodosLosBlobs(`audio/${profileId}/`),
-    listarTodosLosBlobs(`audio/aportes/${profileId}/`),
-    listarTodosLosBlobs(`media/${profileId}/`),
-  ]);
-  const audioBlobs = [...audioPropio, ...audioAportes];
-  const fotoBlobs = media.filter((b) => /\/foto-/.test(b.pathname));
-  const videoBlobs = media.filter((b) => /\/video-/.test(b.pathname));
-  const sumar = (arr) => arr.reduce((acc, b) => acc + (b.size || 0), 0);
-  return {
-    audioBytes: sumar(audioBlobs),
-    audioCount: audioBlobs.length,
-    fotoBytes: sumar(fotoBlobs),
-    fotoCount: fotoBlobs.length,
-    videoBytes: sumar(videoBlobs),
-    videoCount: videoBlobs.length,
+// Espacio de archivos (audios, fotos, videos) de TODOS los perfiles. Antes se le pedía la lista de archivos al
+// almacenamiento perfil por perfil (3 consultas por cuenta, en cada carga del panel): con cientos de cuentas el
+// panel se ponía lentísimo y no cargaba. Ahora son 2 listados en total, que se reparten por perfil según la ruta del
+// archivo (audio/<id>/, audio/aportes/<id>/, media/<id>/), y el resultado se guarda unos minutos.
+const VIDA_CACHE_BLOBS_MS = 5 * 60 * 1000;
+let cacheBlobsPorPerfil = { en: 0, datos: null };
+async function resumenDeBlobsPorPerfil() {
+  if (cacheBlobsPorPerfil.datos && Date.now() - cacheBlobsPorPerfil.en < VIDA_CACHE_BLOBS_MS) return cacheBlobsPorPerfil.datos;
+  const [audios, media] = await Promise.all([listarTodosLosBlobs('audio/'), listarTodosLosBlobs('media/')]);
+  const porPerfil = new Map();
+  const de = (id) => {
+    if (!porPerfil.has(id)) porPerfil.set(id, { audioBytes: 0, audioCount: 0, fotoBytes: 0, fotoCount: 0, videoBytes: 0, videoCount: 0 });
+    return porPerfil.get(id);
   };
+  const idDe = (texto) => (/^\d+$/.test(texto || '') ? Number(texto) : null);
+  for (const b of audios) {
+    const partes = b.pathname.split('/');
+    const id = idDe(partes[1] === 'aportes' ? partes[2] : partes[1]);
+    if (id === null) continue;
+    const r = de(id);
+    r.audioBytes += b.size || 0;
+    r.audioCount += 1;
+  }
+  for (const b of media) {
+    const id = idDe(b.pathname.split('/')[1]);
+    if (id === null) continue;
+    const r = de(id);
+    if (/\/foto-/.test(b.pathname)) { r.fotoBytes += b.size || 0; r.fotoCount += 1; }
+    else if (/\/video-/.test(b.pathname)) { r.videoBytes += b.size || 0; r.videoCount += 1; }
+  }
+  cacheBlobsPorPerfil = { en: Date.now(), datos: porPerfil };
+  return porPerfil;
 }
 
 // --- Panel de consumo (solo cuentas is_admin) ---
@@ -10464,8 +10478,10 @@ app.get('/api/admin/usage', requireAuth, requireAdmin, async (req, res) => {
     const nombresPorId = new Map(rows.map((r) => [r.id, capitalizarNombre(r.nombre || '') || r.username || `#${r.id}`]));
 
     // Audios/fotos/videos reales viven en Blob, no en Postgres (ver
-    // resumenBlobDePerfil) — se trae en paralelo, uno por perfil.
-    const blobPorPerfil = await Promise.all(rows.map((r) => resumenBlobDePerfil(r.id)));
+    // resumenDeBlobsPorPerfil) — 2 listados en total, no uno por perfil.
+    const blobsDeTodos = await resumenDeBlobsPorPerfil();
+    const sinArchivos = { audioBytes: 0, audioCount: 0, fotoBytes: 0, fotoCount: 0, videoBytes: 0, videoCount: 0 };
+    const blobPorPerfil = rows.map((r) => blobsDeTodos.get(Number(r.id)) || sinArchivos);
 
     const profiles = rows.map((r, i) => {
       const textBytes = Number(r.sessions_bytes) + Number(r.resumen_bytes) + Number(r.family_notes_bytes) + Number(r.story_log_bytes) + Number(r.chapters_bytes);
