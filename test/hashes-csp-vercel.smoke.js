@@ -56,9 +56,9 @@ check('style-src en vercel.json trae exactamente los hashes que hoy dan las pág
 // de "una página, un hash". (17 desde 2026-10-12: el rediseño ECO de
 // pruebas hizo que dos páginas que compartían el mismo <style> dejaran
 // de ser idénticas. 21 desde 2026-11-06: se sumaron escuchar, como-funciona y las landings viejas, que
-// faltaban en PAGINAS y con la CSP obligatoria habrían quedado sin estilos.)
+// faltaban en PAGINAS y con la CSP obligatoria habrían quedado sin estilos. 22 desde que app.html trae los estilos del popup de retroalimentación.)
 check(`hay ${scriptHashes.length} hashes de <script> (uno por bloque inline real, sin contar los que tienen src=)`, scriptHashes.length >= 9);
-check(`hay ${styleHashes.length} hashes de <style> (uno por página)`, styleHashes.length === 21);
+check(`hay ${styleHashes.length} hashes de <style> (uno por página)`, styleHashes.length === 22);
 
 console.log(`\n${pasaron} pasaron, ${fallaron} fallaron`);
 if (fallaron) {
