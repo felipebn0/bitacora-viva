@@ -88,6 +88,7 @@ const historial = [
   ok(r.status === 200 && r.json.done === true, 'el aporte del invitado termina (done)');
   ok(/gracias por colaborar con la historia de Felipe/i.test(r.json.message), 'Eco da las gracias por colaborar con la historia de la persona');
   ok(/ingresa a mieco\.app/.test(r.json.message) && /Aún es gratis\.$/.test(r.json.message), 'y lo invita a ingresar a mieco.app, «aún es gratis»');
+  ok(/ingresa a mieco\.app, o da clic en el botón de abajo\. Aún es gratis\.$/.test(r.json.message), 'después de mieco.app agrega «o da clic en el botón de abajo»');
   ok(/contar tus propias historias, o las de tus familiares/.test(r.json.message), 'habla de sus propias historias o las de sus familiares');
   ok(!/\[FIN\]/.test(r.json.message), 'sin la marca interna [FIN]');
   ok(!guardados.some((g) => /mieco\.app|aún es gratis/i.test(g.texto)), 'la frase comercial NO se guarda en la historia');

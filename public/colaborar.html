@@ -92,8 +92,10 @@
     display: flex;
     flex-direction: column;
     gap: 14px;
-    margin-top: 60px;
+    margin: 60px auto 0;
   }
+  /* Los párrafos de aviso están vacíos hasta que hay algo que decir: sin esto dejaban un hueco grande entre el nombre y el formulario. */
+  #guestScreen p:empty { display: none; }
   /* Mismo componente de login que app.html (label visible + Mostrar/Ocultar
      clave) — antes este login solo tenía placeholders, sin esas ayudas,
      aunque es la misma app para quien colabora. */
@@ -496,7 +498,6 @@
         </div>
       </div>
 
-      <button class="otra-historia-btn" id="otraHistoriaBtn" type="button">Contar otra historia</button>
       <a class="otra-historia-btn cta-crear-cuenta" id="ctaCrearCuenta" href="/#registro" hidden>Empezar a contar mis historias · aún es gratis</a>
 
       <p class="msg" id="aporteMsg" role="status" aria-live="polite" aria-atomic="true"></p>
@@ -1176,7 +1177,6 @@
   const aporteChat = document.getElementById('aporteChat');
   const orb = document.getElementById('orb');
   const recStatus = document.getElementById('recStatus');
-  const otraHistoriaBtn = document.getElementById('otraHistoriaBtn');
   const ctaCrearCuenta = document.getElementById('ctaCrearCuenta');
   const writeRowColab = document.getElementById('writeRowColab');
   const writeInputColab = document.getElementById('writeInputColab');
@@ -1254,7 +1254,6 @@
     aporteChat.innerHTML = '';
     aporteMsg.textContent = '';
     aporteMsg.classList.remove('error');
-    otraHistoriaBtn.style.display = 'none';
     ctaCrearCuenta.hidden = true;
     orb.style.display = '';
     document.getElementById('subirAudioBtn').style.display = '';
@@ -1275,11 +1274,11 @@
   // corresponde, ya se terminó de hablar): cerrar la charla si era el
   // cierre, o seguir escuchando sola si no (pedido de Felipe, 2026-09-08:
   // que esta pantalla se sienta igual de fluida que la charla principal).
-  // Al cerrar la charla el orbe se queda a la vista: tocarlo empieza otra historia (lo mismo que el botón de abajo).
+  // Al cerrar la charla el orbe se queda a la vista y dice «Contar otra historia»: tocarlo empieza otra. Ya no hay un botón aparte.
   function orbeParaOtraHistoria() {
     orb.style.display = '';
     orb.dataset.state = 'idle';
-    orb.innerHTML = 'Presiona<br>para otra historia';
+    orb.innerHTML = 'Contar otra<br>historia';
     orb.setAttribute('aria-label', 'Presiona para contar otra historia');
     orb.disabled = false;
   }
@@ -1294,7 +1293,6 @@
       recStatus.textContent = '';
       aporteMsg.classList.toggle('error', !data.saved);
       aporteMsg.textContent = data.saved ? '✓ Historia guardada. Gracias. Si quieres añadir otra historia, toca el círculo.' : '⚠️ La charla terminó, pero hubo un problema para guardarla.';
-      otraHistoriaBtn.style.display = 'inline-block';
       if (data.saved && sesionEsGuest) ctaCrearCuenta.hidden = false;
       if (data.saved) { cargarAportes(); }
     } else if (pausadoPorSalida) {
@@ -1432,7 +1430,6 @@
     enviarTurno();
   }
 
-  otraHistoriaBtn.addEventListener('click', iniciarAporte);
 
   async function enviarTextoEscrito() {
     const texto = writeInputColab.value.trim();

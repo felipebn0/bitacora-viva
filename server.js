@@ -6584,7 +6584,7 @@ function instruccionTratamientoDeTercero(nombre, tratamiento) {
 }
 
 // Frase final para quien colaboró sin cuenta (enlace abierto o personal): la voz de Eco la dice, y mieco.app se lee bien en voz alta.
-const CIERRE_COMERCIAL_INVITADO = 'Y si quieres empezar a contar tus propias historias, o las de tus familiares, ingresa a mieco.app. Aún es gratis.';
+const CIERRE_COMERCIAL_INVITADO = 'Y si quieres empezar a contar tus propias historias, o las de tus familiares, ingresa a mieco.app, o da clic en el botón de abajo. Aún es gratis.';
 
 function buildAporteSystemPrompt(ownerNombre, colaboradorNombre, protagonista, parentescoConocido, ownerTratamiento) {
   const nombre = ownerNombre || 'esta persona';

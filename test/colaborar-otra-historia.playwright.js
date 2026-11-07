@@ -49,7 +49,8 @@ const ok = (c, m) => { if (c) console.log('✓ ' + m); else { fallos++; console.
   const orbe = () => page.evaluate(() => { const o = document.getElementById('orb'); const r = o.getBoundingClientRect(); return { visible: getComputedStyle(o).display !== 'none' && r.width > 0, texto: o.textContent.replace(/\s+/g, ' ').trim(), desactivado: o.disabled, estado: o.dataset.state }; });
   const o = await orbe();
   ok(o.visible, 'al terminar la historia el orbe sigue a la vista');
-  ok(!o.desactivado && /otra historia/.test(o.texto), 'dice que se puede tocar para otra historia (' + o.texto + ')');
+  ok(!o.desactivado && /otra\s*historia/i.test(o.texto), 'el orbe dice «Contar otra historia» (' + o.texto.replace(/\n/g, ' ') + ')');
+  ok(await page.locator('#otraHistoriaBtn').count() === 0, 'ya no hay un botón aparte de «Contar otra historia»: eso lo dice el orbe');
   ok(/toca el círculo/i.test(await page.textContent('#aporteMsg')), 'el mensaje avisa que se toca el círculo para añadir otra historia');
 
   if (process.env.CAPTURA) await page.screenshot({ path: process.env.CAPTURA });
@@ -57,7 +58,7 @@ const ok = (c, m) => { if (c) console.log('✓ ' + m); else { fallos++; console.
   await page.waitForFunction(() => document.getElementById('aporteMsg').textContent === '', null, { timeout: 10000 });
   ok(turnos.length === 3 && turnos[2].history.length === 0, 'tocar el orbe empieza una charla nueva (sin lo anterior)');
   const despues = await orbe();
-  ok(despues.visible && !/otra historia/.test(despues.texto), 'y el orbe vuelve a su texto normal (' + despues.texto + ')');
+  ok(despues.visible && !/otra\s*historia/i.test(despues.texto), 'y el orbe vuelve a su texto normal (' + despues.texto + ')');
   ok(!errores.length, 'sin errores en la página (' + errores.join(' | ') + ')');
 
   await browser.close(); server.close();

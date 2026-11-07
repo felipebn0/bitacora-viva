@@ -33,6 +33,14 @@ const ok = (c, m) => { if (c) console.log('✓ ' + m); else { fallos++; console.
     await page.waitForSelector('#guestScreen', { state: 'visible' });
     await page.waitForSelector('#guestNombre', { state: 'visible' });
     ok(/Felipe/.test(await page.textContent('#guestOwnerName')), 'muestra con quién va a colaborar (el dueño del libro)');
+    for (const ancho of [390, 1280]) {
+      await page.setViewportSize({ width: ancho, height: 844 });
+      const g = await page.evaluate(() => { const r = document.getElementById('guestScreen').getBoundingClientRect(); return { izq: r.left, der: innerWidth - r.right }; });
+      ok(Math.abs(g.izq - g.der) <= 1, `la tarjeta de entrada queda centrada con pantalla de ${ancho}px (márgenes ${Math.round(g.izq)} y ${Math.round(g.der)})`);
+    }
+    await page.setViewportSize({ width: 420, height: 900 });
+    const hueco = await page.evaluate(() => document.getElementById('guestNombreRow').getBoundingClientRect().top - document.getElementById('guestOwnerName').getBoundingClientRect().bottom);
+    ok(hueco < 60, 'no hay un hueco grande entre el nombre del dueño y el formulario (' + Math.round(hueco) + 'px)');
     ok(await page.isVisible('#guestApellido') && await page.isVisible('#guestTermsRow'), 'pide nombre y apellido y los Términos');
     ok(/Entrar a colaborar/.test(await page.textContent('#guestStartBtn')), 'el botón dice «Entrar a colaborar»');
     ok(/Solo tu nombre y apellido/.test(await page.textContent('#guestSinCuenta')), 'explica que no necesita cuenta ni clave');
