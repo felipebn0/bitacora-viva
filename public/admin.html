@@ -449,7 +449,7 @@
       </div>`;
 
     if (!profiles.length) {
-      content.innerHTML = rangeBarHtml + '<p class="empty">Todavía no hay cuentas registradas.</p>';
+      content.innerHTML = rangeBarHtml + '<p class="empty">Nadie usó Eco en este período. Prueba con «7 días» o «30 días».</p>';
       conectarRangeBar();
       return;
     }
@@ -457,7 +457,7 @@
     const threshold = data.pricing.alertThresholdUsd;
     const totalCostRange = profiles.reduce((acc, p) => acc + (p.totalCostUsdRange || 0), 0);
     const totalCostPrevRange = profiles.reduce((acc, p) => acc + (p.totalCostUsdPrevRange || 0), 0);
-    const totalCostAll = profiles.reduce((acc, p) => acc + (p.totalCostUsd || 0), 0);
+    const totalCostAll = typeof data.totalHistoricoUsd === 'number' ? data.totalHistoricoUsd : profiles.reduce((acc, p) => acc + (p.totalCostUsd || 0), 0);
     const totalTokensRange = profiles.reduce((acc, p) => acc + (p.claude.inputTokensRange || 0) + (p.claude.outputTokensRange || 0), 0);
     const totalTalkRange = profiles.reduce((acc, p) => acc + (p.elevenlabsStt.secondsRange || 0), 0);
     const totalIntervencionesRange = profiles.reduce((acc, p) => acc + (p.elevenlabsStt.callsRange || 0), 0);

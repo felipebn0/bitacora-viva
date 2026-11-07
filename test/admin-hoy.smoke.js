@@ -48,6 +48,7 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
   ok(/\{ key: 'hoy', label: 'Hoy', dias: 1 \}/.test(html), 'el panel tiene el botón «Hoy»');
   ok(/let activePreset = 'hoy';/.test(html), 'y «Hoy» es la vista por defecto');
   ok(html.indexOf("key: 'hoy'") < html.indexOf("key: '7d'"), '«Hoy» va de primero');
+  ok(/typeof data\.totalHistoricoUsd === 'number'/.test(html), 'el total histórico sale del que manda el servidor (el panel solo lista perfiles con uso)');
 
   const server = http.createServer(app).listen(0);
   await new Promise((r) => server.once('listening', r));

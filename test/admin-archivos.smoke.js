@@ -20,12 +20,14 @@ function fakeSql(strings, ...v) {
   if (text.includes('SELECT id, username, password_hash, token_version FROM users WHERE username')) return Promise.resolve(v[0] === 'admin' ? [{ id: 1, username: 'admin', password_hash: HASH, token_version: 0 }] : []);
   if (text.includes('SELECT owner_user_id, token_version FROM users WHERE id')) return Promise.resolve([{ owner_user_id: null, token_version: 0 }]);
   if (text.includes('SELECT is_admin FROM users WHERE id')) return Promise.resolve([{ is_admin: true }]);
-  if (text.includes('usage_all')) return Promise.resolve(perfiles);
+  if (text.includes('usage_all')) { consultasPrincipales.push({ text, valores: v }); return Promise.resolve(perfiles); }
+  if (text.includes('SELECT COALESCE(SUM(cost_usd), 0) AS total FROM usage_events')) return Promise.resolve([{ total: '12.5' }]);
   return Promise.resolve([]);
 }
 fakeSql.transaction = (q) => Promise.all(q);
 
 const listados = [];
+const consultasPrincipales = [];
 const archivos = {
   'audio/': [
     { pathname: 'audio/5/a.webm', size: 1000 },
@@ -83,6 +85,13 @@ const buscar = (obj, clave) => { if (!obj || typeof obj !== 'object') return und
 
   r = await pedir(server, 'GET', '/api/admin/usage?start=2026-11-01&end=2026-11-06&tz=300', null, cookie);
   ok(r.status === 200 && listados.length === 2, 'al cambiar de rango no se vuelve a consultar el almacenamiento (queda guardado unos minutos)');
+
+  const q = consultasPrincipales[0];
+  ok(q && /WITH activos AS \(\s*SELECT DISTINCT user_id FROM usage_events/.test(q.text), 'la consulta principal solo trae perfiles con uso (CTE "activos")');
+  ok(q && /FROM users WHERE owner_user_id IS NULL AND id IN \(SELECT user_id FROM activos\)/.test(q.text) && /FROM bitacoras WHERE id IN \(SELECT user_id FROM activos\)/.test(q.text), 'tanto cuentas como subperfiles se limitan a los que tuvieron uso');
+  ok(q && /WHERE user_id IN \(SELECT user_id FROM activos\)/.test(q.text), 'el acumulado histórico también se calcula solo para esos perfiles');
+  r = await pedir(server, 'GET', '/api/admin/usage?start=2026-11-06&end=2026-11-06&tz=300', null, cookie);
+  ok(r.json.totalHistoricoUsd === 12.5, 'el total histórico de todos los perfiles se calcula aparte y llega en la respuesta');
 
   server.close();
   console.log(`\n${pasaron} pasaron, ${fallaron} fallaron`);
