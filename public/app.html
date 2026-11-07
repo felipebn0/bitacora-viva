@@ -4197,7 +4197,6 @@
     document.querySelectorAll('#feedbackBtns button').forEach(b => { b.removeAttribute('data-selected'); });
     document.getElementById('feedbackText').value = '';
     feedbackRating = null;
-    // Adaptar textos al idioma de la cuenta
     const en = document.documentElement.lang === 'en';
     document.getElementById('feedbackPregunta').textContent = en ? 'How was this session?' : '¿Cómo estuvo esta sesión?';
     document.getElementById('feedbackText').placeholder = en ? 'Anything you want to tell us? (optional)' : '¿Algo que quieras contarnos? (opcional)';
@@ -4207,12 +4206,13 @@
     document.querySelectorAll('#feedbackBtns button[data-en]').forEach(b => {
       if (en) { b.childNodes[b.childNodes.length - 1].textContent = b.dataset.en; }
     });
-    overlay.style.display = 'flex';
+    overlay.hidden = false;
+    overlay.classList.add('fb-visible');
   }
   function ocultarFeedback() {
     if (feedbackTimeout) { clearTimeout(feedbackTimeout); feedbackTimeout = null; }
     const overlay = document.getElementById('feedbackOverlay');
-    if (overlay) overlay.style.display = 'none';
+    if (overlay) { overlay.classList.remove('fb-visible'); overlay.hidden = true; }
   }
   // Clic en Mal/Regular/Bien
   document.getElementById('feedbackBtns')?.addEventListener('click', (e) => {
@@ -4530,40 +4530,56 @@
 <script src="/eco-intro.js?v=2" defer></script>
 
 <!-- Feedback popup overlay -->
-<div id="feedbackOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(30,25,18,.5);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:1rem;font-family:Georgia,serif">
-  <div style="position:relative;background:linear-gradient(165deg,#FFFAF3 0%,#F5EDE0 100%);border-radius:24px;padding:2.2rem 1.8rem 1.8rem;max-width:320px;width:100%;box-shadow:0 12px 48px rgba(30,25,18,.3),0 0 0 1px rgba(143,90,32,.08);text-align:center;animation:fbIn .35s cubic-bezier(.22,1,.36,1)">
-    <div style="margin-bottom:1rem"><span style="font-size:1.6rem">🌿</span></div>
-    <p id="feedbackPregunta" style="font-size:1.1rem;margin:0 0 1.4rem;color:var(--text,#3B3226);font-weight:600;line-height:1.35;letter-spacing:-.01em">¿Cómo estuvo esta sesión?</p>
-    <div id="feedbackBtns" style="display:flex;gap:.6rem;justify-content:center;margin-bottom:.2rem">
-      <button type="button" data-rating="mal" data-en="Bad" style="flex:1;padding:.8rem .4rem .7rem;border-radius:16px;border:2px solid rgba(143,90,32,.15);background:rgba(255,255,255,.6);color:var(--text,#3B3226);cursor:pointer;font-size:.85rem;font-family:inherit;transition:all .2s;-webkit-tap-highlight-color:transparent">
-        <span style="display:block;font-size:2.2rem;margin-bottom:.3rem;line-height:1">😕</span>Mal
+<div id="feedbackOverlay" class="fb-overlay" hidden>
+  <div class="fb-card">
+    <div class="fb-icon">🌿</div>
+    <p id="feedbackPregunta" class="fb-question">¿Cómo estuvo esta sesión?</p>
+    <div id="feedbackBtns" class="fb-btns">
+      <button type="button" data-rating="mal" data-en="Bad" class="fb-btn">
+        <span class="fb-emoji">😕</span>Mal
       </button>
-      <button type="button" data-rating="regular" data-en="Okay" style="flex:1;padding:.8rem .4rem .7rem;border-radius:16px;border:2px solid rgba(143,90,32,.15);background:rgba(255,255,255,.6);color:var(--text,#3B3226);cursor:pointer;font-size:.85rem;font-family:inherit;transition:all .2s;-webkit-tap-highlight-color:transparent">
-        <span style="display:block;font-size:2.2rem;margin-bottom:.3rem;line-height:1">🤔</span>Regular
+      <button type="button" data-rating="regular" data-en="Okay" class="fb-btn">
+        <span class="fb-emoji">🤔</span>Regular
       </button>
-      <button type="button" data-rating="bien" data-en="Good" style="flex:1;padding:.8rem .4rem .7rem;border-radius:16px;border:2px solid rgba(143,90,32,.15);background:rgba(255,255,255,.6);color:var(--text,#3B3226);cursor:pointer;font-size:.85rem;font-family:inherit;transition:all .2s;-webkit-tap-highlight-color:transparent">
-        <span style="display:block;font-size:2.2rem;margin-bottom:.3rem;line-height:1">😊</span>Bien
+      <button type="button" data-rating="bien" data-en="Good" class="fb-btn">
+        <span class="fb-emoji">😊</span>Bien
       </button>
     </div>
-    <div id="feedbackComment" hidden style="margin-top:1.1rem">
-      <textarea id="feedbackText" rows="3" maxlength="1000" placeholder="¿Algo que quieras contarnos? (opcional)" style="width:100%;padding:.65rem .85rem;border-radius:14px;border:1.5px solid rgba(143,90,32,.15);background:rgba(255,255,255,.7);color:var(--text,#3B3226);font-family:inherit;font-size:.88rem;resize:none;box-sizing:border-box;outline:none;transition:border-color .2s"></textarea>
-      <div style="display:flex;gap:.5rem;margin-top:.8rem;justify-content:center">
-        <button type="button" id="feedbackSend" style="flex:1;max-width:130px;padding:.6rem 1rem;border-radius:999px;border:none;background:var(--primario,#8F5A20);color:#fff;cursor:pointer;font-size:.88rem;font-family:inherit;font-weight:600;box-shadow:0 2px 8px rgba(143,90,32,.25);transition:transform .15s,box-shadow .15s;-webkit-tap-highlight-color:transparent">Enviar</button>
-        <button type="button" id="feedbackSkip" style="flex:1;max-width:130px;padding:.6rem 1rem;border-radius:999px;border:1.5px solid rgba(143,90,32,.2);background:transparent;color:var(--text,#3B3226);cursor:pointer;font-size:.88rem;font-family:inherit;-webkit-tap-highlight-color:transparent">Omitir</button>
+    <div id="feedbackComment" hidden class="fb-comment">
+      <textarea id="feedbackText" rows="3" maxlength="1000" placeholder="¿Algo que quieras contarnos? (opcional)" class="fb-textarea"></textarea>
+      <div class="fb-actions">
+        <button type="button" id="feedbackSend" class="fb-send">Enviar</button>
+        <button type="button" id="feedbackSkip" class="fb-skip">Omitir</button>
       </div>
     </div>
-    <p id="feedbackGracias" hidden style="font-size:1.05rem;margin:1.2rem 0 .3rem;color:var(--primario,#8F5A20);font-weight:600"><span style="display:block;font-size:1.5rem;margin-bottom:.3rem">🌱</span>¡Gracias por tu opinión!</p>
-    <button type="button" id="feedbackClose" style="position:absolute;top:.6rem;right:.8rem;background:none;border:none;font-size:1.2rem;color:var(--text,#3B3226);opacity:.35;cursor:pointer;padding:.4rem;transition:opacity .2s;-webkit-tap-highlight-color:transparent" aria-label="Cerrar">✕</button>
+    <p id="feedbackGracias" hidden class="fb-thanks"><span class="fb-thanks-icon">🌱</span>¡Gracias por tu opinión!</p>
+    <button type="button" id="feedbackClose" class="fb-close" aria-label="Cerrar">✕</button>
   </div>
 </div>
 <style>
+.fb-overlay{display:none;position:fixed;inset:0;z-index:9999;background:rgba(30,25,18,.5);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:1rem;font-family:Georgia,serif}
+.fb-overlay.fb-visible{display:flex}
+.fb-card{position:relative;background:linear-gradient(165deg,#FFFAF3 0%,#F5EDE0 100%);border-radius:24px;padding:2.2rem 1.8rem 1.8rem;max-width:320px;width:100%;box-shadow:0 12px 48px rgba(30,25,18,.3),0 0 0 1px rgba(143,90,32,.08);text-align:center;animation:fbIn .35s cubic-bezier(.22,1,.36,1)}
+.fb-icon{margin-bottom:1rem;font-size:1.6rem}
+.fb-question{font-size:1.1rem;margin:0 0 1.4rem;color:var(--text,#3B3226);font-weight:600;line-height:1.35;letter-spacing:-.01em}
+.fb-btns{display:flex;gap:.6rem;justify-content:center;margin-bottom:.2rem}
+.fb-btn{flex:1;padding:.8rem .4rem .7rem;border-radius:16px;border:2px solid rgba(143,90,32,.15);background:rgba(255,255,255,.6);color:var(--text,#3B3226);cursor:pointer;font-size:.85rem;font-family:inherit;transition:all .2s;-webkit-tap-highlight-color:transparent}
+.fb-btn:hover{background:rgba(143,90,32,.08);border-color:rgba(143,90,32,.3)}
+.fb-btn:active{transform:scale(.96)}
+.fb-btn[data-selected]{border-color:var(--primario,#8F5A20);background:rgba(143,90,32,.12);font-weight:700;box-shadow:0 2px 8px rgba(143,90,32,.12)}
+.fb-emoji{display:block;font-size:2.2rem;margin-bottom:.3rem;line-height:1}
+.fb-comment{margin-top:1.1rem}
+.fb-textarea{width:100%;padding:.65rem .85rem;border-radius:14px;border:1.5px solid rgba(143,90,32,.15);background:rgba(255,255,255,.7);color:var(--text,#3B3226);font-family:inherit;font-size:.88rem;resize:none;box-sizing:border-box;outline:none;transition:border-color .2s}
+.fb-textarea:focus{border-color:var(--primario,#8F5A20)}
+.fb-actions{display:flex;gap:.5rem;margin-top:.8rem;justify-content:center}
+.fb-send{flex:1;max-width:130px;padding:.6rem 1rem;border-radius:999px;border:none;background:var(--primario,#8F5A20);color:#fff;cursor:pointer;font-size:.88rem;font-family:inherit;font-weight:600;box-shadow:0 2px 8px rgba(143,90,32,.25);transition:transform .15s,box-shadow .15s;-webkit-tap-highlight-color:transparent}
+.fb-send:active{transform:scale(.97)}
+.fb-skip{flex:1;max-width:130px;padding:.6rem 1rem;border-radius:999px;border:1.5px solid rgba(143,90,32,.2);background:transparent;color:var(--text,#3B3226);cursor:pointer;font-size:.88rem;font-family:inherit;-webkit-tap-highlight-color:transparent}
+.fb-thanks{font-size:1.05rem;margin:1.2rem 0 .3rem;color:var(--primario,#8F5A20);font-weight:600}
+.fb-thanks-icon{display:block;font-size:1.5rem;margin-bottom:.3rem}
+.fb-close{position:absolute;top:.6rem;right:.8rem;background:none;border:none;font-size:1.2rem;color:var(--text,#3B3226);opacity:.35;cursor:pointer;padding:.4rem;transition:opacity .2s;-webkit-tap-highlight-color:transparent}
+.fb-close:hover{opacity:.7}
 @keyframes fbIn{from{opacity:0;transform:translateY(16px) scale(.95)}to{opacity:1;transform:translateY(0) scale(1)}}
-#feedbackBtns button:hover{background:rgba(143,90,32,.08)!important;border-color:rgba(143,90,32,.3)}
-#feedbackBtns button:active{transform:scale(.96)}
-#feedbackBtns button[data-selected]{border-color:var(--primario,#8F5A20);background:rgba(143,90,32,.12)!important;font-weight:700;box-shadow:0 2px 8px rgba(143,90,32,.12)}
-#feedbackClose:hover{opacity:.7!important}
-#feedbackSend:active{transform:scale(.97)}
-#feedbackText:focus{border-color:var(--primario,#8F5A20)}
 </style>
 </body>
 </html>
