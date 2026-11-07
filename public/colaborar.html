@@ -100,6 +100,8 @@
   .login-field { display: flex; flex-direction: column; gap: 5px; }
   .login-field label { font-size: 0.85rem; font-weight: 700; color: var(--ink-soft); }
   .login-field[hidden] { display: none; }
+  a.cta-crear-cuenta { display: inline-block; text-decoration: none; text-align: center; margin-top: 10px; }
+  a.cta-crear-cuenta[hidden] { display: none; }
   .login input {
     border: 1px solid var(--eco-edge,#dadaca); border-radius: 10px; padding: 12px 14px;
     font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink);
@@ -495,6 +497,7 @@
       </div>
 
       <button class="otra-historia-btn" id="otraHistoriaBtn" type="button">Contar otra historia</button>
+      <a class="otra-historia-btn cta-crear-cuenta" id="ctaCrearCuenta" href="/#registro" hidden>Empezar a contar mis historias · aún es gratis</a>
 
       <p class="msg" id="aporteMsg" role="status" aria-live="polite" aria-atomic="true"></p>
 
@@ -1174,6 +1177,7 @@
   const orb = document.getElementById('orb');
   const recStatus = document.getElementById('recStatus');
   const otraHistoriaBtn = document.getElementById('otraHistoriaBtn');
+  const ctaCrearCuenta = document.getElementById('ctaCrearCuenta');
   const writeRowColab = document.getElementById('writeRowColab');
   const writeInputColab = document.getElementById('writeInputColab');
   const writeSendColab = document.getElementById('writeSendColab');
@@ -1251,6 +1255,7 @@
     aporteMsg.textContent = '';
     aporteMsg.classList.remove('error');
     otraHistoriaBtn.style.display = 'none';
+    ctaCrearCuenta.hidden = true;
     orb.style.display = '';
     document.getElementById('subirAudioBtn').style.display = '';
     if (!micNoDisponible) mostrarEscribirColab(false);
@@ -1290,6 +1295,7 @@
       aporteMsg.classList.toggle('error', !data.saved);
       aporteMsg.textContent = data.saved ? '✓ Historia guardada. Gracias. Si quieres añadir otra historia, toca el círculo.' : '⚠️ La charla terminó, pero hubo un problema para guardarla.';
       otraHistoriaBtn.style.display = 'inline-block';
+      if (data.saved && sesionEsGuest) ctaCrearCuenta.hidden = false;
       if (data.saved) { cargarAportes(); }
     } else if (pausadoPorSalida) {
       recStatus.textContent = 'En pausa — presiona el círculo para seguir.';

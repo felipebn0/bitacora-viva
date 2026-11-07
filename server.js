@@ -6583,6 +6583,9 @@ function instruccionTratamientoDeTercero(nombre, tratamiento) {
   return `\n\nTRATO: no sabes si ${nombre} es hombre o mujer. No lo asumas por el nombre: habla de esa persona sin marcar género (usa su nombre o "esa persona") hasta que el familiar lo deje claro.`;
 }
 
+// Frase final para quien colaboró sin cuenta (enlace abierto o personal): la voz de Eco la dice, y mieco.app se lee bien en voz alta.
+const CIERRE_COMERCIAL_INVITADO = 'Y si quieres empezar a contar tus propias historias, o las de tus familiares, ingresa a mieco.app. Aún es gratis.';
+
 function buildAporteSystemPrompt(ownerNombre, colaboradorNombre, protagonista, parentescoConocido, ownerTratamiento) {
   const nombre = ownerNombre || 'esta persona';
   const esOtroProtagonista = protagonista && protagonista !== colaboradorNombre;
@@ -6617,7 +6620,7 @@ Cuando hagas esa pregunta de aclaración, termina ese mensaje, y solo ese, con l
 
 Esto es lo que más se rompe en la práctica, presta especial atención: en cuanto la persona te responda esa pregunta de aclaración (el dato que faltaba), ese dato queda completo — NO importa qué tan corta sea su respuesta ("su nieta", "en el 2020"). El turno siguiente, sin excepción, tiene que ir DIRECTO a la pregunta de "¿algo más?" — nunca a otra pregunta de seguimiento sobre la historia ("y qué más pasó ese día", "cuéntame más de eso"), aunque la respuesta a la aclaración te haya dejado con ganas de saber más. Tratar esa respuesta breve como si fuera una nueva entrada de historia que hay que profundizar es exactamente el error a evitar aquí.
 
-Importante — esto es lo que más se rompe, presta mucha atención: en cuanto tengas parentesco, referencia temporal e historia (con lo mínimo indicado arriba, sin importar qué tan corta o simple sea la historia), NO sigas pidiendo más detalle bajo NINGÚN pretexto ("cuéntame más", "¿cómo fue todo?", "¿qué pasó después?" quedan PROHIBIDAS en este punto), NO hagas preguntas de color, NO profundices por curiosidad — pasa DIRECTO a preguntarle con calidez si hay algo más que quiera agregar a esa historia. Esa pregunta de "¿algo más?" reemplaza cualquier otra pregunta de seguimiento, sin excepción. Si dice que no, o algo equivalente, cierra la charla agradeciéndole con calidez y avisando que la historia quedó guardada. Termina ese mensaje, y solo ese, con la palabra exacta [FIN] en una línea aparte. Nunca uses [FIN] excepto en ese cierre.` + REGLA_AYUDA_EN_CRISIS + instruccionTratamientoDeTercero(nombre, ownerTratamiento) + REGLA_DATOS_NO_CONFIABLES + REGLA_ESPANOL_COLOMBIANO;
+Importante — esto es lo que más se rompe, presta mucha atención: en cuanto tengas parentesco, referencia temporal e historia (con lo mínimo indicado arriba, sin importar qué tan corta o simple sea la historia), NO sigas pidiendo más detalle bajo NINGÚN pretexto ("cuéntame más", "¿cómo fue todo?", "¿qué pasó después?" quedan PROHIBIDAS en este punto), NO hagas preguntas de color, NO profundices por curiosidad — pasa DIRECTO a preguntarle con calidez si hay algo más que quiera agregar a esa historia. Esa pregunta de "¿algo más?" reemplaza cualquier otra pregunta de seguimiento, sin excepción. Si dice que no, o algo equivalente, cierra la charla agradeciéndole con calidez por colaborar con la historia de ${nombre} y avisando que la historia quedó guardada. Termina ese mensaje, y solo ese, con la palabra exacta [FIN] en una línea aparte. Nunca uses [FIN] excepto en ese cierre.` + REGLA_AYUDA_EN_CRISIS + instruccionTratamientoDeTercero(nombre, ownerTratamiento) + REGLA_DATOS_NO_CONFIABLES + REGLA_ESPANOL_COLOMBIANO;
 }
 
 const APORTE_EXTRACT_TOOL = [{
@@ -6938,7 +6941,10 @@ app.post('/api/contribute-chat', requireAuth, rateLimit, async (req, res) => {
       draftId = await guardarBorradorAporte(ownerId, draftId, messages, audioUrls, req.userId, colaboradorNombre, protagonista, mediaUrls, req.guestId || null);
     }
 
-    res.json({ message: text, done, saved, needsBasicInfo, draftId, ayuda });
+    // Al invitado sin cuenta, al terminar, se le invita a contar sus propias historias. Va solo en lo que ve y oye, nunca en
+    // la conversación guardada (esa ya se guardó arriba con el texto original).
+    const mensaje = done && req.isGuest ? `${text.trimEnd()} ${CIERRE_COMERCIAL_INVITADO}` : text;
+    res.json({ message: mensaje, done, saved, needsBasicInfo, draftId, ayuda });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo continuar la charla.' });
