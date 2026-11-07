@@ -19,6 +19,7 @@
     "test:csp-blob": "node test/csp-blob.playwright.js",
     "test:admin-paginas": "node test/admin-paginas.playwright.js",
     "test:enlace-abierto": "node test/enlace-abierto.playwright.js",
+    "test:feedback-popup": "node test/feedback-popup.playwright.js",
     "test:perfilar-regalo": "node test/perfilar-regalo.playwright.js",
     "test:ingreso": "node test/ingreso.playwright.js",
     "test:pantalla": "node test/pantalla-principal.playwright.js",

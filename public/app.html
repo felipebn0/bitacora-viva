@@ -1239,7 +1239,7 @@
           <div class="state-label" id="stateLabel" role="status" aria-live="polite" aria-atomic="true"></div>
           <!-- Feedback de sesión: aparece al terminar una charla guardada -->
           <!-- Feedback popup: se muestra como overlay al terminar una sesión -->
-          <div id="sessionFeedback" hidden style="display:none"></div>
+          <div id="sessionFeedback" hidden></div>
           <!-- Medio #7: indicador de nivel de micrófono — solo visible al escuchar -->
           <div class="mic-level" id="micLevel" aria-hidden="true" hidden>
             <span></span><span></span><span></span><span></span><span></span>
@@ -2469,6 +2469,7 @@
 .fb-icon{margin-bottom:1rem;font-size:1.6rem}
 .fb-question{font-size:1.1rem;margin:0 0 1.4rem;color:var(--text,#3B3226);font-weight:600;line-height:1.35;letter-spacing:-.01em}
 .fb-btns{display:flex;gap:.6rem;justify-content:center;margin-bottom:.2rem}
+.fb-btns[hidden]{display:none}
 .fb-btn{flex:1;padding:.8rem .4rem .7rem;border-radius:16px;border:2px solid rgba(143,90,32,.15);background:rgba(255,255,255,.6);color:var(--text,#3B3226);cursor:pointer;font-size:.85rem;font-family:inherit;transition:all .2s;-webkit-tap-highlight-color:transparent}
 .fb-btn:hover{background:rgba(143,90,32,.08);border-color:rgba(143,90,32,.3)}
 .fb-btn:active{transform:scale(.96)}
