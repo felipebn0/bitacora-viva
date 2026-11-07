@@ -99,6 +99,7 @@
      aunque es la misma app para quien colabora. */
   .login-field { display: flex; flex-direction: column; gap: 5px; }
   .login-field label { font-size: 0.85rem; font-weight: 700; color: var(--ink-soft); }
+  .login-field[hidden] { display: none; }
   .login input {
     border: 1px solid var(--eco-edge,#dadaca); border-radius: 10px; padding: 12px 14px;
     font-family: var(--font-body); font-size: 1rem; background: #fff; color: var(--ink);
@@ -377,6 +378,14 @@
     <p class="guest-owner-name" id="guestHola"></p>
     <p class="error" id="guestError" role="alert"></p>
     <p class="sub pc-1015cafb" id="guestNotice"></p>
+    <div class="login-field" id="guestNombreRow" hidden>
+      <label for="guestNombre">Nombre</label>
+      <input type="text" id="guestNombre" autocomplete="given-name" placeholder="Tu nombre" maxlength="40">
+    </div>
+    <div class="login-field" id="guestApellidoRow" hidden>
+      <label for="guestApellido">Apellido</label>
+      <input type="text" id="guestApellido" autocomplete="family-name" placeholder="Tu apellido" maxlength="40">
+    </div>
     <div class="login-check" id="guestTermsRow" hidden>
       <input type="checkbox" id="guestTerms">
       <label for="guestTerms">Acepto los <a href="/terminos.html" target="_blank" rel="noopener">Términos y Condiciones</a> y la <a href="/privacidad.html" target="_blank" rel="noopener">Política de Privacidad</a>: lo que aporte se guarda en la bitácora de quien me invitó.</label>
@@ -525,6 +534,10 @@
   const guestStartBtn = document.getElementById('guestStartBtn');
   const guestTermsRow = document.getElementById('guestTermsRow');
   const guestTerms = document.getElementById('guestTerms');
+  const guestNombreRow = document.getElementById('guestNombreRow');
+  const guestApellidoRow = document.getElementById('guestApellidoRow');
+  const guestNombre = document.getElementById('guestNombre');
+  const guestApellido = document.getElementById('guestApellido');
   const guestError = document.getElementById('guestError');
   const hubScreen = document.getElementById('hubScreen');
   const hubCode = document.getElementById('hubCode');
@@ -553,7 +566,10 @@
   let activeOwnerId = new URLSearchParams(window.location.search).get('owner');
   // Entrada de invitado sin cuenta — llega con ?codigo=XXXXXXXX (link de
   // WhatsApp compartido desde app.html, ver /api/guest-start).
-  const codigoInvitado = new URLSearchParams(window.location.search).get('codigo');
+  // ?abierto=<código> es el enlace abierto del dueño (nombre y apellido, sin cuenta ni celular). Con una cuenta ya iniciada
+  // se comporta como ?codigo= (la cuenta se suma como colaboradora).
+  const codigoAbierto = new URLSearchParams(window.location.search).get('abierto');
+  const codigoInvitado = new URLSearchParams(window.location.search).get('codigo') || codigoAbierto;
   // Enlace PERSONAL de invitado (SEC-002A): lo crea el dueño con el nombre y
   // el celular de cada persona (ver /api/invitaciones) y es lo único que deja
   // entrar sin cuenta.
@@ -722,7 +738,25 @@
     guestStartBtn.style.display = 'none';
     guestSinCuenta.style.display = 'none';
     guestTermsRow.hidden = true;
+    guestNombreRow.hidden = true;
+    guestApellidoRow.hidden = true;
+    guestStartBtn.textContent = 'Empezar';
     try {
+      if (codigoAbierto && !invitacionUrl) {
+        const resp = await fetch('/api/guest-code-info?codigo=' + encodeURIComponent(codigoAbierto));
+        const data = await resp.json();
+        if (!resp.ok) { guestError.textContent = data.error || 'Ese enlace ya no es válido — pídele a quien te invitó que te mande uno nuevo.'; return; }
+        guestOwnerName.textContent = data.ownerName;
+        guestNombreRow.hidden = false;
+        guestApellidoRow.hidden = false;
+        guestTermsRow.hidden = false;
+        guestStartBtn.textContent = 'Entrar a colaborar';
+        guestStartBtn.style.display = '';
+        guestSinCuenta.textContent = 'No necesitas crear cuenta ni clave. Solo tu nombre y apellido.';
+        guestSinCuenta.style.display = '';
+        guestNombre.focus();
+        return;
+      }
       if (invitacionUrl) {
         const resp = await fetch('/api/invitacion-info?invitacion=' + encodeURIComponent(invitacionUrl));
         const data = await resp.json();
@@ -757,7 +791,40 @@
     }
   }
 
+  async function doGuestAbierto() {
+    const nombre = guestNombre.value.trim();
+    const apellido = guestApellido.value.trim();
+    if (nombre.length < 2) { guestError.textContent = 'Escribe tu nombre.'; guestNombre.focus(); return; }
+    if (apellido.length < 2) { guestError.textContent = 'Escribe tu apellido.'; guestApellido.focus(); return; }
+    if (!guestTerms.checked) {
+      guestError.textContent = 'Para entrar, marca que aceptas los Términos y la Política de Privacidad.';
+      guestTerms.focus();
+      return;
+    }
+    guestStartBtn.disabled = true;
+    guestError.textContent = '';
+    try {
+      const resp = await fetch('/api/guest-abierto', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ codigo: codigoAbierto, nombre, apellido, acceptTerms: true }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        guestError.textContent = data.error || 'No se pudo entrar con ese enlace.';
+        guestStartBtn.disabled = false;
+        return;
+      }
+      // Sin el ?abierto= en la dirección, la recarga ya entra como invitado (con la sesión creada).
+      window.location.href = location.pathname;
+    } catch (e) {
+      guestError.textContent = 'Hubo un problema para conectar.';
+      guestStartBtn.disabled = false;
+    }
+  }
+
   async function doGuestStart() {
+    if (codigoAbierto && !invitacionUrl) { doGuestAbierto(); return; }
     if (!invitacionUrl) return;
     if (!guestTermsRow.hidden && !guestTerms.checked) {
       guestError.textContent = 'Para entrar, marca que aceptas los Términos y la Política de Privacidad.';
@@ -789,6 +856,7 @@
     }
   }
   guestStartBtn.addEventListener('click', doGuestStart);
+  [guestNombre, guestApellido].forEach((campo) => campo.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doGuestStart(); } }));
 
   // "¿Ya tienes cuenta? Inicia sesión" desde la pantalla de invitado
   // (pedido de Felipe, 2026-09-10): cambia a la pantalla de login (que ya
@@ -1393,7 +1461,7 @@
   // largo en app.html): cortaba pausas normales de alguien pensando a
   // mitad de frase. Subido a 2200ms, y bajado a 2000ms el 2026-10-08
   // (pedido de Felipe, ver app.html).
-  const SILENCE_MS = 2500;
+  const SILENCE_MS = 2000;
   // Subido de 0.02: con ruido de fondo, el volumen ambiente solía superar
   // 0.02 seguido y la detección de silencio no llegaba a cumplirse nunca
   // — se quedaba escuchando sin parar aunque ya hubiera terminado de

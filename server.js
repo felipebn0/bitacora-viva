@@ -945,6 +945,8 @@ function ensureSchema() {
       sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_invitados_codigo ON invitados(codigo)`,
       sql`ALTER TABLE invitados ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ`,
       sql`ALTER TABLE invitados ADD COLUMN IF NOT EXISTS terms_version TEXT`,
+      // origen = 'abierto': entró por el enlace abierto del dueño (solo nombre y apellido, sin celular). Cada visita tiene su propia fila.
+      sql`ALTER TABLE invitados ADD COLUMN IF NOT EXISTS origen TEXT`,
       // Registro de cada aceptación de Términos y Política de Privacidad
       // (cuenta, invitado con enlace personal o narrador de un subperfil).
       // Es la prueba de la autorización: no lleva nombre, correo ni teléfono,
@@ -2929,6 +2931,8 @@ app.post('/api/invite-code/regenerate', requireAuth, rateLimit, async (req, res)
     }
     await ensureSchema();
     const code = await asignarInviteCodeActivo(req.profileUserId, req.bitacoraEsPropia);
+    // El enlace abierto usa este mismo código: al cambiarlo, también se corta a quienes entraron por el enlace anterior.
+    await sql`UPDATE invitados SET revocado_at = now() WHERE owner_id = ${req.profileUserId} AND origen = 'abierto' AND revocado_at IS NULL`;
     res.json({ code });
   } catch (err) {
     console.error(err);
@@ -3011,6 +3015,52 @@ async function buscarDuenoPorInviteCode(cleanCode) {
   if (enBitacoras.length) return { id: enBitacoras[0].id, nombre: enBitacoras[0].nombre, esBitacora: true };
   return null;
 }
+
+// Enlace abierto (estrategia de lanzamiento): cualquiera que abra colaborar.html?abierto=<código> escribe su nombre y
+// apellido (los dos obligatorios), acepta los Términos y entra a contar un recuerdo en esa bitácora, sin cuenta ni clave.
+// A diferencia del viejo enlace familiar (que se quitó porque dos personas con el mismo nombre se veían los aportes),
+// cada visita crea su PROPIA fila en "invitados": los aportes quedan atados a ese id, no al nombre, y no se mezclan.
+// Cambiar el código del dueño (POST /api/invite-code/regenerate) corta el enlace y a quienes entraron por él.
+const NOMBRE_PERSONA_RE = /^[\p{L}][\p{L} '’.-]{1,39}$/u;
+const ENTRADAS_ABIERTAS_POR_DIA = 300;
+function validarNombrePersona(texto) {
+  const limpio = String(texto || '').trim().replace(/\s+/g, ' ');
+  return NOMBRE_PERSONA_RE.test(limpio) ? limpio : null;
+}
+
+app.post('/api/guest-abierto', rateLimit, async (req, res) => {
+  try {
+    const cleanCode = String((req.body && req.body.codigo) || '').trim().toUpperCase().slice(0, 32);
+    if (!cleanCode) return res.status(400).json({ error: 'Falta el enlace.' });
+    const nombre = validarNombrePersona(req.body && req.body.nombre);
+    const apellido = validarNombrePersona(req.body && req.body.apellido);
+    if (!nombre || !apellido) return res.status(400).json({ error: 'Escribe tu nombre y tu apellido (solo letras).', necesitaNombre: true });
+    if (!req.body || req.body.acceptTerms !== true) return res.status(400).json({ error: MENSAJE_TERMINOS_ENTRADA, necesitaTerminos: true });
+    const limite = await limitePorClave('abierto:ip:' + (req.ip || 'desconocida'), 60 * 60 * 1000, 40);
+    if (!limite.permitido) {
+      res.setHeader('Retry-After', String(limite.retryAfterSegundos));
+      return res.status(429).json({ error: 'Demasiados intentos desde esta conexión. Espera un rato e intenta de nuevo.' });
+    }
+    await ensureSchema();
+    const owner = await buscarDuenoPorInviteCode(cleanCode);
+    if (!owner) return res.status(404).json({ error: 'Ese enlace ya no es válido — pídele a quien te invitó que te mande uno nuevo.' });
+    const recientes = await sql`SELECT COUNT(*)::int AS n FROM invitados WHERE owner_id = ${owner.id} AND origen = 'abierto' AND created_at > now() - interval '1 day'`;
+    if (recientes[0] && recientes[0].n >= ENTRADAS_ABIERTAS_POR_DIA) return res.status(429).json({ error: 'Este enlace recibió muchas visitas hoy. Intenta de nuevo mañana.' });
+
+    const id = crypto.randomBytes(12).toString('hex');
+    const guestName = capitalizarNombre(`${nombre} ${apellido}`);
+    await sql`INSERT INTO invitados (id, owner_id, owner_es_bitacora, nombre, telefono, codigo, creado_por, origen, terms_accepted_at, terms_version, ultimo_ingreso)
+      VALUES (${id}, ${owner.id}, ${!!owner.esBitacora}, ${guestName}, ${'abierto:' + id}, ${nuevoCodigoInvitacion()}, NULL, 'abierto', now(), ${TERMS_VERSION}, now())`;
+    await registrarAceptacion('invitado', id, owner.id, null);
+    const token = signSession({ guest: true, ownerId: owner.id, ownerEsBitacora: !!owner.esBitacora, guestName, guestId: id });
+    const secure = cookieEsSegura(req) ? '; Secure' : '';
+    res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${token}; Max-Age=${SESSION_MAX_AGE}; Path=/; HttpOnly; SameSite=Lax${secure}`);
+    res.json({ ok: true, ownerName: capitalizarNombre(owner.nombre), guestName });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo entrar con ese enlace.' });
+  }
+});
 
 app.get('/api/guest-code-info', rateLimit, async (req, res) => {
   try {
@@ -3136,7 +3186,7 @@ app.get('/api/invitaciones', requireAuth, bloquearColaborador, bloquearInvitado,
     if (!ownerId || !(await puedeAdministrarBitacora(ownerId, req))) return res.status(403).json({ error: 'No tienes acceso a esa bitácora.' });
     await ensureSchema();
     const esBitacora = ownerId !== req.userId;
-    const filas = await sql`SELECT id, nombre, telefono, codigo, ultimo_ingreso, revocado_at FROM invitados WHERE owner_id = ${ownerId} ORDER BY created_at ASC`;
+    const filas = await sql`SELECT id, nombre, telefono, codigo, ultimo_ingreso, revocado_at FROM invitados WHERE owner_id = ${ownerId} AND origen IS DISTINCT FROM 'abierto' ORDER BY created_at ASC`;
     const ownerNombre = await nombreDeLaBitacora(ownerId, esBitacora);
     res.json({ invitaciones: filas.map((f) => datosDeInvitacion(req, f, ownerNombre)) });
   } catch (err) {

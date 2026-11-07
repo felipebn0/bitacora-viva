@@ -250,7 +250,7 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
 
   // --- Respuesta especulativa (2026-10-08) ---
   ok(/const MAX_TURN_MS = 180 \* 1000;/.test(app_) && /const MAX_TURN_MS = 180 \* 1000;/.test(colab), 'una persona puede hablar 3 minutos de corrido antes de que se corte el turno (app y colaborar)');
-  ok(/const ESPECULAR_MS = 900;/.test(app_) && /const SILENCE_MS = 2500;/.test(app_), 'app: se especula a los 900 ms de silencio y se cierra a los 2500 ms');
+  ok(/const ESPECULAR_MS = 900;/.test(app_) && /const SILENCE_MS = 2000;/.test(app_) && /const SILENCE_MS = 2000;/.test(colab), 'app y colaborar: se especula a los 900 ms de silencio y se cierra a los 2000 ms');
   ok(/const UMBRAL_SONIDO_ESPECULACION = 0\.015;/.test(app_) && /especulacion\.sonidoDespues = true;/.test(app_) && /!especulacion\.sonidoDespues \? especulacion : null/.test(app_), 'app: si hubo sonido (aunque bajito) después de la pausa, la respuesta adelantada se descarta y se transcribe todo el audio');
   ok(/if \(data\.done \|\| finPedido\)/.test(app_) && /finPedido = true;/.test(app_), 'app: el botón Fin termina la charla aunque la IA no ponga [FIN]');
   ok(/const SILENCIO_INICIAL_MS = 8000;/.test(app_) && /const esperaInicial = !huboVoz && finalizacionesVacias === 0;/.test(app_), 'app: antes de la primera palabra hay 8 s para pensar, solo en el primer intento del turno (los reintentos vuelven a 2 s)');
