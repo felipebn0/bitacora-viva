@@ -101,7 +101,7 @@ const historial = [
   ok(r.status === 200 && r.json.done === true && !/mieco\.app|gratis/i.test(r.json.message), 'quien ya tiene cuenta no recibe la invitación comercial');
 
   const colab = require('fs').readFileSync(path.join(__dirname, '..', 'public', 'colaborar.html'), 'utf8');
-  ok(/id="ctaCrearCuenta" href="\/#registro" hidden/.test(colab) && /data\.saved && sesionEsGuest\) ctaCrearCuenta\.hidden = false/.test(colab), 'al terminar, el invitado ve un botón para empezar a contar sus historias (apunta al registro)');
+  ok(/id="ctaCrearCuenta" href="\/\?desde=colaboracion#registro" hidden/.test(colab) && /data\.saved && sesionEsGuest\) ctaCrearCuenta\.hidden = false/.test(colab), 'al terminar, el invitado ve un botón para empezar a contar sus historias (apunta al registro)');
   ok(/ctaCrearCuenta\.hidden = true;/.test(colab), 'el botón se oculta de nuevo al empezar otra historia');
 
   server.close();

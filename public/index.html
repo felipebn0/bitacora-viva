@@ -6,6 +6,7 @@
   <title>Eco — Historias que siguen vivas</title>
   <meta name="description" content="Conserva las historias, la voz y los recuerdos de tu familia en un lugar al que puedes volver a escuchar, consultar y compartir. Crea tu cuenta gratis." />
   <link rel="canonical" href="https://mieco.app/" />
+  <script src="/eco-origen.js?v=1" defer></script>
   <meta name="theme-color" content="#F5EFE2" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Eco" />
@@ -1221,7 +1222,7 @@
         const response = await fetch('/api/signup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ idioma: document.getElementById('suIdioma').value, name, email, phone, tratamiento, password, inviteCode, accountType: modoColaborador ? 'collaborator' : 'owner', acceptTerms: true })
+          body: JSON.stringify({ idioma: document.getElementById('suIdioma').value, name, email, phone, tratamiento, password, inviteCode, origen: (window.ecoOrigen && window.ecoOrigen()) || null, accountType: modoColaborador ? 'collaborator' : 'owner', acceptTerms: true })
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {

@@ -114,6 +114,45 @@ const ok = (c, m) => { if (c) console.log('✓ ' + m); else { fallos++; console.
     await page.click('[data-view="whatsapp"]');
     ok(await page.isHidden('#ecoAbiertoUrl'), 'al elegir otra opción el enlace abierto se oculta');
   }
+  console.log('--- medición ---');
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1000, height: 900 } });
+    const page = await ctx.newPage();
+    page.on('pageerror', (e) => errores.push(e.message));
+    await page.route('**/api/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+    await page.goto(base + '/?desde=colaboracion#registro');
+    ok(await page.evaluate(() => window.ecoOrigen()) === 'colaboracion', 'la landing recuerda de dónde llegó la persona (desde=colaboracion)');
+    await page.goto(base + '/?desde=%3Cscript%3E');
+    ok(await page.evaluate(() => window.ecoOrigen()) === 'colaboracion', 'una etiqueta con caracteres raros no pisa la guardada');
+  }
+  {
+    const page = await (await browser.newContext({ viewport: { width: 1100, height: 900 } })).newPage();
+    page.on('pageerror', (e) => errores.push(e.message));
+    let consulta = null;
+    await page.route('**/api/**', (route) => {
+      const u = new URL(route.request().url());
+      const json = (o, st = 200) => route.fulfill({ status: st, contentType: 'application/json', body: JSON.stringify(o) });
+      if (u.pathname === '/api/me') return json({ isAdmin: true });
+      if (u.pathname === '/api/admin/enlace-abierto') {
+        consulta = u.search;
+        return json({ entraron: 12, empezaron: 7, terminaron: 4, cuentasNuevas: 2, ultimos: [
+          { id: 'a', nombre: 'Ana Gómez', creado: '2026-11-07T15:00:00Z', empezo: true, termino: true, cortado: false },
+          { id: 'b', nombre: 'Luis <b>Pérez</b>', creado: '2026-11-07T14:00:00Z', empezo: true, termino: false, cortado: false },
+          { id: 'c', nombre: 'Sara Ruiz', creado: '2026-11-07T13:00:00Z', empezo: false, termino: false, cortado: true },
+        ] });
+      }
+      return json({}, 404);
+    });
+    await page.goto(base + '/admin.html');
+    await page.waitForSelector('#enlaceWrap .stat-card');
+    const cartas = await page.locator('#enlaceWrap .stat-card').allTextContents();
+    ok(cartas.length === 4 && /Entraron\s*12/.test(cartas[0]) && /Empezaron a contar\s*7/.test(cartas[1]) && /Terminaron un recuerdo\s*4/.test(cartas[2]) && /Cuentas nuevas desde ahí\s*2/.test(cartas[3]), 'la tarjeta muestra entraron, empezaron, terminaron y cuentas nuevas');
+    ok(/58% de quienes entraron/.test(cartas[1]) && /33% de quienes entraron/.test(cartas[2]) && /50% de quienes terminaron/.test(cartas[3]), 'y los porcentajes de cada paso');
+    const filas = await page.locator('#enlaceWrap tbody tr').allTextContents();
+    ok(filas.length === 3 && /Terminó un recuerdo/.test(filas[0]) && /Empezó, no terminó/.test(filas[1]) && /Solo entró · acceso cortado/.test(filas[2]), 'la lista dice qué hizo cada uno');
+    ok(await page.locator('#enlaceWrap b').count() === 0, 'un nombre con HTML se ve como texto');
+    ok(/start=\d{4}-\d{2}-\d{2}&end=\d{4}-\d{2}-\d{2}&tz=/.test(consulta || ''), 'pide las cifras del mismo período que el resto del panel');
+  }
   ok(errores.length === 0, 'sin errores de JavaScript' + (errores.length ? ': ' + errores.join(' | ') : ''));
   await browser.close(); server.close();
   console.log(fallos ? `\n${fallos} fallaron` : '\nTodo bien');

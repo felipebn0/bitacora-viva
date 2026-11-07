@@ -1551,6 +1551,8 @@ function ensureSchema() {
       sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT false`,
       // primer_uso_avisado: false solo en las cuentas nuevas hasta su primera charla (ahí les suena el celular a los admins); las que ya existían quedan en true.
       sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS primer_uso_avisado BOOLEAN NOT NULL DEFAULT true`,
+      // origen_registro: de dónde llegó la persona al registro (por ejemplo 'colaboracion' = el botón del cierre de un aporte de invitado).
+      sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS origen_registro TEXT`,
 
       // Consumo medido de servicios pagos (Claude + voz), una fila por
       // llamada — alimenta el reporte de costos en /admin.html. "user_id"
@@ -3994,7 +3996,7 @@ app.post('/api/register', rateLimit, async (req, res) => {
 // funcionando sin tocarlo.
 app.post('/api/signup', rateLimit, async (req, res) => {
   try {
-    const { name, email, phone, password, inviteCode, accountType, acceptTerms, tratamiento, idioma } = req.body || {};
+    const { name, email, phone, password, inviteCode, accountType, acceptTerms, tratamiento, idioma, origen } = req.body || {};
     const idiomaCuenta = String(idioma || '').toLowerCase() === 'en' ? 'en' : 'es';
     if (acceptTerms !== true) {
       return res.status(400).json({ error: 'Para crear tu cuenta tienes que aceptar los Términos y la Política de Privacidad.' });
@@ -4056,6 +4058,11 @@ app.post('/api/signup', rateLimit, async (req, res) => {
       VALUES (${cleanEmail}, ${cleanName}, ${cleanEmail}, ${cleanPhone}, ${hash}, ${ownerUserId}, ${signupVariant}, now(), ${TERMS_VERSION}, ${!!ownerUserId}, ${tratamientoValido(tratamiento)}, ${idiomaCuenta})
       RETURNING id, username, token_version
     `;
+    // De dónde llegó al registro (etiqueta corta del enlace, ej. «colaboracion»): para medir qué estrategia trae cuentas.
+    const origenLimpio = typeof origen === 'string' && /^[a-z0-9_-]{1,30}$/i.test(origen) ? origen.toLowerCase() : null;
+    if (origenLimpio) {
+      try { await sql`UPDATE users SET origen_registro = ${origenLimpio} WHERE id = ${rows[0].id}`; } catch (err) { console.error('No se pudo guardar el origen del registro:', err.message); }
+    }
     await avisarAAdmins({
       title: 'Eco · nueva cuenta',
       body: cleanName + ' se registró' + (ownerUserId ? ' como colaboradora de una familia.' : ' en Eco.'),
@@ -9322,6 +9329,50 @@ app.get('/api/admin/crisis-avisos', requireAuth, requireAdmin, async (req, res) 
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudieron cargar los avisos.' });
+  }
+});
+
+// Panel: cuánta gente entra por el enlace abierto de invitar y qué hace (entró, empezó a contar, terminó un recuerdo), y
+// cuántas cuentas nuevas llegaron desde el botón del cierre de la colaboración (users.origen_registro = 'colaboracion').
+app.get('/api/admin/enlace-abierto', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await ensureSchema();
+    const tzMin = Number(req.query.tz);
+    const desfase = Number.isFinite(tzMin) ? Math.max(-840, Math.min(840, Math.round(tzMin))) * 60 * 1000 : 0;
+    const ahora = new Date();
+    let desde = new Date(ahora.getTime() - 30 * 24 * 60 * 60 * 1000);
+    let hasta = ahora;
+    if (req.query.start) { const d = new Date(req.query.start); if (!isNaN(d)) desde = new Date(d.getTime() + desfase); }
+    if (req.query.end) { const d = new Date(req.query.end); if (!isNaN(d)) hasta = new Date(d.getTime() + desfase + 24 * 60 * 60 * 1000 - 1); }
+    const a = desde.toISOString();
+    const b = hasta.toISOString();
+    const totales = await sql`
+      SELECT
+        (SELECT COUNT(*) FROM invitados WHERE origen = 'abierto' AND created_at >= ${a} AND created_at <= ${b})::int AS entraron,
+        (SELECT COUNT(DISTINCT i.id) FROM invitados i JOIN family_notes n ON n.guest_id = i.id
+           WHERE i.origen = 'abierto' AND i.created_at >= ${a} AND i.created_at <= ${b})::int AS empezaron,
+        (SELECT COUNT(DISTINCT i.id) FROM invitados i JOIN family_notes n ON n.guest_id = i.id
+           WHERE i.origen = 'abierto' AND n.en_progreso = false AND i.created_at >= ${a} AND i.created_at <= ${b})::int AS terminaron,
+        (SELECT COUNT(*) FROM users WHERE origen_registro = 'colaboracion' AND created_at >= ${a} AND created_at <= ${b})::int AS cuentas_nuevas`;
+    const ultimos = await sql`
+      SELECT i.id, i.nombre, i.created_at, i.revocado_at,
+        EXISTS (SELECT 1 FROM family_notes n WHERE n.guest_id = i.id) AS empezo,
+        EXISTS (SELECT 1 FROM family_notes n WHERE n.guest_id = i.id AND n.en_progreso = false) AS termino
+      FROM invitados i
+      WHERE i.origen = 'abierto' AND i.created_at >= ${a} AND i.created_at <= ${b}
+      ORDER BY i.created_at DESC LIMIT 10`;
+    const t = totales[0] || {};
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      entraron: Number(t.entraron) || 0,
+      empezaron: Number(t.empezaron) || 0,
+      terminaron: Number(t.terminaron) || 0,
+      cuentasNuevas: Number(t.cuentas_nuevas) || 0,
+      ultimos: ultimos.map((u) => ({ id: u.id, nombre: u.nombre, creado: u.created_at, empezo: !!u.empezo, termino: !!u.termino, cortado: !!u.revocado_at })),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudieron cargar las cifras del enlace abierto.' });
   }
 });
 
