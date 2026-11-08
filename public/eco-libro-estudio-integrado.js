@@ -281,7 +281,7 @@ function marcarSeccionActual(){
 // los párrafos, igual que en el resto de Eco); al salir del texto el capítulo se vuelve a armar con sus párrafos y fotos.
 function editable(el,{ph='',unaLinea=false,alCambiar}={}){
  try{el.contentEditable='plaintext-only'}catch{el.contentEditable='true'}
- el.spellcheck=true;el.lang='es';el.dataset.ph=ph;el.setAttribute('role','textbox');el.setAttribute('aria-multiline',String(!unaLinea));
+ el.spellcheck=true;el.lang=document.documentElement.lang==='en'?'en':'es';el.dataset.ph=ph;el.setAttribute('role','textbox');el.setAttribute('aria-multiline',String(!unaLinea));
  el.addEventListener('input',()=>alCambiar(el));
  el.addEventListener('keydown',e=>{
   if(e.key!=='Enter'||e.isComposing)return;
