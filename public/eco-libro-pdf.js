@@ -60,7 +60,13 @@
   const limpio = (t) => String(t == null ? '' : t).replace(/\r/g, '').replace(/[​-‍﻿]/g, '');
 
   // datos: { titulo, subtitulo, dedicatoria, capitulos: [{ id, titulo, texto, fotos: [{ src, pie }] }] }; qr: { [idCapitulo]: { token } }
-  async function crear(datos, qr = {}) {
+  async function crear(crudos, qr = {}) {
+    // Cuenta en inglés: textos del PDF en inglés y los títulos que quedaron por defecto en español, también.
+    const EN = document.documentElement.lang === 'en';
+    const T = (es, en) => (EN ? en : es);
+    const DEF = { 'Mi historia familiar': 'My family story', 'Mi libro': 'My book', 'Recuerdos para las próximas generaciones': 'Memories for the generations to come', 'Capítulo': 'Chapter' };
+    const d = (t) => (EN && DEF[t]) || t;
+    const datos = { ...crudos, titulo: d(crudos.titulo), subtitulo: d(crudos.subtitulo), capitulos: (crudos.capitulos || []).map((c) => ({ ...c, titulo: d(c.titulo) })) };
     await cargarLibreria();
     const buffers = {};
     await Promise.all(Object.entries(FUENTES).map(async ([nombre, archivo]) => { buffers[nombre] = await bytesDe('/fonts/pdf/' + archivo); }));
@@ -69,7 +75,7 @@
 
     const doc = new window.PDFDocument({
       size: 'A4', margins: MARGEN, bufferPages: true, autoFirstPage: false,
-      info: { Title: limpio(datos.titulo) || 'Mi libro', Author: 'Eco', Creator: 'Eco', Producer: 'Eco' },
+      info: { Title: limpio(datos.titulo) || T('Mi libro', 'My book'), Author: 'Eco', Creator: 'Eco', Producer: 'Eco' },
     });
     Object.entries(buffers).forEach(([n, b]) => doc.registerFont(n, b));
     const partes = [];
@@ -81,8 +87,8 @@
     // — Portada
     doc.addPage();
     doc.lineWidth(9).strokeColor(COLOR.musgo).rect(22, 22, ANCHO - 44, ALTO - 44).stroke();
-    doc.font('SansNegrita').fontSize(9).fillColor(COLOR.musgo).text('ECO · BITÁCORA VIVA', 90, 290, { width: ANCHO - 180, align: 'center', characterSpacing: 2.4 });
-    doc.font('SerifSemi').fontSize(36).fillColor(COLOR.oscuro).text(limpio(datos.titulo) || 'Mi historia familiar', 90, doc.y + 34, { width: ANCHO - 180, align: 'center', lineGap: 2 });
+    doc.font('SansNegrita').fontSize(9).fillColor(COLOR.musgo).text(T('ECO · BITÁCORA VIVA', 'ECO · LIVING JOURNAL'), 90, 290, { width: ANCHO - 180, align: 'center', characterSpacing: 2.4 });
+    doc.font('SerifSemi').fontSize(36).fillColor(COLOR.oscuro).text(limpio(datos.titulo) || T('Mi historia familiar', 'My family story'), 90, doc.y + 34, { width: ANCHO - 180, align: 'center', lineGap: 2 });
     if (limpio(datos.subtitulo).trim()) doc.font('Serif').fontSize(16).fillColor(COLOR.suave).text(limpio(datos.subtitulo), 90, doc.y + 14, { width: ANCHO - 180, align: 'center' });
     const yAdorno = Math.min(doc.y + 64, ALTO - 120);
     doc.strokeColor(COLOR.musgo).lineWidth(1.2).moveTo(ANCHO / 2 - 34, yAdorno).lineTo(ANCHO / 2 - 8, yAdorno).stroke().moveTo(ANCHO / 2 + 8, yAdorno).lineTo(ANCHO / 2 + 34, yAdorno).stroke();
@@ -91,33 +97,33 @@
     // — Dedicatoria (solo si la hay)
     if (limpio(datos.dedicatoria).trim()) {
       doc.addPage();
-      doc.font('SansNegrita').fontSize(9).fillColor(COLOR.musgo).text('DEDICATORIA', MARGEN.left, 250, { width: AREA, align: 'center', characterSpacing: 2.2 });
+      doc.font('SansNegrita').fontSize(9).fillColor(COLOR.musgo).text(T('DEDICATORIA', 'DEDICATION'), MARGEN.left, 250, { width: AREA, align: 'center', characterSpacing: 2.2 });
       doc.font('SerifCursiva').fontSize(17).fillColor(COLOR.tinta).text(limpio(datos.dedicatoria), MARGEN.left + 30, doc.y + 24, { width: AREA - 60, align: 'center', lineGap: 5 });
     }
 
     // — Contenido, con enlaces a cada capítulo
     doc.addPage();
-    doc.font('SerifSemi').fontSize(28).fillColor(COLOR.oscuro).text('Contenido', MARGEN.left, MARGEN.top, { width: AREA });
+    doc.font('SerifSemi').fontSize(28).fillColor(COLOR.oscuro).text(T('Contenido', 'Contents'), MARGEN.left, MARGEN.top, { width: AREA });
     doc.moveDown(1.1);
     (datos.capitulos || []).forEach((c, i) => {
       if (!hayEspacio(34)) { doc.addPage(); doc.y = MARGEN.top; }
       const y = doc.y;
       doc.font('SansNegrita').fontSize(11).fillColor(COLOR.dorado).text(dosDigitos(i + 1), MARGEN.left, y + 3, { width: 30, lineBreak: false });
-      doc.font('Serif').fontSize(13.5).fillColor(COLOR.tinta).text(limpio(c.titulo) || 'Capítulo', MARGEN.left + 34, y, { width: AREA - 34, lineGap: 2 });
+      doc.font('Serif').fontSize(13.5).fillColor(COLOR.tinta).text(limpio(c.titulo) || T('Capítulo', 'Chapter'), MARGEN.left + 34, y, { width: AREA - 34, lineGap: 2 });
       const fin = doc.y + 7;
       doc.strokeColor(COLOR.linea).lineWidth(0.8).moveTo(MARGEN.left, fin).lineTo(ANCHO - MARGEN.right, fin).stroke();
       doc.goTo(MARGEN.left, y - 4, AREA, fin - y + 6, 'cap-' + (i + 1));
       doc.y = fin + 9;
     });
-    if (!(datos.capitulos || []).length) doc.font('Serif').fontSize(13).fillColor(COLOR.suave).text('Los capítulos aparecerán aquí cuando los generes.', MARGEN.left, doc.y, { width: AREA });
+    if (!(datos.capitulos || []).length) doc.font('Serif').fontSize(13).fillColor(COLOR.suave).text(T('Los capítulos aparecerán aquí cuando los generes.', 'Chapters will appear here once you generate them.'), MARGEN.left, doc.y, { width: AREA });
 
     // — Capítulos
     (datos.capitulos || []).forEach((c, i) => {
       doc.addPage();
       doc.addNamedDestination('cap-' + (i + 1));
-      doc.font('SansNegrita').fontSize(8.5).fillColor(COLOR.musgo).text('CAPÍTULO ' + dosDigitos(i + 1), MARGEN.left, MARGEN.top, { width: AREA, characterSpacing: 1.8 });
+      doc.font('SansNegrita').fontSize(8.5).fillColor(COLOR.musgo).text(T('CAPÍTULO ', 'CHAPTER ') + dosDigitos(i + 1), MARGEN.left, MARGEN.top, { width: AREA, characterSpacing: 1.8 });
       doc.moveDown(0.5);
-      doc.font('SerifSemi').fontSize(25).fillColor(COLOR.oscuro).text(limpio(c.titulo) || 'Capítulo', MARGEN.left, doc.y, { width: AREA, lineGap: 2 });
+      doc.font('SerifSemi').fontSize(25).fillColor(COLOR.oscuro).text(limpio(c.titulo) || T('Capítulo', 'Chapter'), MARGEN.left, doc.y, { width: AREA, lineGap: 2 });
       doc.moveDown(1.1);
 
       const pars = limpio(c.texto).split(/\n\s*\n/).map((t) => t.trim()).filter(Boolean);
@@ -150,8 +156,8 @@
         const y = doc.y + 6;
         doc.strokeColor(COLOR.linea).lineWidth(0.8).moveTo(MARGEN.left, y - 6).lineTo(ANCHO - MARGEN.right, y - 6).stroke();
         doc.image(png, MARGEN.left, y + 4, { width: 88, height: 88 });
-        doc.font('SansNegrita').fontSize(11).fillColor(COLOR.oscuro).text('Escucha la voz original', MARGEN.left + 104, y + 26, { width: AREA - 104 });
-        doc.font('Sans').fontSize(9.5).fillColor(COLOR.suave).text('Escanea con tu teléfono para escuchar la grabación.', MARGEN.left + 104, doc.y + 3, { width: AREA - 104 });
+        doc.font('SansNegrita').fontSize(11).fillColor(COLOR.oscuro).text(T('Escucha la voz original', 'Listen to the original voice'), MARGEN.left + 104, y + 26, { width: AREA - 104 });
+        doc.font('Sans').fontSize(9.5).fillColor(COLOR.suave).text(T('Escanea con tu teléfono para escuchar la grabación.', 'Scan with your phone to listen to the recording.'), MARGEN.left + 104, doc.y + 3, { width: AREA - 104 });
       }
     });
 

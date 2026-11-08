@@ -100,7 +100,8 @@
       titulo: String(estado.title || 'Mi historia familiar').trim(),
       subtitulo: String(estado.subtitle || '').trim(),
       dedicatoria: String(estado.dedication || '').trim(),
-      fecha: new Date().toLocaleDateString('es-CO', { month: 'long', year: 'numeric' }),
+      fecha: new Date().toLocaleDateString(document.documentElement.lang === 'en' ? 'en-US' : 'es-CO', { month: 'long', year: 'numeric' }),
+      idioma: document.documentElement.lang === 'en' ? 'en' : 'es',
       capitulos: lista,
     };
   }
@@ -108,7 +109,7 @@
   // Lo que se manda al enlace para compartir: el texto y la dirección de cada foto y audio (no los archivos, que ya están guardados).
   function datosParaEnlace(datos) {
     return {
-      titulo: datos.titulo, subtitulo: datos.subtitulo, dedicatoria: datos.dedicatoria, fecha: datos.fecha,
+      titulo: datos.titulo, subtitulo: datos.subtitulo, dedicatoria: datos.dedicatoria, fecha: datos.fecha, idioma: datos.idioma,
       capitulos: datos.capitulos.map((c) => ({ id: c.id, titulo: c.titulo, tema: c.tema, texto: c.texto, fotos: c.enlace.fotos, audios: c.enlace.audios })),
     };
   }
@@ -140,7 +141,7 @@
       avisar('Preparando tu libro: reduciendo las fotos y juntando los audios…');
       const [datos, fuentes, plantilla] = await Promise.all([
         armarDatos(), cssDeFuentes(),
-        fetch('/libro-digital-plantilla.txt').then((r) => (r.ok ? r.text() : Promise.reject(new Error('No se pudo preparar el libro. Intenta de nuevo.')))),
+        fetch('/libro-digital-plantilla.txt?v=2').then((r) => (r.ok ? r.text() : Promise.reject(new Error('No se pudo preparar el libro. Intenta de nuevo.')))),
       ]);
       const omitidos = datos.audiosOmitidos || 0;
       delete datos.audiosOmitidos;

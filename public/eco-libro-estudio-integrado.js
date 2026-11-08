@@ -8,7 +8,7 @@ const herramientasAbiertas=new Set();
 const byId=id=>document.getElementById(id);
 const node=(tag,cls,value)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(value!==undefined)e.textContent=value;return e};
 const plain=t=>String(t||'');
-function fresh(){return {title:'Mi historia familiar',subtitle:'Recuerdos para las próximas generaciones',dedication:'',order:[],edits:{},media:{},bookPhotos:{},qr:{},qrOff:{}}}
+function fresh(){const en=document.documentElement.lang==='en';return {title:en?'My family story':'Mi historia familiar',subtitle:en?'Memories for the generations to come':'Recuerdos para las próximas generaciones',dedication:'',order:[],edits:{},media:{},bookPhotos:{},qr:{},qrOff:{}}}
 function read(){try{const x=JSON.parse(localStorage.getItem(KEY)||'null');if(x&&typeof x==='object'){return {...fresh(),...x,edits:typeof x.edits==='object'&&x.edits?x.edits:{},order:Array.isArray(x.order)?x.order:[]}}}catch{}return fresh()}
 let version=0,saveTimer=null,saving=Promise.resolve(),dirty=false,serverReady=false,enlaceActivo=false,enlaceTimer=null,enlaceEnCurso=false;
 function persist(){

@@ -42,7 +42,7 @@ function fakeSql(strings, ...values) {
   if (text.includes('SELECT token FROM libros_compartidos WHERE owner_id')) { const e = enlaces.filter((x) => x.owner_id === values[0] && !x.revoked_at).pop(); return Promise.resolve(e ? [{ token: e.token }] : []); }
   if (text.includes('UPDATE libros_compartidos SET datos')) { const e = enlaces.find((x) => x.token === values[2] && x.owner_id === values[3]); if (e) { e.datos = values[0]; e.medios = values[1]; e.updated_at = new Date(); } return Promise.resolve([]); }
   if (text.includes('SELECT token,updated_at FROM libros_compartidos WHERE owner_id')) { const e = enlaces.filter((x) => x.owner_id === values[0] && !x.revoked_at).pop(); return Promise.resolve(e ? [{ token: e.token, updated_at: e.updated_at }] : []); }
-  if (text.includes('SELECT datos FROM libros_compartidos WHERE token')) { const e = enlaces.find((x) => x.token === values[0] && !x.revoked_at); return Promise.resolve(e ? [{ datos: e.datos }] : []); }
+  if (text.includes('SELECT lc.datos') && text.includes('FROM libros_compartidos lc')) { const e = enlaces.find((x) => x.token === values[0] && !x.revoked_at); return Promise.resolve(e ? [{ datos: e.datos, idioma: 'es' }] : []); }
   if (text.includes('SELECT owner_id,medios FROM libros_compartidos WHERE token')) { const e = enlaces.find((x) => x.token === values[0] && !x.revoked_at); return Promise.resolve(e ? [{ owner_id: e.owner_id, medios: e.medios }] : []); }
   if (text.includes('UPDATE libros_compartidos SET revoked_at')) { enlaces.filter((x) => x.owner_id === values[0] && !x.revoked_at).forEach((x) => { x.revoked_at = new Date(); }); return Promise.resolve([]); }
   return Promise.resolve([]);

@@ -1845,7 +1845,13 @@ window.ECO_EN = {
   "Escribe tu nombre.": "Type your first name.",
   "Escribe tu apellido.": "Type your last name.",
   "Tu apellido": "Your last name",
-  "Empezar a contar mis historias · aún es gratis": "Start telling my own stories · still free"
+  "Empezar a contar mis historias · aún es gratis": "Start telling my own stories · still free",
+  "Simular compra gratis": "Simulate the purchase for free",
+  "Para compartir el libro primero hay que completar la compra.": "To share the book you first need to complete the purchase.",
+  "El libro no tiene capítulos para compartir.": "The book has no chapters to share.",
+  "No se pudo preparar el enlace para compartir.": "We couldn't prepare the share link.",
+  "Todavía no hay historias detectadas en la charla para armar capítulos.": "There are no stories from your conversations yet to build chapters.",
+  "No se pudo agrupar el material todavía. Prueba de nuevo más tarde.": "We couldn't group the material yet. Try again later."
 };
 window.ECO_EN_PATRONES = {
   "Diario de {} · Eco": "{}'s journal · Eco",
