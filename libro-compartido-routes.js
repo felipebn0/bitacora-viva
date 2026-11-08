@@ -57,7 +57,7 @@ module.exports = (app, { sql, ensureSchema, requireAuth, bloquearColaborador, ra
       const audios = (Array.isArray(cap.audios) ? cap.audios : []).slice(0, 40).filter((a) => a && urlPropia(a.url)).map((a) => ({ a, destino: copias.get(a.url) || a.url })).filter((x) => urlPropia(x.destino)).map((x) => ({ m: posicion(x.destino), pregunta: texto(x.a.pregunta, 300) })).filter((a) => a.m >= 0);
       return { id: Number.isSafeInteger(cap.id) ? cap.id : null, titulo: texto(cap.titulo, 200).trim() || 'Capítulo', tema: texto(cap.tema, 120), texto: texto(cap.texto, 120000), fotos, audios };
     });
-    return { datos: { titulo: texto(crudo.titulo, 200).trim() || 'Mi libro', subtitulo: texto(crudo.subtitulo, 300), dedicatoria: texto(crudo.dedicatoria, 4000), fecha: texto(crudo.fecha, 40), capitulos }, medios };
+    return { datos: { titulo: texto(crudo.titulo, 200).trim() || 'Mi libro', subtitulo: texto(crudo.subtitulo, 300), dedicatoria: texto(crudo.dedicatoria, 4000), fecha: texto(crudo.fecha, 40), idioma: crudo.idioma === 'en' ? 'en' : 'es', capitulos }, medios };
   }
 
   // Crea el enlace del libro o, si ya hay uno activo, lo actualiza con el libro de ahora (mismo enlace).
@@ -157,9 +157,14 @@ module.exports = (app, { sql, ensureSchema, requireAuth, bloquearColaborador, ra
     if (!tokenValido(req.params.token)) return res.status(404).type('html').send(PAGINA_NO_DISPONIBLE);
     try {
       await ready();
-      const item = (await sql`SELECT datos FROM libros_compartidos WHERE token=${req.params.token} AND revoked_at IS NULL`)[0];
+      const item = (await sql`SELECT lc.datos, COALESCE(cuenta.idioma, admin.idioma) AS idioma FROM libros_compartidos lc
+        LEFT JOIN users cuenta ON cuenta.id = lc.owner_id
+        LEFT JOIN bitacoras b ON b.id = lc.owner_id LEFT JOIN users admin ON admin.id = b.admin_user_id
+        WHERE lc.token=${req.params.token} AND lc.revoked_at IS NULL`)[0];
       const datos = item && jsonDe(item.datos, null);
       if (!datos || !Array.isArray(datos.capitulos)) return res.status(404).type('html').send(PAGINA_NO_DISPONIBLE);
+      // Enlaces creados antes de guardar el idioma: se usa el de la cuenta.
+      if (datos.idioma !== 'en' && datos.idioma !== 'es') datos.idioma = item.idioma === 'en' ? 'en' : 'es';
       const medio = (m) => `/api/libro/${req.params.token}/m/${m}`;
       const paraLaPagina = { ...datos, capitulos: datos.capitulos.map((c) => ({ ...c, fotos: c.fotos.map((f) => ({ src: medio(f.m), pie: f.pie })), audios: c.audios.map((a) => ({ src: medio(a.m), pregunta: a.pregunta })) })) };
       res.type('html').send(Pagina.armar({ plantilla: plantilla(), fuentes: CSS_FUENTES, datos: paraLaPagina, enlace: true }));

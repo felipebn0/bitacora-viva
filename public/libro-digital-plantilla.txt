@@ -233,14 +233,30 @@ const reducir = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const smooth = (x) => x * x * (3 - 2 * x);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const fuente = (m) => m.src || (m.ref && (document.getElementById(m.ref) || {}).src) || '';
+// Idioma del libro: lo marca la cuenta al armarlo (o, en enlaces viejos, el servidor). Los títulos que la persona dejó
+// por defecto en español se muestran en inglés; lo que escribió ella se deja tal cual.
+const EN = DATOS.idioma === 'en';
+const TR = (es, en) => (EN ? en : es);
+if (EN) {
+  document.documentElement.lang = 'en';
+  const DEF = { 'Mi historia familiar': 'My family story', 'Mi libro': 'My book', 'Recuerdos para las próximas generaciones': 'Memories for the generations to come', 'Capítulo': 'Chapter' };
+  if (DEF[DATOS.titulo]) DATOS.titulo = DEF[DATOS.titulo];
+  if (DEF[DATOS.subtitulo]) DATOS.subtitulo = DEF[DATOS.subtitulo];
+  CAPS.forEach((c) => { if (DEF[c.titulo]) c.titulo = DEF[c.titulo]; });
+  const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  const m = /^(\S+) de (\d{4})$/i.exec(String(DATOS.fecha || '').trim());
+  if (m && MESES.includes(m[1].toLowerCase())) DATOS.fecha = new Date(+m[2], MESES.indexOf(m[1].toLowerCase()), 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  [['estante', 'Chapter shelf'], ['ant', 'Previous chapter'], ['sig', 'Next chapter'], ['dMenos', 'Smaller text'], ['dMas', 'Larger text']].forEach(([id, t]) => { const x = document.getElementById(id); if (x) x.setAttribute('aria-label', t); });
+  const v = document.getElementById('dCerrar'); if (v) v.textContent = 'BACK TO THE SHELF';
+}
 
-$('libroTitulo').textContent = DATOS.titulo || 'Mi libro';
-$('dLogoT').textContent = DATOS.titulo || 'Mi libro';
-$('libroSub').textContent = DATOS.subtitulo || 'Una historia contada con Eco';
-$('libroCuenta').textContent = N === 1 ? '1 CAPÍTULO' : N + ' CAPÍTULOS';
-$('pieIzq').textContent = DATOS.dedicatoria ? DATOS.dedicatoria : ('CREADO CON ECO' + (DATOS.fecha ? ' · ' + DATOS.fecha : ''));
-document.title = (DATOS.titulo || 'Mi libro') + ' · Eco';
-if (!N) { $('estante').remove(); const p = E('p', 'lbl', 'ESTE LIBRO TODAVÍA NO TIENE CAPÍTULOS'); p.style.cssText = 'position:fixed;left:0;right:0;top:50%;text-align:center'; document.body.appendChild(p); return; }
+$('libroTitulo').textContent = DATOS.titulo || TR('Mi libro', 'My book');
+$('dLogoT').textContent = DATOS.titulo || TR('Mi libro', 'My book');
+$('libroSub').textContent = DATOS.subtitulo || TR('Una historia contada con Eco', 'A story told with Eco');
+$('libroCuenta').textContent = N === 1 ? TR('1 CAPÍTULO', '1 CHAPTER') : N + TR(' CAPÍTULOS', ' CHAPTERS');
+$('pieIzq').textContent = DATOS.dedicatoria ? DATOS.dedicatoria : (TR('CREADO CON ECO', 'MADE WITH ECO') + (DATOS.fecha ? ' · ' + DATOS.fecha : ''));
+document.title = (DATOS.titulo || TR('Mi libro', 'My book')) + ' · Eco';
+if (!N) { $('estante').remove(); const p = E('p', 'lbl', TR('ESTE LIBRO TODAVÍA NO TIENE CAPÍTULOS', 'THIS BOOK HAS NO CHAPTERS YET')); p.style.cssText = 'position:fixed;left:0;right:0;top:50%;text-align:center'; document.body.appendChild(p); return; }
 
 /* Colores de cada libro, todos de la paleta de Eco */
 const PAL = [
@@ -280,7 +296,7 @@ for (let v = 0; v < TOTAL; v++) {
   const cv = E('div', 'face cv'); cv.style.setProperty('--bg', c.bg); cv.style.setProperty('--fg', c.fg);
   const foto = ch.fotos && ch.fotos[0] && fuente(ch.fotos[0]);
   if (foto) { cv.style.backgroundImage = 'url("' + foto + '")'; cv.appendChild(E('div', 'velo')); } else { cv.classList.add('sinfoto'); cv.insertAdjacentHTML('beforeend', ANILLOS({ fg: c.fg, ac: c.ac }).replace('class="anillos"', 'class="adorno"')); }
-  cv.appendChild(E('div', 'arriba', 'Capítulo ' + (i + 1)));
+  cv.appendChild(E('div', 'arriba', TR('Capítulo ', 'Chapter ') + (i + 1)));
   const largo = ch.titulo.length;
   cv.appendChild(E('div', 'nombre' + (largo > 44 ? ' muylargo' : largo > 22 ? ' largo' : ''), ch.titulo));
   if (ch.tema) cv.appendChild(E('div', 'tema', ch.tema));
@@ -320,7 +336,7 @@ function pie(i, dir, inmediato) {
       a.onfinish = () => x.remove();
     });
   }
-  $('indice').textContent = 'CAPÍTULO ' + (i + 1) + ' DE ' + N;
+  $('indice').textContent = TR('CAPÍTULO ', 'CHAPTER ') + (i + 1) + TR(' DE ', ' OF ') + N;
 }
 activo = indiceActivo(); pie(activo, 1, true);
 
@@ -439,7 +455,7 @@ function armarPoster(i) {
     [[320, 80, 150], [320, 80, 100], [320, 80, 52]].forEach(([x, y, r]) => g.appendChild(S('circle', { cx: x + 80, cy: y + 140, r, fill: 'none', stroke: c.fg, 'stroke-width': 18, 'stroke-opacity': .16, 'stroke-linecap': 'round', 'stroke-dasharray': (2 * Math.PI * r * .72) + ' 999' })));
   }
   const tx = (x, y, txt, attrs) => { const t = S('text', Object.assign({ x, y, fill: c.fg }, attrs)); t.textContent = txt; g.appendChild(t); return t; };
-  tx(42, 72, ('Capítulo ' + (i + 1)).toUpperCase(), { 'font-family': SANS, 'font-weight': 700, 'font-size': 15, 'letter-spacing': 3 });
+  tx(42, 72, (TR('Capítulo ', 'Chapter ') + (i + 1)).toUpperCase(), { 'font-family': SANS, 'font-weight': 700, 'font-size': 15, 'letter-spacing': 3 });
   const ls = lineas(ch.titulo, ch.titulo.length > 40 ? 16 : 13), tam = ch.titulo.length > 40 ? 44 : 58, base = 660 - (ls.length - 1) * tam * 1.04;
   ls.forEach((l, k) => tx(42, base + k * tam * 1.04, l, { 'font-family': SERIF, 'font-weight': 600, 'font-size': tam }));
   if (ch.tema) lineas(ch.tema, 34).slice(0, 2).forEach((l, k) => tx(42, 720 + k * 28 + (ls.length > 3 ? 20 : 0), l, { 'font-family': SERIF, 'font-style': 'italic', 'font-size': 22, 'fill-opacity': .92 }));
@@ -447,26 +463,26 @@ function armarPoster(i) {
 }
 function llenarDetalle(i) {
   const ch = CAPS[i];
-  $('dSub').textContent = (ch.tema || 'Capítulo ' + (i + 1)).toUpperCase();
+  $('dSub').textContent = (ch.tema || TR('Capítulo ', 'Chapter ') + (i + 1)).toUpperCase();
   $('dTitulo').textContent = ch.titulo;
   const palabras = (ch.texto || '').trim().split(/\s+/).filter(Boolean).length;
-  $('dMeta').textContent = 'CAPÍTULO ' + (i + 1) + ' DE ' + N + ' / ' + Math.max(1, Math.round(palabras / 180)) + ' MIN DE LECTURA';
+  $('dMeta').textContent = TR('CAPÍTULO ', 'CHAPTER ') + (i + 1) + TR(' DE ', ' OF ') + N + ' / ' + Math.max(1, Math.round(palabras / 180)) + TR(' MIN DE LECTURA', ' MIN READ');
   const cuerpo = $('dCuerpo'); cuerpo.replaceChildren();
   const pars = String(ch.texto || '').split(/\n\s*\n/).filter((p) => p.trim());
   const fotos = ch.fotos || [];
   const antes = new Map();
   fotos.forEach((f, k) => { const j = pars.length ? Math.min(pars.length - 1, Math.round((k * pars.length) / fotos.length)) : 0; if (!antes.has(j)) antes.set(j, []); antes.get(j).push(f); });
   pars.forEach((t, j) => {
-    (antes.get(j) || []).forEach((f) => { const fig = E('figure'); const im = E('img'); im.src = fuente(f); im.alt = f.pie || 'Foto familiar'; fig.appendChild(im); if (f.pie) fig.appendChild(E('figcaption', '', f.pie)); cuerpo.appendChild(fig); });
+    (antes.get(j) || []).forEach((f) => { const fig = E('figure'); const im = E('img'); im.src = fuente(f); im.alt = f.pie || TR('Foto familiar', 'Family photo'); fig.appendChild(im); if (f.pie) fig.appendChild(E('figcaption', '', f.pie)); cuerpo.appendChild(fig); });
     cuerpo.appendChild(E('p', '', t));
   });
-  if (!pars.length) fotos.forEach((f) => { const fig = E('figure'); const im = E('img'); im.src = fuente(f); im.alt = f.pie || 'Foto familiar'; fig.appendChild(im); cuerpo.appendChild(fig); });
+  if (!pars.length) fotos.forEach((f) => { const fig = E('figure'); const im = E('img'); im.src = fuente(f); im.alt = f.pie || TR('Foto familiar', 'Family photo'); fig.appendChild(im); cuerpo.appendChild(fig); });
   cuerpo.appendChild(E('div', 'd-fin', '✦'));
   $('dDed').textContent = i === 0 && DATOS.dedicatoria ? DATOS.dedicatoria : '';
   const zona = $('dAudios'); zona.replaceChildren();
   const aud = ch.audios || [];
   if (aud.length) {
-    zona.appendChild(E('h3', '', aud.length === 1 ? 'Escucha la historia original' : 'Escucha las historias originales'));
+    zona.appendChild(E('h3', '', aud.length === 1 ? TR('Escucha la historia original', 'Listen to the original story') : TR('Escucha las historias originales', 'Listen to the original stories')));
     aud.forEach((a) => { if (a.pregunta) zona.appendChild(E('p', '', a.pregunta)); const au = E('audio'); au.controls = true; au.preload = 'metadata'; au.src = fuente(a); zona.appendChild(au); });
   }
   $('dCol').scrollTop = 0;
