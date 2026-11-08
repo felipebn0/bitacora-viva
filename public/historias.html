@@ -103,8 +103,8 @@
 <script src="/eco-volver-unificado.js?v=1" defer></script>
 <link rel="stylesheet" href="/eco-identidad-global.css?v=1">
 <link rel="stylesheet" href="/eco-audio-player.css">
-<script src="/eco-idioma-en.js?v=3" defer></script>
-<script src="/eco-idioma.js?v=3" defer></script>
+<script src="/eco-idioma-en.js?v=4" defer></script>
+<script src="/eco-idioma.js?v=4" defer></script>
 </head>
 <body class="eco-brand-v1 eco-page-historias">
   <header>
@@ -251,7 +251,7 @@
 
         const body = document.createElement('div');
         body.className = 'item-body';
-        const fecha = new Date(s.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+        const fecha = new Date(s.created_at).toLocaleDateString(document.documentElement.lang === 'en' ? 'en-US' : 'es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
         // audio_url es el primero/único; audio_urls trae los que se
         // sumaron al unir 2 o más historias (ver /api/story-log/merge).
         const todosLosAudios = [s.audio_url, ...(Array.isArray(s.audio_urls) ? s.audio_urls : [])].filter(

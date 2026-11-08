@@ -860,8 +860,8 @@
 <link rel="stylesheet" href="/eco-bebe.css?v=17">
 <link rel="stylesheet" href="/eco-mascota.css?v=2">
 <link rel="stylesheet" href="/eco-crisis-banner.css?v=4">
-<script src="/eco-idioma-en.js?v=3" defer></script>
-<script src="/eco-idioma.js?v=3" defer></script>
+<script src="/eco-idioma-en.js?v=4" defer></script>
+<script src="/eco-idioma.js?v=4" defer></script>
 </head>
 <body class="eco-brand-v1 eco-page-inicio">
   <!-- Experimento UX (rama ux-pruebas, 2026-09-08): solo se ven en desktop
@@ -1718,7 +1718,7 @@
       if (!data.status || data.status === 'none') {
         umPlanEstado.textContent = 'Todavía usas la bitácora gratis — elige un plan cuando quieras.';
       } else {
-        const vence = data.current_period_end ? new Date(data.current_period_end).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' }) : null;
+        const vence = data.current_period_end ? new Date(data.current_period_end).toLocaleDateString(document.documentElement.lang === 'en' ? 'en-US' : 'es-CO', { day: 'numeric', month: 'long', year: 'numeric' }) : null;
         umPlanEstado.textContent = `${NOMBRE_ESTADO_PLAN[data.status] || data.status}${vence ? ' · vence el ' + vence : ''}`;
       }
       umPlanOpciones.style.display = 'block';
@@ -2665,7 +2665,7 @@
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return null;
     const r = new SR();
-    r.lang = 'es-CO';
+    r.lang = 'es-CO'; // se ajusta al idioma de la cuenta justo antes de cada start()
     r.continuous = true;
     r.interimResults = true;
     r.maxAlternatives = 1;
@@ -2801,7 +2801,9 @@
 
   function loadVoices() {
     const all = speechSynthesis.getVoices();
-    voices = all.filter((v) => v.lang && v.lang.toLowerCase().startsWith('es'));
+    // Cuenta en inglés: la voz de respaldo tiene que ser en inglés (leer inglés con voz en español no se entiende).
+    const prefijo = document.documentElement.lang === 'en' ? 'en' : 'es';
+    voices = all.filter((v) => v.lang && v.lang.toLowerCase().startsWith(prefijo));
     if (!voices.length) voices = all;
     if (!voices.length) return;
     // La voz del navegador solo se usa de respaldo cuando falla la voz buena; se
@@ -2870,8 +2872,10 @@
   function speakWithSystemVoice(text, onEnd) {
     if (!('speechSynthesis' in window)) { if (onEnd) onEnd(); return; }
     try {
+      // El idioma de la cuenta llega después de cargar: se vuelve a elegir la voz si no coincide.
+      if (!selectedVoice || !selectedVoice.lang.toLowerCase().startsWith(document.documentElement.lang === 'en' ? 'en' : 'es')) loadVoices();
       const utter = new SpeechSynthesisUtterance(text);
-      utter.lang = selectedVoice ? selectedVoice.lang : 'es-CO';
+      utter.lang = selectedVoice ? selectedVoice.lang : (document.documentElement.lang === 'en' ? 'en-US' : 'es-CO');
       if (selectedVoice) utter.voice = selectedVoice;
       utter.rate = 0.95;
       utter.onend = onEnd || null;
@@ -3861,8 +3865,9 @@
 
     history.push({
       role: 'user',
-      content:
-        '(La persona tocó el botón «Fin»: quiere terminar la charla por hoy. Tu mensaje es el cierre y tiene que dejar clarísimo que la charla termina. Empieza con una frase de cierre como «Perfecto, hemos llegado al fin por hoy», «Listo, llegamos al final de la charla de hoy» o «Muy bien, cerramos por hoy» (cambia la frase cada vez). Después, un mini resumen de 1 o 2 frases de lo que se habló hoy y las ganas de seguir charlando otro día. No hagas ninguna pregunta, no abras temas nuevos y no menciones historias, fotos ni mensajes de otros familiares. Si todavía no se habló de nada, solo despídete con calidez. Termina ese mensaje, y solo ese, con [FIN].)',
+      content: document.documentElement.lang === 'en'
+        ? '(The person tapped the «End» button: they want to finish the conversation for today. Your message is the closing one and must make it crystal clear that the conversation is ending. Start with a closing line such as «Perfect, we\'ve reached the end for today», «All right, that\'s the end of today\'s conversation» or «Very well, let\'s wrap up for today» (vary it each time). Then a short 1–2 sentence summary of what you talked about today and how much you look forward to talking again another day. Do not ask any question, do not open new topics and do not mention stories, photos or messages from other relatives. If nothing was discussed yet, just say goodbye warmly. End that message, and only that one, with [FIN]. Write it in English.)'
+        : '(La persona tocó el botón «Fin»: quiere terminar la charla por hoy. Tu mensaje es el cierre y tiene que dejar clarísimo que la charla termina. Empieza con una frase de cierre como «Perfecto, hemos llegado al fin por hoy», «Listo, llegamos al final de la charla de hoy» o «Muy bien, cerramos por hoy» (cambia la frase cada vez). Después, un mini resumen de 1 o 2 frases de lo que se habló hoy y las ganas de seguir charlando otro día. No hagas ninguna pregunta, no abras temas nuevos y no menciones historias, fotos ni mensajes de otros familiares. Si todavía no se habló de nada, solo despídete con calidez. Termina ese mensaje, y solo ese, con [FIN].)',
     });
 
     fetchNext();
@@ -4001,7 +4006,7 @@
     startVoiceActivityDetection();
     if (fallbackRecognition) {
       fallbackTranscript = '';
-      try { fallbackRecognition.start(); } catch (e) {}
+      try { fallbackRecognition.lang = (document.documentElement.lang === 'en' ? 'en-US' : 'es-CO'); fallbackRecognition.start(); } catch (e) {}
     }
   }
 
@@ -4577,7 +4582,7 @@
 })();
 </script>
 <script src="/eco-toast.js" defer></script>
-<script src="/eco-bebe-comun.js?v=7" defer></script>
+<script src="/eco-bebe-comun.js?v=8" defer></script>
 <script src="/eco-mascotas-inicio.js?v=5" defer></script>
 <script src="/eco-bebe.js?v=13" defer></script>
 <script src="/eco-crisis-banner.js?v=4" defer></script>

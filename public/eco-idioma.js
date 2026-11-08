@@ -10,7 +10,8 @@
   // llevan data-idioma-cuenta en <html>.
   const POR_CUENTA = document.documentElement.hasAttribute('data-idioma-cuenta');
   const CLAVE = POR_CUENTA ? 'eco-idioma-cuenta' : 'eco-idioma';
-  const ATRIBUTOS = ['alt', 'aria-label', 'placeholder', 'title'];
+  // data-ph: el texto guía de los campos editables del libro (se muestra con CSS content: attr(data-ph)).
+  const ATRIBUTOS = ['alt', 'aria-label', 'placeholder', 'title', 'data-ph'];
   // characterData: hay textos (el saludo de la pantalla principal, los contadores)
   // que cambian el contenido de un nodo que ya existe, sin agregar nodos nuevos.
   // attributes: el aria-label/placeholder que la app cambia después de cargar

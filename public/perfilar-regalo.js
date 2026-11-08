@@ -10,14 +10,17 @@
   const grabar = $('regaloGrabar'), guardar = $('regaloGuardar'), quitar = $('regaloQuitar');
   let existe = false, stream = null, rec = null, trozos = [], inicio = 0, tope = null, pendiente = null, urlLocal = null;
 
-  const fechaLarga = (iso) => { try { return new Date(iso).toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' }); } catch (e) { return ''; } };
+  const EN = () => document.documentElement.lang === 'en';
+  const fechaLarga = (iso) => { try { return new Date(iso).toLocaleDateString(EN() ? 'en-US' : 'es-CO', { year: 'numeric', month: 'long', day: 'numeric' }); } catch (e) { return ''; } };
   const aviso = (texto, error) => { msg.textContent = texto || ''; msg.classList.toggle('error', !!error); };
 
   function pintar(info) {
     existe = !!(info && info.existe);
     if (existe) {
       audio.src = info.url; audio.hidden = false;
-      estado.textContent = 'Mensaje guardado' + (info.grabadoEn ? ' el ' + fechaLarga(info.grabadoEn) : '') + '. Puedes escucharlo aquí.';
+      estado.textContent = EN()
+        ? 'Message saved' + (info.grabadoEn ? ' on ' + fechaLarga(info.grabadoEn) : '') + '. You can listen to it here.'
+        : 'Mensaje guardado' + (info.grabadoEn ? ' el ' + fechaLarga(info.grabadoEn) : '') + '. Puedes escucharlo aquí.';
     } else if (!pendiente) {
       audio.hidden = true; audio.removeAttribute('src');
       estado.textContent = 'Todavía no hay un mensaje.';

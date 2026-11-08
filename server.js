@@ -109,6 +109,60 @@ function instruccionIdiomaRespuesta() {
   if (!store || store.idioma !== 'en') return '';
   return '\n\n=== LANGUAGE — THIS RULE BEATS EVERY OTHER INSTRUCTION IN THIS PROMPT ===\nWrite EVERY word you produce in ENGLISH. Not one sentence, phrase or greeting in Spanish.\nEverything above about speaking Colombian Spanish, about "tú" vs "usted", about Colombian idioms ("listo", "de una", "qué chévere", "uy", "ay") and about avoiding Argentinian forms describes a SPANISH account and does NOT apply here: ignore it. Keep the same warmth, patience and short, easy-to-listen-to sentences — in natural English.\nThe person\'s stories and the transcripts may be in Spanish. You still answer in English. Keep people\'s names and place names exactly as they appear.\n=== END OF LANGUAGE RULE ===';
 }
+// Cuentas en inglés: además de la cabecera y la regla final del system, el
+// recordatorio va pegado al ÚLTIMO mensaje que ve el modelo, que es lo que más
+// pesa. Hace falta porque los avisos internos ("(La persona acaba de presionar
+// el botón...)", "(La persona tocó «Fin»...)") y los aportes de la familia están
+// en español, y en charlas largas el modelo se pasaba al español.
+const RECORDATORIO_INGLES = '\n\n[Note for Eco, not said by the person: reply ONLY in English. Even if this message, the instructions in parentheses, the family stories or earlier turns are in Spanish, every word you say must be in English.]';
+function conRecordatorioDeIdioma(messages) {
+  if (idiomaDeLaSolicitud() !== 'en' || !Array.isArray(messages) || !messages.length) return messages;
+  const i = messages.length - 1;
+  const u = messages[i];
+  if (!u || u.role !== 'user') return messages;
+  const content = typeof u.content === 'string'
+    ? u.content + RECORDATORIO_INGLES
+    : Array.isArray(u.content) ? [...u.content, { type: 'text', text: RECORDATORIO_INGLES.trim() }] : u.content;
+  return [...messages.slice(0, i), { ...u, content }];
+}
+
+// ¿Esta frase está en español? Para cuentas en inglés: se cuentan palabras que
+// solo existen en español contra palabras que solo existen en inglés. Los
+// nombres propios con tilde (José, Bogotá) no cuentan solos.
+const SOLO_ES = new Set('que de del la el los las y en por para con una un es está están estás qué cómo cuándo dónde cuéntame cuéntanos dime tu tus mi mis muy pero también eso esto esa ese cuando pues bueno gracias hola sí ya hoy entonces porque fue era tenía había hay aquí ahí algo alguna alguien nos le les se lo al son ser tiene tienes quieres puedes recuerdas recuerdo mamá papá abuela abuelo charla historia historias vida familia claro perfecto listo vale vamos bonito bonita lindo linda años tenías cuéntame'.split(' '));
+const SOLO_EN = new Set('the and you your to of in is it that what was were for with this my me i we they he she his her how when where do did does can could would have has had about tell remember story stories family life thank thanks hello yes'.split(' '));
+function pareceEspanol(texto) {
+  const t = String(texto || '');
+  if (/[¿¡]/.test(t)) return true;
+  const palabras = t.toLowerCase().normalize('NFC').match(/[a-záéíóúüñ']+/g) || [];
+  let es = 0, en = 0;
+  for (const p of palabras) { if (SOLO_ES.has(p)) es++; else if (SOLO_EN.has(p)) en++; }
+  if (palabras.length <= 4) return es >= 2 && en === 0;
+  return es >= 3 && es > en * 1.5;
+}
+// Red de seguridad final: si aun así la respuesta salió en español, se pasa al
+// inglés antes de decirla y de guardarla (si no, el turno en español queda en el
+// historial y arrastra los siguientes).
+async function asegurarIngles(userId, texto) {
+  if (idiomaDeLaSolicitud() !== 'en' || !pareceEspanol(texto)) return texto;
+  try {
+    const response = await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: 600,
+      system: 'You receive a message that a warm interviewer named Eco was supposed to say in English but wrote (partly) in Spanish. Rewrite it entirely in natural, warm, simple spoken English. Keep the meaning, the tone, the questions and every name and place exactly. Keep any marker in square brackets (like [FIN], [PAUSA], [AYUDA]) exactly as it is. Answer ONLY with the rewritten message, no quotes, no explanations.',
+      messages: [{ role: 'user', content: String(texto) }],
+    }, { timeout: PROVIDER_TIMEOUT_MS });
+    await logClaudeUsage(userId, 'asegurar_ingles', response);
+    const b = response.content && response.content.find((x) => x.type === 'text');
+    const nuevo = b && b.text && b.text.trim();
+    if (nuevo) console.warn(`[idioma] userId=${userId} la respuesta salió en español y se pasó a inglés`);
+    return nuevo || texto;
+  } catch (e) {
+    console.error('asegurarIngles falló:', e.message);
+    return texto;
+  }
+}
+
 // El prompt dice decenas de veces que hable en español colombiano: una línea al
 // final no alcanza a ganarle. Por eso el aviso también va ARRIBA de todo.
 function cabeceraIdioma() {
@@ -5701,7 +5755,9 @@ function partirOraciones(texto) {
   return String(texto || '').match(/[^.!?…]*[.!?…]+["”»)\]]*\s*|[^.!?…]+$/g) || [];
 }
 
-function crearEmisorDeFrases(emitir) {
+function crearEmisorDeFrases(emitir, { ingles = false } = {}) {
+  // Cuenta en inglés: una frase en español corta el adelanto (no se dice) y la red de seguridad del final la traduce.
+  const fueraDeIdioma = (t) => (ingles ? pareceEspanol(t) : detectarFueraDeColombia(t).length > 0);
   let buffer = '';
   let corto = '';
   let detenido = false;
@@ -5718,7 +5774,7 @@ function crearEmisorDeFrases(emitir) {
           if (!c) return;
           const clausula = c[1].trim();
           buffer = buffer.slice(c[0].length);
-          if (detectarFueraDeColombia(clausula).length) { detenido = true; return; }
+          if (fueraDeIdioma(clausula)) { detenido = true; return; }
           const texto = corto ? corto + ' ' + clausula : clausula;
           corto = '';
           hablado = hablado ? hablado + ' ' + texto : texto;
@@ -5730,7 +5786,7 @@ function crearEmisorDeFrases(emitir) {
         buffer = buffer.slice(m[0].length);
         const oracion = m[1].trim();
         if (!oracion) continue;
-        if (oracion.includes('[') || detectarFueraDeColombia(oracion).length) { detenido = true; return; }
+        if (oracion.includes('[') || fueraDeIdioma(oracion)) { detenido = true; return; }
         corto = corto ? corto + ' ' + oracion : oracion;
         const esPregunta = oracion.includes('?');
         if (corto.length >= FRASE_ADELANTADA_MIN_CHARS || esPregunta) {
@@ -5925,7 +5981,7 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
       model: MODEL,
       max_tokens: 300,
       system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
-      messages,
+      messages: conRecordatorioDeIdioma(messages),
     };
     let response;
     if (quiereStream) {
@@ -5934,7 +5990,7 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
         abrirStream();
         if (primeraFrase) { medida.marca('primera-frase'); primeraFrase = false; }
         res.write(JSON.stringify({ t: 'frase', texto: frase, media: mediaRespuesta }) + '\n');
-      });
+      }, { ingles: idiomaDeLaSolicitud() === 'en' });
       const flujo = anthropic.messages.stream(paramsClaude, { timeout: PROVIDER_TIMEOUT_MS });
       flujo.on('text', (delta) => emisor.agregar(delta));
       response = await flujo.finalMessage();
@@ -5992,6 +6048,7 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
     // Siempre al final, también en el cierre y en la pausa: nada que no sea
     // español de Colombia le llega a la persona (ver REGLA_ESPANOL_COLOMBIANO).
     if (idiomaDeLaSolicitud() !== 'en') text = await asegurarEspanolColombiano(req.profileUserId, text);
+    else text = await asegurarIngles(req.profileUserId, text);
     medida.marca('postproceso');
 
     // Los mensajes "sintéticos" (avisos de botones, entre paréntesis) y el modo árbol no
@@ -6112,6 +6169,9 @@ async function pedirVozAElevenLabs(text, modelId, voiceId = ELEVEN_VOICE_ID) {
       body: JSON.stringify({
         text,
         model_id: modelId,
+        // Los modelos v2.5 aceptan forzar el idioma; sin esto, con las voces colombianas una frase corta en
+        // inglés a veces sale leída con fonética de español. Los demás modelos lo detectan solos.
+        ...(/_v2_5$/.test(modelId) ? { language_code: idiomaDeLaSolicitud() === 'en' ? 'en' : 'es' } : {}),
         // "style" le da variación emocional/prosódica a la voz — sin este
         // parámetro (o en 0) suena plana, casi robótica, porque queda sin
         // ninguna inflexión de estilo. "use_speaker_boost" mejora la
@@ -6300,9 +6360,19 @@ app.post('/api/speak', requireAuth, rateLimitVoz, async (req, res) => {
     const medida = medirTurno('speak');
     let buffer;
     if (ELEVEN_KEY && ELEVEN_VOICE_ID) {
-      buffer = await speakWithElevenLabs(text, elevenVoiceIdPara(req.body.voz));
-      medida.marca('tts');
-      await logUsage(req.profileUserId, { service: 'elevenlabs', kind: 'tts', characters: text.length, costUsd: elevenTtsCostUsd(text.length) });
+      try {
+        buffer = await speakWithElevenLabs(text, elevenVoiceIdPara(req.body.voz));
+        medida.marca('tts');
+        await logUsage(req.profileUserId, { service: 'elevenlabs', kind: 'tts', characters: text.length, costUsd: elevenTtsCostUsd(text.length) });
+      } catch (err) {
+        // ElevenLabs caído o sin pago: si hay Azure, se usa (con voz en el idioma de la cuenta) en vez de
+        // dejar que el navegador lea con su voz robótica.
+        if (!(AZURE_KEY && AZURE_REGION)) throw err;
+        console.error('ElevenLabs falló, se usa Azure:', err.message);
+      }
+    }
+    if (buffer) {
+      // listo con ElevenLabs
     } else if (AZURE_KEY && AZURE_REGION) {
       buffer = await speakWithAzure(text, req.body.voz);
       // Azure no tiene tarifa configurada aquí (suele usarse en el nivel
@@ -6926,7 +6996,7 @@ app.post('/api/contribute-chat', requireAuth, rateLimit, async (req, res) => {
       model: MODEL,
       max_tokens: 300,
       system,
-      messages,
+      messages: conRecordatorioDeIdioma(messages),
     });
     await logClaudeUsage(ownerId, 'aporte_charla', response);
 
@@ -6940,6 +7010,7 @@ app.post('/api/contribute-chat', requireAuth, rateLimit, async (req, res) => {
     text = marcaAyuda.text;
     const ayuda = marcaAyuda.ayuda;
     if (idiomaDeLaSolicitud() !== 'en') text = await asegurarEspanolColombiano(ownerId, text);
+    else text = await asegurarIngles(ownerId, text);
 
     // El borrador que se venía guardando turno a turno (ver
     // guardarBorradorAporte) — si ya existía, seguimos actualizando la

@@ -67,7 +67,7 @@
   }
 
   function fechaLarga(iso) {
-    try { return new Date(iso).toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); } catch (e) { return ''; }
+    try { return new Date(iso).toLocaleDateString(document.documentElement.lang === 'en' ? 'en-US' : 'es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); } catch (e) { return ''; }
   }
 
   async function subirAudio(blob) {
