@@ -164,11 +164,10 @@ async function main() {
   if (r.stderr) console.log('--- stderr del hijo ---\\n' + r.stderr);
 
   check('una URL de NUESTRO store se sirve -> 200', /STATUS_NUESTRA=200/.test(r.stdout));
-  // El pin exacto derivado del token no era confiable (con storeId "store_xxx",
-  // token.split("_")[3] da "store" y NINGÚN aporte guardaba/servía su media).
-  // Ahora se acepta cualquier host de Vercel Blob, y el riesgo de relayar un
-  // store ajeno se acota forzando un Content-Type de medios + nosniff.
-  check('una URL de OTRO store de Vercel Blob se sirve -> 200 (el pin exacto rompía todos los aportes)', /STATUS_OTRO_STORE=200/.test(r.stdout));
+  // Con BLOB_HOST_EXACTO configurado, una URL de OTRO store se sigue
+  // aceptando por el regex genérico de fallback — el riesgo se acota
+  // sirviendo solo content-types de medios + nosniff.
+  check('una URL de OTRO store de Vercel Blob se sirve -> 200 (fallback regex + content-type seguro)', /STATUS_OTRO_STORE=200/.test(r.stdout));
   check('si el archivo dice ser text/html, se sirve como descarga genérica, nunca como HTML', /CT_HTML=application\/octet-stream/.test(r.stdout));
   check('la respuesta lleva X-Content-Type-Options: nosniff', /NOSNIFF_HTML=nosniff/.test(r.stdout));
   check('una URL a un host que NO es de Vercel Blob se rechaza -> 404 (sin SSRF)', /STATUS_EXTERNA=404/.test(r.stdout));

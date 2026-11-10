@@ -31,10 +31,40 @@ const { quitarPadresDeOtraGeneracion } = require('./arbol-generaciones');
 let Sentry = null;
 if (process.env.SENTRY_DSN) {
   Sentry = require('@sentry/node');
+  // Patrones sensibles que no deben salir en los eventos de Sentry:
+  // tokens de sesión, historias de vida, contenido de voz/transcripción.
+  const SENTRY_REDACT_RE = /eyJ[A-Za-z0-9_-]{10,}|"texto"\s*:\s*"[^"]{20,}"|"historia"\s*:\s*"[^"]{20,}"|"transcripcion"\s*:\s*"[^"]{20,}"|token=[a-f0-9]{30,}/gi;
+  function limpiarValorSentry(v) {
+    if (typeof v !== 'string') return v;
+    return v.replace(SENTRY_REDACT_RE, '[REDACTED]');
+  }
+
   Sentry.init({
     dsn: process.env.SENTRY_DSN,
     environment: process.env.VERCEL_ENV || process.env.NODE_ENV || 'development',
     tracesSampleRate: 0, // solo errores por ahora, no performance tracing (no hace falta y consume la cuota gratis más rápido)
+    beforeSend(event) {
+      // Limpiar el mensaje principal
+      if (event.message) event.message = limpiarValorSentry(event.message);
+      // Limpiar breadcrumbs
+      if (event.breadcrumbs) {
+        for (const bc of event.breadcrumbs) {
+          if (bc.message) bc.message = limpiarValorSentry(bc.message);
+          if (bc.data) {
+            for (const k of Object.keys(bc.data)) {
+              bc.data[k] = limpiarValorSentry(bc.data[k]);
+            }
+          }
+        }
+      }
+      // Limpiar las excepciones
+      if (event.exception && event.exception.values) {
+        for (const ex of event.exception.values) {
+          if (ex.value) ex.value = limpiarValorSentry(ex.value);
+        }
+      }
+      return event;
+    },
   });
 }
 
@@ -2614,6 +2644,10 @@ function esHostDeNuestroBlob(hostname) {
   if (R2_PUBLIC_HOST && hostname === R2_PUBLIC_HOST) return true;
   if (BLOB_HOST_EXACTO && hostname === BLOB_HOST_EXACTO) return true;
   if (BLOB_HOST_APRENDIDO && hostname === BLOB_HOST_APRENDIDO) return true;
+  // Acepta cualquier subdominio de blob.vercel-storage.com como fallback
+  // para URLs que ya están en la base (legacy). El riesgo de relay a un
+  // store ajeno se acota en enviarArchivoAlmacenado (Content-Type forzado
+  // a medios + nosniff, nunca HTML ejecutable).
   return /^[a-z0-9-]+\.(public\.)?blob\.vercel-storage\.com$/i.test(hostname);
 }
 
@@ -2671,7 +2705,10 @@ async function almacenarArchivo(pathname, cuerpo, contentType) {
     if (!resp.ok) throw new Error(`R2 PUT ${resp.status}: ${(await resp.text().catch(() => '')).slice(0, 200)}`);
     return { url: `${R2_PUBLIC_URL}/${clave}` };
   }
-  const blob = await put(base, cuerpo, { access: 'public', contentType, addRandomSuffix: true });
+  // SEC-03: los archivos se sirven a través de /api/media-file (con sesión)
+  // o /api/libro/:token/m/:n (con token), nunca directamente por su URL de
+  // Blob, así que no necesitan ser públicos.
+  const blob = await put(base, cuerpo, { access: 'private', contentType, addRandomSuffix: true });
   recordarHostDeBlob(blob.url);
   return { url: blob.url };
 }
@@ -6564,7 +6601,7 @@ app.get('/api/media-file', requireAuth, async (req, res) => {
     const autorizado = await estaAutorizadoParaVerArchivo(req, datos);
     if (!autorizado) return res.status(403).json({ error: 'No tienes acceso a ese archivo.' });
 
-    await enviarArchivoAlmacenado(req, res, valorGuardado, 'private, max-age=86400');
+    await enviarArchivoAlmacenado(req, res, valorGuardado, 'private, no-cache');
   } catch (err) {
     console.error(err);
     if (!res.headersSent) res.status(500).json({ error: 'No se pudo cargar el archivo.' });

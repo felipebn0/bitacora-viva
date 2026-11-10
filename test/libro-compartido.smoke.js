@@ -133,7 +133,11 @@ const libro = (extra = {}) => Object.assign({
   const datosJson = JSON.parse(r.texto.match(/<script type="application\/json" id="datos">([\s\S]*?)<\/script>/)[1]);
   ok(datosJson.capitulos[0].fotos[0].ref === 'f-0-0' && !datosJson.capitulos[0].fotos[0].src, 'los datos de la estantería solo apuntan a la foto, sin repetirla');
   ok(/noindex/.test(r.headers['x-robots-tag']) && /no-store/.test(r.headers['cache-control']), 'no se indexa ni se guarda en caché');
-  ok(!r.headers['content-security-policy-report-only'] && !r.headers['content-security-policy'], 'la página no lleva política de contenido que la reporte (trae su propio estilo y programa)');
+  // SEC-04: ahora tiene una CSP mínima (unsafe-inline permitido para no
+  // romper los estilos y scripts inline de la página, pero bloquea frames,
+  // objetos y form-action externo).
+  ok(!r.headers['content-security-policy-report-only'], 'no lleva CSP de solo reporte');
+  ok(r.headers['content-security-policy'] && r.headers['content-security-policy'].includes("frame-src 'none'"), 'SEC-04: CSP mínima presente, bloquea frames');
   ok(/@font-face\{font-family:"Source Serif 4"[^}]*url\(\/fonts\/files\/source-serif-4-latin-standard-normal\.woff2\)/.test(r.texto), 'las tipografías se piden al sitio (no van pegadas en la página)');
 
   r = await request(server, { path: `/api/libro/${token}/m/0` });
