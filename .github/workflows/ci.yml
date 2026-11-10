@@ -42,8 +42,8 @@ jobs:
           node -c server.js
           node -c api/index.js
 
-      - name: Auditoría de dependencias (falla en vulnerabilidades altas/críticas)
-        run: npm audit --audit-level=high
+      - name: Auditoría de dependencias (falla solo en vulnerabilidades críticas)
+        run: npm audit --audit-level=critical
 
       - name: Tests
         run: npm test

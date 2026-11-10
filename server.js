@@ -115,6 +115,15 @@ app.use((req, res, next) => {
   contextoDePedido.run({ requestId, idioma: 'es' }, next);
 });
 
+// ENG-03: ejecutar ensureSchema lo antes posible en cada instancia para
+// las rutas que usan la base. Las rutas siguen llamándolo individualmente
+// (es un no-op tras la primera vez), pero así el DDL corre proactivamente
+// en la primera request de API, no cuando el usuario llega a una ruta
+// particular. Las rutas estáticas (landing, assets) no lo necesitan.
+app.use('/api', (req, res, next) => {
+  ensureSchema().then(() => next(), next);
+});
+
 // Idioma de la cuenta (users.idioma, elegido al crearla). requireAuth lo pone en el
 // contexto del pedido; la IA (resúmenes, capítulos, entrevistador, transcripción) lo usa.
 const cacheIdioma = new Map();
