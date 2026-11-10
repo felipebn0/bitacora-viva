@@ -5,6 +5,35 @@
    se restaura el original. Sin voces nuevas: las voces de ElevenLabs siguen en inglés. */
 (() => {
   'use strict';
+  // El diccionario de inglés (eco-idioma-en.js) pesa unos 200 KB: ya no va como <script> en cada página, sino que se
+  // descarga solo cuando la página va a mostrarse en inglés. Usa el mismo ?v= de este archivo, así que para publicar
+  // un diccionario nuevo basta con subir el ?v= de eco-idioma.js en las páginas, como siempre.
+  const VERSION = (() => {
+    try { return new URL(document.currentScript.src).searchParams.get('v') || '1'; } catch (e) { return '1'; }
+  })();
+  const DICCIONARIO = '/eco-idioma-en.js?v=' + encodeURIComponent(VERSION);
+  let cargaDiccionario = null;
+  function cargarDiccionario() {
+    if (window.ECO_EN && typeof window.ECO_EN === 'object') return Promise.resolve();
+    if (!cargaDiccionario) {
+      cargaDiccionario = new Promise((listo) => {
+        const s = document.createElement('script');
+        s.src = DICCIONARIO;
+        s.onload = () => { patronesCompilados = null; listo(); };
+        s.onerror = () => { cargaDiccionario = null; listo(); }; // sin red: se queda en español y se reintenta al próximo cambio
+        document.head.appendChild(s);
+      });
+    }
+    return cargaDiccionario;
+  }
+  // Pinta la página en inglés cuando el diccionario ya llegó (si mientras tanto volvió a español, no hace nada).
+  function aplicarIngles() {
+    return cargarDiccionario().then(() => {
+      if (idioma !== 'en') return;
+      marcarIdioma();
+      aplicar(document.body);
+    });
+  }
   // En el landing el idioma lo elige la bandera. Dentro de la bitácora lo manda
   // la cuenta (se eligió al crearla) y no hay botón para cambiarlo: esas páginas
   // llevan data-idioma-cuenta en <html>.
@@ -158,7 +187,8 @@
     idioma = nuevo;
     guardar(nuevo);
     marcarIdioma();
-    aplicar(document.body);
+    if (nuevo === 'en') aplicarIngles();
+    else aplicar(document.body);
   }
 
   // Los avisos del navegador (confirm, alert, prompt) no pasan por el DOM: el
@@ -231,12 +261,14 @@
       }
       observador.observe(document.body, OBSERVAR);
     });
-    if (idioma === 'en') aplicar(document.body);
-    else observador.observe(document.body, OBSERVAR);
+    observador.observe(document.body, OBSERVAR);
+    if (idioma === 'en') aplicarIngles();
     if (POR_CUENTA) consultarCuenta();
   }
 
   window.EcoIdioma = { cambiar, actual: () => idioma };
+  // Quien ya venía en inglés empieza a descargar el diccionario de una vez, sin esperar a que la página termine de armarse.
+  if (leer() === 'en') cargarDiccionario();
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar);
   else iniciar();
 })();

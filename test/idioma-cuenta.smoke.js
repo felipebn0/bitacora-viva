@@ -16,11 +16,13 @@ const PAGINAS_APP = ['app', 'arbol', 'capitulos', 'colaboraciones', 'colaborar',
 for (const p of PAGINAS_APP) {
   const html = leer(path.join('public', p + '.html'));
   ok(/<html[^>]*\sdata-idioma-cuenta/.test(html), p + '.html: <html> pide el idioma de la cuenta');
-  ok(html.includes('/eco-idioma-en.js') && html.includes('/eco-idioma.js'), p + '.html: carga el diccionario y el motor');
+  ok(html.includes('/eco-idioma.js') && !html.includes('/eco-idioma-en.js'), p + '.html: carga el motor y NO el diccionario de inglés (ese se descarga solo si la página va en inglés)');
   ok(!html.includes('eco-idioma.css'), p + '.html: no trae la hoja de la bandera (dentro de la app no hay botón)');
 }
 
 const motor = leer('public/eco-idioma.js');
+ok(/function cargarDiccionario\(\)/.test(motor) && /'\/eco-idioma-en\.js\?v=' \+ encodeURIComponent\(VERSION\)/.test(motor), 'el motor descarga el diccionario cuando hace falta, con su mismo ?v=');
+ok(/if \(nuevo === 'en'\) aplicarIngles\(\);/.test(motor) && /if \(leer\(\) === 'en'\) cargarDiccionario\(\);/.test(motor), 'en inglés lo pide de una vez; en español no lo pide nunca');
 ok(motor.includes("document.documentElement.hasAttribute('data-idioma-cuenta')"), 'el motor reconoce el modo "idioma de la cuenta"');
 ok(/function crearBoton\(\) \{\s*if \(POR_CUENTA/.test(motor), 'en ese modo no se dibuja la bandera');
 ok(motor.includes("fetch('/api/me'"), 'el motor consulta el idioma guardado en la cuenta');
