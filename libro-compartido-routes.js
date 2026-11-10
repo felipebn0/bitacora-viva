@@ -150,10 +150,14 @@ module.exports = (app, { sql, ensureSchema, requireAuth, bloquearColaborador, ra
   app.get('/libro/:token', rateLimitQr, async (req, res) => {
     res.set('X-Robots-Tag', 'noindex, nofollow');
     sinCache(res);
-    // La página trae su propio estilo y programa dentro (como el archivo que se descarga): sin política de contenido que la reporte.
-    res.removeHeader('Content-Security-Policy');
+    // SEC-04: la página trae sus propios estilos y scripts inline, así que
+    // no se puede usar una CSP con hashes sin riesgo de romperla. Se pone
+    // una CSP mínima: permite inline (unsafe-inline) para no romper nada,
+    // pero bloquea objetos embebidos, frames de terceros y form-action
+    // externo, reduciendo la superficie de ataque frente a inyección.
     res.removeHeader('Content-Security-Policy-Report-Only');
     res.removeHeader('Reporting-Endpoints');
+    res.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' blob: data: https:; media-src 'self' https:; connect-src 'self'; frame-src 'none'; object-src 'none'; form-action 'self'; base-uri 'self'");
     if (!tokenValido(req.params.token)) return res.status(404).type('html').send(PAGINA_NO_DISPONIBLE);
     try {
       await ready();
@@ -186,7 +190,7 @@ module.exports = (app, { sql, ensureSchema, requireAuth, bloquearColaborador, ra
       // Defensa extra: el archivo tiene que ser de quien creó el enlace.
       const datos = datosDelArchivoDeBlob(guardado);
       if (!datos || datos.ownerId !== item.owner_id) return res.status(404).json({ error: 'Este enlace ya no está disponible.' });
-      await enviarArchivoAlmacenado(req, res, guardado, 'private, max-age=3600');
+      await enviarArchivoAlmacenado(req, res, guardado, 'private, no-cache');
     } catch (e) {
       console.error('Archivo del libro compartido', e);
       if (!res.headersSent) res.status(500).json({ error: 'No se pudo cargar el archivo.' });

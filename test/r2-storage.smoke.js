@@ -106,7 +106,7 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
   ok(r1.status === 200, 'lee un audio de R2 -> 200');
   ok(r1.headers['content-type'] === 'audio/webm', 'reenvía el content-type audio/webm de R2');
   ok(r1.body.toString() === CONTENIDO.toString(), 'el cuerpo es el archivo de R2');
-  ok(r1.headers['cache-control'] === 'private, max-age=86400', 'deja que el navegador lo cachee 1 día');
+  ok(r1.headers['cache-control'] === 'private, no-cache', 'SEC-05: no cachea medios privados');
 
   const r2 = await req(server, mf('https://pub-abc123.r2.dev/media/1/mal-xyz.png'), cookie);
   ok(r2.status === 200, 'archivo de R2 que miente text/html -> 200');
