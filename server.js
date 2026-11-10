@@ -888,10 +888,8 @@ let pushRecordatorios = null;
 // reset-bitacora/delete-account): un solo viaje de red, y de paso queda
 // atómico — si algo fallara a mitad de camino no deja el schema a medio
 // migrar, se puede reintentar limpio en el próximo arranque en frío.
-function ensureSchema() {
-  if (!sql) throw new Error('Falta configurar la base de datos (DATABASE_URL).');
-  if (!schemaReady) {
-    schemaReady = sql.transaction([
+function aplicarEsquema() {
+    return sql.transaction([
       sql`CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         username TEXT UNIQUE NOT NULL,
@@ -1737,11 +1735,46 @@ function ensureSchema() {
       )`,
       sql`CREATE INDEX IF NOT EXISTS idx_magic_tokens_user ON magic_tokens(user_id)`,
       sql`CREATE INDEX IF NOT EXISTS idx_magic_tokens_hash ON magic_tokens(token_hash)`,
-    ]).catch((err) => {
-      // Si la transacción falla, no dejamos una promesa rota memoizada para
-      // siempre — el próximo intento (esta misma instancia tibia, no hace
-      // falta esperar un arranque en frío) puede reintentar limpio en vez
-      // de quedar rota hasta que Vercel recicle la instancia.
+    ]);
+}
+
+// Arranque en frío: antes, CADA instancia nueva corría todas las sentencias de arriba (más de 150 CREATE/ALTER) antes de
+// atender su primer pedido, aunque la base ya estuviera lista. Ahora se guarda en la base la "versión" del esquema que
+// ya se aplicó y cada instancia solo hace una consulta para comparar: si coincide, no corre nada más.
+// La versión es la huella del texto de aplicarEsquema(): cualquier sentencia que se agregue o cambie la cambia sola, y la
+// siguiente instancia aplica el esquema completo una vez. ECO_FORZAR_ESQUEMA=1 lo aplica siempre (por si hiciera falta).
+let versionEsquemaCalculada = null;
+function versionDelEsquema() {
+  if (!versionEsquemaCalculada) versionEsquemaCalculada = crypto.createHash('sha256').update(aplicarEsquema.toString()).digest('hex').slice(0, 32);
+  return versionEsquemaCalculada;
+}
+async function esquemaAlDia() {
+  try {
+    const r = await sql`SELECT version FROM schema_meta WHERE id = 1`;
+    return !!(r[0] && r[0].version === versionDelEsquema());
+  } catch (err) {
+    return false; // la tabla todavía no existe (primera vez) o no se pudo leer: se aplica el esquema completo, como antes
+  }
+}
+async function marcarEsquemaAlDia() {
+  await sql`CREATE TABLE IF NOT EXISTS schema_meta (id INT PRIMARY KEY, version TEXT NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`;
+  await sql`INSERT INTO schema_meta (id, version) VALUES (1, ${versionDelEsquema()}) ON CONFLICT (id) DO UPDATE SET version = EXCLUDED.version, updated_at = now()`;
+}
+function ensureSchema() {
+  if (!sql) throw new Error('Falta configurar la base de datos (DATABASE_URL).');
+  if (!schemaReady) {
+    schemaReady = (async () => {
+      const t0 = Date.now();
+      if (process.env.ECO_FORZAR_ESQUEMA !== '1' && await esquemaAlDia()) {
+        console.log(`[esquema] al día (${Date.now() - t0} ms)`);
+        return;
+      }
+      await aplicarEsquema();
+      await marcarEsquemaAlDia();
+      console.log(`[esquema] aplicado completo (${Date.now() - t0} ms)`);
+    })().catch((err) => {
+      // Si falla, no dejamos una promesa rota memoizada para siempre: el próximo
+      // intento (esta misma instancia tibia) puede reintentar limpio.
       schemaReady = null;
       throw err;
     });
@@ -9456,6 +9489,28 @@ app.get('/api/admin/crisis-avisos', requireAuth, requireAdmin, async (req, res) 
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudieron cargar los avisos.' });
+  }
+});
+
+// Diagnóstico del arranque en frío (solo admins): cuánto tarda la revisión rápida del esquema y, con ?medir=1, cuánto
+// tarda aplicar el esquema completo (lo que antes pagaba cada instancia nueva). Aplicarlo de nuevo no cambia nada.
+app.get('/api/admin/esquema', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const t0 = Date.now();
+    const alDia = await esquemaAlDia();
+    const msRevision = Date.now() - t0;
+    let msCompleto = null;
+    if (req.query.medir === '1') {
+      const t1 = Date.now();
+      await aplicarEsquema();
+      await marcarEsquemaAlDia();
+      msCompleto = Date.now() - t1;
+    }
+    res.set('Cache-Control', 'no-store');
+    res.json({ version: versionDelEsquema(), alDia, msRevision, msCompleto });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo revisar el esquema.' });
   }
 });
 
