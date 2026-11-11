@@ -4015,6 +4015,33 @@
   // para no gastar un llamado a la IA que quizás se descarta si nunca
   // vuelve, y para que sea resumeConversation() (con pausedFromState =
   // 'thinking') quien pida la pregunta nueva solo cuando de verdad vuelve.
+  // ¿La persona se despide o pide terminar? Solo frases cortas y con la despedida al principio o al final, para no
+  // confundirla con una historia ("y me dijo chao", "me voy a acordar..."). Si sí, se cierra como con el botón «Fin».
+  // Despedidas: cuentan al principio o al final de lo que dijo («Bueno, chao», «Gracias Eco, hasta mañana»).
+  const DESPEDIDAS = [
+    'chao', 'chau', 'adios', 'bye', 'goodbye', 'goodnight', 'good night', 'see you', 'hasta luego', 'hasta manana', 'hasta pronto',
+    'hasta la proxima', 'hasta otro dia', 'nos vemos', 'me tengo que ir', 'tengo que irme', 'ya me voy', 'me voy ya', 'i have to go',
+    'por hoy es todo', 'por hoy fue todo', 'eso es todo por hoy', 'ya no mas por hoy', 'hasta aqui por hoy', 'suficiente por hoy',
+    'fin de la charla', 'thats all for today',
+  ];
+  // Pedidos de terminar: solo si cierran la frase («Listo, terminemos por hoy»). «Terminemos de hablar de mi papá y…» o
+  // «Paremos un momento en la finca…» siguen la charla.
+  const PEDIDOS_DE_TERMINAR = [
+    'terminemos', 'acabemos', 'finalicemos', 'cerremos', 'paremos', 'dejemoslo', 'dejemos aqui', 'dejemos hasta aqui',
+    'quiero terminar', 'vamos a terminar', 'podemos terminar', 'quiero parar', 'quiero finalizar', 'quiero acabar',
+    'terminar la charla', 'finalizar la charla', 'lets stop', 'lets end', 'lets finish', 'end the conversation',
+  ];
+  const RELLENO = '(?:bueno|listo|ok|okay|vale|bien|ya|eco|gracias|muchas gracias|mil gracias|entonces|por hoy|aqui|hasta aqui|la charla|well|thanks|thank you|for today)';
+  const RE_DESPEDIDA_INICIO = new RegExp('^(?:' + RELLENO + '\\s+)*(?:' + DESPEDIDAS.join('|') + ')\\b');
+  const RE_DESPEDIDA_FIN = new RegExp('\\b(?:' + DESPEDIDAS.concat(PEDIDOS_DE_TERMINAR).join('|') + ')(?:\\s+' + RELLENO + ')*$');
+  function pideTerminarLaCharla(texto) {
+    const t = String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+      .replace(/['’]/g, '').replace(/[^a-z0-9ñ\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!t || t.length > 80) return false;
+    return RE_DESPEDIDA_INICIO.test(t) || RE_DESPEDIDA_FIN.test(t);
+  }
+  window.__ecoPideTerminarLaCharla = pideTerminarLaCharla; // para las pruebas
+
   async function handleAnswer(text, audioBlob, { seguir = true, especulacion: esp = null } = {}) {
     if (!text || !text.trim()) return;
     quitarFotoDelOrbe(); // ya contó: el círculo vuelve a ser el botón normal
@@ -4028,6 +4055,14 @@
     const myTurn = turnIndex;
     history.push({ role: 'user', content: text.trim() });
     if (window.ecoCrisisCheck) window.ecoCrisisCheck(text.trim(), orb.closest('.orb-wrap'));
+    // Se despidió con la voz: se cierra como con «Fin». Eco responde la despedida y la charla termina, aunque la IA no
+    // ponga la marca [FIN] (ver alTerminarDeHablar). Una respuesta adelantada se descarta: tiene que ser el cierre.
+    if (seguir && !finPedido && pideTerminarLaCharla(text)) {
+      finPedido = true;
+      endBtn.style.display = 'none';
+      cancelarEspeculacion();
+      esp = null;
+    }
     const logEntry = { role: 'user', content: text.trim(), timestamp: new Date().toISOString() };
     sessionLog.push(logEntry);
     writeRow.classList.remove('visible');
