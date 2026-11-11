@@ -1,0 +1,20 @@
+/* Árbol: sección «Quiénes han colaborado» (eco-arbol-colaboradores.js). */
+.colab-section { max-width: 1000px; margin: 40px auto 8px; padding: 0 16px; }
+.colab-section[hidden] { display: none; }
+.colab-section h2 { font-family: var(--font-display, Georgia, serif); font-size: 1.3rem; text-align: center; margin: 0 0 4px; color: var(--deep, #293d30); }
+.colab-section .sub { color: var(--sub, #777568); font-size: .95rem; text-align: center; margin: 0 0 18px; }
+.colab-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+.colab-card {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 44px;
+  background: var(--cream, #fffdf6); border: 1px solid var(--stroke, #dadaca); border-radius: 16px;
+  padding: 16px 14px; text-align: center; text-decoration: none; color: var(--ink, #302d25);
+  transition: box-shadow .15s ease, border-color .15s ease;
+}
+.colab-card:hover, .colab-card:focus-visible { border-color: var(--green, #4d6542); box-shadow: 0 4px 10px -4px rgba(0, 0, 0, .2); }
+.colab-avatar {
+  width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; margin-bottom: 6px;
+  background: var(--pale, #edf0e5); color: var(--deep, #293d30); font-weight: 700;
+}
+.colab-card strong { font-size: 1rem; overflow-wrap: anywhere; }
+.colab-parentesco { color: var(--brown, #8b6345); font-size: .9rem; font-weight: 700; }
+.colab-historias { color: var(--sub, #777568); font-size: .9rem; }

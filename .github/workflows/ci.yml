@@ -154,11 +154,24 @@ jobs:
         continue-on-error: true
         run: npm run test:despedida-voz
 
+      # Las tarjetas de «Quiénes han colaborado» del árbol enlazan a los aportes
+      # de esa persona (colaboraciones.html?colaborador=).
+      - name: Pruebas del enlace árbol → aportes por colaborador (Playwright)
+        id: arbol_colab_link
+        continue-on-error: true
+        run: npm run test:arbol-colab-link
+
+      # Todo arranca en español; <html lang> pasa a «en» solo cuando llega la traducción.
+      - name: Pruebas de idioma (Playwright)
+        id: idioma_lang
+        continue-on-error: true
+        run: npm run test:idioma-lang
+
       - name: Resultado de las pruebas de Playwright
         if: always()
         run: |
           fallo=0
-          for r in "${{ steps.responsive.outcome }}" "${{ steps.pause_resume.outcome }}" "${{ steps.libro_privacidad.outcome }}" "${{ steps.mic_denegado.outcome }}" "${{ steps.a11y.outcome }}" "${{ steps.landscape.outcome }}" "${{ steps.colaborar_sticky.outcome }}" "${{ steps.login_vacio.outcome }}" "${{ steps.instalacion.outcome }}" "${{ steps.despedida_voz.outcome }}"; do
+          for r in "${{ steps.responsive.outcome }}" "${{ steps.pause_resume.outcome }}" "${{ steps.libro_privacidad.outcome }}" "${{ steps.mic_denegado.outcome }}" "${{ steps.a11y.outcome }}" "${{ steps.landscape.outcome }}" "${{ steps.colaborar_sticky.outcome }}" "${{ steps.login_vacio.outcome }}" "${{ steps.instalacion.outcome }}" "${{ steps.despedida_voz.outcome }}" "${{ steps.arbol_colab_link.outcome }}" "${{ steps.idioma_lang.outcome }}"; do
             if [ "$r" != "success" ]; then fallo=1; fi
           done
           if [ "$fallo" = "1" ]; then

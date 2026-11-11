@@ -8088,7 +8088,7 @@ app.delete('/api/chapters/:id', requireAuth, bloquearColaborador, rateLimit, asy
   }
 });
 
-pushWeb = require('./push-web-routes')(app, { sql, ensureSchema, requireAuth, bloquearColaborador, bloquearInvitado, rateLimit });
+pushWeb = require('./push-web-routes')(app, { sql, ensureSchema, requireAuth, bloquearColaborador, bloquearInvitado, rateLimit, avisarFallaPush });
 pushRecordatorios = require('./push-recordatorios-routes')(app, { sql, ensureSchema, requireAuth, requireAdmin, bloquearColaborador, bloquearInvitado, rateLimit, pushWeb });
 require('./book-qr-routes')(app, { preguntasPorAudio, sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob });
 require('./libro-compartido-routes')(app, { sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob, almacenarArchivo, express });
@@ -9419,6 +9419,25 @@ app.post('/api/admin/whatsapp-reminders/run', requireAuth, requireAdmin, rateLim
     res.status(500).json({ error: 'No se pudo correr el resumen.' });
   }
 });
+
+// Muchas notificaciones fallando seguidas (push-web-routes.js, anotarFallo): correo a cada admin. Va por correo y no
+// por notificación porque, si las notificaciones están dañadas, el aviso tampoco llegaría.
+async function avisarFallaPush({ total, resumen }) {
+  if (!RESEND_API_KEY) { console.error(`Fallaron ${total} avisos push en la última hora (sin RESEND_API_KEY para avisar).`); return; }
+  const admins = await sql`SELECT email FROM users WHERE is_admin = true AND email IS NOT NULL AND email <> ''`;
+  const filas = resumen.map((r) => `${r.n} × ${r.tipo === 'suscripcion' ? 'activar avisos' : 'mandar un aviso'} — ${r.detalle}`);
+  const text = `En la última hora fallaron ${total} notificaciones de Eco.\n\n${filas.join('\n')}\n\n`
+    + 'Si dice «activar avisos — rechazada: fcm.googleapis.com», es Chrome/Android: la app está rechazando celulares reales. '
+    + 'Prueba activar los avisos en tu celular. No vuelve a llegar otro correo de esto en 12 horas.';
+  const html = `<div style="font-family:Georgia,serif;max-width:520px;color:#2B241C">
+    <h1 style="font-size:1.2rem">Están fallando las notificaciones de Eco</h1>
+    <p>En la última hora fallaron <b>${total}</b>:</p>
+    <ul>${filas.map((f) => `<li>${escapeHtmlCorreo(f)}</li>`).join('')}</ul>
+    <p>Si dice «activar avisos — rechazada: fcm.googleapis.com», es Chrome/Android: la app está rechazando celulares reales. Prueba activar los avisos en tu celular.</p>
+    <p style="color:#777568;font-size:.9rem">No vuelve a llegar otro correo de esto en 12 horas.</p></div>`;
+  await Promise.all(admins.map((a) => enviarCorreo({ to: a.email, subject: 'Eco: están fallando las notificaciones', html, text })
+    .catch((err) => console.error('No se pudo mandar el correo de fallas push:', err.message))));
+}
 
 // Notificación al celular de cada cuenta admin (las que tienen los avisos activados). No falla nunca.
 async function avisarAAdmins(aviso) {

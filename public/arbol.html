@@ -77,13 +77,14 @@
 <link rel="stylesheet" href="/eco-arbol-v7.css?v=7">
 <link rel="stylesheet" href="/eco-arbol-v71.css?v=73">
 <link rel="stylesheet" href="/eco-arbol-movil.css?v=4">
+<link rel="stylesheet" href="/eco-arbol-colaboradores.css?v=1">
 <link rel="stylesheet" href="/eco-identidad-global.css?v=1">
 <link rel="stylesheet" href="/eco-volver-unificado.css?v=4">
 <link rel="stylesheet" href="/eco-inteligencia-familiar.css?v=1">
 <link rel="stylesheet" href="/eco-inteligencia-familiar-v3.css?v=3">
 <link rel="stylesheet" href="/eco-mobile-base.css">
 <script src="/font-size.js"></script><script src="/eco-orientacion.js?v=1" data-libre></script>
-<script src="/eco-idioma.js?v=5" defer></script>
+<script src="/eco-idioma.js?v=6" defer></script>
 </head>
 <body class="eco-brand-v1 eco-page-arbol"><div class="shell">
 <header><div><a class="volver" href="/app.html">← Volver a mi bitácora</a><h1>Árbol familiar</h1><p class="lead">Tu familia, sus historias y los vínculos que los unen.</p></div><div class="toolbar"><button class="btn" id="addPerson" type="button">＋ Añadir familiar</button><input type="search" id="searchInput" placeholder="🔍 Buscar..." autocomplete="off" aria-label="Buscar familiar"><button class="btn" id="treeBtn" aria-pressed="true">♧ Vista de árbol</button><button class="btn" id="listBtn" aria-pressed="false">☷ Vista de lista</button><button class="btn" id="zoomOut" title="Alejar" aria-label="Alejar">−</button><span id="zoomText">100%</span><button class="btn" id="zoomIn" title="Acercar" aria-label="Acercar">+</button><button class="btn" id="zoomReset" title="Restablecer zoom" aria-label="Restablecer zoom">↺</button></div></header>
@@ -97,6 +98,7 @@
 </div>
 <div class="info"><span id="stats">Cargando familiares…</span><span id="modeHint">Haz clic en una persona para ver sus vínculos. Arrástrala para organizar el árbol.</span></div>
 <div class="layout"><main><div class="stage" id="stage"><div id="paper" class="paper"><svg id="wires" class="wires"></svg><div id="nodes"></div></div></div><div class="list-panel" id="listPanel"><div class="list" id="listGrid"></div></div></main><aside class="side"><div class="side-top"><h2 id="sideTitle">Tu árbol, más claro</h2><button type="button" class="actions-trigger" id="actionsTrigger" aria-haspopup="menu" aria-expanded="false" aria-controls="sideActions" aria-label="Más opciones de esta persona" title="Más opciones">⋯</button></div><p id="sideDesc">Selecciona a alguien para ver su familia cercana. RAÍZ conecta automáticamente los familiares cuando comparten padres registrados.</p><div class="side-actions" id="sideActions" role="menu" aria-label="Acciones del árbol"><div class="sheet-head"><strong id="sheetTitle">Opciones</strong><button type="button" class="sheet-close" id="closeActions" aria-label="Cerrar opciones">×</button></div><button class="btn primary" id="addLink">+ Crear vínculo</button><button class="btn" id="toggleAll">Mostrar todas las conexiones</button><button class="btn" id="editPerson" disabled>✎ Editar familiar</button><button class="btn" id="photoPerson" disabled>Gestionar foto</button><button class="btn" id="hidePerson" disabled>◉ Ocultar / mostrar familiar</button><button class="btn" id="mergePerson" disabled>⇢ Fusionar con...</button><button class="btn danger" id="deletePerson" disabled>Eliminar persona</button><button class="btn" id="showHidden">Mostrar familiares ocultos</button><button class="btn" id="resetPlaces">Reorganizar tarjetas</button></div><div id="relations"></div><input type="file" id="photoFile" accept="image/jpeg,image/png,image/webp" hidden><p class="tip" id="photoNotice">Las fotos y los vínculos se guardan en tu cuenta cuando la sincronización está disponible.</p><div class="legend"><div><i class="swatch"></i> Padre / madre → hijo/a (los hermanos se reconocen automáticamente)</div><div><i class="swatch dash"></i> Pareja o vínculo personalizado</div><div><i class="swatch sib"></i> Hermanos/as</div><p>Para evitar cambios por accidente, <b>arrastrar una tarjeta solo cambia su posición</b>, no su parentesco.</p></div></aside></div>
+<section class="colab-section" id="colabSection" hidden aria-labelledby="colabTitulo"><h2 id="colabTitulo">Quiénes han colaborado</h2><p class="sub">Familiares que aportaron historias con su invitación. Toca a alguien para ver sus aportes.</p><div class="colab-grid" id="colabGrid"></div></section>
 </div>
 <div id="actionsBackdrop" class="actions-backdrop" hidden></div>
 <div class="shade" id="photoShade" hidden><div class="modal" role="dialog" aria-modal="true" aria-labelledby="photoTitle"><h2 id="photoTitle">Fotografía familiar</h2><div class="photo-preview" id="photoPreview" aria-hidden="true"></div><p id="photoHelp" class="tip">Sube una foto para identificar a esta persona en el árbol.</p><div class="photo-options"><button type="button" class="btn primary" id="choosePhoto">Poner o cambiar foto</button><button type="button" class="btn danger" id="removePhoto" disabled>Quitar foto</button><button type="button" class="btn" id="photoClose">Cerrar</button></div></div></div>
@@ -261,5 +263,6 @@ load();loadMergeSugg();fetch('/api/tree/mark-seen',{method:'POST',credentials:'s
 <script src="/eco-volver-unificado.js" defer></script>
 <script src="/eco-inteligencia-familiar-v3.js?v=3" defer></script>
 <script src="/eco-toast.js" defer></script>
+<script src="/eco-arbol-colaboradores.js?v=1" defer></script>
 <script src="/eco-tour.js?v=4" defer></script>
 </body></html>

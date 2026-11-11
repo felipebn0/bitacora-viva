@@ -19,8 +19,7 @@
 //      el nombre viaja en la URL, así que es dato no confiable).
 //
 // No usa server.js: las dos páginas se sirven estáticas y /api/* se
-// intercepta con page.route() (mismo patrón que
-// test/arbol-conexiones.playwright.js).
+// intercepta con page.route().
 //
 //   node test/arbol-colaboraciones-link.playwright.js
 //   (o: npm run test:arbol-colab-link)

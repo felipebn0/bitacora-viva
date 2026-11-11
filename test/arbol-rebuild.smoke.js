@@ -1,6 +1,5 @@
 // Smoke test para la mitad SERVIDOR del arreglo de conexiones rotas en el
-// árbol genealógico (ver también test/arbol-conexiones.playwright.js, que
-// cubre la mitad del NAVEGADOR).
+// árbol genealógico.
 //
 // El árbol conecta a cada persona con sus padres por coincidencia EXACTA de
 // texto entre "nombre" y "padres" — sin ID de por medio. Como esa lista la

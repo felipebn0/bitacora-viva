@@ -164,7 +164,9 @@
   }
 
   function marcarIdioma() {
-    document.documentElement.lang = idioma;
+    // Español por defecto: la página solo se marca en inglés cuando ya llegó la traducción (si no, un lector de
+    // pantalla leería el texto en español con voz en inglés).
+    document.documentElement.lang = idioma === 'en' && !window.ECO_EN ? 'es' : idioma;
     // La bandera solo vive en el landing: se borra la cookie vieja que usaba la IA.
     try { document.cookie = "eco_idioma=; path=/; max-age=0"; } catch (e) { /* sin cookies */ }
     const titulo = document.title;

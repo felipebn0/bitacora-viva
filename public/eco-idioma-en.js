@@ -1546,6 +1546,8 @@ window.ECO_EN = {
   "Qué animal es": "What kind of animal",
   "Quien tenga el enlace dejará de poder ver tu libro. ¿Dejar de compartir?": "Anyone with the link will no longer be able to see your book. Stop sharing?",
   "Quiénes han colaborado": "Who has contributed",
+  "Familiares que aportaron historias con su invitación. Toca a alguien para ver sus aportes.": "Family members who contributed stories with their invitation. Tap someone to see their contributions.",
+  "1 historia aportada": "1 story contributed",
   "quitar acceso": "remove access",
   "Quitar acceso": "Remove access",
   "Quitar del libro": "Remove from the book",
@@ -1880,6 +1882,8 @@ window.ECO_EN = {
   "Pausar": "Pause"
 };
 window.ECO_EN_PATRONES = {
+  "{} historias aportadas": "{} stories contributed",
+  "Ver los aportes de {}": "See {}'s contributions",
   "Diario de {} · Eco": "{}'s journal · Eco",
   "Abrir el diario de {}": "Open {}'s journal",
   "Foto del diario de {}": "Photo from {}'s journal",
