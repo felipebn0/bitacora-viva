@@ -1,0 +1,71 @@
+name: Backup semanal de fotos y audios (R2)
+
+# Copia todo el bucket de R2 de la app (fotos, audios, PDFs) a un segundo
+# bucket de respaldo. Corre los domingos y también a mano desde Actions.
+#
+# Lo borrado en la app no se pierde de una: se guarda 30 días en
+# «borrados/FECHA/» del respaldo y luego se elimina de verdad (así las
+# solicitudes de borrado de datos se cumplen en un plazo razonable).
+#
+# Secrets necesarios (Settings → Secrets and variables → Actions):
+#   R2_ACCOUNT_ID                 el mismo de Vercel
+#   R2_BUCKET                     el bucket de la app (el mismo de Vercel)
+#   R2_BACKUP_BUCKET              el bucket de respaldo (nuevo)
+#   R2_BACKUP_ACCESS_KEY_ID       llave con lectura/escritura en ambos buckets
+#   R2_BACKUP_SECRET_ACCESS_KEY
+
+on:
+  schedule:
+    - cron: '47 7 * * 0'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verificar que existan los secrets necesarios
+        env:
+          A: ${{ secrets.R2_ACCOUNT_ID }}
+          B: ${{ secrets.R2_BUCKET }}
+          C: ${{ secrets.R2_BACKUP_BUCKET }}
+          D: ${{ secrets.R2_BACKUP_ACCESS_KEY_ID }}
+          E: ${{ secrets.R2_BACKUP_SECRET_ACCESS_KEY }}
+        run: |
+          faltan=""
+          [ -z "$A" ] && faltan="$faltan R2_ACCOUNT_ID"
+          [ -z "$B" ] && faltan="$faltan R2_BUCKET"
+          [ -z "$C" ] && faltan="$faltan R2_BACKUP_BUCKET"
+          [ -z "$D" ] && faltan="$faltan R2_BACKUP_ACCESS_KEY_ID"
+          [ -z "$E" ] && faltan="$faltan R2_BACKUP_SECRET_ACCESS_KEY"
+          if [ -n "$faltan" ]; then
+            echo "::error::Faltan secrets para respaldar los archivos:$faltan. Agrégalos en Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          if [ "$B" = "$C" ]; then
+            echo "::error::R2_BACKUP_BUCKET tiene que ser un bucket distinto de R2_BUCKET."
+            exit 1
+          fi
+
+      - name: Instalar rclone
+        run: sudo apt-get update && sudo apt-get install -y rclone
+
+      - name: Copiar los archivos al bucket de respaldo
+        env:
+          RCLONE_CONFIG_R2_TYPE: s3
+          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_BACKUP_ACCESS_KEY_ID }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_SECRET_ACCESS_KEY }}
+          RCLONE_CONFIG_R2_ENDPOINT: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          RCLONE_CONFIG_R2_NO_CHECK_BUCKET: 'true'
+          ORIGEN: ${{ secrets.R2_BUCKET }}
+          DESTINO: ${{ secrets.R2_BACKUP_BUCKET }}
+        run: |
+          FECHA=$(date -u +%Y-%m-%d)
+          rclone sync "r2:$ORIGEN" "r2:$DESTINO/actual" \
+            --backup-dir "r2:$DESTINO/borrados/$FECHA" \
+            --fast-list --transfers 16 --checkers 32 --stats-one-line --stats 30s -v
+          rclone delete "r2:$DESTINO/borrados" --min-age 30d --rmdirs -v || true
+          echo "Respaldo: $(rclone size "r2:$DESTINO/actual" --json)"
