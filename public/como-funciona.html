@@ -14,7 +14,7 @@
        antes venían de fonts.googleapis.com/fonts.gstatic.com, lo que además
        de la violación de CSP (font-src 'self') mandaba la IP de cada visita
        a un tercero. Ver public/fonts/fonts.css para el detalle. -->
-  <link rel="preload" as="image" href="/images/portada/manos.jpg">
+  <link rel="preload" as="image" type="image/webp" href="/images/portada/manos.webp">
   <link rel="stylesheet" href="/fonts/fonts.css">
   <script src="/font-size.js"></script><script src="/eco-orientacion.js?v=1"></script>
   <style>
@@ -565,7 +565,7 @@
     .pc-a2ef1fee{width:30px !important; height:30px !important;}
 </style>
 <link rel="stylesheet" href="/eco-v5.css?v=6">
-<link rel="stylesheet" href="/eco-portada.css?v=10">
+<link rel="stylesheet" href="/eco-portada.css?v=11">
 <link rel="stylesheet" href="/eco-demo-orbe.css?v=1">
 <link rel="stylesheet" href="/eco-demo.css?v=11">
 <link rel="stylesheet" href="/eco-idioma.css?v=1">
@@ -593,7 +593,7 @@
 
   <main id="main-content" tabindex="-1">
     <section class="portada-bloque portada-bloque--album portada-bloque--pagina" aria-labelledby="cfTitulo">
-      <img class="portada-bloque__foto" src="/images/portada/manos.jpg" width="760" height="345" decoding="async" alt="Las manos de un abuelo moviéndose mientras cuenta una historia">
+      <picture><source type="image/webp" srcset="/images/portada/manos.webp"><img class="portada-bloque__foto" src="/images/portada/manos.jpg" width="760" height="345" decoding="async" alt="Las manos de un abuelo moviéndose mientras cuenta una historia"></picture>
       <div class="wrap portada-bloque__texto cf-cabecera">
         <div class="cf-izq">
         <div class="eyebrow">Cómo funciona</div>
