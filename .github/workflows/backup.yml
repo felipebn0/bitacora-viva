@@ -49,7 +49,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-common
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
-          sudo apt-get install -y postgresql-client-17
+          # Neon ya va en Postgres 18; pg_dump tiene que ser igual o más nuevo.
+          sudo apt-get install -y postgresql-client-18
 
       - name: Hacer el pg_dump y cifrarlo
         env:
@@ -75,7 +76,8 @@ jobs:
           URL_LIMPIA="$RUTA${PARAMS:+?$PARAMS}"
           echo "::add-mask::$URL_LIMPIA"
           echo "Parámetros usados: $(printf '%s' "$PARAMS" | tr '&' '\n' | cut -d= -f1 | paste -sd ',' -)"
-          pg_dump "$URL_LIMPIA" --no-owner --no-privileges -F c -f "backup-$FECHA.dump"
+          # Ruta exacta: el runner trae otro pg_dump (16) que va primero en el PATH.
+          /usr/lib/postgresql/18/bin/pg_dump "$URL_LIMPIA" --no-owner --no-privileges -F c -f "backup-$FECHA.dump"
           # El release queda visible para cualquier colaborador del repo, y
           # el dump trae hashes de claves, correos e historias privadas — se
           # sube cifrado con AES-256, nunca en claro. La frase va por stdin
