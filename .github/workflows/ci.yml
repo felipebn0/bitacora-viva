@@ -80,14 +80,13 @@ jobs:
         continue-on-error: true
         run: npm run test:pause-resume
 
-      # También Playwright, sirviendo public/ solo: reproduce el bug
-      # reportado (nombres con un acento distinto entre charlas rompían la
-      # conexión padre/hijo en el árbol, dejando gente "flotando" en la fila
-      # que no era) y confirma que se cierra sin inventar conexiones falsas.
-      - name: Pruebas de conexiones del árbol genealógico (Playwright)
-        id: arbol
+      # Mi Libro: el respaldo local va por cuenta y un guardado fallido no publica.
+      # (Reemplaza la suite vieja del árbol, que buscaba .tree-node: esa vista
+      # no existe desde el árbol V4 — el archivo sigue en test/.)
+      - name: Pruebas de privacidad y guardado de Mi Libro (Playwright)
+        id: libro_privacidad
         continue-on-error: true
-        run: npm run test:arbol
+        run: npm run test:libro-privacidad
 
       # Cubre qué pasa si el navegador niega o revoca el permiso de
       # micrófono a mitad de una charla: antes no había ningún test que
@@ -140,18 +139,18 @@ jobs:
         continue-on-error: true
         run: npm run test:instalacion
 
-      # Las tarjetas de "Quiénes han colaborado" en el árbol ahora enlazan a
-      # colaboraciones.html filtrado a esa persona (?colaborador=).
-      - name: Pruebas del enlace árbol → aportes por colaborador (Playwright)
-        id: arbol_colab_link
+      # Despedirse con la voz cierra la charla como el botón «Fin», sin
+      # falsos positivos. (Reemplaza la suite de .colab-card del árbol viejo.)
+      - name: Pruebas de despedida por voz (Playwright)
+        id: despedida_voz
         continue-on-error: true
-        run: npm run test:arbol-colab-link
+        run: npm run test:despedida-voz
 
       - name: Resultado de las pruebas de Playwright
         if: always()
         run: |
           fallo=0
-          for r in "${{ steps.responsive.outcome }}" "${{ steps.pause_resume.outcome }}" "${{ steps.arbol.outcome }}" "${{ steps.mic_denegado.outcome }}" "${{ steps.a11y.outcome }}" "${{ steps.landscape.outcome }}" "${{ steps.colaborar_sticky.outcome }}" "${{ steps.login_vacio.outcome }}" "${{ steps.instalacion.outcome }}" "${{ steps.arbol_colab_link.outcome }}"; do
+          for r in "${{ steps.responsive.outcome }}" "${{ steps.pause_resume.outcome }}" "${{ steps.libro_privacidad.outcome }}" "${{ steps.mic_denegado.outcome }}" "${{ steps.a11y.outcome }}" "${{ steps.landscape.outcome }}" "${{ steps.colaborar_sticky.outcome }}" "${{ steps.login_vacio.outcome }}" "${{ steps.instalacion.outcome }}" "${{ steps.despedida_voz.outcome }}"; do
             if [ "$r" != "success" ]; then fallo=1; fi
           done
           if [ "$fallo" = "1" ]; then

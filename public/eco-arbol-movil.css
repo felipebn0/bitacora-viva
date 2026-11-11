@@ -10,3 +10,6 @@
 @media (max-width: 900px) {
   header .toolbar .btn, header .toolbar button, header .toolbar input, #searchInput, .eco7-nav .btn, .side .btn, .side button, #actionsTrigger { min-height: 44px; }
 }
+
+/* En computador también: el buscador y «⋯» quedaban en 43px. */
+#searchInput, #actionsTrigger { min-height: 44px; }

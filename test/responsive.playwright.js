@@ -385,26 +385,32 @@ async function checkCuenta(browser, base, w, scale, sessionCookie, screenshotDir
   // ya no es de primer nivel — vive anidado dentro de "Opciones avanzadas",
   // así que hay que abrir esa sección padre antes de poder abrirlo.
   // El acordeón no es exclusivo: abrir una sección no cierra las otras.
-  await page.click('button[aria-controls="umSecPerfil"]').catch(() => {});   // el correo vive acá
+  // Cuenta ahora es un menú lateral con vistas («Mi perfil», «Preferencias»…):
+  // se ve una a la vez, así que el correo se mide en una y A-/A+ en la otra.
+  await page.click('button[aria-controls="eco-lateral-perfil"]').catch(() => {});
+  await page.waitForTimeout(150);
+  const emailLegible = await page.evaluate(() => {
+    const email = document.getElementById('umProfileEmail');
+    const emailFull = document.getElementById('umProfileEmailFull');
+    return email
+      ? (emailFull && !emailFull.hidden ? emailFull.textContent === email.value : email.scrollWidth <= email.clientWidth + 1)
+      : null;
+  });
+  await page.click('#eco-lateral-perfil .eco-lateral-back').catch(() => {});
   await page.waitForTimeout(120);
-  await page.click('button[aria-controls="umSecAvanzadas"]').catch(() => {}); // sección padre
+  await page.click('button[aria-controls="eco-lateral-preferencias"]').catch(() => {});
   await page.waitForTimeout(120);
   await page.click('button[aria-controls="umSecFuente"]').catch(() => {});    // el control A-/A+ vive acá
   await page.waitForTimeout(150);
 
   const info = await page.evaluate(() => {
-    const email = document.getElementById('umProfileEmail');
-    const emailFull = document.getElementById('umProfileEmailFull');
     const incBtn = document.getElementById('umFontIncBtn');
-    const emailLegible = email
-      ? (emailFull && !emailFull.hidden ? emailFull.textContent === email.value : email.scrollWidth <= email.clientWidth + 1)
-      : null;
     return {
       overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      emailLegible,
       botonAlto: incBtn ? incBtn.getBoundingClientRect().height : null,
     };
   });
+  info.emailLegible = emailLegible;
   check(info.overflowX <= 1, `${label}: sin scroll horizontal (overflow=${info.overflowX}px)`);
   check(info.emailLegible !== false, `${label}: el correo se ve completo, en el cuadro o en el texto de abajo`);
   check(info.botonAlto !== null && info.botonAlto >= 43.5, `${label}: A-/A+ mide 44px+ de alto (${info.botonAlto}px)`);
@@ -484,10 +490,12 @@ async function checkColaborar(browser, server, base, screenshotDir) {
   check(/class="volver"/.test(topbarHTML) && !/icon-btn/.test(topbarHTML), 'colaborar (owner=): el topbar tiene un solo link "← volver", no la fila de 3 íconos de antes');
   const logoutRowVisible = await page.locator('#logoutRow').isVisible().catch(() => true);
   check(!logoutRowVisible, 'colaborar (owner=): NO muestra "cerrar sesión"/"borrar cuenta" (eso se maneja desde app.html)');
-  const collabBox = await page.locator('#collabSwitch').boundingBox();
+  // #collabSwitch ahora va dentro del desplegable «Cambiar de bitácora»
+  // (.eco-colab-barra, eco-colaborar-rediseno.js): se mide esa barra.
+  const collabBox = await page.locator('.eco-colab-barra').boundingBox();
   check(
-    !!collabBox && Math.abs(collabBox.x - (1440 - (collabBox.x + collabBox.width))) < 30,
-    `colaborar (owner=): "Tus colaboraciones" queda centrado, no pegado al borde izquierdo (${collabBox ? `leftGap=${Math.round(collabBox.x)} rightGap=${Math.round(1440 - (collabBox.x + collabBox.width))}` : 'no se encontró la caja'})`
+    !!collabBox && collabBox.width > 200 && Math.abs(collabBox.x - (1440 - (collabBox.x + collabBox.width))) < 30,
+    `colaborar (owner=): la barra «Cambiar de bitácora» queda centrada, no pegada al borde izquierdo (${collabBox ? `leftGap=${Math.round(collabBox.x)} rightGap=${Math.round(1440 - (collabBox.x + collabBox.width))}` : 'no se encontró la caja'})`
   );
   await checkSinViolacionesCsp(page, 'colaborar (owner=), cuenta dueña', check);
   await page.screenshot({ path: path.join(screenshotDir, 'colaborar-owner-1440.png') });

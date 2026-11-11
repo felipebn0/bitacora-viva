@@ -88,9 +88,8 @@ async function abrirPanelDeCuenta(browser, base, userAgent) {
   await page.goto(base + '/app.html');
   await page.waitForSelector('#appContent', { state: 'visible' });
   await page.click('#userMenuBtn');
-  // "Instalación" vive dentro del acordeón anidado "Opciones avanzadas"
-  // (experimento UX de ux-pruebas) — hay que abrir ese primero.
-  await page.click('button[aria-controls="umSecAvanzadas"]');
+  // "Instalación" vive en la vista «Recuerdos, datos y seguridad» del menú de Cuenta.
+  await page.click('button[aria-controls="eco-lateral-datos"]');
   await page.click('button[aria-controls="umSecInstalacion"]');
   await page.waitForSelector('#umSecInstalacion', { state: 'visible' });
   return { context, page };
