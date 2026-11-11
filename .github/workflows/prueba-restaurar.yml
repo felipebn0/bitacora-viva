@@ -1,0 +1,94 @@
+name: Prueba semanal de restaurar la copia de la base
+
+# Una copia que nunca se ha restaurado no se sabe si sirve. Cada domingo, dos
+# horas después del backup (backup.yml), esto descarga la copia más reciente,
+# la descifra, la restaura en un Postgres de prueba que existe solo durante
+# esta corrida y cuenta usuarios, charlas, capítulos e historias. Si algo falla
+# (no hay copia reciente, no se descifra, no se restaura o sale vacía), la
+# corrida queda en rojo y GitHub manda un correo. Nada sale de GitHub y la base
+# de prueba se borra al terminar.
+
+on:
+  schedule:
+    - cron: '17 9 * * 0'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  restaurar:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: prueba
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DESTINO: postgres://postgres:prueba@localhost:5432/postgres
+    steps:
+      - name: Verificar el secret de la frase
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          if [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "::error::Falta el secret BACKUP_PASSPHRASE: sin él la copia no se puede descifrar."
+            exit 1
+          fi
+
+      - name: Instalar cliente de Postgres 18
+        run: |
+          for i in 1 2 3; do
+            sudo apt-get update && sudo apt-get install -y postgresql-common && break
+            echo "Intento $i falló; reintentando…"; sleep 20
+          done
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client-18
+
+      - name: Descargar la copia más reciente
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          read -r TAG CREADA < <(gh release list --repo "${{ github.repository }}" --limit 50 --json tagName,createdAt \
+            | jq -r '[.[] | select(.tagName | startswith("backup-"))] | sort_by(.createdAt) | last | "\(.tagName) \(.createdAt)"')
+          if [ -z "$TAG" ] || [ "$TAG" = "null" ]; then
+            echo "::error::No hay ninguna copia (release backup-*). Revisa el workflow «Backup semanal de la base de datos»."
+            exit 1
+          fi
+          DIAS=$(( ( $(date -u +%s) - $(date -u -d "$CREADA" +%s) ) / 86400 ))
+          echo "Copia: $TAG (hace $DIAS días)"
+          if [ "$DIAS" -gt 8 ]; then
+            echo "::error::La copia más reciente ($TAG) tiene $DIAS días: el backup semanal dejó de correr."
+            exit 1
+          fi
+          gh release download "$TAG" --repo "${{ github.repository }}" --pattern '*.dump.gpg' --output copia.dump.gpg
+
+      - name: Descifrar y restaurar
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          printf '%s' "$BACKUP_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 \
+            -o copia.dump -d copia.dump.gpg
+          rm -f copia.dump.gpg
+          /usr/lib/postgresql/18/bin/pg_restore --no-owner --no-privileges --exit-on-error -d "$DESTINO" copia.dump
+          rm -f copia.dump
+
+      - name: Revisar que la copia tenga datos
+        run: |
+          contar() { /usr/lib/postgresql/18/bin/psql "$DESTINO" -tAc "SELECT count(*) FROM $1" 2>/dev/null || echo "sin tabla"; }
+          USUARIOS=$(contar users)
+          echo "Usuarios: $USUARIOS"
+          echo "Charlas: $(contar sessions)"
+          echo "Capítulos: $(contar chapters)"
+          echo "Historias: $(contar story_log)"
+          echo "Archivos: $(contar media)"
+          echo "### Copia restaurada bien — $USUARIOS usuarios" >> "$GITHUB_STEP_SUMMARY"
+          if ! [ "$USUARIOS" -gt 0 ] 2>/dev/null; then
+            echo "::error::La copia se restauró pero no tiene usuarios ($USUARIOS)."
+            exit 1
+          fi
