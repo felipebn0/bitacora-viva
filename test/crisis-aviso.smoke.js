@@ -19,7 +19,7 @@ const users = {
 };
 const avisos = [];
 let siguienteId = 1;
-const suscripciones = [{ id: 1, user_id: 1, endpoint: 'https://push.example/admin-1', p256dh: 'p', auth: 'a' }];
+const suscripciones = [{ id: 1, user_id: 1, endpoint: 'https://fcm.googleapis.com/fcm/send/admin-1', p256dh: 'p', auth: 'a' }];
 const enviados = [];
 
 function fakeSql(strings, ...values) {
@@ -115,7 +115,7 @@ async function login(server, username) {
     ok(r.status === 200 && avisos.length === 1, 'cuando sale el popup queda el registro');
     ok(avisos[0].quien === 'Ana' && avisos[0].tipo === 'suicide' && avisos[0].cuenta_id === 2, 'el registro dice quién y de qué tipo');
     ok(!JSON.stringify(avisos[0]).includes('lo que dijo'), 'lo que la persona dijo nunca se guarda');
-    ok(enviados.length === 1 && enviados[0].endpoint === 'https://push.example/admin-1', 'la notificación le llega al celular del admin');
+    ok(enviados.length === 1 && enviados[0].endpoint === 'https://fcm.googleapis.com/fcm/send/admin-1', 'la notificación le llega al celular del admin');
     ok(/Ana/.test(enviados[0].carga.body) && enviados[0].carga.url === '/admin.html' && !/lo que dijo/.test(enviados[0].carga.body), 'la notificación dice quién y lleva al panel, sin el texto');
 
     r = await request(server, { path: '/api/crisis-aviso', method: 'POST', body: { tipo: 'suicide' } }, ana);

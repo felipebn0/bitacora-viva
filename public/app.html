@@ -4015,30 +4015,30 @@
   // para no gastar un llamado a la IA que quizás se descarta si nunca
   // vuelve, y para que sea resumeConversation() (con pausedFromState =
   // 'thinking') quien pida la pregunta nueva solo cuando de verdad vuelve.
-  // ¿La persona se despide o pide terminar? Solo frases cortas y con la despedida al principio o al final, para no
-  // confundirla con una historia ("y me dijo chao", "me voy a acordar..."). Si sí, se cierra como con el botón «Fin».
-  // Despedidas: cuentan al principio o al final de lo que dijo («Bueno, chao», «Gracias Eco, hasta mañana»).
-  const DESPEDIDAS = [
-    'chao', 'chau', 'adios', 'bye', 'goodbye', 'goodnight', 'good night', 'see you', 'hasta luego', 'hasta manana', 'hasta pronto',
-    'hasta la proxima', 'hasta otro dia', 'nos vemos', 'me tengo que ir', 'tengo que irme', 'ya me voy', 'me voy ya', 'i have to go',
-    'por hoy es todo', 'por hoy fue todo', 'eso es todo por hoy', 'ya no mas por hoy', 'hasta aqui por hoy', 'suficiente por hoy',
-    'fin de la charla', 'thats all for today',
+  // ¿La persona se despide o pide terminar? Cuenta solo si TODO lo que dijo es despedida (más palabras de relleno como
+  // «bueno», «gracias», «Eco»): «Bueno, chao», «Gracias Eco, hasta mañana», «Listo, terminemos por hoy». Si sobra algo, no
+  // es una despedida: «no quiero terminar», «y me dijo chao», «nos vemos todos los domingos», «mi mamá dijo hasta mañana».
+  // En ese caso la IA decide (el prompt también sabe cerrar con una despedida). Si sí, se cierra como con el botón «Fin».
+  const FRASES_DE_CIERRE = [
+    'chao', 'chau', 'adios', 'bye', 'goodbye', 'goodnight', 'good night', 'see you', 'see you later', 'hasta luego', 'hasta manana',
+    'hasta pronto', 'hasta la proxima', 'hasta otro dia', 'nos vemos', 'nos vemos manana', 'me tengo que ir', 'tengo que irme', 'ya me voy',
+    'me voy ya', 'i have to go', 'por hoy es todo', 'por hoy fue todo', 'eso es todo por hoy', 'ya no mas por hoy', 'hasta aqui por hoy',
+    'suficiente por hoy', 'fin de la charla', 'thats all for today', 'terminemos', 'terminemos por hoy', 'terminemos la charla',
+    'acabemos', 'finalicemos', 'cerremos', 'paremos', 'paremos aqui', 'dejemoslo', 'dejemoslo aqui', 'dejemoslo hasta aqui',
+    'dejemos aqui', 'dejemos hasta aqui', 'quiero terminar', 'quiero terminar la charla', 'vamos a terminar', 'podemos terminar',
+    'quiero parar', 'quiero finalizar', 'quiero acabar', 'terminar la charla', 'finalizar la charla', 'lets stop', 'lets end',
+    'lets finish', 'end the conversation',
   ];
-  // Pedidos de terminar: solo si cierran la frase («Listo, terminemos por hoy»). «Terminemos de hablar de mi papá y…» o
-  // «Paremos un momento en la finca…» siguen la charla.
-  const PEDIDOS_DE_TERMINAR = [
-    'terminemos', 'acabemos', 'finalicemos', 'cerremos', 'paremos', 'dejemoslo', 'dejemos aqui', 'dejemos hasta aqui',
-    'quiero terminar', 'vamos a terminar', 'podemos terminar', 'quiero parar', 'quiero finalizar', 'quiero acabar',
-    'terminar la charla', 'finalizar la charla', 'lets stop', 'lets end', 'lets finish', 'end the conversation',
-  ];
-  const RELLENO = '(?:bueno|listo|ok|okay|vale|bien|ya|eco|gracias|muchas gracias|mil gracias|entonces|por hoy|aqui|hasta aqui|la charla|well|thanks|thank you|for today)';
-  const RE_DESPEDIDA_INICIO = new RegExp('^(?:' + RELLENO + '\\s+)*(?:' + DESPEDIDAS.join('|') + ')\\b');
-  const RE_DESPEDIDA_FIN = new RegExp('\\b(?:' + DESPEDIDAS.concat(PEDIDOS_DE_TERMINAR).join('|') + ')(?:\\s+' + RELLENO + ')*$');
+  const RELLENOS = ['bueno', 'listo', 'ok', 'okay', 'vale', 'bien', 'ya', 'eco', 'gracias', 'muchas gracias', 'mil gracias', 'entonces',
+    'si', 'pues', 'por hoy', 'aqui', 'cuidate', 'que descanses', 'well', 'thanks', 'thank you', 'for today', 'ok then'];
+  const alternativas = (lista) => lista.slice().sort((a, b) => b.length - a.length).join('|');
+  const RE_SOLO_CIERRE = new RegExp('^(?:(?:' + alternativas(FRASES_DE_CIERRE.concat(RELLENOS)) + ')(?: |$))+$');
+  const RE_ALGUN_CIERRE = new RegExp('(?:^| )(?:' + alternativas(FRASES_DE_CIERRE) + ')(?= |$)');
   function pideTerminarLaCharla(texto) {
-    const t = String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    const t = String(texto || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
       .replace(/['’]/g, '').replace(/[^a-z0-9ñ\s]/g, ' ').replace(/\s+/g, ' ').trim();
     if (!t || t.length > 80) return false;
-    return RE_DESPEDIDA_INICIO.test(t) || RE_DESPEDIDA_FIN.test(t);
+    return RE_SOLO_CIERRE.test(t) && RE_ALGUN_CIERRE.test(t);
   }
   window.__ecoPideTerminarLaCharla = pideTerminarLaCharla; // para las pruebas
 

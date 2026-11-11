@@ -49,32 +49,24 @@ module.exports = (app, { sql, ensureSchema, requireAuth, bloquearColaborador, bl
 
   const textoCorto = (v, max) => (typeof v === 'string' && v.length > 0 && v.length <= max ? v : null);
 
-  // SEC-06: rechazar endpoints a IPs privadas, localhost o link-local para
-  // evitar que un atacante registre una suscripción push apuntando a la red
-  // interna y el servidor haga fetch() hacia allá (SSRF).
-  function esDestinoPrivado(urlStr) {
+  // Solo se mandan avisos a los servicios de push de los navegadores (Chrome/Android, Firefox, Safari/iPhone, Edge). Antes
+  // se aceptaba cualquier dirección https, y el servidor podía terminar enviando pedidos a una dirección interna (SSRF).
+  // Reemplaza a una lista de rangos privados que también bloqueaba fcm.googleapis.com (empieza por «fc», como las IPv6
+  // privadas): con ella nadie en Chrome o Android podía activar los avisos.
+  const HOSTS_PUSH = [/^fcm\.googleapis\.com$/, /^android\.googleapis\.com$/, /^updates\.push\.services\.mozilla\.com$/,
+    /^web\.push\.apple\.com$/, /^[a-z0-9-]+\.notify\.windows\.com$/];
+  const destinoPermitido = (endpoint) => {
     try {
-      const u = new URL(urlStr);
-      const h = u.hostname.toLowerCase();
-      if (h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '[::1]') return true;
-      if (/^10\./.test(h)) return true;
-      if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return true;
-      if (/^192\.168\./.test(h)) return true;
-      if (/^169\.254\./.test(h)) return true; // link-local
-      if (/^0\./.test(h) || h === '0.0.0.0') return true;
-      if (/^fc|^fd/i.test(h)) return true; // IPv6 ULA
-      if (/^fe80/i.test(h)) return true; // IPv6 link-local
-      return false;
-    } catch { return true; }
-  }
-
+      const u = new URL(endpoint);
+      return u.protocol === 'https:' && !u.port && !u.username && !u.password && HOSTS_PUSH.some((re) => re.test(u.hostname.toLowerCase()));
+    } catch (e) { return false; }
+  };
   const suscripcionValida = (s) => {
     if (!s || typeof s !== 'object') return null;
     const endpoint = textoCorto(s.endpoint, 800);
     const p256dh = textoCorto(s.keys && s.keys.p256dh, 200);
     const auth = textoCorto(s.keys && s.keys.auth, 100);
-    if (!endpoint || !p256dh || !auth || !/^https:\/\//i.test(endpoint)) return null;
-    if (esDestinoPrivado(endpoint)) return null;
+    if (!endpoint || !p256dh || !auth || !destinoPermitido(endpoint)) return null;
     return { endpoint, p256dh, auth };
   };
 
@@ -88,6 +80,8 @@ module.exports = (app, { sql, ensureSchema, requireAuth, bloquearColaborador, bl
       let enviados = 0;
       const carga = JSON.stringify({ title: aviso.title, body: aviso.body, url: aviso.url || '/app.html', tag: aviso.tag || 'eco-aviso' });
       await Promise.all(filas.map(async (f) => {
+        // Una suscripción guardada antes de la lista de destinos permitidos y que no esté en ella no se usa nunca.
+        if (!destinoPermitido(f.endpoint)) return;
         try {
           await Promise.race([
             webpush.sendNotification({ endpoint: f.endpoint, keys: { p256dh: f.p256dh, auth: f.auth } }, carga, { TTL: 86400 }),

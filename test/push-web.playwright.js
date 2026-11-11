@@ -11,7 +11,7 @@ const ok = (c, m) => { if (c) console.log('✓ ' + m); else { fallas++; console.
 
 const FALSOS = () => {
   window.__push = { suscrito: null, registrados: [], permiso: 'default' };
-  const sub = { endpoint: 'https://push.example/x', toJSON() { return { endpoint: this.endpoint, keys: { p256dh: 'p', auth: 'a' } }; }, async unsubscribe() { window.__push.suscrito = null; return true; } };
+  const sub = { endpoint: 'https://fcm.googleapis.com/fcm/send/x', toJSON() { return { endpoint: this.endpoint, keys: { p256dh: 'p', auth: 'a' } }; }, async unsubscribe() { window.__push.suscrito = null; return true; } };
   const reg = { pushManager: { getSubscription: async () => window.__push.suscrito, subscribe: async () => { window.__push.suscrito = sub; return sub; } } };
   Object.defineProperty(navigator, 'serviceWorker', { configurable: true, value: { getRegistration: async () => reg, register: async (u) => { window.__push.registrados.push(u); return reg; }, ready: Promise.resolve(reg) } });
   window.PushManager = function PushManager() {};

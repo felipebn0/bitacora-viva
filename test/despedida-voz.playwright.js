@@ -69,7 +69,9 @@ const fakes = () => {
     const no = ['Y mi papá me dijo chao y se fue para la finca a trabajar', 'Me voy a acordar siempre de esa casa', 'Eso es todo',
       'Ya terminé', 'Terminamos el colegio en 1985 y nos fuimos a Bogotá', 'Cuando era niño me iba a la finca de mi abuelo todos los diciembres y allá aprendí a ordeñar y a montar a caballo, chao',
       'Mi abuela siempre decía adiós con la mano desde la ventana', 'Paremos un momento en la parte de la finca de mis abuelos',
-      'Terminemos de hablar de mi papá y pasemos a mi mamá', 'Quiero terminar la historia de cuando nos fuimos a Cali'];
+      'Terminemos de hablar de mi papá y pasemos a mi mamá', 'Quiero terminar la historia de cuando nos fuimos a Cali',
+      'No quiero terminar', 'y me dijo chao', 'mi mamá dijo hasta mañana', 'nos vemos todos los domingos', 'No terminemos todavía',
+      'Buenas noches Eco', 'Hola Eco, buenas noches', 'No, no me voy', 'Él siempre decía me tengo que ir'];
     const r = await page.evaluate(([si, no]) => ({ si: si.map((t) => [t, window.__ecoPideTerminarLaCharla(t)]), no: no.map((t) => [t, window.__ecoPideTerminarLaCharla(t)]) }), [si, no]);
     const faltan = r.si.filter(([, v]) => !v).map(([t]) => t);
     const sobran = r.no.filter(([, v]) => v).map(([t]) => t);

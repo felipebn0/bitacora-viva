@@ -2,38 +2,52 @@
    contenido y capítulos) para recorrerlo, y a la derecha el libro mismo, que se edita directamente. Arriba: "Descargar PDF"
    (hoja A4) y "Compartir libro digital". No modifica las historias originales; lo que se edita queda en el borrador del libro. */
 (()=>{'use strict';
-const KEY='eco-editorial-borrador-v1';
+// Respaldo local del libro: va separado por cuenta y perfil (antes era una sola clave para todo el navegador, y en un
+// computador compartido la cuenta B podía ver la portada y dedicatoria de A). Solo se usa con la identidad confirmada.
+const KEY='eco-editorial-borrador-v2';
+const KEY_VIEJA='eco-editorial-borrador-v1';
+let claveLocal=null;
+function claveDe(me){
+ if(!me||typeof me!=='object')return null;
+ const quien=me.username||(me.bitacoraActiva&&me.bitacoraActiva.id?'narrador':'');
+ if(!quien)return null;
+ return KEY+':'+quien+':'+(me.bitacoraActiva&&me.bitacoraActiva.id?me.bitacoraActiva.id:'propia');
+}
 let chapters=[],stories=[],state={},dialog,book,outline,status;
 const herramientasAbiertas=new Set();
 const byId=id=>document.getElementById(id);
 const node=(tag,cls,value)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(value!==undefined)e.textContent=value;return e};
 const plain=t=>String(t||'');
 function fresh(){const en=document.documentElement.lang==='en';return {title:en?'My family story':'Mi historia familiar',subtitle:en?'Memories for the generations to come':'Recuerdos para las próximas generaciones',dedication:'',order:[],edits:{},media:{},bookPhotos:{},qr:{},qrOff:{}}}
-function read(){try{const x=JSON.parse(localStorage.getItem(KEY)||'null');if(x&&typeof x==='object'){return {...fresh(),...x,edits:typeof x.edits==='object'&&x.edits?x.edits:{},order:Array.isArray(x.order)?x.order:[]}}}catch{}return fresh()}
+function read(){if(!claveLocal)return fresh();try{const x=JSON.parse(localStorage.getItem(claveLocal)||'null');if(x&&typeof x==='object'){return {...fresh(),...x,edits:typeof x.edits==='object'&&x.edits?x.edits:{},order:Array.isArray(x.order)?x.order:[]}}}catch{}return fresh()}
+let guardadoOk=true;
 let version=0,saveTimer=null,saving=Promise.resolve(),dirty=false,serverReady=false,enlaceActivo=false,enlaceTimer=null,enlaceEnCurso=false;
 function persist(){
  dirty=true;
  programarEnlace();
- try{localStorage.setItem(KEY,JSON.stringify(state))}catch{}
+ if(claveLocal){try{localStorage.setItem(claveLocal,JSON.stringify(state))}catch{}}
  if(!serverReady){status.textContent='Sin conexión con el guardado en ECO. Descarga una copia de respaldo.';return}
  status.textContent='Cambios pendientes de guardar…';
  clearTimeout(saveTimer);
  saveTimer=setTimeout(flush,750);
 }
+// Devuelve true solo si lo último quedó guardado en ECO: publicar o actualizar el enlace depende de eso.
 function flush(){
  clearTimeout(saveTimer);
- if(!dirty||!serverReady)return saving;
+ if(!serverReady)return Promise.resolve(false);
+ if(!dirty)return saving.then(()=>guardadoOk);
  dirty=false;
  const snapshot=JSON.parse(JSON.stringify(state));
  saving=saving.then(async()=>{
    const r=await fetch('/api/book-editor/draft',{method:'PUT',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({book:snapshot,version})});
    const d=await r.json().catch(()=>({}));
-   if(r.status===409){serverReady=false;dirty=true;status.textContent='Hay una versión más nueva en otro dispositivo. Recarga la página para verla.';return}
+   if(r.status===409){serverReady=false;dirty=true;guardadoOk=false;status.textContent='Hay una versión más nueva en otro dispositivo. Recarga la página para verla.';return}
    if(!r.ok)throw Error(d.error||'No se pudieron guardar los cambios.');
    version=d.version;
+   guardadoOk=true;
    status.textContent=dirty?'Hay nuevos cambios pendientes…':'Guardado en tu cuenta ECO ✓';
- }).catch(e=>{dirty=true;status.textContent='No se guardó en ECO: '+e.message});
- return saving;
+ }).catch(e=>{dirty=true;guardadoOk=false;status.textContent='No se guardó en ECO: '+e.message});
+ return saving.then(()=>guardadoOk);
 }
 function getOrder(){const ids=chapters.map(c=>String(c.id));return [...state.order.filter(x=>ids.includes(String(x))).map(String),...ids.filter(x=>!state.order.includes(x))]}
 function ordered(){return getOrder().map(id=>chapters.find(c=>String(c.id)===id)).filter(Boolean)}
@@ -70,10 +84,15 @@ function create(){if(dialog)return;
 function alternarIndice(abrir){const v=abrir===undefined?!dialog.classList.contains('eco-outline-abierto'):abrir;dialog.classList.toggle('eco-outline-abierto',v);byId('ecoEditorialIndexToggle').setAttribute('aria-expanded',String(v))}
 function trap(e){const nodes=[...dialog.querySelectorAll('button:not([disabled]),input:not([disabled]),textarea:not([disabled]),select:not([disabled]),summary,[contenteditable="plaintext-only"],[contenteditable="true"]')].filter(el=>el.getClientRects().length);if(!nodes.length)return;if(e.shiftKey&&document.activeElement===nodes[0]){e.preventDefault();nodes.at(-1).focus()}else if(!e.shiftKey&&document.activeElement===nodes.at(-1)){e.preventDefault();nodes[0].focus()}}
 async function open(){create();dialog.hidden=false;document.body.classList.add('eco-editorial-open-body');
- state=fresh();serverReady=false;status.textContent='Cargando libro guardado…';
+ state=fresh();serverReady=false;claveLocal=null;status.textContent='Cargando libro guardado…';
+ try{localStorage.removeItem(KEY_VIEJA)}catch{}
  try{
+ // Primero, quién es: sin identidad confirmada no se muestra ningún respaldo local.
+ const mr=await fetch('/api/me',{credentials:'same-origin'}).catch(()=>null);
+ if(!mr||!mr.ok)throw Object.assign(Error(mr&&(mr.status===401||mr.status===403)?'Inicia sesión para acceder a tu libro.':'No se pudo conectar con ECO. Revisa tu conexión y vuelve a abrir el libro.'),{sinIdentidad:true});
+ claveLocal=claveDe(await mr.json().catch(()=>null));
  const [r,dr,sr]=await Promise.all([fetch('/api/chapters',{credentials:'same-origin'}),fetch('/api/book-editor/draft',{credentials:'same-origin'}),fetch('/api/story-log',{credentials:'same-origin'})]);
- if(!r.ok||!dr.ok||!sr.ok)throw Error((r.status===401||dr.status===401)?'Inicia sesión para acceder a tu libro.':'No se pudo conectar con el guardado de ECO.');
+ if(!r.ok||!dr.ok||!sr.ok)throw Object.assign(Error((r.status===401||dr.status===401)?'Inicia sesión para acceder a tu libro.':'No se pudo conectar con el guardado de ECO.'),{sinIdentidad:r.status===401||dr.status===401||r.status===403||dr.status===403});
  const [data,draft,storyData]=await Promise.all([r.json(),dr.json(),sr.json()]);stories=Array.isArray(storyData.stories)?storyData.stories:[];
  chapters=Array.isArray(data.chapters)?data.chapters:[];
  state={...fresh(),...(draft.book||{}),edits:draft.book?.edits||{},order:Array.isArray(draft.book?.order)?draft.book.order:[],media:draft.book?.media||{},bookPhotos:draft.book?.bookPhotos||{},qr:draft.book?.qr||{},qrOff:draft.book?.qrOff||{}};
@@ -83,7 +102,7 @@ async function open(){create();dialog.hidden=false;document.body.classList.add('
  // PRI-01: no crear QR públicos automáticamente al abrir el editor.
  // El usuario puede crearlos manualmente cuando lo decida.
  consultarEnlace();
- }catch(e){chapters=[];state=read();status.textContent=e.message+' Se cargó el respaldo local cuando estaba disponible.'}
+ }catch(e){chapters=[];if(e.sinIdentidad)claveLocal=null;state=read();status.textContent=e.message+(claveLocal?' Se cargó el respaldo local de tu cuenta cuando estaba disponible.':'')}
  drawBook();renderOutline();dialog.querySelector('.eco-editorial-preview').scrollTop=0;marcarSeccionActual();byId('ecoEditorialPdf').focus()}
 // Por defecto, todos los capítulos que tienen grabaciones llevan su QR de voz; quien retiró uno a propósito
 // (qrOff) no lo vuelve a recibir solo.
@@ -129,7 +148,7 @@ async function prepararEnlace(btn,textoOcupado){
  status.classList.remove('eco-editorial-status-error');
  btn.disabled=true;btn.textContent=textoOcupado;
  try{
-  await flush();
+  if(!(await flush()))throw Error('No se pudieron guardar tus cambios, así que no publiqué el libro. Tus cambios siguen aquí: revisa la conexión y vuelve a intentar.');
   const url=await window.EcoLibroDigital.compartirEnLinea({aviso:t=>{status.textContent=t}});
   if(!url)throw Error('No se pudo preparar el enlace. Intenta de nuevo.');
   mostrarEnlace(url);alternarIndice(true);status.textContent='Listo: copia el enlace de tu libro (a la izquierda) y mándalo. Se actualiza solo cuando cambias tu libro.';
@@ -144,7 +163,7 @@ function programarEnlace(){
   if(!enlaceActivo)return;
   if(enlaceEnCurso)return programarEnlace();
   enlaceEnCurso=true;
-  try{await flush();if(await window.EcoLibroDigital.compartirEnLinea())status.textContent='Guardado ✓ El enlace de tu libro quedó al día.'}catch{/* se reintenta con el próximo cambio */}
+  try{if(!(await flush()))return;if(await window.EcoLibroDigital.compartirEnLinea())status.textContent='Guardado ✓ El enlace de tu libro quedó al día.'}catch{/* se reintenta con el próximo cambio */}
   finally{enlaceEnCurso=false}
  },5000);
 }
@@ -178,10 +197,10 @@ async function descargarPdf(){
   btn.textContent='Preparando…';status.classList.remove('eco-editorial-status-error');
   status.textContent='Preparando tu PDF: reduciendo las fotos y armando las páginas…';
   document.activeElement?.blur?.();
-  await flush();
+  const guardado=await flush();
   const datos=await window.EcoLibroDigital.armarDatos({conAudios:false});
   const r=await window.EcoLibroPdf.descargar(datos,state.qr||{});
-  status.textContent='Listo: se descargó tu PDF en hoja A4 ('+(r.bytes/1048576).toFixed(1)+' MB).';
+  status.textContent='Listo: se descargó tu PDF en hoja A4 ('+(r.bytes/1048576).toFixed(1)+' MB).'+(guardado?'':' Ojo: tiene cambios que todavía no se guardaron en ECO.');
  }catch(e){status.textContent=e.message||'No se pudo preparar el PDF.';status.classList.add('eco-editorial-status-error')}
  finally{btn.disabled=false;btn.textContent=texto}
 }

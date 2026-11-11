@@ -77,7 +77,7 @@ function fakeSql(strings, ...values) {
     return Promise.resolve(Object.values(por));
   }
   if (text.includes('SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id')) {
-    return Promise.resolve(sinCelular.has(values[0]) ? [] : [{ id: values[0], endpoint: 'https://push.example/c' + values[0], p256dh: 'p', auth: 'a' }]);
+    return Promise.resolve(sinCelular.has(values[0]) ? [] : [{ id: values[0], endpoint: 'https://fcm.googleapis.com/fcm/send/c' + values[0], p256dh: 'p', auth: 'a' }]);
   }
   return Promise.resolve([]);
 }
@@ -153,7 +153,7 @@ const cron = (server, auth) => request(server, { path: '/api/cron/recordatorio-p
     r = await cron(server);
     ok(r.status === 200 && r.json.enviados === 5, 'manda a las 5 cuentas que le tocan');
     ok(r.json.yaUsaron === 1 && r.json.yaTenianAviso === 1, 'salta a quien ya usó Eco hoy y a quien ya recibió uno hoy');
-    ok(!enviados.some((e) => e.endpoint === 'https://push.example/c16' || e.endpoint === 'https://push.example/c17'), 'a esas dos no les llega nada');
+    ok(!enviados.some((e) => e.endpoint === 'https://fcm.googleapis.com/fcm/send/c16' || e.endpoint === 'https://fcm.googleapis.com/fcm/send/c17'), 'a esas dos no les llega nada');
     ok(new Set(Object.values(tiposGuardados)).size === 5, 'las 5 cuentas quedan repartidas en los 5 tipos (uno cada uno)');
     ok(envios.length === 5 && envios.every((e) => /^[a-f0-9]{24}$/.test(e.token)), 'cada envío queda registrado con su marca');
     const sinHistorias = envios.find((e) => e.user_id === 12);

@@ -157,7 +157,7 @@ module.exports = (app, { sql, ensureSchema, requireAuth, bloquearColaborador, ra
     // externo, reduciendo la superficie de ataque frente a inyección.
     res.removeHeader('Content-Security-Policy-Report-Only');
     res.removeHeader('Reporting-Endpoints');
-    res.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' blob: data: https:; media-src 'self' https:; connect-src 'self'; frame-src 'none'; object-src 'none'; form-action 'self'; base-uri 'self'");
+    res.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' blob: data: https:; media-src 'self' https:; connect-src 'self'; frame-src 'none'; object-src 'none'; form-action 'self'; base-uri 'self'");
     if (!tokenValido(req.params.token)) return res.status(404).type('html').send(PAGINA_NO_DISPONIBLE);
     try {
       await ready();

@@ -16,7 +16,7 @@ const users = {
   1: { id: 1, username: 'admin', name: 'Felipe', password_hash: HASH, token_version: 0, owner_user_id: null, is_admin: true, primer_uso_avisado: true, email: 'admin@x.co' },
 };
 let siguienteId = 10;
-const suscripciones = [{ id: 1, user_id: 1, endpoint: 'https://push.example/admin-1', p256dh: 'p', auth: 'a' }];
+const suscripciones = [{ id: 1, user_id: 1, endpoint: 'https://fcm.googleapis.com/fcm/send/admin-1', p256dh: 'p', auth: 'a' }];
 const enviados = [];
 
 function fakeSql(strings, ...values) {
@@ -96,7 +96,7 @@ function request(server, opts, cookie) {
     const registro = { name: 'maria perez', email: 'maria@x.co', phone: '+57 300 123 4567', password: 'miclave123', acceptTerms: true };
     let r = await request(server, { path: '/api/signup', method: 'POST', body: registro });
     ok(r.status === 200, 'el registro funciona (200)');
-    ok(enviados.length === 1 && enviados[0].endpoint === 'https://push.example/admin-1', 'al admin le llega la notificación de la cuenta nueva');
+    ok(enviados.length === 1 && enviados[0].endpoint === 'https://fcm.googleapis.com/fcm/send/admin-1', 'al admin le llega la notificación de la cuenta nueva');
     ok(/Maria Perez/.test(enviados[0].carga.body) && enviados[0].carga.title === 'Eco · nueva cuenta' && enviados[0].carga.url === '/admin.html', 'dice quién se registró y lleva al panel');
     ok(!/maria@x\.co|300/.test(JSON.stringify(enviados[0].carga)), 'sin correo ni teléfono en la notificación');
 

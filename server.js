@@ -8079,6 +8079,8 @@ app.delete('/api/chapters/:id', requireAuth, bloquearColaborador, rateLimit, asy
     if (!Number.isFinite(id)) return res.status(400).json({ error: 'Id inválido.' });
     const rows = await sql`DELETE FROM chapters WHERE id = ${id} AND user_id = ${req.profileUserId} RETURNING id`;
     if (!rows.length) return res.status(404).json({ error: 'No se encontró ese capítulo.' });
+    // Borrar el capítulo también retira su QR y su audio público: quien tenga el enlace ya no lo puede abrir.
+    await sql`UPDATE book_audio_links SET revoked_at = now() WHERE owner_id = ${req.profileUserId} AND chapter_id = ${id} AND revoked_at IS NULL`;
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -8782,8 +8784,18 @@ app.post('/api/session-feedback', requireAuth, rateLimit, async (req, res) => {
     }
     const texto = typeof comment === 'string' ? comment.trim().slice(0, 1000) : null;
     await ensureSchema();
+    // La charla tiene que ser de esta misma bitácora. Mismo error para una que no existe y una ajena: no revela cuál es cuál.
+    let sesion = null;
+    if (sessionDbId !== undefined && sessionDbId !== null && sessionDbId !== '') {
+      const n = Number(sessionDbId);
+      const propia = Number.isSafeInteger(n) && n > 0
+        ? await sql`SELECT id FROM sessions WHERE id = ${n} AND user_id = ${req.profileUserId}`
+        : [];
+      if (!propia.length) return res.status(400).json({ error: 'No se encontró esa charla.' });
+      sesion = n;
+    }
     await sql`INSERT INTO session_feedback (user_id, session_id, rating, comment)
-              VALUES (${req.userId}, ${sessionDbId || null}, ${rating}, ${texto || null})`;
+              VALUES (${req.userId}, ${sesion}, ${rating}, ${texto || null})`;
     res.json({ ok: true });
   } catch (err) {
     console.error('Error al guardar feedback:', err);
@@ -9498,22 +9510,27 @@ app.get('/api/admin/crisis-avisos', requireAuth, requireAdmin, async (req, res) 
   }
 });
 
-// Diagnóstico del arranque en frío (solo admins): cuánto tarda la revisión rápida del esquema y, con ?medir=1, cuánto
-// tarda aplicar el esquema completo (lo que antes pagaba cada instancia nueva). Aplicarlo de nuevo no cambia nada.
+// Diagnóstico del arranque en frío (solo admins). El GET es de solo lectura: dice si la base está al día y cuánto tarda
+// la revisión rápida. Volver a aplicar el esquema completo (y cronometrarlo) es un POST aparte, para que abrir un enlace
+// nunca cambie la base.
 app.get('/api/admin/esquema', requireAuth, requireAdmin, async (req, res) => {
   try {
     const t0 = Date.now();
     const alDia = await esquemaAlDia();
-    const msRevision = Date.now() - t0;
-    let msCompleto = null;
-    if (req.query.medir === '1') {
-      const t1 = Date.now();
-      await aplicarEsquema();
-      await marcarEsquemaAlDia();
-      msCompleto = Date.now() - t1;
-    }
     res.set('Cache-Control', 'no-store');
-    res.json({ version: versionDelEsquema(), alDia, msRevision, msCompleto });
+    res.json({ version: versionDelEsquema(), alDia, msRevision: Date.now() - t0 });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo revisar el esquema.' });
+  }
+});
+app.post('/api/admin/esquema/aplicar', requireAuth, requireAdmin, rateLimit, async (req, res) => {
+  try {
+    const t1 = Date.now();
+    await aplicarEsquema();
+    await marcarEsquemaAlDia();
+    res.set('Cache-Control', 'no-store');
+    res.json({ version: versionDelEsquema(), alDia: true, msCompleto: Date.now() - t1 });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'No se pudo revisar el esquema.' });
