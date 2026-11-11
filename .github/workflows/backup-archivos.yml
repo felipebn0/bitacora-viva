@@ -64,6 +64,14 @@ jobs:
           DESTINO: ${{ secrets.R2_BACKUP_BUCKET }}
         run: |
           FECHA=$(date -u +%Y-%m-%d)
+          if ! rclone lsf "r2:$ORIGEN" --max-depth 1 >/dev/null 2>err.txt; then
+            echo "::error::La llave no puede leer el bucket de la app (R2_BUCKET): $(tail -1 err.txt). Revisa que el nombre sea exacto y que el token tenga ese bucket en «Apply to specific buckets»."
+            exit 1
+          fi
+          if ! rclone lsf "r2:$DESTINO" --max-depth 1 >/dev/null 2>err.txt; then
+            echo "::error::La llave no puede usar el bucket de respaldo (R2_BACKUP_BUCKET): $(tail -1 err.txt)."
+            exit 1
+          fi
           rclone sync "r2:$ORIGEN" "r2:$DESTINO/actual" \
             --backup-dir "r2:$DESTINO/borrados/$FECHA" \
             --fast-list --transfers 16 --checkers 32 --stats-one-line --stats 30s -v
