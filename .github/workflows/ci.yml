@@ -55,7 +55,15 @@ jobs:
       # botones por debajo del tamaño táctil mínimo) que ningún test
       # anterior agarraba porque ninguno mide nada visual.
       - name: Instalar navegador de Playwright (Chromium)
-        run: npx playwright install --with-deps chromium
+        # Los espejos de Ubuntu a veces no responden desde GitHub («Temporary
+        # failure resolving»): se reintenta y, si no, se instala sin paquetes
+        # del sistema (la imagen de ubuntu-latest ya trae casi todos).
+        run: |
+          for i in 1 2 3; do
+            npx playwright install --with-deps chromium && exit 0
+            echo "Intento $i falló; reintentando en 20 s…"; sleep 20
+          done
+          npx playwright install chromium
 
       # Las 10 suites de Playwright de acá abajo van con "continue-on-error:
       # true" + id: cada una corre pase lo que pase con las anteriores — un
