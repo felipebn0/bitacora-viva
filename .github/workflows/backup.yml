@@ -58,7 +58,24 @@ jobs:
         run: |
           FECHA=$(date -u +%Y-%m-%d)
           echo "FECHA=$FECHA" >> "$GITHUB_ENV"
-          pg_dump "$DATABASE_URL" --no-owner --no-privileges -F c -f "backup-$FECHA.dump"
+          # El secret puede venir pegado con comillas, espacios, «psql '…'» o
+          # «DATABASE_URL=…» (todos los intentos desde sept-2026 fallaron con
+          # «invalid connection option ""»). Se toma solo la dirección
+          # postgresql://… y se botan parámetros vacíos o sin nombre.
+          BASE=$(printf '%s' "$DATABASE_URL" | tr -d '\r\n' | grep -oE "postgres(ql)?://[^'\" ]+" | head -1 || true)
+          if [ -z "$BASE" ]; then
+            echo "::error::El secret DATABASE_URL no contiene una dirección que empiece por postgresql://. Cópiala de nuevo desde Neon (Connection string) y pégala sola, sin comillas ni «psql»."
+            exit 1
+          fi
+          RUTA=${BASE%%\?*}
+          PARAMS=""
+          if [ "$RUTA" != "$BASE" ]; then
+            PARAMS=$(printf '%s' "${BASE#*\?}" | tr '&' '\n' | grep -E '^[A-Za-z_]+=.+' | paste -sd '&' - || true)
+          fi
+          URL_LIMPIA="$RUTA${PARAMS:+?$PARAMS}"
+          echo "::add-mask::$URL_LIMPIA"
+          echo "Parámetros usados: $(printf '%s' "$PARAMS" | tr '&' '\n' | cut -d= -f1 | paste -sd ',' -)"
+          pg_dump "$URL_LIMPIA" --no-owner --no-privileges -F c -f "backup-$FECHA.dump"
           # El release queda visible para cualquier colaborador del repo, y
           # el dump trae hashes de claves, correos e historias privadas — se
           # sube cifrado con AES-256, nunca en claro. La frase va por stdin
