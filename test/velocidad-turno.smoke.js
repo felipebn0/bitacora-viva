@@ -111,7 +111,7 @@ const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { f
   clavesRateLimit.length = 0;
   await llamar(server, 'POST', '/api/speak', { text: 'Hola.' }, cookie);
   ok(clavesRateLimit.some((k) => String(k).startsWith('voz:')), '/api/speak cuenta en su propio cupo (clave "voz:")');
-  ok(!clavesRateLimit.some((k) => !String(k).startsWith('voz:')), '/api/speak no gasta el cupo general de 30/minuto');
+  ok(!clavesRateLimit.some((k) => !String(k).startsWith('voz:') && !String(k).startsWith('cuenta-voz:')), '/api/speak no gasta el cupo general de 30/minuto');
   conteoRateLimit = 31;
   const voz31 = await llamar(server, 'POST', '/api/speak', { text: 'Hola.' }, cookie);
   ok(voz31.status === 200, '/api/speak: 31 pedidos en un minuto SÍ pasan (el tope de la voz es 120)');

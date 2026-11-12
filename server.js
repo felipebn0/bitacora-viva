@@ -518,10 +518,13 @@ const RATE_LIMIT_MAX_VOZ = 120;
 // celular) se topaba con el 429 y la app mostraba "problema en el servidor".
 const RATE_LIMIT_MAX_TURNO = 90;
 
-function crearRateLimit(prefijoClave, maximo) {
+// porCuenta: el cupo se cuenta por cuenta (req.userId, que pone requireAuth) en vez de por IP. Así, rotar de red
+// no alcanza para saltarse el tope de las rutas que gastan IA o voz. Si no hay cuenta, cae a la IP.
+function crearRateLimit(prefijoClave, maximo, porCuenta = false) {
   return async function rateLimit(req, res, next) {
   try {
-    const ip = prefijoClave + (req.ip || 'desconocida');
+    const quien = porCuenta && req.userId ? 'cuenta:' + req.userId : (req.ip || 'desconocida');
+    const ip = prefijoClave + quien;
     const windowStart = Math.floor(Date.now() / RATE_LIMIT_WINDOW_MS);
     await ensureSchema();
     const rows = await sql`
@@ -569,6 +572,11 @@ const rateLimitVoz = crearRateLimit('voz:', RATE_LIMIT_MAX_VOZ);
 const rateLimitTurno = crearRateLimit('turno:', RATE_LIMIT_MAX_TURNO);
 // Los enlaces públicos de los QR del libro: cada audio se pide a pedacitos (rangos), así que el tope es holgado.
 const rateLimitQr = crearRateLimit('qr:', 240);
+// Mismos cupos que los de arriba, pero contados por cuenta (van DESPUÉS de requireAuth en la ruta).
+const rateLimitCuentaTurno = crearRateLimit('cuenta-turno:', RATE_LIMIT_MAX_TURNO, true);
+const rateLimitCuentaVoz = crearRateLimit('cuenta-voz:', RATE_LIMIT_MAX_VOZ, true);
+// Pedidos de IA que no son turno de charla (generar capítulos, chat de aportes): cupo propio y más bajo.
+const rateLimitCuentaIA = crearRateLimit('cuenta-ia:', 30, true);
 
 // Recibe los reportes de violación de CSP que manda el navegador solo,
 // disparados por la propia política (Content-Security-Policy-Report-Only,
@@ -5915,7 +5923,7 @@ function restanteSinLoHablado(texto, hablado) {
   return partirOraciones(t).slice(partirOraciones(h).length).join('').trim();
 }
 
-app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar, bloquearSiReadOnly, rateLimitTurno, async (req, res) => {
+app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar, bloquearSiReadOnly, rateLimitTurno, rateLimitCuentaTurno, async (req, res) => {
   try {
     const history = Array.isArray(req.body.history) ? req.body.history.slice(0, 60) : [];
     for (const m of history) {
@@ -6188,7 +6196,7 @@ app.post('/api/next', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar,
 
 // Confirma un turno que se generó de forma especulativa (ver "especulativo" en
 // /api/next): guarda la historia igual que lo habría hecho /api/next.
-app.post('/api/next/guardar', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar, bloquearSiReadOnly, rateLimitTurno, async (req, res) => {
+app.post('/api/next/guardar', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar, bloquearSiReadOnly, rateLimitTurno, rateLimitCuentaTurno, async (req, res) => {
   try {
     const history = Array.isArray(req.body.history) ? req.body.history.slice(0, 60) : [];
     for (const m of history) {
@@ -6331,7 +6339,7 @@ async function speakWithAzure(text, voz) {
 // plataforma, así que declarar aquí un límite mayor no cambiaba nada en
 // producción salvo dar un error menos claro. 4mb queda cómodo por debajo de
 // ese tope real.
-app.post('/api/transcribe', requireAuth, rateLimitTurno, express.raw({ type: '*/*', limit: '4mb' }), async (req, res) => {
+app.post('/api/transcribe', requireAuth, rateLimitTurno, rateLimitCuentaTurno, express.raw({ type: '*/*', limit: '4mb' }), async (req, res) => {
   try {
     if (!req.body || !req.body.length) return res.status(400).json({ error: 'Falta audio.' });
     if (!ELEVEN_KEY) {
@@ -6392,7 +6400,7 @@ app.post('/api/transcribe', requireAuth, rateLimitTurno, express.raw({ type: '*/
 // audio) y, cuando ambas terminaron, el cliente llama aquí para completarlo.
 // Solo completa una historia de ESTA bitácora, de los últimos 10 minutos, que
 // todavía no tiene audio, y solo con un archivo que es de esta misma bitácora.
-app.post('/api/story-log/audio', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar, rateLimitTurno, async (req, res) => {
+app.post('/api/story-log/audio', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar, rateLimitTurno, rateLimitCuentaTurno, async (req, res) => {
   try {
     const texto = typeof req.body.text === 'string' ? req.body.text.trim().slice(0, 4000) : '';
     const audioUrl = urlHttpValida(typeof req.body.audioUrl === 'string' ? req.body.audioUrl.slice(0, 1000) : null);
@@ -6454,7 +6462,7 @@ app.post('/api/voz', requireAuth, bloquearColaborador, rateLimit, async (req, re
   }
 });
 
-app.post('/api/speak', requireAuth, rateLimitVoz, async (req, res) => {
+app.post('/api/speak', requireAuth, rateLimitVoz, rateLimitCuentaVoz, async (req, res) => {
   try {
     let text = (req.body.text || '').trim();
     if (!text) return res.status(400).json({ error: 'Falta texto.' });
@@ -6678,7 +6686,7 @@ app.get('/api/media-file', requireAuth, async (req, res) => {
 // Mismo ajuste que en /api/transcribe: 4mb en vez de 20mb, para que sea
 // esta ruta la que rechace con un mensaje claro un audio muy largo, en vez
 // de que lo rechace la plataforma con un error genérico.
-app.post('/api/save-audio', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar, rateLimitTurno, express.raw({ type: '*/*', limit: '4mb' }), async (req, res) => {
+app.post('/api/save-audio', requireAuth, bloquearColaborador, bloquearSiNoPuedeNarrar, rateLimitTurno, rateLimitCuentaTurno, express.raw({ type: '*/*', limit: '4mb' }), async (req, res) => {
   try {
     const { sessionId, index, role } = req.query;
     if (!sessionId || index === undefined || !role) {
@@ -7033,7 +7041,7 @@ async function finalizarAporte(ownerId, draftId, fullHistory, audioUrls, contrib
 // /api/next pero para un colaborador contando un recuerdo. Cuando ya tiene
 // nombre, parentesco, espacio temporal e historia, cierra con [FIN] y aquí
 // mismo se guarda (ver finalizarAporte).
-app.post('/api/contribute-chat', requireAuth, rateLimit, async (req, res) => {
+app.post('/api/contribute-chat', requireAuth, rateLimit, rateLimitCuentaIA, async (req, res) => {
   try {
     const ownerId = await resolveProfileUserId(req);
     if (!ownerId) return res.status(403).json({ error: 'No tienes acceso a esa historia.' });
@@ -7827,7 +7835,7 @@ async function writeChapterFromStories(userId, theme, stories, persona, aportes,
 
 // Dispara el flujo de dos pasos y GUARDA el resultado, reemplazando los
 // capítulos anteriores (igual que el árbol: más simple que ir haciendo diff).
-app.post('/api/chapters/generate', requireAuth, bloquearColaborador, rateLimit, async (req, res) => {
+app.post('/api/chapters/generate', requireAuth, bloquearColaborador, rateLimit, rateLimitCuentaIA, async (req, res) => {
   try {
     const persona = req.body.persona === 'primera' ? 'primera' : 'tercera';
     await ensureSchema();
@@ -9200,43 +9208,62 @@ async function crearLinkMagico(req, userId, next) {
   await sql`INSERT INTO magic_tokens (user_id, token_hash, token_version, expires_at)
             VALUES (${userId}, ${tokenHash}, ${tokenVersion}, ${expiresAt})`;
   const base = urlBase(req);
-  return `${base}/api/magic-login?token=${encodeURIComponent(token)}&next=${encodeURIComponent(next || '/app.html')}`;
+  // El token va en el FRAGMENTO (#): el navegador no lo manda al servidor, así que no queda en logs de Vercel ni en
+  // el historial del servidor. magico.html lo lee y lo canjea con un POST a /api/magic-login.
+  return `${base}/magico.html#t=${encodeURIComponent(token)}&next=${encodeURIComponent(next || '/app.html')}`;
 }
 
+// Canjea un token de login mágico: la misma lógica para el GET (enlaces viejos del correo) y el POST (magico.html).
+// Devuelve { ok: true, next } o { ok: false, motivo }.
+async function canjearLinkMagico(req, res, token, next) {
+  const payload = verifySession(token);
+  if (!payload || !payload.magic || !payload.userId || Date.now() - payload.iat > MAGIC_LOGIN_MAX_AGE) {
+    return { ok: false, motivo: 'vencido' };
+  }
+  await ensureSchema();
+  // SEC-02: consumir atómicamente — UPDATE ... WHERE consumed_at IS NULL
+  // devuelve la fila SOLO si no se había consumido. Segundo uso → 0 filas.
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const consumed = await sql`
+    UPDATE magic_tokens
+       SET consumed_at = now()
+     WHERE token_hash = ${tokenHash}
+       AND consumed_at IS NULL
+       AND expires_at > now()
+    RETURNING user_id, token_version`;
+  if (!consumed.length) return { ok: false, motivo: 'vencido' };
+  // Verificar que token_version no cambió desde que se creó el enlace
+  // (cambiar clave incrementa token_version → invalida enlaces pendientes)
+  const rows = await sql`SELECT username, token_version FROM users WHERE id = ${payload.userId}`;
+  if (!rows.length) return { ok: false, motivo: 'invalido' };
+  if (rows[0].token_version !== consumed[0].token_version) return { ok: false, motivo: 'vencido' };
+  setSessionCookie(req, res, { userId: payload.userId, username: rows[0].username, tokenVersion: rows[0].token_version });
+  return { ok: true, next };
+}
+const destinoMagicoSeguro = (v) => (typeof v === 'string' && v.startsWith('/') && !v.startsWith('//') ? v : '/app.html');
+
+// Enlaces viejos (GET con ?token=, de correos enviados antes del cambio al fragmento). Vencen en 15 minutos.
 app.get('/api/magic-login', rateLimit, async (req, res) => {
   try {
     const token = typeof req.query.token === 'string' ? req.query.token : '';
-    const next = typeof req.query.next === 'string' && req.query.next.startsWith('/') && !req.query.next.startsWith('//') ? req.query.next : '/app.html';
-    const payload = verifySession(token);
-    if (!payload || !payload.magic || !payload.userId || Date.now() - payload.iat > MAGIC_LOGIN_MAX_AGE) {
-      return res.redirect(302, '/app.html?magic=vencido');
-    }
-    await ensureSchema();
-    // SEC-02: consumir atómicamente — UPDATE ... WHERE consumed_at IS NULL
-    // devuelve la fila SOLO si no se había consumido. Segundo uso → 0 filas.
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    const consumed = await sql`
-      UPDATE magic_tokens
-         SET consumed_at = now()
-       WHERE token_hash = ${tokenHash}
-         AND consumed_at IS NULL
-         AND expires_at > now()
-      RETURNING user_id, token_version`;
-    if (!consumed.length) {
-      return res.redirect(302, '/app.html?magic=vencido');
-    }
-    // Verificar que token_version no cambió desde que se creó el enlace
-    // (cambiar clave incrementa token_version → invalida enlaces pendientes)
-    const rows = await sql`SELECT username, token_version FROM users WHERE id = ${payload.userId}`;
-    if (!rows.length) return res.redirect(302, '/app.html?magic=invalido');
-    if (rows[0].token_version !== consumed[0].token_version) {
-      return res.redirect(302, '/app.html?magic=vencido');
-    }
-    setSessionCookie(req, res, { userId: payload.userId, username: rows[0].username, tokenVersion: rows[0].token_version });
-    res.redirect(302, next);
+    const r = await canjearLinkMagico(req, res, token, destinoMagicoSeguro(req.query.next));
+    res.redirect(302, r.ok ? r.next : `/app.html?magic=${r.motivo}`);
   } catch (err) {
     console.error(err);
     res.redirect(302, '/app.html?magic=error');
+  }
+});
+
+// Canje desde magico.html: el token llega en el cuerpo del POST, no en la URL.
+app.post('/api/magic-login', rateLimit, express.json({ limit: '4kb' }), async (req, res) => {
+  try {
+    const token = typeof req.body?.token === 'string' ? req.body.token : '';
+    const r = await canjearLinkMagico(req, res, token, destinoMagicoSeguro(req.body?.next));
+    if (!r.ok) return res.status(r.motivo === 'invalido' ? 400 : 401).json({ motivo: r.motivo });
+    res.json({ redirect: r.next });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ motivo: 'error' });
   }
 });
 
