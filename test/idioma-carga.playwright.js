@@ -19,6 +19,8 @@ const ok = (c, m) => { if (c) console.log('✓ ' + m); else { fallos++; console.
   async function abrir(ruta, { me = null, local = null } = {}) {
     const ctx = await browser.newContext({ viewport: { width: 420, height: 900 } });
     if (local) await ctx.addInitScript((v) => { try { for (const k of Object.keys(v)) localStorage.setItem(k, v[k]); } catch (e) { /* nada */ } }, local);
+    // El popup de bienvenida de la portada se abre a los 1,2 s: se marca como ya visto para que no tape la bandera.
+    await ctx.addInitScript(() => { try { sessionStorage.setItem('ecoPopupVisto', '1'); } catch (e) { /* nada */ } });
     const page = await ctx.newPage();
     page.on('pageerror', (e) => errores.push(ruta + ': ' + e.message));
     const diccionario = [];
@@ -82,6 +84,22 @@ const ok = (c, m) => { if (c) console.log('✓ ' + m); else { fallos++; console.
     await page.waitForFunction(() => typeof window.ECO_EN === 'object', null, { timeout: 8000 }).catch(() => {});
     await page.waitForTimeout(300);
     ok(diccionario.length === 1 && /Reset your password/.test(await page.title()), 'el título de la página también se traduce cuando llega el diccionario (' + await page.title() + ')');
+    await ctx.close();
+  }
+
+  console.log('--- si la primera descarga del diccionario falla ---');
+  {
+    const ctx = await browser.newContext({ viewport: { width: 420, height: 900 } });
+    await ctx.addInitScript(() => { try { localStorage.setItem('eco-idioma-cuenta', 'en'); sessionStorage.setItem('ecoPopupVisto', '1'); } catch (e) { /* nada */ } });
+    const page = await ctx.newPage();
+    page.on('pageerror', (e) => errores.push('reintento: ' + e.message));
+    let intentos = 0;
+    await page.route('**/eco-idioma-en.js*', (route) => { intentos++; return intentos === 1 ? route.abort() : route.continue(); });
+    await page.route('**/api/**', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":"No autenticado."}' }));
+    await page.goto(base + '/app.html', { waitUntil: 'load' });
+    await page.waitForFunction(() => document.getElementById('olvideClave').textContent === 'Forgot your password?', null, { timeout: 15000 }).catch(() => {});
+    ok(intentos >= 2, 'si falla la primera descarga, la página vuelve a pedir el diccionario (intentos: ' + intentos + ')');
+    ok(await olvide(page) === 'Forgot your password?', 'y termina traducida');
     await ctx.close();
   }
 

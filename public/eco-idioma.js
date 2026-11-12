@@ -13,14 +13,24 @@
   })();
   const DICCIONARIO = '/eco-idioma-en.js?v=' + encodeURIComponent(VERSION);
   let cargaDiccionario = null;
-  function cargarDiccionario() {
-    if (window.ECO_EN && typeof window.ECO_EN === 'object') return Promise.resolve();
+  // Si la descarga falla (red intermitente, un 404 o una respuesta que no es el diccionario), reintenta con esperas
+  // crecientes. Si se agotan los intentos, la página queda en español y se reintenta al próximo cambio de idioma.
+  const ESPERAS_MS = [1500, 4000, 10000];
+  const hayDiccionario = () => !!(window.ECO_EN && typeof window.ECO_EN === 'object');
+  function cargarDiccionario(intento = 0) {
+    if (hayDiccionario()) return Promise.resolve();
     if (!cargaDiccionario) {
       cargaDiccionario = new Promise((listo) => {
         const s = document.createElement('script');
         s.src = DICCIONARIO;
-        s.onload = () => { patronesCompilados = null; listo(); };
-        s.onerror = () => { cargaDiccionario = null; listo(); }; // sin red: se queda en español y se reintenta al próximo cambio
+        const fallo = () => {
+          s.remove();
+          cargaDiccionario = null;
+          if (intento < ESPERAS_MS.length) setTimeout(() => cargarDiccionario(intento + 1).then(listo), ESPERAS_MS[intento]);
+          else listo();
+        };
+        s.onload = () => { if (hayDiccionario()) { patronesCompilados = null; listo(); } else fallo(); };
+        s.onerror = fallo;
         document.head.appendChild(s);
       });
     }
