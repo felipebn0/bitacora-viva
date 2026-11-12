@@ -75,5 +75,11 @@ jobs:
           rclone sync "r2:$ORIGEN" "r2:$DESTINO/actual" \
             --backup-dir "r2:$DESTINO/borrados/$FECHA" \
             --fast-list --transfers 16 --checkers 32 --stats-one-line --stats 30s -v
-          rclone delete "r2:$DESTINO/borrados" --min-age 30d --rmdirs -v || true
+          # Si esto falla no detiene el respaldo (la copia ya quedó hecha), pero queda visible en el log y como aviso.
+          # Un «directory not found» (todavía no hay nada en «borrados/») no es error: rclone lo reporta igual.
+          if ! rclone delete "r2:$DESTINO/borrados" --min-age 30d --rmdirs -v; then
+            if rclone lsf "r2:$DESTINO/borrados" >/dev/null 2>&1; then
+              echo "::warning::No se pudo limpiar «borrados/» (más de 30 días). El respaldo quedó bien; revisa el log."
+            fi
+          fi
           echo "Respaldo: $(rclone size "r2:$DESTINO/actual" --json)"

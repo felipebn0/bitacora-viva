@@ -1735,6 +1735,24 @@ function aplicarEsquema() {
       )`,
       sql`CREATE INDEX IF NOT EXISTS idx_magic_tokens_user ON magic_tokens(user_id)`,
       sql`CREATE INDEX IF NOT EXISTS idx_magic_tokens_hash ON magic_tokens(token_hash)`,
+      // Avisos push (push-web-routes.js). Antes corrían por instancia en cada ready(); ahora van aquí.
+      sql`CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id SERIAL PRIMARY KEY,
+        user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        endpoint TEXT NOT NULL UNIQUE,
+        p256dh TEXT NOT NULL,
+        auth TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      sql`CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(user_id)`,
+      sql`CREATE TABLE IF NOT EXISTS push_fallos (
+        id SERIAL PRIMARY KEY,
+        tipo TEXT NOT NULL,
+        detalle TEXT NOT NULL,
+        creado_en TIMESTAMPTZ NOT NULL DEFAULT now()
+      )`,
+      // El narrador de un subperfil no tiene fila en "users": sus avisos se guardan con el id del subperfil.
+      sql`ALTER TABLE push_subscriptions DROP CONSTRAINT IF EXISTS push_subscriptions_user_id_fkey`,
     ]);
 }
 
