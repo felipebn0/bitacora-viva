@@ -28,12 +28,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Verificar que existan los secrets necesarios
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
         run: |
-          if [ -z "${{ secrets.DATABASE_URL }}" ]; then
+          if [ -z "$DATABASE_URL" ]; then
             echo "::error::Falta el secret DATABASE_URL en este repo. Sin él no se puede hacer el backup. Agregalo en Settings → Secrets and variables → Actions → New repository secret."
             exit 1
           fi
-          if [ -z "${{ secrets.BACKUP_PASSPHRASE }}" ]; then
+          if [ -z "$BACKUP_PASSPHRASE" ]; then
             echo "::error::Falta el secret BACKUP_PASSPHRASE. El dump se cifra con esta frase antes de subirlo (el release queda visible para cualquier colaborador del repo, y el dump trae hashes de claves y datos privados de las familias). Elegí una frase larga, guardala en un gestor de contraseñas, y agregala en Settings → Secrets and variables → Actions."
             exit 1
           fi

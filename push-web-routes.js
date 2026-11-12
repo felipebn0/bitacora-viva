@@ -18,29 +18,9 @@ const ESPERA_MAXIMA_MS = 4000;
 const UMBRAL_FALLOS = 5;
 
 module.exports = (app, { sql, ensureSchema, requireAuth, bloquearColaborador, bloquearInvitado, rateLimit, avisarFallaPush }) => {
-  let fkQuitada = false;
+  // Las tablas push_subscriptions y push_fallos se crean en aplicarEsquema (server.js), no aquí.
   async function ready() {
     await ensureSchema();
-    await sql`CREATE TABLE IF NOT EXISTS push_subscriptions (
-      id SERIAL PRIMARY KEY,
-      user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      endpoint TEXT NOT NULL UNIQUE,
-      p256dh TEXT NOT NULL,
-      auth TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    )`;
-    await sql`CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(user_id)`;
-    await sql`CREATE TABLE IF NOT EXISTS push_fallos (
-      id SERIAL PRIMARY KEY,
-      tipo TEXT NOT NULL,
-      detalle TEXT NOT NULL,
-      creado_en TIMESTAMPTZ NOT NULL DEFAULT now()
-    )`;
-    // El narrador de un subperfil no tiene fila en "users": sus avisos se guardan con el id del subperfil.
-    if (!fkQuitada) {
-      await sql`ALTER TABLE push_subscriptions DROP CONSTRAINT IF EXISTS push_subscriptions_user_id_fkey`;
-      fkQuitada = true;
-    }
   }
 
   // Quién recibe los avisos de esta sesión: la cuenta que entró o, si es el narrador de un subperfil, ese subperfil.

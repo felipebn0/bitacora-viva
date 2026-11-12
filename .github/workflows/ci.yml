@@ -167,11 +167,18 @@ jobs:
         continue-on-error: true
         run: npm run test:idioma-lang
 
+      # El diccionario de inglés (200 KB) se descarga solo cuando la página va en inglés: esta suite verifica que
+      # llegue, que se aplique y que nada quede en español para una cuenta en inglés.
+      - name: Pruebas de carga diferida del idioma inglés (Playwright)
+        id: idioma_carga
+        continue-on-error: true
+        run: npm run test:idioma-carga
+
       - name: Resultado de las pruebas de Playwright
         if: always()
         run: |
           fallo=0
-          for r in "${{ steps.responsive.outcome }}" "${{ steps.pause_resume.outcome }}" "${{ steps.libro_privacidad.outcome }}" "${{ steps.mic_denegado.outcome }}" "${{ steps.a11y.outcome }}" "${{ steps.landscape.outcome }}" "${{ steps.colaborar_sticky.outcome }}" "${{ steps.login_vacio.outcome }}" "${{ steps.instalacion.outcome }}" "${{ steps.despedida_voz.outcome }}" "${{ steps.arbol_colab_link.outcome }}" "${{ steps.idioma_lang.outcome }}"; do
+          for r in "${{ steps.responsive.outcome }}" "${{ steps.pause_resume.outcome }}" "${{ steps.libro_privacidad.outcome }}" "${{ steps.mic_denegado.outcome }}" "${{ steps.a11y.outcome }}" "${{ steps.landscape.outcome }}" "${{ steps.colaborar_sticky.outcome }}" "${{ steps.login_vacio.outcome }}" "${{ steps.instalacion.outcome }}" "${{ steps.despedida_voz.outcome }}" "${{ steps.arbol_colab_link.outcome }}" "${{ steps.idioma_lang.outcome }}" "${{ steps.idioma_carga.outcome }}"; do
             if [ "$r" != "success" ]; then fallo=1; fi
           done
           if [ "$fallo" = "1" ]; then
