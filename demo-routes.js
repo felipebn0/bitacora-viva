@@ -36,11 +36,16 @@ const CIERRE_DEMO = `(Se acabó el minuto de prueba. Este es tu último mensaje 
 // y el navegador lo pide apenas arranca la demo, así al final no hay que esperar a que se genere.
 const PITCH_DEMO = 'Con tu cuenta gratis, Eco sigue charlando contigo de a poco, unos minutos al día, y guarda cada historia con tu propia voz. Con esas historias arma capítulos, el árbol de tu familia y hasta un libro, y tu familia puede escucharte y sumar sus propios recuerdos. Crea tu cuenta con el botón que aparece en la pantalla.';
 
+// Analítica: contadores por día de cada paso (demo_eventos). Solo cuántas veces pasó algo; nunca quién ni qué dijo.
+// Los que manda la página (no los puede saber el servidor) van en esta lista; el resto los anota el servidor solo.
+const EVENTOS_DE_LA_PAGINA = new Set(['visita', 'mic_negado', 'popup', 'clic_registro', 'ahora_no']);
+const EVENTOS = ['visita', 'empezo', 'saludo', 'hablo', 'turno_persona', 'completo', 'popup', 'clic_registro', 'ahora_no', 'mic_negado', 'limite', 'cupo', 'error_ia'];
+
 module.exports = (app, deps) => {
   const {
     sql, ensureSchema, anthropic, MODEL, SYSTEM_PROMPT, SESSION_SECRET, PROVIDER_TIMEOUT_MS, rateLimit,
     extraerMarcaAyuda, contarPreguntas, dejarUnaSolaPregunta, asegurarEspanolColombiano, primerBloqueDeTexto,
-    verificarArchivoReal, AUDIO_MIME_PERMITIDOS, hablar, ELEVEN_KEY,
+    verificarArchivoReal, AUDIO_MIME_PERMITIDOS, hablar, ELEVEN_KEY, requireAuth, requireAdmin,
   } = deps;
 
   const SYSTEM_DEMO = SYSTEM_PROMPT + INSTRUCCION_DEMO;
@@ -84,6 +89,16 @@ module.exports = (app, deps) => {
     }
     return (filas[0] && filas[0].cuenta) || 1;
   }
+  // Nunca frena ni rompe la demo: si no se puede anotar, se sigue igual.
+  function anotar(evento) {
+    Promise.resolve().then(() => ensureSchema()).then(() => sql`
+      INSERT INTO demo_eventos (dia, evento, cuenta)
+      VALUES ((now() AT TIME ZONE 'America/Bogota')::date, ${evento}, 1)
+      ON CONFLICT (dia, evento) DO UPDATE SET cuenta = demo_eventos.cuenta + 1`).catch((err) => {
+      console.error('[demo] no se pudo anotar el evento:', err.message);
+    });
+  }
+
   const huellaRed = (ip) => crypto.createHmac('sha256', LLAVE).update(String(ip || 'desconocida')).digest('hex').slice(0, 32);
 
   function apagada(res) {
@@ -107,9 +122,10 @@ module.exports = (app, deps) => {
       const nombre = limpiarNombre(req.body && req.body.nombre);
       if (!nombre) return res.status(400).json({ motivo: 'nombre' });
       await ensureSchema();
-      if (await sumar('red:' + huellaRed(req.ip)) > DEMOS_POR_RED_AL_DIA) return res.status(429).json({ motivo: 'limite' });
-      if (await sumar('total') > DEMOS_AL_DIA) return res.status(429).json({ motivo: 'cupo' });
+      if (await sumar('red:' + huellaRed(req.ip)) > DEMOS_POR_RED_AL_DIA) { anotar('limite'); return res.status(429).json({ motivo: 'limite' }); }
+      if (await sumar('total') > DEMOS_AL_DIA) { anotar('cupo'); return res.status(429).json({ motivo: 'cupo' }); }
       const id = crypto.randomBytes(12).toString('base64url');
+      anotar('empezo');
       res.json({ token: firmar({ demo: 1, id, nombre, iat: Date.now() }), segundos: 60 });
     } catch (err) {
       console.error('[demo] empezar:', err);
@@ -132,7 +148,8 @@ module.exports = (app, deps) => {
       }
       const fin = req.body.fin === true;
       await ensureSchema();
-      if (await sumar('turnos:' + datos.id) > TURNOS_POR_DEMO + 1) return res.status(429).json({ motivo: 'turnos' });
+      const numeroDeTurno = await sumar('turnos:' + datos.id);
+      if (numeroDeTurno > TURNOS_POR_DEMO + 1) return res.status(429).json({ motivo: 'turnos' });
 
       // Los avisos entre paréntesis van como mensajes de la persona, igual que en la app.
       const messages = [{ role: 'user', content: inicioDemo(datos.nombre) }];
@@ -173,8 +190,11 @@ module.exports = (app, deps) => {
       } catch (err) {
         console.error('[demo] voz:', err.message);
       }
+      if (fin) anotar('completo');
+      else if (numeroDeTurno === 1) anotar('saludo');
       res.json({ texto, audio, ayuda: marca.ayuda || null, fin });
     } catch (err) {
+      anotar('error_ia');
       console.error('[demo] turno:', err);
       res.status(500).json({ motivo: 'error' });
     }
@@ -210,7 +230,8 @@ module.exports = (app, deps) => {
       if (!req.body || !req.body.length) return res.status(400).json({ motivo: 'audio' });
       if (!ELEVEN_KEY) return res.status(501).json({ motivo: 'sin-proveedor' });
       await ensureSchema();
-      if (await sumar('stt:' + datos.id) > TRANSCRIPCIONES_POR_DEMO) return res.status(429).json({ motivo: 'turnos' });
+      const numeroDeAudio = await sumar('stt:' + datos.id);
+      if (numeroDeAudio > TRANSCRIPCIONES_POR_DEMO) return res.status(429).json({ motivo: 'turnos' });
       const real = await verificarArchivoReal(req.body, AUDIO_MIME_PERMITIDOS);
       if (!real) return res.status(400).json({ motivo: 'audio' });
       const form = new FormData();
@@ -228,10 +249,66 @@ module.exports = (app, deps) => {
         return res.status(502).json({ motivo: 'error' });
       }
       const data = await resp.json();
-      res.json({ text: String(data.text || '').trim().slice(0, 2000) });
+      const texto = String(data.text || '').trim().slice(0, 2000);
+      if (texto) {
+        anotar('turno_persona');
+        // «Hablaron»: demos en las que la persona dijo algo al menos una vez (se cuenta la primera vez de cada demo).
+        if (await sumar('hablo:' + datos.id) === 1) anotar('hablo');
+      }
+      res.json({ text: texto });
     } catch (err) {
       console.error('[demo] transcribir:', err);
       res.status(500).json({ motivo: 'error' });
+    }
+  });
+
+  app.post('/api/demo/evento', rateLimit, (req, res) => {
+    const evento = req.body && req.body.evento;
+    if (typeof evento !== 'string' || !EVENTOS_DE_LA_PAGINA.has(evento)) return res.status(400).json({ motivo: 'evento' });
+    if (process.env.DEMO_DESACTIVADA !== '1') anotar(evento);
+    res.status(204).end();
+  });
+
+  // Panel de admin: el embudo de la demo por día, más las cuentas creadas desde ella (users.origen_registro = 'demo',
+  // que pone el botón del final con ?desde=demo, ver eco-origen.js).
+  app.get('/api/admin/demo', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const dias = Math.max(1, Math.min(365, parseInt(req.query.dias, 10) || 30));
+      await ensureSchema();
+      const filas = await sql`
+        SELECT to_char(dia, 'YYYY-MM-DD') AS dia, evento, cuenta
+        FROM demo_eventos
+        WHERE dia > (now() AT TIME ZONE 'America/Bogota')::date - ${dias}::int
+        ORDER BY dia DESC`;
+      const cuentas = await sql`
+        SELECT to_char((created_at AT TIME ZONE 'America/Bogota')::date, 'YYYY-MM-DD') AS dia, count(*)::int AS cuenta
+        FROM users
+        WHERE origen_registro = 'demo'
+          AND (created_at AT TIME ZONE 'America/Bogota')::date > (now() AT TIME ZONE 'America/Bogota')::date - ${dias}::int
+        GROUP BY 1`;
+      const porDia = {};
+      const vacio = () => Object.fromEntries(EVENTOS.concat('cuentas').map((e) => [e, 0]));
+      const totales = vacio();
+      for (const f of filas) {
+        if (!EVENTOS.includes(f.evento)) continue;
+        (porDia[f.dia] = porDia[f.dia] || vacio())[f.evento] += Number(f.cuenta) || 0;
+        totales[f.evento] += Number(f.cuenta) || 0;
+      }
+      for (const c of cuentas) {
+        (porDia[c.dia] = porDia[c.dia] || vacio()).cuentas += Number(c.cuenta) || 0;
+        totales.cuentas += Number(c.cuenta) || 0;
+      }
+      res.set('Cache-Control', 'no-store');
+      res.json({
+        dias,
+        totales,
+        porDia: Object.keys(porDia).sort().reverse().map((dia) => Object.assign({ dia }, porDia[dia])),
+        limites: { porRed: DEMOS_POR_RED_AL_DIA, alDia: DEMOS_AL_DIA },
+        apagada: process.env.DEMO_DESACTIVADA === '1',
+      });
+    } catch (err) {
+      console.error('[demo] panel:', err);
+      res.status(500).json({ error: 'No se pudieron cargar las cifras de la demo.' });
     }
   });
 

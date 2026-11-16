@@ -1,0 +1,19 @@
+/* Panel de admin: sección de la demo pública (eco-admin-demo.js). */
+.dm-rango { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 14px; }
+.dm-embudo { list-style: none; margin: 16px 0; padding: 0; display: grid; gap: 10px; }
+.dm-paso { display: grid; grid-template-columns: minmax(150px, 1.2fr) 2fr minmax(110px, auto); gap: 12px; align-items: center; }
+.dm-paso__texto { display: grid; gap: 2px; font-size: .9rem; }
+.dm-paso__texto span, .dm-paso__num span { font-size: .75rem; color: var(--ink-soft); }
+.dm-paso__barra { height: 14px; border-radius: 999px; background: rgba(0, 0, 0, 0.06); overflow: hidden; }
+.dm-paso__barra span { display: block; height: 100%; width: 0; min-width: 2px; border-radius: 999px; background: var(--gold-deep); transition: width .4s ease; }
+.dm-paso:last-child .dm-paso__barra span { background: #4F5D3A; }
+.dm-paso__num { display: grid; gap: 2px; text-align: right; }
+.dm-paso__num strong { font-family: var(--font-display); font-size: 1.15rem; }
+.dm-tabla { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.dm-tabla .pr-tabla { min-width: 640px; }
+.dm-tabla td:first-child { white-space: nowrap; }
+.dm-sub { font-size: 1rem; margin: 18px 0 6px; }
+@media (max-width: 640px) {
+  .dm-paso { grid-template-columns: 1fr auto; }
+  .dm-paso__barra { grid-column: 1 / -1; grid-row: 2; }
+}

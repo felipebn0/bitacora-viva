@@ -54,6 +54,14 @@
   let urlAudio = null;
   let pitch = null; // lo que Eco dice al final sobre la app: se pide apenas arranca, para no esperarlo al cerrar
 
+  // ---------- analítica (solo cuenta pasos, nunca quién ni qué dijo; ver /api/admin/demo) ----------
+  function evento(nombre) {
+    try {
+      fetch('/api/demo/evento', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ evento: nombre }), keepalive: true }).catch(() => {});
+    } catch (e) { /* nada */ }
+  }
+  let popupContado = false;
+
   // ---------- utilidades ----------
   function ponerEstado(est, textoOrbe, textoEstado, aria) {
     orbe.dataset.state = est;
@@ -113,13 +121,17 @@
     if (o.texto) popupTexto.textContent = o.texto;
     popup.hidden = false;
     barraFinal.hidden = true;
+    // Solo cuenta la invitación de quien sí hizo la demo (a quien frenó el límite lo cuenta el servidor aparte).
+    if (!popupContado && token) { popupContado = true; evento('popup'); }
     setTimeout(() => popupRegistro.focus(), 60);
   }
   function cerrarPopup() {
+    if (!popup.hidden) evento('ahora_no');
     popup.hidden = true;
     barraFinal.hidden = false;
   }
   popupCerrar.addEventListener('click', cerrarPopup);
+  [popupRegistro, barraFinal.querySelector('a')].forEach((a) => a.addEventListener('click', () => evento('clic_registro')));
   popup.addEventListener('click', (e) => { if (e.target === popup) cerrarPopup(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !popup.hidden) cerrarPopup(); });
 
@@ -342,6 +354,7 @@
     try { ctx = new (window.AudioContext || window.webkitAudioContext)(); ctx.resume().catch(() => {}); } catch (err) {}
     const micOk = await asegurarMicrofono();
     if (!micOk) {
+      evento('mic_negado');
       botonEmpezar.disabled = false;
       botonEmpezar.textContent = 'Empezar la charla';
       errorNombre.textContent = 'Eco necesita el micrófono para escucharte. Permítelo en el navegador y vuelve a intentar.';
@@ -372,4 +385,8 @@
   });
 
   window.addEventListener('pagehide', soltarMicrofono);
+  // Una visita por pestaña (recargar no cuenta otra vez).
+  try {
+    if (!sessionStorage.getItem('eco_demo_visita')) { sessionStorage.setItem('eco_demo_visita', '1'); evento('visita'); }
+  } catch (e) { evento('visita'); }
 })();

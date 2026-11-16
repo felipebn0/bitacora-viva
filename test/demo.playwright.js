@@ -42,6 +42,8 @@ function wav(segundosTono, segundosSilencio) {
     const errores = [];
     page.on('pageerror', (e) => errores.push(e.message));
     const turnos = [];
+    const eventosPagina = [];
+    await page.route('**/api/demo/evento', (r) => { eventosPagina.push(JSON.parse(r.request().postData()).evento); r.fulfill({ status: 204, body: '' }); });
     await page.route('**/api/demo/empezar', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ token: 'tok', segundos: 60 }) }));
     await page.route('**/api/demo/transcribir', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ text: 'Mi abuela hacía arepas los domingos' }) }));
     await page.route('**/api/demo/pitch', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ texto: 'Con tu cuenta gratis, Eco sigue charlando contigo. Crea tu cuenta con el botón.', audio: audioEco }) }));
@@ -72,8 +74,11 @@ function wav(segundosTono, segundosSilencio) {
     await page.screenshot({ path: path.join(__dirname, '..', 'test-artifacts', 'demo-popup.png') }).catch(() => {});
     ok(turnos.length >= 2 && turnos[turnos.length - 1].fin === true, 'al acabarse el tiempo Eco hace el cierre');
     ok(turnos.some((t) => t.history.some((m) => m.role === 'user' && /arepas/.test(m.content))), 'lo que dijo la persona llega a Eco');
-    ok(await page.getAttribute('#popupRegistro', 'href') === '/#registro-form', 'el popup lleva al registro');
+    ok(await page.getAttribute('#popupRegistro', 'href') === '/?desde=demo#registro-form', 'el popup lleva al registro marcado como «demo»');
+    ok(['visita', 'popup'].every((e) => eventosPagina.includes(e)), 'la página anota la visita y que vio la invitación');
     await page.click('#popupCerrar');
+    await page.waitForTimeout(200);
+    ok(eventosPagina.includes('ahora_no'), 'y si la cerró');
     ok(await page.isVisible('#barraFinal') && !(await page.isVisible('#popup')), '«Ahora no» deja un botón fijo de registro');
     ok(!errores.length, 'sin errores de JavaScript' + (errores.length ? ': ' + errores.join(' | ') : ''));
     await ctx.close();

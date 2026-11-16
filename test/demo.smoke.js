@@ -9,6 +9,11 @@ process.env.BLOB_READ_WRITE_TOKEN = '';
 
 const path = require('path');
 const http = require('http');
+const bcrypt = require('bcryptjs');
+
+const HASH = bcrypt.hashSync('miclave123', 4);
+const users = { 1: { id: 1, username: 'admin', password_hash: HASH, token_version: 0, owner_user_id: null } };
+const eventos = {};
 
 const cupos = {};
 const sentencias = [];
@@ -17,6 +22,18 @@ function fakeSql(strings, ...values) {
   sentencias.push(text);
   if (text.includes('CREATE TABLE') || text.includes('ALTER TABLE') || text.includes('CREATE INDEX')) return Promise.resolve([]);
   if (text.includes('rate_limits')) return Promise.resolve([{ count: 1 }]);
+  if (text.includes('SELECT id, username, password_hash, token_version FROM users WHERE username')) {
+    const u = Object.values(users).find((x) => x.username === values[0]);
+    return Promise.resolve(u ? [{ id: u.id, username: u.username, password_hash: u.password_hash, token_version: u.token_version }] : []);
+  }
+  if (text.includes('SELECT owner_user_id, token_version FROM users WHERE id')) {
+    const u = users[values[0]];
+    return Promise.resolve(u ? [{ owner_user_id: u.owner_user_id, token_version: u.token_version }] : []);
+  }
+  if (text.includes('SELECT is_admin FROM users WHERE id')) return Promise.resolve([{ is_admin: true }]);
+  if (text.includes('INSERT INTO demo_eventos')) { eventos[values[0]] = (eventos[values[0]] || 0) + 1; return Promise.resolve([]); }
+  if (text.includes('FROM demo_eventos')) return Promise.resolve(Object.keys(eventos).map((evento) => ({ dia: '2026-11-15', evento, cuenta: eventos[evento] })));
+  if (text.includes("origen_registro = 'demo'")) return Promise.resolve([{ dia: '2026-11-15', cuenta: 1 }]);
   if (text.includes('INSERT INTO demo_cupos')) {
     cupos[values[0]] = (cupos[values[0]] || 0) + 1;
     return Promise.resolve([{ cuenta: cupos[values[0]] }]);
@@ -58,6 +75,7 @@ const app = require(path.resolve(__dirname, '..', 'server.js'));
 
 let pasaron = 0, fallaron = 0;
 const ok = (c, m) => { if (c) { pasaron++; console.log('OK  - ' + m); } else { fallaron++; console.log('FAIL - ' + m); } };
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
 function request(server, opts) {
   return new Promise((resolve, reject) => {
     const crudo = Buffer.isBuffer(opts.body);
@@ -66,6 +84,7 @@ function request(server, opts) {
     if (data) { headers['Content-Type'] = headers['Content-Type'] || 'application/json'; headers['Content-Length'] = Buffer.byteLength(data); }
     headers.Origin = `http://127.0.0.1:${server.address().port}`;
     if (opts.ip) headers['X-Forwarded-For'] = opts.ip;
+    if (opts.cookie) headers.Cookie = opts.cookie;
     const r = http.request({ hostname: '127.0.0.1', port: server.address().port, path: opts.path, method: opts.method || 'GET', headers }, (res) => {
       let b = ''; res.on('data', (c) => (b += c));
       res.on('end', () => { let json = null; try { json = JSON.parse(b); } catch (e) { /* no json */ } resolve({ status: res.statusCode, headers: res.headers, body: b, json }); });
@@ -156,6 +175,23 @@ function wav() {
     ok(r.status === 429 && r.json.motivo === 'cupo', 'pasadas 200 demos en el día ya no arranca ninguna');
 
     ok(!sentencias.some((s) => /INSERT INTO (story_log|sessions|usage_events|media)/.test(s)), 'no se guarda nada de la charla');
+
+    await request(server, { path: '/api/demo/evento', method: 'POST', body: { evento: 'visita' }, ip: '10.0.0.5' });
+    await request(server, { path: '/api/demo/evento', method: 'POST', body: { evento: 'clic_registro' }, ip: '10.0.0.5' });
+    r = await request(server, { path: '/api/demo/evento', method: 'POST', body: { evento: 'completo' }, ip: '10.0.0.5' });
+    ok(r.status === 400, 'la página no puede inventar eventos que solo anota el servidor');
+    await esperar(50);
+    ok(eventos.visita === 1 && eventos.clic_registro === 1, 'la página anota visitas y clics al registro');
+    ok(eventos.empezo >= 3 && eventos.saludo === 1 && eventos.hablo === 1 && eventos.turno_persona === 1 && eventos.completo === 1, 'el servidor anota empezó, saludo, habló y terminó (una vez por demo)');
+    ok(eventos.limite === 1 && eventos.cupo === 1, 'y cuántos frenaron los límites');
+
+    r = await request(server, { path: '/api/admin/demo' });
+    ok(r.status === 401 || r.status === 403, 'el panel de la demo es solo para admins');
+    const login = await request(server, { path: '/api/login', method: 'POST', body: { username: 'admin', password: 'miclave123' } });
+    const cookie = (login.headers['set-cookie'] || [''])[0].split(';')[0];
+    r = await request(server, { path: '/api/admin/demo?dias=7', cookie });
+    ok(r.status === 200 && r.json.dias === 7 && r.json.totales.visita === 1 && r.json.totales.cuentas === 1, 'el panel trae el embudo y las cuentas creadas desde la demo');
+    ok(r.json.porDia.length === 1 && r.json.porDia[0].dia === '2026-11-15' && r.json.porDia[0].completo === 1, 'y el detalle por día');
 
     process.env.DEMO_DESACTIVADA = '1';
     r = await request(server, { path: '/api/demo/empezar', method: 'POST', body: { nombre: 'Ana' }, ip: '10.0.0.9' });

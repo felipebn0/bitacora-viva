@@ -1767,6 +1767,12 @@ function aplicarEsquema() {
         dia DATE NOT NULL,
         cuenta INT NOT NULL DEFAULT 0
       )`,
+      sql`CREATE TABLE IF NOT EXISTS demo_eventos (
+        dia DATE NOT NULL,
+        evento TEXT NOT NULL,
+        cuenta INT NOT NULL DEFAULT 0,
+        PRIMARY KEY (dia, evento)
+      )`,
     ]);
 }
 
@@ -8125,7 +8131,7 @@ pushRecordatorios = require('./push-recordatorios-routes')(app, { sql, ensureSch
 require('./book-qr-routes')(app, { preguntasPorAudio, sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob });
 require('./libro-compartido-routes')(app, { sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob, almacenarArchivo, express });
 require('./demo-routes')(app, {
-  sql, ensureSchema, anthropic, MODEL, SYSTEM_PROMPT, SESSION_SECRET, PROVIDER_TIMEOUT_MS, rateLimit,
+  sql, ensureSchema, anthropic, MODEL, SYSTEM_PROMPT, SESSION_SECRET, PROVIDER_TIMEOUT_MS, rateLimit, requireAuth, requireAdmin,
   extraerMarcaAyuda, contarPreguntas, dejarUnaSolaPregunta, asegurarEspanolColombiano, primerBloqueDeTexto,
   verificarArchivoReal, AUDIO_MIME_PERMITIDOS, ELEVEN_KEY,
   // Misma voz que la app: ElevenLabs y, si falla, Azure.
