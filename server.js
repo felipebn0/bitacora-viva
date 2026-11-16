@@ -1761,6 +1761,12 @@ function aplicarEsquema() {
       )`,
       // El narrador de un subperfil no tiene fila en "users": sus avisos se guardan con el id del subperfil.
       sql`ALTER TABLE push_subscriptions DROP CONSTRAINT IF EXISTS push_subscriptions_user_id_fkey`,
+      // Demo pública de /demo (demo-routes.js): solo contadores del día, nada de lo que la persona dice.
+      sql`CREATE TABLE IF NOT EXISTS demo_cupos (
+        clave TEXT PRIMARY KEY,
+        dia DATE NOT NULL,
+        cuenta INT NOT NULL DEFAULT 0
+      )`,
     ]);
 }
 
@@ -8118,6 +8124,21 @@ pushWeb = require('./push-web-routes')(app, { sql, ensureSchema, requireAuth, bl
 pushRecordatorios = require('./push-recordatorios-routes')(app, { sql, ensureSchema, requireAuth, requireAdmin, bloquearColaborador, bloquearInvitado, rateLimit, pushWeb });
 require('./book-qr-routes')(app, { preguntasPorAudio, sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob });
 require('./libro-compartido-routes')(app, { sql, ensureSchema, requireAuth, bloquearColaborador, rateLimit, rateLimitQr, enviarArchivoAlmacenado, datosDelArchivoDeBlob, almacenarArchivo, express });
+require('./demo-routes')(app, {
+  sql, ensureSchema, anthropic, MODEL, SYSTEM_PROMPT, SESSION_SECRET, PROVIDER_TIMEOUT_MS, rateLimit,
+  extraerMarcaAyuda, contarPreguntas, dejarUnaSolaPregunta, asegurarEspanolColombiano, primerBloqueDeTexto,
+  verificarArchivoReal, AUDIO_MIME_PERMITIDOS, ELEVEN_KEY,
+  // Misma voz que la app: ElevenLabs y, si falla, Azure.
+  hablar: async (texto) => {
+    if (ELEVEN_KEY && ELEVEN_VOICE_ID) {
+      try { return await speakWithElevenLabs(texto, ELEVEN_VOICE_ID); } catch (err) {
+        if (!(AZURE_KEY && AZURE_REGION)) throw err;
+        console.error('[demo] ElevenLabs falló, se usa Azure:', err.message);
+      }
+    }
+    return AZURE_KEY && AZURE_REGION ? speakWithAzure(texto) : null;
+  },
+});
 require('./demo-nombre-routes')(app, { rateLimit, limitePorClave, verificarArchivoReal, AUDIO_MIME_PERMITIDOS, speakWithElevenLabs: (texto) => pedirVozAElevenLabs(texto, 'eleven_v4_turbo'), elevenKey: ELEVEN_KEY, express });
 // Los correos que se mandan a cualquier persona (cambio de clave, bienvenida) solo se encienden con un remitente propio
 // verificado en Resend: con onboarding@resend.dev solo se puede escribir al dueño de la cuenta de Resend (ver recuperar-clave-routes.js).

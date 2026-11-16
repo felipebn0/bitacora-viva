@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Prueba Eco un minuto</title>
+<meta name="description" content="Charla un minuto con Eco, sin crear cuenta. Solo escribe tu nombre y empieza a contar.">
+<meta name="theme-color" content="#4F5D3A">
+<meta property="og:title" content="Prueba Eco un minuto">
+<meta property="og:description" content="Charla un minuto con Eco, sin crear cuenta. Solo escribe tu nombre y empieza a contar.">
+<meta property="og:image" content="https://mieco.app/images/og-eco.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/images/favicon-192.png">
+<link rel="apple-touch-icon" href="/images/apple-touch-icon.png">
+<link rel="stylesheet" href="/fonts/fonts.css">
+<link rel="stylesheet" href="/eco-demo-vivo.css?v=1">
+</head>
+<body>
+<main class="demo" id="contenido">
+  <a class="demo-logo" href="/" aria-label="Eco, ir al inicio"><img src="/images/logo-icon.png" alt="" width="40" height="40"><span>Eco</span></a>
+
+  <section class="demo-paso" id="pasoNombre" aria-labelledby="tituloNombre">
+    <h1 id="tituloNombre">Charla un minuto con Eco</h1>
+    <p class="demo-sub">Eco te hace preguntas con voz y tú le cuentas un recuerdo, como en una sobremesa. Sin crear cuenta.</p>
+    <form class="demo-form" id="formNombre" novalidate>
+      <label for="nombre">¿Cómo te llamas?</label>
+      <input id="nombre" name="nombre" type="text" autocomplete="given-name" maxlength="40" placeholder="Tu nombre" required>
+      <button class="demo-boton" id="botonEmpezar" type="submit">Empezar la charla</button>
+      <p class="demo-error" id="errorNombre" role="alert"></p>
+    </form>
+    <ul class="demo-notas">
+      <li>Dura 1 minuto. Activa el sonido y permite el micrófono.</li>
+      <li>No guardamos nada de lo que digas en esta prueba.</li>
+    </ul>
+  </section>
+
+  <section class="demo-paso" id="pasoCharla" hidden aria-label="Charla con Eco">
+    <div class="demo-tiempo" aria-hidden="true"><span class="demo-tiempo__barra" id="barraTiempo"></span></div>
+    <p class="demo-saludo" id="saludo"></p>
+    <div class="demo-orbe-zona">
+      <button class="orb" id="orbe" type="button" data-state="thinking" aria-label="Eco está preparando su saludo">
+        <svg class="orb-logo" viewBox="16 16 168 168" aria-hidden="true" focusable="false">
+          <g class="wave-g w1"><circle class="wave-c" cx="100" cy="100" r="72" pathLength="100" transform="rotate(-34 100 100)"/></g>
+          <g class="wave-g w2"><circle class="wave-c" cx="100" cy="100" r="72" pathLength="100" transform="rotate(-34 100 100)"/></g>
+          <g class="wave-g w3"><circle class="wave-c" cx="100" cy="100" r="72" pathLength="100" transform="rotate(-34 100 100)"/></g>
+          <g class="wave-g w4"><circle class="wave-c" cx="100" cy="100" r="72" pathLength="100" transform="rotate(-34 100 100)"/></g>
+          <g class="rg r1"><circle class="ring" cx="100" cy="100" r="28" pathLength="100" transform="rotate(-10 100 100)"/></g>
+          <g class="rg r2"><circle class="ring" cx="100" cy="100" r="50" pathLength="100" transform="rotate(-22 100 100)"/></g>
+          <g class="rg r3"><circle class="ring" cx="100" cy="100" r="72" pathLength="100" transform="rotate(-34 100 100)"/></g>
+          <circle class="dot" cx="100" cy="100" r="13"/>
+          <g class="drop"><path class="drop-fill" transform="translate(100 100)" d="M0 -27C3 -17 13 -9 13 0A13 13 0 0 1 -13 0C-13 -9 -3 -17 0 -27Z"/></g>
+        </svg>
+        <span id="orbeEtiqueta">Un momento…</span>
+      </button>
+      <div class="mic-level" id="nivelMic" hidden aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+      <p class="demo-estado" id="estado" role="status" aria-live="polite" aria-atomic="true"></p>
+    </div>
+    <p class="demo-dicho" id="dicho" aria-live="polite"></p>
+    <p class="demo-ayuda" id="ayuda" hidden>Si estás pasando por un momento difícil, no estás sola ni solo. En Colombia puedes llamar gratis a la Línea 106, las 24 horas.</p>
+  </section>
+</main>
+
+<div class="demo-popup" id="popup" hidden>
+  <div class="demo-popup__caja" role="dialog" aria-modal="true" aria-labelledby="popupTitulo" aria-describedby="popupTexto">
+    <h2 id="popupTitulo">Tu historia apenas empieza</h2>
+    <p id="popupTexto">Con tu cuenta, Eco sigue charlando contigo unos minutos al día y guarda cada recuerdo con tu propia voz.</p>
+    <ul class="demo-popup__lista">
+      <li>Capítulos de tu vida, escritos con lo que cuentas</li>
+      <li>El árbol de tu familia</li>
+      <li>Tu familia te escucha y suma sus recuerdos</li>
+      <li>Y si quieres, un libro con tu voz adentro</li>
+    </ul>
+    <a class="demo-boton demo-boton--grande" id="popupRegistro" href="/#registro-form">Crear mi cuenta gratis</a>
+    <button class="demo-enlace" id="popupCerrar" type="button">Ahora no</button>
+  </div>
+</div>
+<div class="demo-barra-final" id="barraFinal" hidden>
+  <a class="demo-boton" href="/#registro-form">Crear mi cuenta gratis</a>
+</div>
+
+<script src="/eco-demo-vivo.js?v=1" defer></script>
+</body>
+</html>

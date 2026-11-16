@@ -39,6 +39,7 @@
     { "src": "/libro/(.*)", "dest": "/api/index.js" },
     { "src": "/", "dest": "/api/index.js" },
     { "src": "/index-portada.html", "status": 308, "headers": { "Location": "/" } },
+    { "src": "/demo/?", "dest": "/public/demo.html" },
     { "src": "/(.*)", "dest": "/public/$1" }
   ],
   "crons": [

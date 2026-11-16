@@ -174,11 +174,17 @@ jobs:
         continue-on-error: true
         run: npm run test:idioma-carga
 
+      # Demo pública de /demo: nombre, charla con micrófono simulado, cierre al acabarse el tiempo y popup de registro.
+      - name: Pruebas de la demo pública (Playwright)
+        id: demo_publica
+        continue-on-error: true
+        run: npm run test:demo
+
       - name: Resultado de las pruebas de Playwright
         if: always()
         run: |
           fallo=0
-          for r in "${{ steps.responsive.outcome }}" "${{ steps.pause_resume.outcome }}" "${{ steps.libro_privacidad.outcome }}" "${{ steps.mic_denegado.outcome }}" "${{ steps.a11y.outcome }}" "${{ steps.landscape.outcome }}" "${{ steps.colaborar_sticky.outcome }}" "${{ steps.login_vacio.outcome }}" "${{ steps.instalacion.outcome }}" "${{ steps.despedida_voz.outcome }}" "${{ steps.arbol_colab_link.outcome }}" "${{ steps.idioma_lang.outcome }}" "${{ steps.idioma_carga.outcome }}"; do
+          for r in "${{ steps.responsive.outcome }}" "${{ steps.pause_resume.outcome }}" "${{ steps.libro_privacidad.outcome }}" "${{ steps.mic_denegado.outcome }}" "${{ steps.a11y.outcome }}" "${{ steps.landscape.outcome }}" "${{ steps.colaborar_sticky.outcome }}" "${{ steps.login_vacio.outcome }}" "${{ steps.instalacion.outcome }}" "${{ steps.despedida_voz.outcome }}" "${{ steps.arbol_colab_link.outcome }}" "${{ steps.idioma_lang.outcome }}" "${{ steps.idioma_carga.outcome }}" "${{ steps.demo_publica.outcome }}"; do
             if [ "$r" != "success" ]; then fallo=1; fi
           done
           if [ "$fallo" = "1" ]; then
