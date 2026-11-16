@@ -44,10 +44,12 @@ function wav(segundosTono, segundosSilencio) {
     const turnos = [];
     await page.route('**/api/demo/empezar', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ token: 'tok', segundos: 60 }) }));
     await page.route('**/api/demo/transcribir', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ text: 'Mi abuela hacía arepas los domingos' }) }));
-    await page.route('**/api/demo/turno', (r) => {
+    await page.route('**/api/demo/pitch', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ texto: 'Con tu cuenta gratis, Eco sigue charlando contigo. Crea tu cuenta con el botón.', audio: audioEco }) }));
+    await page.route('**/api/demo/turno', async (r) => {
+      await new Promise((ok2) => setTimeout(ok2, 600));
       const cuerpo = JSON.parse(r.request().postData());
       turnos.push(cuerpo);
-      const texto = cuerpo.fin ? 'Gracias, Ana. Crea tu cuenta con el botón.' : (cuerpo.history.length ? '¡Qué rico! ¿Quién más estaba ahí?' : 'Hola, Ana. ¿Qué olor te recuerda la casa de tu abuela?');
+      const texto = cuerpo.fin ? 'Gracias, Ana, qué bonito lo de las arepas.' : (cuerpo.history.length ? '¡Qué rico! ¿Quién más estaba ahí?' : 'Hola, Ana. ¿Qué olor te recuerda la casa de tu abuela?');
       r.fulfill({ contentType: 'application/json', body: JSON.stringify({ texto, audio: audioEco, fin: !!cuerpo.fin }) });
     });
     await page.goto(base + '/demo');
@@ -58,10 +60,14 @@ function wav(segundosTono, segundosSilencio) {
     await page.click('#botonEmpezar');
     await page.waitForSelector('#pasoCharla:not([hidden])', { timeout: 5000 });
     ok(true, 'con nombre pasa a la charla');
+    await page.waitForTimeout(300);
+    ok(await page.evaluate(() => document.getElementById('barraTiempo').style.transform === ''), 'el minuto no corre mientras Eco prepara su saludo');
     await page.waitForFunction(() => document.getElementById('orbe').dataset.state === 'listening', null, { timeout: 15000 });
     await page.waitForTimeout(1600);
     await page.screenshot({ path: path.join(__dirname, '..', 'test-artifacts', 'demo-escuchando.png') }).catch(() => {});
     ok(/abuela/.test(await page.locator('#saludo').innerText()), 'Eco saluda y después escucha');
+    await page.waitForFunction(() => /Con tu cuenta gratis/.test(document.getElementById('saludo').textContent), null, { timeout: 45000 }).catch(() => {});
+    ok(/Con tu cuenta gratis/.test(await page.locator('#saludo').innerText()), 'después de la despedida Eco dice el pitch');
     await page.waitForSelector('#popup:not([hidden])', { timeout: 45000 });
     await page.screenshot({ path: path.join(__dirname, '..', 'test-artifacts', 'demo-popup.png') }).catch(() => {});
     ok(turnos.length >= 2 && turnos[turnos.length - 1].fin === true, 'al acabarse el tiempo Eco hace el cierre');

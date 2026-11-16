@@ -34,6 +34,8 @@
   const MAX_TURNO_MS = 30 * 1000;
   const MAX_EXTRA_MS = 20 * 1000; // si al acabarse el minuto la persona está hablando, se le deja terminar hasta esto
   const UMBRAL_VOZ = 0.035;
+  // En los últimos 10 segundos Eco ya no hace preguntas nuevas: lo siguiente que dice es el cierre.
+  const CIERRE_ANTES_MS = Math.min(10 * 1000, DURACION_MS / 4);
 
   const voz = new Audio();
   voz.preload = 'auto';
@@ -50,6 +52,7 @@
   let alTocarOrbe = null;
   let intentosVacios = 0;
   let urlAudio = null;
+  let pitch = null; // lo que Eco dice al final sobre la app: se pide apenas arranca, para no esperarlo al cerrar
 
   // ---------- utilidades ----------
   function ponerEstado(est, textoOrbe, textoEstado, aria) {
@@ -59,6 +62,7 @@
     orbe.setAttribute('aria-label', aria || textoOrbe || '');
   }
   const tiempoAcabado = () => inicio > 0 && Date.now() - inicio >= DURACION_MS;
+  const quedaPoco = () => inicio > 0 && Date.now() - inicio >= DURACION_MS - CIERRE_ANTES_MS;
 
   function arrancarReloj() {
     if (inicio) return;
@@ -124,7 +128,6 @@
     return new Promise((resolver) => {
       saludo.textContent = texto;
       ponerEstado('speaking', 'Eco habla', '', 'Eco está hablando');
-      arrancarReloj();
       let hecho = false;
       // Red de seguridad: si el audio nunca avisa que terminó, la charla no se queda pegada.
       const seguro = setTimeout(() => terminar(), 45000);
@@ -174,6 +177,7 @@
   // ---------- turnos ----------
   async function pedirTurno(fin) {
     if (terminada) return;
+    if (quedaPoco()) fin = true;
     ponerEstado('thinking', 'Pensando…', '', 'Eco está pensando');
     let r;
     try {
@@ -193,6 +197,9 @@
     await hablar(texto, audio);
     if (terminada) return;
     if (fin) {
+      const p = pitch ? await pitch : null;
+      if (!terminada && p && p.ok && p.datos.texto) await hablar(p.datos.texto, p.datos.audio);
+      if (terminada) return;
       ponerEstado('ended', 'Gracias', '', 'La prueba terminó');
       mostrarPopup();
       return;
@@ -253,6 +260,8 @@
     };
 
     grabador.start(250);
+    // El minuto corre desde que Eco terminó su saludo y le toca a la persona, no mientras Eco prepara o dice el saludo.
+    arrancarReloj();
     ponerEstado('listening', 'Te escucho', 'Cuando termines, haz una pausa o toca el botón.', 'Te escucho. Toca para terminar de hablar');
     nivel.hidden = false;
     alTocarOrbe = () => cerrar(huboVoz ? 'toque' : 'nada');
@@ -355,6 +364,7 @@
       return;
     }
     token = r.datos.token;
+    pitch = postJson('/api/demo/pitch', { token }).catch(() => null);
     pasoNombre.hidden = true;
     pasoCharla.hidden = false;
     saludo.textContent = 'Hola, ' + nombre + '.';

@@ -117,6 +117,16 @@ function wav() {
     ok(r.status === 200 && r.json.fin === true && !/\[FIN\]/.test(r.json.texto), 'el cierre llega sin marcas internas');
     ok(/Se acabó el minuto de prueba/.test(cierre.messages[cierre.messages.length - 1].content), 'el cierre le pide a Eco el pitch');
 
+    ok(cierre.max_tokens <= 150, 'la despedida es corta (no hace esperar al final)');
+
+    const ttsAntes = llamadasFetch.filter((x) => x === 'tts').length;
+    r = await request(server, { path: '/api/demo/pitch', method: 'POST', body: { token }, ip: '10.0.0.1' });
+    ok(r.status === 200 && /Crea tu cuenta/.test(r.json.texto) && typeof r.json.audio === 'string', 'el pitch final llega con su voz');
+    await request(server, { path: '/api/demo/pitch', method: 'POST', body: { token }, ip: '10.0.0.1' });
+    ok(llamadasFetch.filter((x) => x === 'tts').length === ttsAntes + 1, 'la voz del pitch se genera una sola vez y se reutiliza');
+    r = await request(server, { path: '/api/demo/pitch', method: 'POST', body: { token: 'nada' }, ip: '10.0.0.1' });
+    ok(r.status === 401, 'sin token no hay pitch');
+
     r = await request(server, { path: '/api/demo/turno', method: 'POST', body: { token: token.slice(0, -2) + 'xx', history: [] }, ip: '10.0.0.1' });
     ok(r.status === 401, 'un token alterado no sirve');
     const [b64, firma] = token.split('.');

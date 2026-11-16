@@ -30,12 +30,11 @@ Esta persona NO tiene cuenta: está probando Eco durante un minuto desde la pág
 
 const inicioDemo = (nombre) => `(La persona se llama ${nombre} y acaba de empezar una prueba de Eco de un minuto, sin cuenta. En 2 frases cortas: salúdala por su nombre con calidez y hazle de una una pregunta fácil y cercana para que empiece a contar un recuerdo de su familia o de su infancia. No le expliques la app.)`;
 
-const CIERRE_DEMO = `(Se acabó el minuto de prueba. Este es tu último mensaje: despídete de esta charla y cuéntale qué es Eco, en máximo 5 frases cortas, sin hacer ninguna pregunta:
-1. Agradécele por su nombre y retoma en una frase algo concreto y bonito que te contó (si no alcanzó a contar nada, dile que su historia está esperando).
-2. Cuéntale que con su cuenta gratis Eco sigue charlando con ella de a poco, unos minutos al día, y guarda cada historia con su propia voz.
-3. Cuéntale que con esas historias Eco arma capítulos, un árbol de la familia y hasta un libro, y que su familia puede escucharla y sumar sus propios recuerdos.
-4. Invítala a crear su cuenta con el botón que le va a aparecer en la pantalla.
-Usa el mismo tono cálido de la charla, nada de lenguaje de venta.)`;
+const CIERRE_DEMO = `(Se acabó el minuto de prueba. Este es tu último mensaje antes de que la app le cuente qué es Eco: en máximo 2 frases cortas y sin ninguna pregunta, reacciona con calidez a lo último que contó y agradécele por su nombre por compartirlo contigo. Si no alcanzó a contar nada, dile con cariño que su historia la está esperando. No expliques la app ni la invites a nada: eso viene justo después.)`;
+
+// Lo que viene después de la despedida es igual para todos: se convierte a voz una sola vez por instancia del servidor
+// y el navegador lo pide apenas arranca la demo, así al final no hay que esperar a que se genere.
+const PITCH_DEMO = 'Con tu cuenta gratis, Eco sigue charlando contigo de a poco, unos minutos al día, y guarda cada historia con tu propia voz. Con esas historias arma capítulos, el árbol de tu familia y hasta un libro, y tu familia puede escucharte y sumar sus propios recuerdos. Crea tu cuenta con el botón que aparece en la pantalla.';
 
 module.exports = (app, deps) => {
   const {
@@ -45,6 +44,7 @@ module.exports = (app, deps) => {
   } = deps;
 
   const SYSTEM_DEMO = SYSTEM_PROMPT + INSTRUCCION_DEMO;
+  let audioPitch = null;
   // Llave propia para los tokens de la demo: un token de demo nunca sirve como cookie de sesión (ni al revés).
   const LLAVE = crypto.createHmac('sha256', String(SESSION_SECRET || '')).update('eco-demo-v1').digest();
 
@@ -151,7 +151,7 @@ module.exports = (app, deps) => {
 
       const response = await anthropic.messages.create({
         model: MODEL,
-        max_tokens: fin ? 400 : 250,
+        max_tokens: fin ? 150 : 250,
         // Igual para todas las demos (el nombre va en los mensajes): el caché de Anthropic se comparte entre ellas.
         system: [{ type: 'text', text: SYSTEM_DEMO, cache_control: { type: 'ephemeral' } }],
         messages,
@@ -176,6 +176,28 @@ module.exports = (app, deps) => {
       res.json({ texto, audio, ayuda: marca.ayuda || null, fin });
     } catch (err) {
       console.error('[demo] turno:', err);
+      res.status(500).json({ motivo: 'error' });
+    }
+  });
+
+  app.post('/api/demo/pitch', rateLimit, async (req, res) => {
+    try {
+      if (apagada(res)) return;
+      if (!leerToken(req.body && req.body.token)) return res.status(401).json({ motivo: 'vencida' });
+      if (!audioPitch) {
+        audioPitch = Promise.resolve(hablar(PITCH_DEMO)).then((b) => (b ? Buffer.from(b).toString('base64') : null));
+        audioPitch.catch(() => {});
+      }
+      let audio = null;
+      try {
+        audio = await audioPitch;
+      } catch (err) {
+        console.error('[demo] voz del pitch:', err.message);
+      }
+      if (!audio) audioPitch = null;
+      res.json({ texto: PITCH_DEMO, audio });
+    } catch (err) {
+      console.error('[demo] pitch:', err);
       res.status(500).json({ motivo: 'error' });
     }
   });
